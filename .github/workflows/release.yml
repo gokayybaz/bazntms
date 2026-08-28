@@ -17,7 +17,7 @@ jobs:
         include:
           - { goos: linux, goarch: amd64, runs: ubuntu-latest }
           - { goos: linux, goarch: arm64, runs: ubuntu-24.04-arm }
-          - { goos: darwin, goarch: amd64, runs: macos-13 }
+          - { goos: darwin, goarch: amd64, runs: macos-latest, cc: "clang -arch x86_64" }
           - { goos: darwin, goarch: arm64, runs: macos-latest }
           - { goos: windows, goarch: amd64, runs: windows-latest }
     runs-on: ${{ matrix.runs }}
@@ -64,12 +64,19 @@ jobs:
       - name: Build frontend
         run: |
           cd frontend
-          npm ci
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            # npm ci, rolldown optional-deps hatasina dusebilir: lockfile'siz kur
+            rm -f package-lock.json
+            npm install
+          else
+            npm ci
+          fi
           npm run build
 
       - name: Build binary
         env:
           CGO_ENABLED: '1'
+          CC: ${{ matrix.cc }}
           CGO_CFLAGS: ${{ matrix.goos == 'windows' && '-I/c/npcap-sdk/Include' || '' }}
           CGO_LDFLAGS: ${{ matrix.goos == 'windows' && '-L/c/npcap-sdk/Lib/x64' || '' }}
         run: |
