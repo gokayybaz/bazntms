@@ -1,5 +1,9 @@
 # bazNTMS
 
+[![CI](https://github.com/gokayybaz/bazntms/actions/workflows/ci.yml/badge.svg)](https://github.com/gokayybaz/bazntms/actions/workflows/ci.yml)
+[![Release](https://github.com/gokayybaz/bazntms/actions/workflows/release.yml/badge.svg)](https://github.com/gokayybaz/bazntms/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **baz Network Traffic Monitoring System** — Go ile yazılmış, **çok platformlu** ağ trafiği monitörü. Bilgisayarınızın network
 trafiğini gerçek zamanlı olarak **yakalar, analiz eder, kaydeder ve raporlar**.
 Vite + React ile tasarlanmış web arayüzü Go binary'sinin içine embed edilir —

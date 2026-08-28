@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  linux-macos:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install libpcap (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
+
+  windows:
+    name: Test (windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          update: false
+          install: >-
+            git
+            unzip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-go
+
+      - name: Install Npcap SDK
+        shell: pwsh
+        run: |
+          curl.exe -L -o npcap-sdk.zip https://npcap.com/dist/npcap-sdk-1.13.zip
+          Expand-Archive -Force npcap-sdk.zip C:\npcap-sdk
+
+      - name: Test
+        env:
+          CGO_ENABLED: 1
+          CGO_CFLAGS: -I/c/npcap-sdk/Include
+          CGO_LDFLAGS: -L/c/npcap-sdk/Lib/x64
+        run: |
+          go version
+          go vet ./...
+          go test ./... -count=1

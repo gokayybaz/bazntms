@@ -24,6 +24,8 @@ import (
 //go:embed all:frontend/dist
 var distFS embed.FS
 
+var version = "dev" // release ldflags ile set edilir
+
 func main() {
 	port := flag.String("port", "8080", "HTTP sunucu portu")
 	dev := flag.Bool("dev", false, "frontend embed'i atla (vite dev server ile gelistirme)")
@@ -118,7 +120,7 @@ func main() {
 	srv := server.New(static, engine, st, *dbPath, aiClient, alerts, geo, *authPassword)
 	addr := "0.0.0.0:" + *port
 	fmt.Println()
-	fmt.Println("  bazNTMS calisiyor (baz Network Traffic Monitoring System)")
+	fmt.Printf("  bazNTMS %s — baz Network Traffic Monitoring System\n", version)
 	fmt.Printf("  http://localhost:%s\n", *port)
 	fmt.Printf("  veritabani: %s (saklama: %d saat)\n", *dbPath, *retentionH)
 	fmt.Println()
