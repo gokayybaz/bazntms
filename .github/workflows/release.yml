@@ -60,7 +60,6 @@ jobs:
           Expand-Archive -Force npcap-sdk.zip C:\npcap-sdk
 
       - name: Build frontend
-        shell: ${{ matrix.goos == 'windows' && 'pwsh' || 'bash' }}
         run: |
           cd frontend
           npm install
