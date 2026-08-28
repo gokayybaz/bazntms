@@ -15,17 +15,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
-          - { goos: windows, goarch: amd64 }
-    runs-on: ${{ matrix.goos == 'windows' && 'windows-latest' || (matrix.goos == 'darwin' && 'macos-latest' || 'ubuntu-latest') }}
+          - { goos: linux, goarch: amd64, runs: ubuntu-latest }
+          - { goos: linux, goarch: arm64, runs: ubuntu-24.04-arm }
+          - { goos: darwin, goarch: amd64, runs: macos-13 }
+          - { goos: darwin, goarch: arm64, runs: macos-latest }
+          - { goos: windows, goarch: amd64, runs: windows-latest }
+    runs-on: ${{ matrix.runs }}
     defaults:
       run:
         shell: ${{ matrix.goos == 'windows' && 'msys2 {0}' || 'bash' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install libpcap (linux)
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
 
       - name: Install toolchain (windows)
         if: matrix.goos == 'windows'
@@ -38,8 +42,7 @@ jobs:
             unzip
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-go
-            nodejs
-            npm
+            mingw-w64-x86_64-nodejs
 
       - uses: actions/setup-go@v5
         if: matrix.goos != 'windows'
