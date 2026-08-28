@@ -1,0 +1,23 @@
+# binary
+bazntms
+bazntms.exe
+bazntms-*
+
+# veri tabani / kayitlar
+*.db
+*.db-wal
+*.db-shm
+captures/
+*.pcap
+
+# geoip veri tabanlari (lisansli indirilir, commit edilmez)
+geoip/*.mmdb
+
+# frontend
+frontend/node_modules/
+frontend/dist/*
+!frontend/dist/.gitkeep
+
+# diger
+*.log
+.DS_Store
