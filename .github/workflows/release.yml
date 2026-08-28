@@ -17,7 +17,7 @@ jobs:
         include:
           - { goos: linux, goarch: amd64, runs: ubuntu-latest }
           - { goos: linux, goarch: arm64, runs: ubuntu-24.04-arm }
-          - { goos: darwin, goarch: amd64, runs: macos-latest, cc: "clang -arch x86_64" }
+          - { goos: darwin, goarch: amd64, runs: macos-latest }
           - { goos: darwin, goarch: arm64, runs: macos-latest }
           - { goos: windows, goarch: amd64, runs: windows-latest }
     runs-on: ${{ matrix.runs }}
@@ -42,7 +42,6 @@ jobs:
             unzip
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-go
-            mingw-w64-x86_64-nodejs
 
       - uses: actions/setup-go@v5
         if: matrix.goos != 'windows'
@@ -50,7 +49,6 @@ jobs:
           go-version: stable
 
       - uses: actions/setup-node@v4
-        if: matrix.goos != 'windows'
         with:
           node-version: 20
 
@@ -62,21 +60,15 @@ jobs:
           Expand-Archive -Force npcap-sdk.zip C:\npcap-sdk
 
       - name: Build frontend
+        shell: ${{ matrix.goos == 'windows' && 'pwsh' || 'bash' }}
         run: |
           cd frontend
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            # npm ci, rolldown optional-deps hatasina dusebilir: lockfile'siz kur
-            rm -f package-lock.json
-            npm install
-          else
-            npm ci
-          fi
+          npm install
           npm run build
 
       - name: Build binary
         env:
           CGO_ENABLED: '1'
-          CC: ${{ matrix.cc }}
           CGO_CFLAGS: ${{ matrix.goos == 'windows' && '-I/c/npcap-sdk/Include' || '' }}
           CGO_LDFLAGS: ${{ matrix.goos == 'windows' && '-L/c/npcap-sdk/Lib/x64' || '' }}
         run: |
