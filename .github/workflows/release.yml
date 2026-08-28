@@ -59,7 +59,16 @@ jobs:
           curl.exe -L -o npcap-sdk.zip https://npcap.com/dist/npcap-sdk-1.13.zip
           Expand-Archive -Force npcap-sdk.zip C:\npcap-sdk
 
+      - name: Build frontend (windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
       - name: Build frontend
+        if: matrix.goos != 'windows'
         run: |
           cd frontend
           npm install
