@@ -1,0 +1,326 @@
+/* Landing page — koyu terminal estetiği (slate + cyan, JetBrains Mono) */
+
+.page {
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --dim: #64748b;
+  --line: #1e293b;
+  --panel: rgba(15, 23, 42, 0.72);
+}
+
+/* --- HERO --- */
+.hero {
+  text-align: center;
+  padding: 72px 24px 48px;
+  background:
+    radial-gradient(circle, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(180deg, rgba(34, 211, 238, 0.07), transparent 70%);
+  border-bottom: 1px solid var(--line);
+}
+
+.kicker {
+  font-family: var(--ifm-font-family-monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 11px;
+  color: #22d3ee;
+  margin: 0 0 14px;
+}
+
+.title {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 58px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+
+.title span {
+  color: #22d3ee;
+}
+
+.tagline {
+  color: var(--muted);
+  font-size: 18px;
+  max-width: 620px;
+  margin: 0 auto 28px;
+  line-height: 1.6;
+}
+
+.tagline b {
+  color: var(--ink);
+}
+
+.ctas {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.btnPrimary,
+.btnGhost {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.btnPrimary {
+  background: #0891b2;
+  color: #f0fdff;
+}
+
+.btnPrimary:hover {
+  background: #22d3ee;
+  color: #020617;
+  text-decoration: none;
+}
+
+.btnGhost {
+  border-color: #334155;
+  color: var(--ink);
+}
+
+.btnGhost:hover {
+  border-color: #22d3ee;
+  color: #67e8f9;
+  text-decoration: none;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: var(--panel);
+}
+
+.chip:first-child {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+/* --- SAYILAR --- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  max-width: 920px;
+  margin: 40px auto 0;
+  padding: 0 24px;
+}
+
+.stats > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.stats b {
+  display: block;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 26px;
+  color: #22d3ee;
+}
+
+.stats span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+/* --- BÖLÜM ORTAK --- */
+.section {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 56px 24px 8px;
+}
+
+.section h2 {
+  font-family: var(--ifm-font-family-monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 15px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+  margin: 0 0 22px;
+}
+
+/* --- ÖZELLİKLER --- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.feature {
+  border: 1px solid var(--line);
+  border-left: 3px solid #22d3ee;
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 18px 20px;
+}
+
+.feature h3 {
+  color: var(--ink);
+  font-size: 15px;
+  margin: 8px 0 8px;
+}
+
+.feature p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.featureIcon {
+  font-size: 20px;
+}
+
+/* --- HIZLI BAŞLANGIÇ --- */
+.terminalGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.terminal {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #020617;
+  overflow: hidden;
+}
+
+.terminalHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.terminalHead i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1e293b;
+}
+
+.terminalHead i:first-child {
+  background: #f87171;
+}
+
+.terminalHead span {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 10.5px;
+  color: var(--dim);
+  margin-left: 4px;
+}
+
+.terminal pre {
+  margin: 0;
+  padding: 14px;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #a5f3fc;
+  background: transparent;
+}
+
+/* --- MİMARİ --- */
+.arch {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  background: #020617;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+  overflow-x: auto;
+  margin: 0;
+}
+
+/* --- YOL HARİTASI --- */
+.phases {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.phase {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 12px 14px;
+}
+
+.phase b {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 10.5px;
+  color: #22d3ee;
+  white-space: nowrap;
+}
+
+.phase span {
+  font-size: 12px;
+  color: var(--ink);
+  flex: 1;
+}
+
+.phase em {
+  color: #34d399;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* --- ALT CTA --- */
+.bottom {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 56px 24px 72px;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 900px) {
+  .grid,
+  .terminalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats,
+  .phases {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .title {
+    font-size: 42px;
+  }
+}
