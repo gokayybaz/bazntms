@@ -13,8 +13,10 @@ captures/
 # geoip veri tabanlari (lisansli indirilir, commit edilmez)
 geoip/*.mmdb
 
-# frontend
-frontend/node_modules/
+# frontend / docs-site
+node_modules/
+docs-site/build/
+docs-site/.docusaurus/
 web/dist/*
 !web/dist/.gitkeep
 

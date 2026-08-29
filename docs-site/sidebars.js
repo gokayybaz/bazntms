@@ -4,10 +4,18 @@ const sidebars = {
     'intro',
     'installation',
     'agent-deployment',
-    'configuration',
-    'upgrading',
-    'dr',
-    'api',
+    {
+      type: 'category',
+      label: 'Referans',
+      link: { type: 'generated-index', title: 'Referans Dokümanları' },
+      items: [
+        'reference/api',
+        'reference/configuration',
+        'reference/architecture',
+        'reference/upgrading',
+        'reference/dr',
+      ],
+    },
   ],
 };
 

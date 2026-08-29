@@ -50,7 +50,19 @@ tek dosya, kurulum gerektirmez.
 - **Yönetim CLI**: `bazntmsctl setup` (kurulum sihirbazı), `update keygen/sign` (ed25519 imza kanalı)
 - **Paketler**: deb/rpm (nfpm + systemd), Windows MSI (WiX), macOS pkg (launchd) — release CI otomatik üretir
 - **Otomatik agent güncellemesi**: stable/beta kanalları, SHA-256 + ed25519 imza doğrulamalı, atomik binary değişimi
-- **Dokümantasyon**: `docs/UPGRADE-RUNBOOK.md`, `docs/DR-RUNBOOK.md`, Docusaurus iskeleti (`docs-site/`)
+- **Dokümantasyon**: `docs/UPGRADE-RUNBOOK.md`, `docs/DR-RUNBOOK.md`, Docusaurus sitesi (`docs-site/`)
+
+## Dokümantasyon Sitesi
+
+Docusaurus sitesi her push'ta GitHub Pages'e otomatik yayınlanır
+(`docs-site/**` veya `docs/**` değişince tetiklenir):
+
+**https://gokayybaz.github.io/bazntms/**
+
+- `docs/reference/` içeriği her build'de repo kökündeki `docs/*.md`
+  dosyalarından otomatik senkronize edilir
+- Yerel geliştirme: `cd docs-site && npm install && npm run dev`
+- İlk kurulum: repo **Settings → Pages → Source = GitHub Actions** seçilmeli
 
 ### Analiz ve otomasyon
 - **AI analizi**: OpenAI-uyumlu her servis (Ollama, LM Studio, llama.cpp, OpenAI...)
