@@ -88,6 +88,17 @@ jobs:
           go build -trimpath -ldflags "$LDFLAGS" \
             -o "bazntms-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-agent
 
+      # macOS pkg installer (Faz 7.3; yalnizca darwin runner'larda)
+      - name: Build macOS pkg
+        if: matrix.goos == 'darwin'
+        run: |
+          chmod +x deploy/macos/build-pkg.sh deploy/macos/postinstall
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          deploy/macos/build-pkg.sh \
+            "bazntms-agent-${{ matrix.goos }}-${{ matrix.goarch }}" \
+            "bazntms-agent-${{ matrix.goarch }}.pkg" \
+            "${VERSION#v}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: bazntms-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -95,9 +106,60 @@ jobs:
             bazntms-*
             !bazntms-agent.yml
 
+  packages:
+    name: Packages (deb/rpm/msi)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Install tooling (nfpm, wixl)
+        run: |
+          sudo apt-get update && sudo apt-get install -y msitools
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Build deb/rpm (amd64 + arm64)
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          chmod +x deploy/nfpm/postinstall.sh deploy/nfpm/postremove.sh
+          for arch in amd64 arm64; do
+            export ARCH="$arch" VERSION
+            for fmt in deb rpm; do
+              nfpm package -p "$fmt" -f deploy/nfpm/agent.yaml \
+                -t "bazntms-agent-${arch}.${fmt}"
+            done
+          done
+
+      - name: Build MSI (windows-amd64)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          wixl -v -o bazntms-agent-amd64.msi \
+            -D VERSION="$VERSION" \
+            -D EXE=bazntms-agent-windows-amd64.exe \
+            deploy/msi/bazntms-agent.wxs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bazntms-packages
+          path: |
+            bazntms-*.deb
+            bazntms-*.rpm
+            bazntms-*.msi
+            !bazntms-agent.yml
+
   supply-chain:
     name: Supply chain (SBOM, scan, sign)
-    needs: build
+    needs: [build, packages]
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1,0 +1,115 @@
+# bazntms-hub Helm degerleri (Faz 4.4)
+#
+# Not: PostgreSQL/TimescaleDB ve NATS'i kendi chart'lariyla kurun (bkz.
+# deploy/docker-compose.yml referans yapilandirmasi) ve asagidaki config
+# bolumundeki adresleri ona gore ayarlayin.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/gokayybaz/bazntms-hub
+  tag: "" # Chart appVersion'a varsayilan
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+  flowPort: 2055 # NetFlow UDP (0 = NodePort'ta acma)
+  syslogPort: 5514 # Syslog UDP
+
+# Tek-node demo varsayilani. Stateful bilesenler (capture/alerts/poller)
+# yalnizca bir replikada acilmalidir; N replika ingest icin:
+#   replicaCount: N, capture.enabled: false, alerts.enabled: false, poller.enabled: false
+# (uyari/poller icin ayri bir "controller" replikasi yonetim panelinden
+# yonetilir ya da tek replikalik ikinci bir release calistirilir.)
+replicaRoles:
+  capture:
+    enabled: true
+  alerts:
+    enabled: true
+  poller:
+    enabled: true
+
+# hub.yaml icerigi (koanf -config ile yuklenir)
+config:
+  port: 8080
+  database:
+    # postgres:// DSN → TimescaleDB modu; dosya yolu → SQLite dev modu
+    path: postgres://bazntms:bazntms@bazntms-postgres:5432/bazntms?sslmode=disable
+  nats:
+    url: nats://bazntms-nats:4222 # bos → kuyruk kapali (dogrudan store yazimi)
+  capture:
+    enabled: true
+  alerts:
+    enabled: true
+  poller:
+    enabled: true
+  retention_hours: 168
+  telemetry_interval: 30
+  log:
+    level: info
+    format: json
+
+# Arayuz sifresi. Uretimde mevcut bir Secret kullanin:
+#   auth.existingSecret: <secret-ad>, auth.existingSecretKey: AUTH_PASSWORD
+auth:
+  password: "" # bos ise kimlik dogrulama kapali
+  existingSecret: ""
+  existingSecretKey: AUTH_PASSWORD
+
+enrollToken: "" # bos → hub rastgele uretir ve loglar
+
+# Agent DaemonSet (Faz 7.1): k8s node'larinda telemetri; varsayilan kapali.
+# EnrollToken ustteki alandan gelir; gizli tutulacagi yerde kendi Secret'inizi
+# referanslayin (agent.existingSecret).
+agent:
+  enabled: false
+  image:
+    repository: ghcr.io/gokayybaz/bazntms-agent
+    tag: "" # Chart appVersion'a varsayilan
+    pullPolicy: IfNotPresent
+  site: "k8s"
+  namePrefix: "k8s-" # agent adi: prefix + pod adi
+  hostNetwork: true
+  pcap: false # node'larda paket yakalama (NET_RAW gerekir)
+  existingSecret: ""
+  existingSecretKey: BAZNTMS_ENROLL_TOKEN
+  update:
+    enabled: false
+    channel: stable
+    publicKey: "" # hex ed25519 public key (imza dogrulamali guncelleme)
+    intervalHours: 6
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    - host: bazntms.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

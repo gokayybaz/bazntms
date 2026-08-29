@@ -42,6 +42,7 @@ type Server struct {
 	geo               *geoip.Resolver
 	auth              *AuthManager
 	oidc              *OIDCManager
+	updatesDir        string // guncelleme kanali dizini (Faz 7.3; bos = kapali)
 	enrollToken       string
 	telemetryInterval int
 	agentPCAP         bool
@@ -158,6 +159,8 @@ func (s *Server) Handler() http.Handler {
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
 	mux.Handle("POST /api/v1/agent/telemetry", s.agentAuth(http.HandlerFunc(s.handleAgentTelemetry)))
+	mux.Handle("GET /api/v1/agent/update/manifest", s.agentAuth(http.HandlerFunc(s.handleUpdateManifest)))
+	mux.Handle("GET /api/v1/agent/update/file/{channel}/{name}", s.agentAuth(http.HandlerFunc(s.handleUpdateFile)))
 	mux.HandleFunc("GET /api/v1/processes", s.handleProcesses)
 
 	// filo yonetimi (UI auth'u ile korunur; silme = netops+)

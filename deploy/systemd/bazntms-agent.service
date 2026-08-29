@@ -1,0 +1,17 @@
+[Unit]
+Description=bazNTMS agent — network traffic telemetry daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/bazntms-agent -config /etc/bazntms/agent.yml
+Restart=always
+RestartSec=5
+# paket yakalama ve proses envanteri icin yetkiler
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN CAP_SYS_PTRACE
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

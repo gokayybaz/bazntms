@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bazntms.fullname" . }}
+  labels:
+    {{- include "bazntms.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "bazntms.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/name: {{ include "bazntms.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: hub
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "-config"
+            - "/etc/bazntms/hub.yaml"
+            {{- if .Values.enrollToken }}
+            - "-enroll-token"
+            - {{ .Values.enrollToken | quote }}
+            {{- end }}
+            {{- if gt (int .Values.service.flowPort) 0 }}
+            - "-flow-port"
+            - {{ .Values.service.flowPort | quote }}
+            {{- end }}
+            {{- if gt (int .Values.service.syslogPort) 0 }}
+            - "-syslog-port"
+            - {{ .Values.service.syslogPort | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            {{- if gt (int .Values.service.flowPort) 0 }}
+            - name: netflow
+              containerPort: {{ .Values.service.flowPort }}
+              protocol: UDP
+            {{- end }}
+            {{- if gt (int .Values.service.syslogPort) 0 }}
+            - name: syslog
+              containerPort: {{ .Values.service.syslogPort }}
+              protocol: UDP
+            {{- end }}
+          env:
+            {{- if not .Values.auth.existingSecret }}
+            - name: AUTH_PASSWORD
+              value: {{ .Values.auth.password | quote }}
+            {{- else }}
+            - name: AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.existingSecretKey }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/bazntms
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "bazntms.fullname" . }}-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

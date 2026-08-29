@@ -306,3 +306,10 @@ func (c *Client) doJSON(req *http.Request, out any) error {
 
 // Interval, guncel telemetri araligini dondurur (hub politikasiyla degisebilir).
 func (c *Client) Interval() int { return c.opts.IntervalSec }
+
+// BaseURL, failover havuzunda aktif hub adresini dondurur (Faz 7.3
+// guncelleme istemcisi icin).
+func (c *Client) BaseURL() string {
+	pool := c.urls()
+	return pool[c.hubIdx%len(pool)]
+}

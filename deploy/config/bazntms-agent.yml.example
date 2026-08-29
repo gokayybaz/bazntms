@@ -1,0 +1,32 @@
+# bazNTMS agent ornek yapilandirmasi.
+# Gercek konfigurasyonu /etc/bazntms/agent.yml olarak kopyalayip doldurun
+# (veya interaktif sihirbaz: bazntmsctl setup).
+
+hub:
+  # birden fazla hub: virgulle ayirin → failover sirasi (Faz 5.4)
+  url: https://hub.example.com
+  token: HUBDAN-ALDIGINIZ-ENROLL-TOKEN   # yalnizca ilk kayit icin gerekli
+
+agent:
+  name: sunucu-01      # bos → hostname
+  site: genel-merkez   # site scope (RBAC) ve filo organizasyonu
+
+collect:
+  interval_seconds: 30
+  # derin toplama (paket yakalama ile surec atfi): root/admin gerekir
+  pcap: false
+  pcap_interface: auto
+  # ham PCAP kaydi (hub politikasi da acik olmali)
+  pcap_record: false
+  pcap_dir: /var/lib/bazntms/captures
+
+# otomatik guncelleme (Faz 7.3): hub -updates-dir ile baslatilmali
+# update:
+#   enabled: true
+#   channel: stable
+#   public_key: "<ed25519-hex>"
+#   interval_hours: 6
+
+log:
+  level: info
+  format: json
