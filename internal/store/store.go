@@ -133,6 +133,41 @@ CREATE TABLE IF NOT EXISTS dns_queries (
 );
 CREATE INDEX IF NOT EXISTS idx_dns_ts ON dns_queries(ts);
 
+CREATE TABLE IF NOT EXISTS agents (
+	id               INTEGER PRIMARY KEY AUTOINCREMENT,
+	name             TEXT    NOT NULL,
+	site             TEXT    NOT NULL DEFAULT '',
+	token_hash       TEXT    NOT NULL UNIQUE,
+	first_seen       INTEGER NOT NULL,
+	last_seen        INTEGER NOT NULL,
+	version          TEXT    NOT NULL DEFAULT '',
+	protocol_version INTEGER NOT NULL DEFAULT 1,
+	remote_ip        TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen);
+
+CREATE TABLE IF NOT EXISTS agent_iface_samples (
+	agent_id   INTEGER NOT NULL,
+	ts         INTEGER NOT NULL,
+	name       TEXT    NOT NULL,
+	rx_bytes   INTEGER NOT NULL DEFAULT 0,
+	tx_bytes   INTEGER NOT NULL DEFAULT 0,
+	rx_packets INTEGER NOT NULL DEFAULT 0,
+	tx_packets INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_agent_iface ON agent_iface_samples(agent_id, ts);
+
+CREATE TABLE IF NOT EXISTS agent_conn_latest (
+	agent_id    INTEGER NOT NULL,
+	proto       TEXT    NOT NULL,
+	local_addr  TEXT    NOT NULL,
+	remote_addr TEXT    NOT NULL DEFAULT '',
+	status      TEXT    NOT NULL DEFAULT '',
+	pid         INTEGER NOT NULL DEFAULT 0,
+	process     TEXT    NOT NULL DEFAULT '',
+	PRIMARY KEY (agent_id, proto, local_addr, remote_addr)
+);
+
 CREATE TABLE IF NOT EXISTS alert_events (
 	id      INTEGER PRIMARY KEY AUTOINCREMENT,
 	ts      INTEGER NOT NULL,
@@ -256,6 +291,7 @@ func (s *Store) Prune(retention time.Duration) error {
 		`DELETE FROM connection_events WHERE ts < ?`,
 		`DELETE FROM dns_queries WHERE ts < ?`,
 		`DELETE FROM alert_events WHERE ts < ?`,
+		`DELETE FROM agent_iface_samples WHERE ts < ?`,
 	} {
 		if _, err := s.db.Exec(q, cutoff); err != nil {
 			return err

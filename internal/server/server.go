@@ -38,6 +38,8 @@ type Server struct {
 	alerts    *alert.Manager
 	geo       *geoip.Resolver
 	auth      *AuthManager
+	enrollToken       string
+	telemetryInterval int
 
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
@@ -46,7 +48,7 @@ type Server struct {
 	registry     *prometheus.Registry
 }
 
-func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string) *Server {
+func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int) *Server {
 	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
@@ -58,6 +60,11 @@ func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string,
 		geo:      geo,
 		auth:     NewAuthManager(password),
 	}
+	if telemetryInterval <= 0 {
+		telemetryInterval = defaultTelemetryInterval
+	}
+	s.enrollToken = enrollToken
+	s.telemetryInterval = telemetryInterval
 
 	// Prometheus metrikleri
 	s.httpRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -117,6 +124,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/interfaces", s.handleInterfaces)
 	mux.HandleFunc("GET /api/v1/connections", s.handleConnections)
 	mux.HandleFunc("GET /api/v1/version", s.handleVersion)
+
+	// agent filo uclari (agentAuth: Bearer agent token)
+	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
+	mux.Handle("POST /api/v1/agent/telemetry", s.agentAuth(http.HandlerFunc(s.handleAgentTelemetry)))
+
+	// filo yonetimi (UI auth'u ile korunur)
+	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
+	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
+	mux.HandleFunc("DELETE /api/v1/agents/{id}", s.handleAgentDelete)
 
 	// gozlemlenebilirlik (auth muaf — Prometheus/healthcheck standartlari)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)

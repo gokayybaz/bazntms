@@ -173,7 +173,9 @@ func (a *AuthManager) middleware(next http.Handler) http.Handler {
 			return
 		}
 		path := r.URL.Path
-		if path == "/api/login" || path == "/api/auth/status" || !requiresAuth(path) {
+		// agent uclari UI auth'undan muaf: kendi Bearer agent auth'unu kullanir
+		if path == "/api/login" || path == "/api/auth/status" ||
+			strings.HasPrefix(path, "/api/v1/agent/") || !requiresAuth(path) {
 			next.ServeHTTP(w, r)
 			return
 		}

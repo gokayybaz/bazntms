@@ -1,0 +1,208 @@
+package server
+
+// Agent filo uclari (Faz 1): enrollment, telemetri, liste.
+// UI auth'undan ayrı olarak agent token'lari (Bearer) ile korunur.
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
+)
+
+const defaultTelemetryInterval = 30
+
+// agentFromCtx, agentAuth middleware'inin yerlestirdigi kaydi dondurur.
+type ctxKey string
+
+const agentCtxKey ctxKey = "agent"
+
+func agentFromCtx(r *http.Request) *store.Agent {
+	if v, ok := r.Context().Value(agentCtxKey).(*store.Agent); ok {
+		return v
+	}
+	return nil
+}
+
+// agentAuth, Bearer agent token'ini dogrular ve kaydi context'e koyar.
+func (s *Server) agentAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
+		token := ""
+		if ah := r.Header.Get("Authorization"); len(ah) > len(prefix) && ah[:len(prefix)] == prefix {
+			token = ah[len(prefix):]
+		}
+		if token == "" {
+			unauthorized(w, "agent token gerekli")
+			return
+		}
+		agent, err := s.store.AgentByTokenHash(store.TokenHash(token))
+		if err != nil {
+			unauthorized(w, "gecersiz agent token")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), agentCtxKey, agent)))
+	})
+}
+
+func unauthorized(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]any{"error": msg})
+}
+
+// handleAgentHello, enrollment: X-Enroll-Token dogrulamasi ile agent kaydeder
+// ve kalici agent token'i dondurur.
+func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
+	if s.enrollToken == "" {
+		unauthorized(w, "enrollment kapalı: hub'i -enroll-token ile başlatın")
+		return
+	}
+	if r.Header.Get("X-Enroll-Token") != s.enrollToken {
+		unauthorized(w, "geçersiz enrollment token")
+		return
+	}
+	var hello telemetry.AgentHello
+	if err := json.NewDecoder(r.Body).Decode(&hello); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if hello.Name == "" {
+		http.Error(w, "name zorunlu", http.StatusBadRequest)
+		return
+	}
+	if hello.ProtocolVersion > version1 {
+		unauthorized(w, "protokol surumu hub'dan yeni")
+		return
+	}
+
+	buf := make([]byte, 32)
+	rand.Read(buf)
+	agentToken := hex.EncodeToString(buf)
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+	id, err := s.store.RegisterAgent(store.Agent{
+		Name:            hello.Name,
+		Site:            hello.Site,
+		TokenHash:       store.TokenHash(agentToken),
+		Version:         hello.Version,
+		ProtocolVersion: hello.ProtocolVersion,
+		RemoteIP:        ip,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", ip)
+	writeJSON(w, telemetry.HubReply{
+		Accepted:                 true,
+		AgentID:                  id,
+		AgentToken:               agentToken,
+		TelemetryIntervalSeconds: s.telemetryInterval,
+	})
+}
+
+// handleAgentTelemetry, batch veriyi kaydeder ve last_seen gunceller.
+func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
+	agent := agentFromCtx(r)
+	if agent == nil {
+		unauthorized(w, "agent kimliği yok")
+		return
+	}
+	var batch telemetry.TelemetryBatch
+	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ts := batch.TS
+	if ts == 0 {
+		ts = time.Now().Unix()
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+	if err := s.store.SaveIfaceSamples(agent.ID, ts, batch.Interfaces); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.ReplaceConnLatest(agent.ID, batch.Connections); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.TouchAgent(agent.ID, agent.Version, ip); err != nil {
+		slog.Error("agent touch hatasi", "agent_id", agent.ID, "err", err)
+	}
+	slog.Debug("telemetri alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
+	writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
+}
+
+// handleAgentsList, UI icin filo gorunumu (UI auth'u ile korunur).
+func (s *Server) handleAgentsList(w http.ResponseWriter, r *http.Request) {
+	window := time.Duration(2*s.telemetryInterval)*time.Second
+	agents, err := s.store.ListAgents(window)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, agents)
+}
+
+func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	agent, err := s.store.AgentByID(id)
+	if err != nil {
+		http.Error(w, "agent bulunamadi", http.StatusNotFound)
+		return
+	}
+	window := time.Duration(2*s.telemetryInterval)*time.Second
+	agents, _ := s.store.ListAgents(window)
+	var withRates *store.AgentWithRates
+	for i := range agents {
+		if agents[i].ID == id {
+			withRates = &agents[i]
+			break
+		}
+	}
+	if withRates == nil {
+		withRates = &store.AgentWithRates{Agent: *agent, Online: false}
+	}
+	withRates.Conns = len(s.store.LatestAgentConnections(id))
+	writeJSON(w, map[string]any{
+		"agent":       withRates,
+		"connections": s.store.LatestAgentConnections(id),
+	})
+}
+
+func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.DeleteAgent(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	slog.Info("agent silindi", "agent_id", id)
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// version1, desteklenen en yuksek agent protokol surumu.
+const version1 = 1
+
+func parseID(s string) (int64, error) {
+	var id int64
+	_, err := fmt.Sscanf(s, "%d", &id)
+	return id, err
+}

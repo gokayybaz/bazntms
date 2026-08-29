@@ -16,6 +16,7 @@ import { PcapCard } from './components/PcapCard'
 import { CompareCard } from './components/CompareCard'
 import { ReportCard } from './components/ReportCard'
 import { LoginScreen } from './components/LoginScreen'
+import { AgentsCard } from './components/AgentsCard'
 import { Card } from './components/Card'
 
 export default function App() {
@@ -130,6 +131,10 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
         <StatCards stats={stats} />
+
+        <Card title="Agent Filosu" right={<span className="text-xs text-slate-500">merkezi izleme</span>}>
+          <AgentsCard refreshKey={historyRefresh} />
+        </Card>
 
         <Card title="Ağ Verimi">
           <ThroughputChart history={stats.history} running={stats.running} />

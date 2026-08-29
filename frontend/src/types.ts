@@ -120,6 +120,29 @@ export interface CompareResponse {
   yesterday_hours: HourAvg[]
 }
 
+export interface AgentRate {
+  name: string
+  rx_bps: number
+  tx_bps: number
+  rx_bytes: number
+  tx_bytes: number
+  last_seen: number
+}
+
+export interface AgentWithRates {
+  id: number
+  name: string
+  site: string
+  first_seen: number
+  last_seen: number
+  version: string
+  protocol_version: number
+  remote_ip: string
+  online: boolean
+  rates: AgentRate[]
+  conns: number
+}
+
 export interface AlertEvent {
   id: number
   ts: number

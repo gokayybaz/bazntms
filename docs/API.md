@@ -209,6 +209,57 @@ Kayıtlı analizler (son 10): `{id, ts, model, period_minutes, summary}`
 
 ---
 
+## Agent Filosu (Faz 1)
+
+Agent uçları UI oturumundan bağımsızdır: `Bearer <agent_token>` kullanır.
+Agent token'ı enrollment ile verilir ve diskte (`bazntms-agent.state.json`)
+saklanır; hub yalnızca SHA-256 hash'ini tutar.
+
+### `POST /api/v1/agent/hello` *(UI auth muaf)*
+
+Enrollment: header `X-Enroll-Token: <hub -enroll-token>` zorunlu.
+
+```json
+{"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64"}
+```
+
+**200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30}`
+
+### `POST /api/v1/agent/telemetry` *(Bearer agent token)*
+
+```json
+{
+  "ts": 1788021229,
+  "interfaces": [{"name":"en0","rx_bytes":123456,"tx_bytes":9876,"rx_packets":100,"tx_packets":90}],
+  "connections": [{"proto":"tcp","local_addr":"192.168.1.43:5000","remote_addr":"1.2.3.4:443","status":"ESTABLISHED","pid":123,"process":"chrome"}]
+}
+```
+
+**200:** `{"ok":true,"interval":30}` — `interval`, hub politikası (değişirse agent uyar).
+
+### Filo yönetimi *(UI auth ile korunur)*
+
+| Uç | Açıklama |
+|----|----------|
+| `GET /api/v1/agents` | `{id, name, site, online, last_seen, version, remote_ip, rates[{name, rx_bps, tx_bps}], conns}` |
+| `GET /api/v1/agents/{id}` | Agent detayı + güncel bağlantı envanteri |
+| `DELETE /api/v1/agents/{id}` | Agent'ı ve telemetrisini sil |
+
+Agent çalıştırma:
+
+```bash
+# hub tarafı
+sudo ./bazntms -enroll-token gizli-token
+
+# uç tarafı (ilk çalıştırma enrollment yapar, token diskte saklanır)
+./bazntms-agent -hub-url https://hub.example.com -enroll-token gizli-token -name ws-01 -site ofis
+```
+
+Offline iken batch'ler disk kuyruğuna yazılır (`*.state.json.queue.jsonl`,
+en fazla 100 batch) ve bağlantı geri gelince otomatik bosaltilir.
+
+---
+
 ## Sysmon
 
 ### `GET /api/connections`

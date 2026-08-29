@@ -23,7 +23,7 @@ func newTestServer(t *testing.T, password string) *httptest.Server {
 	t.Cleanup(func() { st.Close() })
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, password)
+	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, password, "", 30)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
