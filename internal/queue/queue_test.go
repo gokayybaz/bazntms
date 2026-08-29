@@ -115,7 +115,7 @@ func TestQueueRoundTrip(t *testing.T) {
 	}
 
 	waitFor(t, func() bool {
-		agents, err := st.ListAgents(time.Hour)
+		agents, err := st.ListAgents(time.Hour, "")
 		return err == nil && len(agents) == 1 && agents[0].Online
 	}, "telemetri store'a yazilmadi")
 

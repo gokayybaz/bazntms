@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
-export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
+export function LoginScreen({ onSuccess }: { onSuccess: (identity: { username: string; role: string }) => void }) {
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -11,14 +12,15 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     setBusy(true)
     setError('')
     try {
+      // username bos → legacy tek-sifre (admin); dolu → kullanici girisi (RBAC)
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username: username || undefined, password }),
       })
       const data = await res.json()
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'giriş başarısız')
-      onSuccess()
+      onSuccess({ username: data.username ?? 'admin', role: data.role ?? 'admin' })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -41,10 +43,18 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           </div>
           <div>
             <h1 className="font-mono text-lg font-bold leading-tight text-white">bazNTMS</h1>
-            <p className="text-xs text-slate-500">devam etmek için şifrenizi girin</p>
+            <p className="text-xs text-slate-500">devam etmek için giriş yapın</p>
           </div>
         </div>
 
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Kullanıcı adı (opsiyonel — SSO/kurumsal hesap)"
+          autoComplete="username"
+          className="mb-2.5 w-full rounded-lg border border-slate-700/80 bg-slate-950 px-3.5 py-2.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
+        />
         <input
           type="password"
           value={password}

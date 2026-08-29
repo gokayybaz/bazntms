@@ -272,6 +272,58 @@ en fazla 100 batch) ve bağlantı geri gelince otomatik bosaltilir.
 
 ---
 
+## RBAC, Kullanıcılar, Token'lar ve Denetim (Faz 5, admin yetkisi gerekir)
+
+Giriş yolları:
+- **Legacy**: `POST /api/login {"password":"..."}` → admin kimliği (geriye uyumlu)
+- **Kullanıcı (RBAC)**: `POST /api/login {"username":"bob","password":"..."}` → rol + site scope
+- **SSO (OIDC)**: `GET /api/auth/oidc/login` → sağlayıcı → callback → oturum
+- **API token**: `Authorization: Bearer bnt_...` (entegrasyonlar için)
+
+Roller ve yetkiler:
+
+| Yetki | admin | netops | analyst | viewer |
+|---|---|---|---|---|
+| görüntüleme (`view`) | ✓ | ✓ | ✓ | ✓ |
+| yakalama/kayıt kontrolü (`operate`) | ✓ | ✓ | ✗ | ✗ |
+| AI analiz/rapor (`analyze`) | ✓ | ✓ | ✓ | ✗ |
+| cihaz ekle/sil (`devices`) | ✓ | ✓ | ✗ | ✗ |
+| agent sil (`agents`) | ✓ | ✗ | ✗ | ✗ |
+| kullanıcı/token/audit (`admin`) | ✓ | ✗ | ✗ | ✗ |
+
+### `GET /api/v1/users` · `POST /api/v1/users`
+
+Kullanıcı listesi ve oluşturma. Oluşturma: `{username, password (≥8), role, site}`.
+`site` doluysa kullanıcı yalnızca o sitenin agent'larını görür.
+
+### `PUT /api/v1/users/{id}` · `DELETE /api/v1/users/{id}`
+
+Rol/site/enabled/sifre güncelleme: `{role?, site?, enabled?, password?}`.
+Kendi hesabını silme/kilitleme korumalıdır.
+
+### `GET /api/v1/tokens` · `POST /api/v1/tokens` · `DELETE /api/v1/tokens/{id}`
+
+Entegrasyon API token'ları. Oluşturma: `{name, role, site}` → düz token
+**yalnızca bir kez** döner (`{"token":"bnt_..."}`); sunucuda yalnız hash tutulur.
+Silme = revoke (Bearing anında geçersizleşir).
+
+### `GET /api/v1/audit?limit=100`
+
+Append-only denetim kayıtları: `{id, ts, username, role, action, target, detail, ip, prev_hash, hash}`.
+Her kayıt bir öncekinin hash'ini taşır (SHA-256 zinciri).
+
+### `GET /api/v1/audit/verify`
+
+Zincir bütünlüğü: `{"ok":true,"broken_at":0,"checked":N}`. `ok:false` ise
+`broken_at` ID'sinden itibaren veri tabanı dışarıdan değiştirilmiştir.
+
+### `GET /api/auth/oidc/login` · `GET /api/auth/oidc/callback`
+
+SSO akışı (config'te `oidc.issuer` tanımlıysa aktif). Grup→rol eşlemesi
+`oidc.group_roles` ile yapılır; eşleşmeyen kullanıcılar `default_role` alır.
+
+---
+
 ## Cihazlar, NetFlow ve Syslog (Faz 3, UI auth ile korunur)
 
 ### `GET /api/v1/devices`

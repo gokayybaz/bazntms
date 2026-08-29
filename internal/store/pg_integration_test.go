@@ -134,7 +134,7 @@ func TestPostgresStore(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("iface ornek: %v", err)
 	}
-	agents, err := st.ListAgents(time.Hour)
+	agents, err := st.ListAgents(time.Hour, "")
 	if err != nil || len(agents) != 1 || !agents[0].Online || len(agents[0].Rates) != 1 {
 		t.Fatalf("filo: %v %+v", err, agents)
 	}

@@ -95,9 +95,56 @@ jobs:
             bazntms-*
             !bazntms-agent.yml
 
+  supply-chain:
+    name: Supply chain (SBOM, scan, sign)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # cosign keyless imza
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: SBOM (syft, SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          artifact-name: bazntms-sbom.spdx.json
+          upload-artifact: true
+
+      - name: Trivy taramasi (CRITICAL bloklar)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Cosign keyless imzasi
+        uses: sigstore/cosign-installer@v3
+
+      - name: Artifact'lari imzala
+        run: |
+          for f in bazntms-*; do
+            [ -f "$f" ] || continue
+            cosign sign-blob --yes --output-signature "$f.sig" --bundle "$f.bundle" "$f"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bazntms-signatures
+          path: |
+            bazntms-*.sig
+            bazntms-*.bundle
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, supply-chain]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -108,7 +155,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" bazntms-* \
+          gh release create "${GITHUB_REF_NAME}" \
+            bazntms-* bazntms-sbom.spdx.json \
             --repo "${GITHUB_REPOSITORY}" \
             --title "bazNTMS ${GITHUB_REF_NAME}" \
             --generate-notes

@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // postgres:// DSN icin driver kaydi
@@ -116,7 +117,7 @@ type Store interface {
 	TouchAgent(id int64, version, remoteIP string) error
 	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
 	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
-	ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error)
+	ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error)
 	LatestAgentConnections(agentID int64) []telemetry.ConnectionSample
 	AgentByID(id int64) (*Agent, error)
 	DeleteAgent(id int64) error
@@ -137,6 +138,25 @@ type Store interface {
 	TopFlows(since time.Time, limit int) ([]FlowRow, error)
 	SaveSyslogEvent(e SyslogEvent) error
 	RecentSyslog(limit int) ([]SyslogEvent, error)
+
+	// kullanicilar, token'lar, denetim kaydi (Faz 5)
+	CreateUser(u User) (int64, error)
+	UserByName(username string) (*User, error)
+	UserByID(id int64) (*User, error)
+	ListUsers() ([]User, error)
+	UpdateUser(u User) error
+	UpdateUserPassword(id int64, passwordHash string) error
+	TouchUserLogin(id int64) error
+	DeleteUser(id int64) error
+	CreateAPIToken(t APIToken) (int64, error)
+	APITokenByHash(hash string) (*APIToken, error)
+	ListAPITokens() ([]APIToken, error)
+	RevokeAPIToken(id int64) error
+	DeleteAPIToken(id int64) error
+	TouchAPIToken(id int64) error
+	InsertAuditEvent(e AuditEvent) (int64, error)
+	RecentAuditEvents(limit int) ([]AuditEvent, error)
+	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
 }
 
 // sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
@@ -146,6 +166,8 @@ type sqlStore struct {
 	db *sql.DB
 	pg bool // PostgreSQL/TimescaleDB modu
 	ts bool // TimescaleDB eklentisi aktif (pg modunda anlamlı)
+
+	auditMu sync.Mutex // audit hash-zinciri tutarliligi (Faz 5.3)
 }
 
 // Open, veri deposunu acar: DSN postgres:// ile basliyorsa PostgreSQL
@@ -411,6 +433,42 @@ CREATE TABLE IF NOT EXISTS insights (
 	period_minutes INTEGER NOT NULL,
 	summary        TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	username      TEXT    NOT NULL UNIQUE,
+	password_hash TEXT    NOT NULL DEFAULT '',
+	role          TEXT    NOT NULL DEFAULT 'viewer',
+	site          TEXT    NOT NULL DEFAULT '',
+	enabled       INTEGER NOT NULL DEFAULT 1,
+	created_at    INTEGER NOT NULL,
+	last_login    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	name       TEXT    NOT NULL,
+	token_hash TEXT    NOT NULL UNIQUE,
+	role       TEXT    NOT NULL DEFAULT 'viewer',
+	site       TEXT    NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	last_used  INTEGER NOT NULL DEFAULT 0,
+	revoked    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+	id        INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts        INTEGER NOT NULL,
+	username  TEXT    NOT NULL,
+	role      TEXT    NOT NULL DEFAULT '',
+	action    TEXT    NOT NULL,
+	target    TEXT    NOT NULL DEFAULT '',
+	detail    TEXT    NOT NULL DEFAULT '',
+	ip        TEXT    NOT NULL DEFAULT '',
+	prev_hash TEXT    NOT NULL DEFAULT '',
+	hash      TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts);
 `)
 	return err
 }

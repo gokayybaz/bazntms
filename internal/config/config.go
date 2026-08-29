@@ -37,6 +37,14 @@ type HubConfig struct {
 	NATS              struct {
 		URL string `koanf:"url"` // bos = kuyruk kapali (dogrudan store yazimi)
 	} `koanf:"nats"`
+	OIDC struct {
+		Issuer       string            `koanf:"issuer"` // bos = SSO kapali
+		ClientID     string            `koanf:"client_id"`
+		ClientSecret string            `koanf:"client_secret"`
+		RedirectURL  string            `koanf:"redirect_url"` // bos: <public-url>/api/auth/oidc/callback
+		GroupRoles   map[string]string `koanf:"group_roles"`  // grup → rol (admin|netops|analyst|viewer)
+		DefaultRole  string            `koanf:"default_role"` // eslesmeyen gruplarin rolu (varsayilan viewer)
+	} `koanf:"oidc"`
 	Capture struct {
 		Enabled bool `koanf:"enabled"` // hub'in kendi paket yakalamasi; coklu replikada kapatilir
 	} `koanf:"capture"`
@@ -74,8 +82,9 @@ type HubConfig struct {
 // telemetri ayarlari genisler).
 type AgentConfig struct {
 	Hub struct {
-		URL   string `koanf:"url"`
-		Token string `koanf:"token"`
+		URL   string   `koanf:"url"`  // tek adres veya CSV (a,b) — failover sirasi
+		URLs  []string `koanf:"urls"` // liste biçimi: failover sirasi
+		Token string   `koanf:"token"`
 	} `koanf:"hub"`
 	Agent struct {
 		Name string `koanf:"name"`

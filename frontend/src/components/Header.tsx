@@ -11,6 +11,7 @@ interface Props {
   onStop: () => void
   starting: boolean
   onLogout: () => void
+  identity: { username: string; role: string } | null
 }
 
 export function Header({
@@ -24,6 +25,7 @@ export function Header({
   onStop,
   starting,
   onLogout,
+  identity,
 }: Props) {
   const snifable = interfaces.filter((i) => i.up && !i.loopback)
   const options = snifable.length > 0 ? snifable : interfaces
@@ -71,6 +73,15 @@ export function Header({
 
         <div className="flex-1" />
 
+        {identity && (
+          <span
+            title={identity.username}
+            className="rounded border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-violet-300"
+          >
+            {identity.username} · {identity.role}
+          </span>
+        )}
+
         {error && (
           <span className="max-w-md truncate rounded border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 font-mono text-[10px] text-rose-400" title={error}>
             {error}
@@ -100,13 +111,15 @@ export function Header({
             Durdur
           </button>
         ) : (
-          <button
-            onClick={onStart}
-            disabled={!selected || starting}
-            className="rounded-md bg-cyan-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {starting ? 'Başlatılıyor…' : 'Yakalamayı Başlat'}
-          </button>
+          identity && !['viewer', 'analyst'].includes(identity.role) && (
+            <button
+              onClick={onStart}
+              disabled={!selected || starting}
+              className="rounded-md bg-cyan-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {starting ? 'Başlatılıyor…' : 'Yakalamayı Başlat'}
+            </button>
+          )
         )}
 
         <button

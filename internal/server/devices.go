@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -95,6 +96,7 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("cihaz eklendi", "id", id, "name", req.Name, "host", req.Host, "kind", req.Kind)
+	s.audit(r, identityFromCtx(r), "device.add", fmt.Sprintf("device:%d", id), req.Name+" ("+req.Host+")")
 	writeJSON(w, map[string]any{"ok": true, "id": id})
 }
 
@@ -109,6 +111,7 @@ func (s *Server) handleDeviceDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("cihaz silindi", "device_id", id)
+	s.audit(r, identityFromCtx(r), "device.delete", fmt.Sprintf("device:%d", id), "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
