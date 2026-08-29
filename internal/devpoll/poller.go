@@ -164,6 +164,17 @@ func (p *Poller) pollDevice(d store.Device) {
 		ifaces = append(ifaces, i)
 	}
 
+	// topoloji kesfi (Faz 6.1): LLDP/CDP/ARP — best-effort
+	ifMap := map[int64]store.DeviceIface{}
+	for _, i := range ifaces {
+		ifMap[i.IfIndex] = i
+	}
+	source := sysName
+	if source == "" {
+		source = d.Name
+	}
+	p.discoverTopology(conn, d, source, ifMap)
+
 	ts := time.Now().Unix()
 	if err := p.store.SaveDeviceIfaceSamples(d.ID, ts, ifaces); err != nil {
 		slog.Warn("cihaz ornek kaydi", "device", d.Name, "err", err)

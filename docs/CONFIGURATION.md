@@ -178,6 +178,50 @@ değişiklikleri, yakalama başlat/durdur, AI analizi, yetki reddi) append-only
 (SHA-256 zinciri); `GET /api/v1/audit/verify` zinciri yeniden hesaplayarak
 bütünlüğü kanıtlar.
 
+## İleri Analiz (Faz 6)
+
+### Anomali tespiti (AI'sız)
+
+Uyarı ayarlarından (`PUT /api/alerts` veya arayüz) yönetilir:
+
+```json
+"anomaly": {
+  "enabled": true,
+  "sensitivity": 3.0,
+  "min_samples": 120,
+  "window_min": 5
+}
+```
+
+Son 7 günün saatlik (hour-of-day) baseline'ı ile güncel 5 dakikalık pencere
+karşılaştırılır; z-skoru eşiği aşarsa "Anomali" uyarısı üretilir ve tüm
+bildirim kanallarına dağıtılır. Eski config'lerde alan yoksa varsayılanla
+açılır (`sensitivity: 0` geçersiz kabul edilir).
+
+### Bildirim kanalları
+
+`notifiers` bölümüne eklenen kurumsal kanallar:
+
+| Alan | Açıklama |
+|------|----------|
+| `teams_url` | Microsoft Teams incoming webhook (MessageCard) |
+| `webhook_v2_url` + `webhook_v2_secret` | HMAC-SHA256 imzalı webhook (`X-BazNTMS-Signature` başlığı) |
+| `email_host`, `email_port` (0→587), `email_from`, `email_to[]`, `email_user`, `email_pass` | SMTP e-posta (STARTTLS otomatik) |
+
+### Topoloji keşfi
+
+- Cihazlarda: SNMP poller her turda **LLDP-MIB**, **CISCO-CDP-MIB** ve
+  **IP-MIB (ARP)** tablolarını yürütür; desteklenmeyen cihazlarda sessizce
+  atlanır
+- Agentlarda: yerel ağlar (CIDR) telemetriyle hub'a taşınır
+- Kenarlar 24 saat görünmezse temizlenir (`PruneTopology`)
+- Harita: arayüz "Ağ Topolojisi" kartı
+
+### Kurumsal rapor
+
+`/api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,
+paket düşme oranı), kapasite (dönem büyümesi) ve banding (p50/p95/p99).
+
 ## Ölçek Altyapısı (Faz 4)
 
 ### PostgreSQL / TimescaleDB

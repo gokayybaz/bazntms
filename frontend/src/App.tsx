@@ -21,6 +21,7 @@ import { ProcessesCard } from './components/ProcessesCard'
 import { DevicesCard } from './components/DevicesCard'
 import { FlowsCard } from './components/FlowsCard'
 import { SyslogCard } from './components/SyslogCard'
+import { TopologyCard } from './components/TopologyCard'
 import { Card } from './components/Card'
 
 export default function App() {
@@ -141,6 +142,10 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
         <StatCards stats={stats} />
+
+        <Card title="Ağ Topolojisi" right={<span className="text-xs text-slate-500">Faz 6 · LLDP/CDP/ARP + agent subnetleri</span>}>
+          <TopologyCard refreshKey={historyRefresh} />
+        </Card>
 
         <Card title="Agent Filosu" right={<span className="text-xs text-slate-500">merkezi izleme</span>}>
           <AgentsCard refreshKey={historyRefresh} />

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -174,7 +175,32 @@ func (c *Client) Collect() telemetry.TelemetryBatch {
 			Status: cn.Status, PID: cn.PID, Process: cn.Process,
 		})
 	}
+	batch.Subnets = localSubnets()
 	return batch
+}
+
+// localSubnets, yerel aglari CIDR olarak cikarir (loopback/link-local haric)
+// — hub tarafinda topoloji haritasina islenir (Faz 6.1).
+func localSubnets() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, i := range sysmon.ListInterfaces() {
+		for _, a := range i.Addresses {
+			ip, ipnet, err := net.ParseCIDR(a)
+			if err != nil || ipnet == nil {
+				continue
+			}
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+				continue
+			}
+			c := ipnet.String()
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 // Send, batch'i hub'a gonderir; basarisizsa offline kuyruga yazip hatayi dondurur.

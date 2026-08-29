@@ -203,6 +203,13 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 				return
 			}
 		}
+		if len(env.Batch.Subnets) > 0 {
+			// topoloji kesfi (Faz 6.1): agent'in yerel aglari
+			if err := st.SaveAgentSubnets(env.AgentID, "", env.Batch.Subnets); err != nil {
+				q.retry(msg, err)
+				return
+			}
+		}
 	case subFlows:
 		var rows []store.FlowRow
 		if err := json.Unmarshal(msg.Data(), &rows); err != nil {

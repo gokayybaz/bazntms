@@ -61,5 +61,6 @@ type TelemetryBatch struct {
 	Interfaces     []InterfaceSample      `json:"interfaces"`
 	Connections    []ConnectionSample     `json:"connections"`
 	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`
+	Subnets        []string               `json:"subnets,omitempty"` // yerel aglar (CIDR) — topoloji kesfi (Faz 6.1)
 	DroppedPackets uint64                 `json:"dropped_packets,omitempty"`
 }

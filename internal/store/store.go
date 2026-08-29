@@ -157,6 +157,15 @@ type Store interface {
 	InsertAuditEvent(e AuditEvent) (int64, error)
 	RecentAuditEvents(limit int) ([]AuditEvent, error)
 	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
+
+	// topoloji kesfi ve istatistiksel baseline (Faz 6)
+	UpsertTopologyLink(l TopologyLink) error
+	RecentTopologyLinks(since time.Time) ([]TopologyLink, error)
+	PruneTopology(retention time.Duration) error
+	SaveAgentSubnets(agentID int64, name string, subnets []string) error
+	HourlyBpsStats() ([]HourStat, error)
+	AvgBpsSince(since time.Time) (float64, error)
+	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
 }
 
 // sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
@@ -469,6 +478,21 @@ CREATE TABLE IF NOT EXISTS audit_events (
 	hash      TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts);
+
+CREATE TABLE IF NOT EXISTS topology_links (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts          INTEGER NOT NULL,
+	kind        TEXT    NOT NULL,
+	source_type TEXT    NOT NULL,
+	source_id   INTEGER NOT NULL DEFAULT 0,
+	source_name TEXT    NOT NULL DEFAULT '',
+	local_port  TEXT    NOT NULL DEFAULT '',
+	peer_type   TEXT    NOT NULL DEFAULT 'host',
+	peer_id     INTEGER NOT NULL DEFAULT 0,
+	peer_name   TEXT    NOT NULL DEFAULT '',
+	peer_ip     TEXT    NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_topo_dedup ON topology_links(kind, source_type, source_id, local_port, peer_name, peer_ip);
 `)
 	return err
 }

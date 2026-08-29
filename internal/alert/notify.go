@@ -3,10 +3,15 @@ package alert
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/smtp"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -47,7 +52,109 @@ func (n *Notifier) Deliver(nf Notifiers, ev store.AlertEvent) {
 				"text":    title + "\n" + ev.Message,
 			})
 		}
+		// Faz 6.3: kurumsal entegrasyonlar
+		if nf.TeamsURL != "" {
+			n.postJSON(nf.TeamsURL, map[string]any{
+				"@type":      "MessageCard",
+				"@context":   "http://schema.org/extensions",
+				"themeColor": "0E7490",
+				"title":      title,
+				"text":       ev.Message,
+			})
+		}
+		if nf.WebhookV2URL != "" {
+			n.postWebhookV2(nf.WebhookV2URL, nf.WebhookV2Secret, ev, title)
+		}
+		if nf.EmailHost != "" && len(nf.EmailTo) > 0 {
+			if err := sendEmail(nf, title, ev.Message); err != nil {
+				log.Printf("e-posta bildirimi: %v", err)
+			}
+		}
 	}()
+}
+
+// postWebhookV2, imzali webhook: govde HMAC-SHA256 ile imzalanir; alici
+// tarafinda X-BazNTMS-Signature basligi dogrulanarak replay/spoof onlenir.
+func (n *Notifier) postWebhookV2(url, secret string, ev store.AlertEvent, title string) {
+	payload := map[string]any{
+		"version": 2, "ts": ev.Ts, "kind": ev.Kind, "key": ev.Key,
+		"message": ev.Message, "title": title,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-BazNTMS-Signature", "sha256="+hmacSHA256Hex(secret, body))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		log.Printf("webhook v2: %v", err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		log.Printf("webhook v2 basarisiz (HTTP %d): %s", resp.StatusCode, url)
+	}
+}
+
+func hmacSHA256Hex(secret string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// sendEmail, STARTTLS destekli basit SMTP gonderimi (net/smtp).
+func sendEmail(nf Notifiers, subject, body string) error {
+	port := nf.EmailPort
+	if port == 0 {
+		port = 587
+	}
+	host := nf.EmailHost
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	conn, err := smtp.Dial(addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if ok, _ := conn.Extension("STARTTLS"); ok {
+		if err := conn.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
+	if nf.EmailUser != "" {
+		auth := smtp.PlainAuth("", nf.EmailUser, nf.EmailPass, host)
+		if err := conn.Auth(auth); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+	}
+	if err := conn.Mail(nf.EmailFrom); err != nil {
+		return err
+	}
+	for _, to := range nf.EmailTo {
+		if err := conn.Rcpt(to); err != nil {
+			return err
+		}
+	}
+	w, err := conn.Data()
+	if err != nil {
+		return err
+	}
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
+		nf.EmailFrom, strings.Join(nf.EmailTo, ", "), subject, body)
+	if _, err := w.Write([]byte(msg)); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return conn.Quit()
 }
 
 func (n *Notifier) postJSON(url string, payload any) {
@@ -105,6 +212,8 @@ func kindLabel(kind string) string {
 		return "Yeni Süreç"
 	case "target":
 		return "Yeni Hedef"
+	case "anomaly":
+		return "Anomali"
 	default:
 		return strings.ToUpper(kind)
 	}

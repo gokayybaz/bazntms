@@ -172,6 +172,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/devices/{id}/interfaces", s.handleDeviceIfaces)
 	mux.HandleFunc("GET /api/v1/flows", s.handleFlows)
 	mux.HandleFunc("GET /api/v1/syslog", s.handleSyslogEvents)
+	mux.HandleFunc("GET /api/v1/topology", s.handleTopology)
 
 	// RBAC yonetimi (Faz 5): kullanicilar, token'lar, denetim kaydi — admin
 	mux.HandleFunc("GET /api/v1/users", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleUsersList)).ServeHTTP)
@@ -422,6 +423,22 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	if days <= 0 || days > 90 {
 		days = 7
+	}
+	// Faz 6.4: kurumsal rapor (SLA/kapasite/banding)
+	if r.URL.Query().Get("type") == "enterprise" {
+		data, err := report.BuildEnterprise(s.store, days)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		htmlBytes, err := data.RenderEnterpriseHTML()
+		if err != nil {
+			http.Error(w, "HTML üretilemedi: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(htmlBytes)
+		return
 	}
 	data, err := report.Build(s.store, s.geo, days)
 	if err != nil {

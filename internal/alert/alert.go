@@ -22,6 +22,7 @@ type Config struct {
 	Ports     PortsConfig     `json:"ports"`
 	NewProc   ProcConfig      `json:"new_proc"`
 	NewTarget TargetConfig    `json:"new_target"`
+	Anomaly   AnomalyConfig   `json:"anomaly"` // Faz 6.2: istatistiksel baseline
 
 	Notifiers Notifiers `json:"notifiers"`
 }
@@ -55,6 +56,17 @@ type Notifiers struct {
 	SlackURL       string `json:"slack_url"`
 	TelegramToken  string `json:"telegram_token"`
 	TelegramChatID string `json:"telegram_chat_id"`
+
+	// Faz 6.3: kurumsal entegrasyonlar
+	TeamsURL        string   `json:"teams_url"`  // Teams incoming webhook
+	EmailHost       string   `json:"email_host"` // SMTP sunucu (STARTTLS otomatik)
+	EmailPort       int      `json:"email_port"` // 0 → 587
+	EmailFrom       string   `json:"email_from"`
+	EmailTo         []string `json:"email_to"`
+	EmailUser       string   `json:"email_user"`
+	EmailPass       string   `json:"email_pass"`
+	WebhookV2URL    string   `json:"webhook_v2_url"` // imzali webhook (HMAC-SHA256)
+	WebhookV2Secret string   `json:"webhook_v2_secret"`
 }
 
 // DefaultConfig, ilk calistirma icin makul ayarlar.
@@ -74,6 +86,7 @@ func DefaultConfig() Config {
 		NewTarget: TargetConfig{
 			Enabled: true, MinTotalMB: 10,
 		},
+		Anomaly:   DefaultAnomalyConfig(),
 		Notifiers: Notifiers{Desktop: true},
 	}
 }
@@ -143,6 +156,10 @@ func (m *Manager) run() {
 				m.checkPorts(cfg, cons)
 				m.checkNewProcess(cfg, cons)
 				m.checkNewTarget(cfg, snap)
+			}
+			// anomali degerlendirmesi: 5 dakikada bir (Faz 6.2)
+			if m.tickN%300 == 1 {
+				m.checkAnomaly(cfg)
 			}
 		}
 	}
