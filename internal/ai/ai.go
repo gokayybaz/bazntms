@@ -104,7 +104,7 @@ const systemAnalyst = "Sen deneyimli bir ag guvenligi ve performans analizcisisi
 // Chunked modda veri parcalara bolunup ayri isteklerle gonderilir; her parcadan
 // kisa not alinir, en son notlar birlestirilerek final analiz uretilir. Boylece
 // kucuk parametreli modellerde context asiri yuklenmez.
-func (c *Client) Analyze(ctx context.Context, st *store.Store, opts AnalyzeOptions) (string, error) {
+func (c *Client) Analyze(ctx context.Context, st store.Store, opts AnalyzeOptions) (string, error) {
 	if !c.cfg.Enabled() {
 		return "", fmt.Errorf("AI yapilandirilmamis: -llm-base-url (ör. http://localhost:11434/v1) veya LLM_API_KEY ile sunucuyu baslatin")
 	}
@@ -307,7 +307,7 @@ func (d dataParts) combined() string {
 }
 
 // buildDataParts, DB'den donemi okuyup kompakt JSON bolumleri uretir.
-func buildDataParts(st *store.Store, minutes int, geo *geoip.Resolver) (dataParts, error) {
+func buildDataParts(st store.Store, minutes int, geo *geoip.Resolver) (dataParts, error) {
 	since := time.Now().Add(-time.Duration(minutes) * time.Minute)
 
 	totals, err := st.PeriodTotals(since)

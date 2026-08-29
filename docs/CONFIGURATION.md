@@ -6,8 +6,12 @@
 |--------|-----------|----------|
 | `-port` | `8080` | HTTP sunucu portu (0.0.0.0'a bağlanır) |
 | `-dev` | `false` | Frontend embed'ini atla; Vite dev server ile geliştirme |
-| `-db` | `bazntms.db` | SQLite veri tabanı dosyası (WAL modunda açılır) |
-| `-retention-hours` | `168` (7 gün) | Veri saklama süresi; eski kayıtlar 10 dakikada bir silinir |
+| `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (Faz 4.1: DSN ile PostgreSQL/TimescaleDB modu) |
+| `-retention-hours` | `168` (7 gün) | SQLite/Prune modunda saklama süresi; eski kayıtlar 10 dakikada bir silinir. TimescaleDB modunda retention politikaları devrededir |
+| `-nats` | — | NATS JetStream adresi (Faz 4.2). Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
+| `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
+| `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
+| `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-auth-password` | — | Arayüz şifresi. Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` ortam değişkeni de geçerli |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
@@ -125,3 +129,58 @@ zaman çözümlenmez.
 
 Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 `-db` ile taşınabilir; boyut kontrolü için `ls -la <db>*` (WAL dahil).
+
+## Ölçek Altyapısı (Faz 4)
+
+### PostgreSQL / TimescaleDB
+
+`-db postgres://...` verildiğinde store otomatik PostgreSQL moduna geçer:
+
+- Şema açılışta migrasyonla kurulur; `postgres://` DSN'de driver pgx'tir
+- TimescaleDB eklentisi kuruluysa (`CREATE EXTENSION timescaledb`) açılışta
+  hypertable'lar, **samples_1m / samples_1h** continuous aggregate'ları ve
+  retention politikaları otomatik ayarlanır: **ham 7 gün → 1 dk 90 gün →
+  1 saat 2 yıl**
+- Eklenti yoksa düz PostgreSQL çalışır; temizlik Prune ile yapılır
+- Sorgu p95 hedefi için 1 dakikalık panel sorguları continuous aggregate
+  üzerinden okunur (gerçek-zamanlı agregasyon: yeni veri anında görünür)
+
+```bash
+./bazntms-hub -db "postgres://bazntms:bazntms@localhost:5432/bazntms?sslmode=disable"
+```
+
+### NATS JetStream kuyruğu
+
+`-nats` verildiğinde ingest → processor ayrışması devreye girer:
+
+- `POST /api/v1/agent/telemetry` batch'i `BAZNTMS` akışına
+  (`ingest.telemetry`) yayınlar ve hemen yanıt döner; yazımı `store-writer`
+  adlı durable consumer yapar
+- NetFlow ve syslog olayları da kuyruğa alınır (`ingest.flows`,
+  `ingest.syslog`)
+- Yazım hatasında mesaj 2 sn gecikmeli Nak edilir (replay); 10. denemede
+  atılır. Akış diskte tutulur (24 saat MaxAge, 5M mesaj sınırı)
+- Çoklu hub replikası aynı kuyruğu paylaşabilir
+
+### Çoklu replika rolleri
+
+Stateless ingest ölçeklemesi için hub yeniden başlatılabilir (SIGTERM →
+graceful shutdown). Node-yerel bileşenler bayraklarla ayrılır:
+
+```bash
+# ingest replikası (N adet, LB arkası)
+./bazntms-hub -capture=false -alerts=false -poller=false -nats nats://...
+
+# controller replikası (1 adet: yakalama + uyarı + poller)
+./bazntms-hub -capture -alerts -poller
+```
+
+### Yük testi
+
+Bkz. `loadtest/README.md` — `bazntms-loadgen` sentetik filosu ve k6
+senaryosu (hedef: ≥170 ist/sn sürekli ingest).
+
+### Dağıtım
+
+- Tek-node demo: `docker compose -f deploy/docker-compose.yml up --build`
+- Kubernetes: `deploy/helm/bazntms` (Helm chart, değerler `values.yaml`)

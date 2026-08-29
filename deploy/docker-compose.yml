@@ -1,0 +1,60 @@
+# bazNTMS — tek-node demo yığını (Faz 4.4)
+#
+# Kullanım:
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# İçerik:
+#   - TimescaleDB (hypertable + retention politikaları otomatik kurulur)
+#   - NATS JetStream (ingest → processor kuyruğu)
+#   - bazntms-hub (dashboard: http://localhost:8080, şifre: demo123)
+#
+# Hub tam sürümde syslog/NetFlow alanlar için UDP portları da yayınlar.
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: bazntms
+      POSTGRES_PASSWORD: bazntms
+      POSTGRES_DB: bazntms
+    volumes:
+      - tsdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bazntms -d bazntms"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222" # opsiyonel: disaridan kuyruk inspeksiyonu (nats cli)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  hub:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.hub
+    command: ["-flow-port", "2055", "-syslog-port", "5514", "-enroll-token", "demo-enroll-token"]
+    ports:
+      - "8080:8080"
+      - "2055:2055/udp" # NetFlow v5
+      - "5514:5514/udp" # Syslog
+    environment:
+      BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
+      BAZNTMS_NATS__URL: nats://nats:4222
+      BAZNTMS_LOG__FORMAT: json
+      AUTH_PASSWORD: demo123
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+volumes:
+  tsdata:

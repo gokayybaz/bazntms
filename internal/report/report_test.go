@@ -9,7 +9,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
-func seededStore(t *testing.T) *store.Store {
+func seededStore(t *testing.T) store.Store {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "report.db"))
 	if err != nil {

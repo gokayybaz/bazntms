@@ -1,12 +1,28 @@
+// Package store, hub'in kalici veri katmanidir (Faz 4.1).
+//
+// Store arayuzunun iki arka ucu vardir; Open(path) DSN semasindan secim yapar:
+//   - SQLite (dev modu): path bir dosya yolu (modernc.org/sqlite, CGO'suz)
+//   - PostgreSQL/TimescaleDB (olcek modu): path postgres:// veya postgresql://
+//     ile baslar (pgx stdlib driver); TimescaleDB kuruluysa hypertable,
+//     continuous aggregate ve retention politikalari otomatik acilir (Faz 4.3)
+//
+// Zaman kolonlari her iki dialect'te de unix saniye (BIGINT/INTEGER) tutulur;
+// boylece sorgu mantigi dialect'ten bagimsizdir. Sorgu metinleri '?' yer
+// tutucusuyla yazilir; PostgreSQL'e gonderilirken $n'ye cevrilir.
 package store
 
 import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib" // postgres:// DSN icin driver kaydi
+	_ "modernc.org/sqlite"             // SQLite (dev modu) driver kaydi
+
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
 type Sample struct {
@@ -58,11 +74,90 @@ type Insight struct {
 	Summary       string `json:"summary"`
 }
 
-type Store struct {
-	db *sql.DB
+// Store, hub'in tum kalici veri islemlerinin sozlesmesidir. SQLite ve
+// PostgreSQL/TimescaleDB arka uclarinin ikisi de bu arayuzu saglar.
+type Store interface {
+	Close() error
+	Ping() error
+
+	// yakalama verisi (collector)
+	InsertSample(sm Sample) error
+	InsertEndpointDeltas(list []EndpointDelta) error
+	InsertDNSDeltas(list []DNSDelta) error
+	InsertConnectionEvents(list []ConnectionEvent) error
+	Prune(retention time.Duration) error
+
+	// sorgular
+	TimeseriesBuckets(since time.Time) ([]Bucket, error)
+	PeriodTotals(since time.Time) (Totals, error)
+	TopEndpointsSince(since time.Time, limit int) ([]EndpointDelta, error)
+	ProtocolTotals(since time.Time) (map[string]uint64, error)
+	TopProcessesSince(since time.Time, limit int) ([]ProcessUsage, error)
+	TopDomainsSince(since time.Time, limit int) ([]DNSDelta, error)
+	DailyTotals(days int) ([]DayTotal, error)
+	HourlyAverages(dayStart time.Time) ([]HourAvg, error)
+
+	// AI ozetleri
+	InsertInsight(i Insight) (int64, error)
+	RecentInsights(limit int) ([]Insight, error)
+
+	// uyarilar
+	InsertAlertEvent(e AlertEvent) (int64, error)
+	RecentAlertEvents(limit int) ([]AlertEvent, error)
+	IsAlertSeen(kind, key string) (bool, error)
+	MarkAlertSeen(kind, key string) error
+	CountAlertSeen(kind string) (int, error)
+	LoadAlertConfig() (string, error)
+	SaveAlertConfig(cfg string) error
+
+	// agent filosu (Faz 1)
+	RegisterAgent(a Agent) (int64, error)
+	AgentByTokenHash(hash string) (*Agent, error)
+	TouchAgent(id int64, version, remoteIP string) error
+	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
+	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
+	ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error)
+	LatestAgentConnections(agentID int64) []telemetry.ConnectionSample
+	AgentByID(id int64) (*Agent, error)
+	DeleteAgent(id int64) error
+
+	// surec trafigi (Faz 2)
+	SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error
+	TopProcessTraffic(since time.Time, agentID int64, limit int) ([]ProcessTrafficUsage, error)
+
+	// cihazlar, flow, syslog (Faz 3)
+	AddDevice(d Device) (int64, error)
+	ListDevices() ([]Device, error)
+	DeviceByID(id int64) (*Device, error)
+	DeleteDevice(id int64) error
+	UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error
+	SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error
+	LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
+	SaveFlows(rows []FlowRow) error
+	TopFlows(since time.Time, limit int) ([]FlowRow, error)
+	SaveSyslogEvent(e SyslogEvent) error
+	RecentSyslog(limit int) ([]SyslogEvent, error)
 }
 
-func Open(path string) (*Store, error) {
+// sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
+// arasindaki fark (driver, yer tutucu, id dondurme) dialect kontroluyle
+// yonetilir.
+type sqlStore struct {
+	db *sql.DB
+	pg bool // PostgreSQL/TimescaleDB modu
+	ts bool // TimescaleDB eklentisi aktif (pg modunda anlamlı)
+}
+
+// Open, veri deposunu acar: DSN postgres:// ile basliyorsa PostgreSQL
+// (pgx), aksi halde SQLite dosyasi kullanilir.
+func Open(path string) (Store, error) {
+	if strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://") {
+		return openPostgres(path)
+	}
+	return openSQLite(path)
+}
+
+func openSQLite(path string) (Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -81,7 +176,52 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &sqlStore{db: db}, nil
+}
+
+func openPostgres(dsn string) (Store, error) {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	// yuksek eszamanli ingest (5000 agent @ 30sn ≈ 170 ist/sn) icin havuz siniri
+	db.SetMaxOpenConns(32)
+	db.SetMaxIdleConns(8)
+	db.SetConnMaxLifetime(time.Hour)
+	if err := migratePostgres(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("postgres migrasyon: %w", err)
+	}
+	s := &sqlStore{db: db, pg: true}
+	s.ts = setupTimescale(db) // best-effort; yoksa duz PostgreSQL modu
+	return s, nil
+}
+
+// q, sorgu metnini dialect'e uyarlar: SQLite '?' yer tutucusu kullanir,
+// PostgreSQL $n bekler.
+func (s *sqlStore) q(query string) string {
+	if !s.pg {
+		return query
+	}
+	var b strings.Builder
+	n := 0
+	for _, r := range query {
+		if r == '?' {
+			n++
+			b.WriteByte('$')
+			b.WriteString(strconv.Itoa(n))
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func migrate(db *sql.DB) error {
@@ -275,21 +415,26 @@ CREATE TABLE IF NOT EXISTS insights (
 	return err
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+func (s *sqlStore) Close() error { return s.db.Close() }
 
-func (s *Store) InsertSample(sm Sample) error {
+func (s *sqlStore) Ping() error { return s.db.Ping() }
+
+func (s *sqlStore) InsertSample(sm Sample) error {
 	protoJSON, err := json.Marshal(sm.Protocols)
 	if err != nil {
 		protoJSON = []byte("{}")
 	}
-	_, err = s.db.Exec(`INSERT OR REPLACE INTO samples
+	_, err = s.db.Exec(s.q(`INSERT INTO samples
 		(ts, device, bps_in, bps_out, bps_local, pps, dropped, protocols)
-		VALUES (?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?)
+		ON CONFLICT (ts, device) DO UPDATE SET
+			bps_in = excluded.bps_in, bps_out = excluded.bps_out, bps_local = excluded.bps_local,
+			pps = excluded.pps, dropped = excluded.dropped, protocols = excluded.protocols`),
 		sm.Ts, sm.Device, sm.BpsIn, sm.BpsOut, sm.BpsLocal, sm.Pps, sm.Dropped, string(protoJSON))
 	return err
 }
 
-func (s *Store) InsertEndpointDeltas(list []EndpointDelta) error {
+func (s *sqlStore) InsertEndpointDeltas(list []EndpointDelta) error {
 	if len(list) == 0 {
 		return nil
 	}
@@ -298,8 +443,11 @@ func (s *Store) InsertEndpointDeltas(list []EndpointDelta) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO endpoint_stats
-		(ts, device, ip, hostname, bytes_in, bytes_out, packets) VALUES (?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO endpoint_stats
+		(ts, device, ip, hostname, bytes_in, bytes_out, packets) VALUES (?,?,?,?,?,?,?)
+		ON CONFLICT (ts, device, ip) DO UPDATE SET
+			hostname = excluded.hostname, bytes_in = excluded.bytes_in,
+			bytes_out = excluded.bytes_out, packets = excluded.packets`))
 	if err != nil {
 		return err
 	}
@@ -312,7 +460,7 @@ func (s *Store) InsertEndpointDeltas(list []EndpointDelta) error {
 	return tx.Commit()
 }
 
-func (s *Store) InsertDNSDeltas(list []DNSDelta) error {
+func (s *sqlStore) InsertDNSDeltas(list []DNSDelta) error {
 	if len(list) == 0 {
 		return nil
 	}
@@ -321,8 +469,10 @@ func (s *Store) InsertDNSDeltas(list []DNSDelta) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO dns_queries
-		(ts, domain, queries, responses) VALUES (?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO dns_queries
+		(ts, domain, queries, responses) VALUES (?,?,?,?)
+		ON CONFLICT (ts, domain) DO UPDATE SET
+			queries = excluded.queries, responses = excluded.responses`))
 	if err != nil {
 		return err
 	}
@@ -335,7 +485,7 @@ func (s *Store) InsertDNSDeltas(list []DNSDelta) error {
 	return tx.Commit()
 }
 
-func (s *Store) InsertConnectionEvents(list []ConnectionEvent) error {
+func (s *sqlStore) InsertConnectionEvents(list []ConnectionEvent) error {
 	if len(list) == 0 {
 		return nil
 	}
@@ -344,8 +494,8 @@ func (s *Store) InsertConnectionEvents(list []ConnectionEvent) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO connection_events
-		(ts, proto, local_addr, remote_addr, status, pid, process, count) VALUES (?,?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO connection_events
+		(ts, proto, local_addr, remote_addr, status, pid, process, count) VALUES (?,?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -358,7 +508,9 @@ func (s *Store) InsertConnectionEvents(list []ConnectionEvent) error {
 	return tx.Commit()
 }
 
-func (s *Store) Prune(retention time.Duration) error {
+// Prune, retention penceresinin disindaki ham kayitlari siler. TimescaleDB
+// modunda hypertable retention politikalarinin yedegi olarak da calisir.
+func (s *sqlStore) Prune(retention time.Duration) error {
 	cutoff := time.Now().Add(-retention).Unix()
 	for _, q := range []string{
 		`DELETE FROM samples WHERE ts < ?`,
@@ -369,8 +521,10 @@ func (s *Store) Prune(retention time.Duration) error {
 		`DELETE FROM agent_iface_samples WHERE ts < ?`,
 		`DELETE FROM process_traffic WHERE ts < ?`,
 		`DELETE FROM flows WHERE ts < ?`,
+		`DELETE FROM device_iface_samples WHERE ts < ?`, // Faz 4.3: eksik olan iki tablo
+		`DELETE FROM syslog_events WHERE ts < ?`,
 	} {
-		if _, err := s.db.Exec(q, cutoff); err != nil {
+		if _, err := s.db.Exec(s.q(q), cutoff); err != nil {
 			return err
 		}
 	}
@@ -387,13 +541,32 @@ type Bucket struct {
 	Pps   float64 `json:"pps"`
 }
 
-func (s *Store) TimeseriesBuckets(since time.Time) ([]Bucket, error) {
-	rows, err := s.db.Query(`SELECT (ts/60)*60 AS bucket,
+// TimeseriesBuckets, 60 saniyelik kovalara donusturulmis trafik serisi.
+// TimescaleDB modunda 1 dakikalik continuous aggregate (samples_1m) uzerinden
+// okunur (Faz 4.3 downsample: ham 7g, 1dk 90g, 1sa 2y saklanir).
+func (s *sqlStore) TimeseriesBuckets(since time.Time) ([]Bucket, error) {
+	if s.ts {
+		rows, err := s.db.Query(s.q(`SELECT bucket,
+				AVG(avg_bps_in)/8, AVG(avg_bps_out)/8, AVG(avg_bps_local)/8, SUM(pps)
+			FROM samples_1m WHERE bucket >= ? GROUP BY bucket ORDER BY bucket`), since.Unix())
+		if err == nil {
+			out, scanErr := scanBuckets(rows)
+			if scanErr == nil {
+				return out, nil
+			}
+			// cagg uzerinden okuma basarisizsa ham tabloya duser (asagida)
+		}
+	}
+	rows, err := s.db.Query(s.q(`SELECT (ts/60)*60 AS bucket,
 			AVG(bps_in)/8, AVG(bps_out)/8, AVG(bps_local)/8, AVG(pps)
-		FROM samples WHERE ts >= ? GROUP BY bucket ORDER BY bucket`, since.Unix())
+		FROM samples WHERE ts >= ? GROUP BY bucket ORDER BY bucket`), since.Unix())
 	if err != nil {
 		return nil, err
 	}
+	return scanBuckets(rows)
+}
+
+func scanBuckets(rows *sql.Rows) ([]Bucket, error) {
 	defer rows.Close()
 	var out []Bucket
 	for rows.Next() {
@@ -415,12 +588,12 @@ type Totals struct {
 	Samples    int64   `json:"samples"`
 }
 
-func (s *Store) PeriodTotals(since time.Time) (Totals, error) {
+func (s *sqlStore) PeriodTotals(since time.Time) (Totals, error) {
 	var t Totals
-	row := s.db.QueryRow(`SELECT COUNT(*),
+	row := s.db.QueryRow(s.q(`SELECT COUNT(*),
 			COALESCE(AVG(bps_in),0), COALESCE(AVG(bps_out),0),
 			COALESCE(MAX(bps_in),0), COALESCE(MAX(bps_out),0)
-		FROM samples WHERE ts >= ?`, since.Unix())
+		FROM samples WHERE ts >= ?`), since.Unix())
 	err := row.Scan(&t.Samples, &t.AvgBpsIn, &t.AvgBpsOut, &t.PeakBpsIn, &t.PeakBpsOut)
 	if err != nil {
 		return t, err
@@ -431,10 +604,10 @@ func (s *Store) PeriodTotals(since time.Time) (Totals, error) {
 	return t, nil
 }
 
-func (s *Store) TopEndpointsSince(since time.Time, limit int) ([]EndpointDelta, error) {
-	rows, err := s.db.Query(`SELECT ip, MAX(hostname), SUM(bytes_in), SUM(bytes_out), SUM(packets)
+func (s *sqlStore) TopEndpointsSince(since time.Time, limit int) ([]EndpointDelta, error) {
+	rows, err := s.db.Query(s.q(`SELECT ip, MAX(hostname), SUM(bytes_in), SUM(bytes_out), SUM(packets)
 		FROM endpoint_stats WHERE ts >= ?
-		GROUP BY ip ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`, since.Unix(), limit)
+		GROUP BY ip ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`), since.Unix(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -450,8 +623,8 @@ func (s *Store) TopEndpointsSince(since time.Time, limit int) ([]EndpointDelta, 
 	return out, rows.Err()
 }
 
-func (s *Store) ProtocolTotals(since time.Time) (map[string]uint64, error) {
-	rows, err := s.db.Query(`SELECT protocols FROM samples WHERE ts >= ?`, since.Unix())
+func (s *sqlStore) ProtocolTotals(since time.Time) (map[string]uint64, error) {
+	rows, err := s.db.Query(s.q(`SELECT protocols FROM samples WHERE ts >= ?`), since.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -478,10 +651,10 @@ type ProcessUsage struct {
 	Events      int64  `json:"events"`
 }
 
-func (s *Store) TopProcessesSince(since time.Time, limit int) ([]ProcessUsage, error) {
-	rows, err := s.db.Query(`SELECT process, COUNT(DISTINCT local_addr || '|' || remote_addr), SUM(count)
+func (s *sqlStore) TopProcessesSince(since time.Time, limit int) ([]ProcessUsage, error) {
+	rows, err := s.db.Query(s.q(`SELECT process, COUNT(DISTINCT local_addr || '|' || remote_addr), SUM(count)
 		FROM connection_events WHERE ts >= ? AND process != ''
-		GROUP BY process ORDER BY COUNT(DISTINCT local_addr || '|' || remote_addr) DESC LIMIT ?`,
+		GROUP BY process ORDER BY COUNT(DISTINCT local_addr || '|' || remote_addr) DESC LIMIT ?`),
 		since.Unix(), limit)
 	if err != nil {
 		return nil, err
@@ -498,10 +671,10 @@ func (s *Store) TopProcessesSince(since time.Time, limit int) ([]ProcessUsage, e
 	return out, rows.Err()
 }
 
-func (s *Store) TopDomainsSince(since time.Time, limit int) ([]DNSDelta, error) {
-	rows, err := s.db.Query(`SELECT domain, SUM(queries), SUM(responses)
+func (s *sqlStore) TopDomainsSince(since time.Time, limit int) ([]DNSDelta, error) {
+	rows, err := s.db.Query(s.q(`SELECT domain, SUM(queries), SUM(responses)
 		FROM dns_queries WHERE ts >= ?
-		GROUP BY domain ORDER BY SUM(queries + responses) DESC LIMIT ?`, since.Unix(), limit)
+		GROUP BY domain ORDER BY SUM(queries + responses) DESC LIMIT ?`), since.Unix(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -527,17 +700,15 @@ type AlertEvent struct {
 	Message string `json:"message"`
 }
 
-func (s *Store) InsertAlertEvent(e AlertEvent) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO alert_events (ts, kind, key, message) VALUES (?,?,?,?)`,
-		e.Ts, e.Kind, e.Key, e.Message)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+func (s *sqlStore) InsertAlertEvent(e AlertEvent) (int64, error) {
+	var id int64
+	err := s.db.QueryRow(s.q(`INSERT INTO alert_events (ts, kind, key, message) VALUES (?,?,?,?) RETURNING id`),
+		e.Ts, e.Kind, e.Key, e.Message).Scan(&id)
+	return id, err
 }
 
-func (s *Store) RecentAlertEvents(limit int) ([]AlertEvent, error) {
-	rows, err := s.db.Query(`SELECT id, ts, kind, key, message FROM alert_events ORDER BY id DESC LIMIT ?`, limit)
+func (s *sqlStore) RecentAlertEvents(limit int) ([]AlertEvent, error) {
+	rows, err := s.db.Query(s.q(`SELECT id, ts, kind, key, message FROM alert_events ORDER BY id DESC LIMIT ?`), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -557,40 +728,40 @@ func (s *Store) RecentAlertEvents(limit int) ([]AlertEvent, error) {
 }
 
 // IsAlertSeen, kalici gorulmusluk kontrolu (yeni surec/hedef kurallari icin).
-func (s *Store) IsAlertSeen(kind, key string) (bool, error) {
+func (s *sqlStore) IsAlertSeen(kind, key string) (bool, error) {
 	var one int
-	err := s.db.QueryRow(`SELECT 1 FROM alert_seen WHERE kind = ? AND key = ?`, kind, key).Scan(&one)
+	err := s.db.QueryRow(s.q(`SELECT 1 FROM alert_seen WHERE kind = ? AND key = ?`), kind, key).Scan(&one)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
 	return err == nil, err
 }
 
-func (s *Store) MarkAlertSeen(kind, key string) error {
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO alert_seen (kind, key, ts) VALUES (?,?,?)`,
-		kind, key, time.Now().Unix())
+func (s *sqlStore) MarkAlertSeen(kind, key string) error {
+	_, err := s.db.Exec(s.q(`INSERT INTO alert_seen (kind, key, ts) VALUES (?,?,?)
+		ON CONFLICT (kind, key) DO NOTHING`), kind, key, time.Now().Unix())
 	return err
 }
 
-func (s *Store) CountAlertSeen(kind string) (int, error) {
+func (s *sqlStore) CountAlertSeen(kind string) (int, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM alert_seen WHERE kind = ?`, kind).Scan(&n)
+	err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM alert_seen WHERE kind = ?`), kind).Scan(&n)
 	return n, err
 }
 
 // LoadAlertConfig, tek satirlik JSON yapilandirmasini dondurur; yoksa "" doner.
-func (s *Store) LoadAlertConfig() (string, error) {
+func (s *sqlStore) LoadAlertConfig() (string, error) {
 	var cfg string
-	err := s.db.QueryRow(`SELECT cfg FROM alert_config WHERE id = 1`).Scan(&cfg)
+	err := s.db.QueryRow(s.q(`SELECT cfg FROM alert_config WHERE id = 1`)).Scan(&cfg)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
 	return cfg, err
 }
 
-func (s *Store) SaveAlertConfig(cfg string) error {
-	_, err := s.db.Exec(`INSERT INTO alert_config (id, cfg) VALUES (1, ?)
-		ON CONFLICT(id) DO UPDATE SET cfg = excluded.cfg`, cfg)
+func (s *sqlStore) SaveAlertConfig(cfg string) error {
+	_, err := s.db.Exec(s.q(`INSERT INTO alert_config (id, cfg) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET cfg = excluded.cfg`), cfg)
 	return err
 }
 
@@ -606,14 +777,14 @@ type DayTotal struct {
 }
 
 // DailyTotals, gun bazli ozetler; gun sinirlari yerel gece yarisina hizalanir.
-func (s *Store) DailyTotals(days int) ([]DayTotal, error) {
+func (s *sqlStore) DailyTotals(days int) ([]DayTotal, error) {
 	if days <= 0 {
 		days = 7
 	}
 	_, offset := time.Now().Zone()
-	rows, err := s.db.Query(`SELECT (ts + ?)/86400*86400 AS day,
+	rows, err := s.db.Query(s.q(`SELECT (ts + ?)/86400*86400 AS day,
 			AVG(bps_in), AVG(bps_out), MAX(bps_in), MAX(bps_out), COUNT(*)
-		FROM samples GROUP BY day ORDER BY day`, offset)
+		FROM samples GROUP BY day ORDER BY day`), offset)
 	if err != nil {
 		return nil, err
 	}
@@ -642,12 +813,12 @@ type HourAvg struct {
 
 // HourlyAverages, verilen yerel gunun saatlik ortalama serisi (24 kayit;
 // veri olmayan saatler 0 ile doldurulur).
-func (s *Store) HourlyAverages(dayStart time.Time) ([]HourAvg, error) {
+func (s *sqlStore) HourlyAverages(dayStart time.Time) ([]HourAvg, error) {
 	_, offset := time.Now().Zone()
 	start := dayStart.Unix()
-	rows, err := s.db.Query(`SELECT ((ts + ?) % 86400)/3600 AS hour, AVG(bps_in), AVG(bps_out)
+	rows, err := s.db.Query(s.q(`SELECT ((ts + ?) % 86400)/3600 AS hour, AVG(bps_in), AVG(bps_out)
 		FROM samples WHERE ts >= ? AND ts < ?
-		GROUP BY hour ORDER BY hour`, offset, start, start+86400)
+		GROUP BY hour ORDER BY hour`), offset, start, start+86400)
 	if err != nil {
 		return nil, err
 	}
@@ -670,17 +841,15 @@ func (s *Store) HourlyAverages(dayStart time.Time) ([]HourAvg, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) InsertInsight(i Insight) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO insights (ts, model, period_minutes, summary) VALUES (?,?,?,?)`,
-		i.Ts, i.Model, i.PeriodMinutes, i.Summary)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
+func (s *sqlStore) InsertInsight(i Insight) (int64, error) {
+	var id int64
+	err := s.db.QueryRow(s.q(`INSERT INTO insights (ts, model, period_minutes, summary) VALUES (?,?,?,?) RETURNING id`),
+		i.Ts, i.Model, i.PeriodMinutes, i.Summary).Scan(&id)
+	return id, err
 }
 
-func (s *Store) RecentInsights(limit int) ([]Insight, error) {
-	rows, err := s.db.Query(`SELECT id, ts, model, period_minutes, summary FROM insights ORDER BY id DESC LIMIT ?`, limit)
+func (s *sqlStore) RecentInsights(limit int) ([]Insight, error) {
+	rows, err := s.db.Query(s.q(`SELECT id, ts, model, period_minutes, summary FROM insights ORDER BY id DESC LIMIT ?`), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -695,6 +864,3 @@ func (s *Store) RecentInsights(limit int) ([]Insight, error) {
 	}
 	return out, rows.Err()
 }
-
-// Ping, veritabani baglantisini dogrular (/readyz icin).
-func (s *Store) Ping() error { return s.db.Ping() }

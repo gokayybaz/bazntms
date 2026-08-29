@@ -10,7 +10,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/sysmon"
 )
 
-func newTestManager(t *testing.T) (*Manager, *store.Store) {
+func newTestManager(t *testing.T) (*Manager, store.Store) {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "alerts.db"))
 	if err != nil {

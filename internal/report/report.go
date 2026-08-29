@@ -38,7 +38,7 @@ type ProtoCount struct {
 }
 
 // Build, store'dan son `days` gunun verisini toplayip rapor modelini kurar.
-func Build(st *store.Store, geo *geoip.Resolver, days int) (*Data, error) {
+func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 	if days <= 0 {
 		days = 7
 	}

@@ -55,26 +55,27 @@ type DeviceWithStatus struct {
 	IfaceN  int  `json:"iface_n"`
 }
 
-func (s *Store) AddDevice(d Device) (int64, error) {
+func (s *sqlStore) AddDevice(d Device) (int64, error) {
 	if d.PollSeconds <= 0 {
 		d.PollSeconds = 60
 	}
-	res, err := s.db.Exec(`INSERT INTO devices
+	var id int64
+	err := s.db.QueryRow(s.q(`INSERT INTO devices
 		(name, host, kind, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
 		 poll_seconds, enabled, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
 		d.Name, d.Host, d.Kind, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
-		d.V3PrivProto, d.V3PrivPass, d.PollSeconds, d.Enabled, time.Now().Unix())
+		d.V3PrivProto, d.V3PrivPass, d.PollSeconds, btoi(d.Enabled), time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
-func (s *Store) ListDevices() ([]Device, error) {
-	rows, err := s.db.Query(`SELECT id, name, host, kind, snmp_version, community, v3_user, v3_auth_proto,
+func (s *sqlStore) ListDevices() ([]Device, error) {
+	rows, err := s.db.Query(s.q(`SELECT id, name, host, kind, snmp_version, community, v3_user, v3_auth_proto,
 		v3_auth_pass, v3_priv_proto, v3_priv_pass, poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error
-		FROM devices ORDER BY id`)
+		FROM devices ORDER BY id`))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func (s *Store) ListDevices() ([]Device, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) DeviceByID(id int64) (*Device, error) {
+func (s *sqlStore) DeviceByID(id int64) (*Device, error) {
 	list, err := s.ListDevices()
 	if err != nil {
 		return nil, err
@@ -105,33 +106,33 @@ func (s *Store) DeviceByID(id int64) (*Device, error) {
 	return nil, sql.ErrNoRows
 }
 
-func (s *Store) DeleteDevice(id int64) error {
+func (s *sqlStore) DeleteDevice(id int64) error {
 	for _, q := range []string{
 		`DELETE FROM devices WHERE id = ?`,
 		`DELETE FROM device_iface_samples WHERE device_id = ?`,
 	} {
-		if _, err := s.db.Exec(q, id); err != nil {
+		if _, err := s.db.Exec(s.q(q), id); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Store) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error {
-	_, err := s.db.Exec(`UPDATE devices SET last_poll = ?, sys_name = ?, sys_descr = ?, last_error = ? WHERE id = ?`,
+func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error {
+	_, err := s.db.Exec(s.q(`UPDATE devices SET last_poll = ?, sys_name = ?, sys_descr = ?, last_error = ? WHERE id = ?`),
 		time.Now().Unix(), sysName, sysDescr, lastErr, id)
 	return err
 }
 
-func (s *Store) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
+func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO device_iface_samples
+	stmt, err := tx.Prepare(s.q(`INSERT INTO device_iface_samples
 		(device_id, ts, if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes, in_errors, out_errors, in_discards, out_discards)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -146,12 +147,12 @@ func (s *Store) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []Device
 }
 
 // LatestDeviceIfaces, son orneklerden arayuz verimlerini hesaplar.
-func (s *Store) LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error) {
-	rows, err := s.db.Query(`SELECT if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes,
+func (s *sqlStore) LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error) {
+	rows, err := s.db.Query(s.q(`SELECT if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes,
 		in_errors, out_errors, in_discards, out_discards, ts FROM (
 		SELECT if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes,
 		       in_errors, out_errors, in_discards, out_discards, ts
-		FROM device_iface_samples WHERE device_id = ? ORDER BY ts DESC LIMIT 400) ORDER BY ts ASC`, deviceID)
+		FROM device_iface_samples WHERE device_id = ? ORDER BY ts DESC LIMIT 400) sq ORDER BY ts ASC`), deviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +207,7 @@ type FlowRow struct {
 	Octets  uint64 `json:"octets"`
 }
 
-func (s *Store) SaveFlows(rows []FlowRow) error {
+func (s *sqlStore) SaveFlows(rows []FlowRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -215,8 +216,8 @@ func (s *Store) SaveFlows(rows []FlowRow) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO flows
-		(ts, device, src, dst, src_port, dst_port, proto, packets, octets) VALUES (?,?,?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO flows
+		(ts, device, src, dst, src_port, dst_port, proto, packets, octets) VALUES (?,?,?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -229,12 +230,12 @@ func (s *Store) SaveFlows(rows []FlowRow) error {
 	return tx.Commit()
 }
 
-func (s *Store) TopFlows(since time.Time, limit int) ([]FlowRow, error) {
+func (s *sqlStore) TopFlows(since time.Time, limit int) ([]FlowRow, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := s.db.Query(`SELECT ts, device, src, dst, src_port, dst_port, proto, packets, octets
-		FROM flows WHERE ts >= ? ORDER BY octets DESC LIMIT ?`, since.Unix(), limit)
+	rows, err := s.db.Query(s.q(`SELECT ts, device, src, dst, src_port, dst_port, proto, packets, octets
+		FROM flows WHERE ts >= ? ORDER BY octets DESC LIMIT ?`), since.Unix(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -261,17 +262,17 @@ type SyslogEvent struct {
 	Message  string `json:"message"`
 }
 
-func (s *Store) SaveSyslogEvent(e SyslogEvent) error {
-	_, err := s.db.Exec(`INSERT INTO syslog_events (ts, host, severity, tag, message) VALUES (?,?,?,?,?)`,
+func (s *sqlStore) SaveSyslogEvent(e SyslogEvent) error {
+	_, err := s.db.Exec(s.q(`INSERT INTO syslog_events (ts, host, severity, tag, message) VALUES (?,?,?,?,?)`),
 		e.Ts, e.Host, e.Severity, e.Tag, e.Message)
 	return err
 }
 
-func (s *Store) RecentSyslog(limit int) ([]SyslogEvent, error) {
+func (s *sqlStore) RecentSyslog(limit int) ([]SyslogEvent, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.Query(`SELECT id, ts, host, severity, tag, message FROM syslog_events ORDER BY id DESC LIMIT ?`, limit)
+	rows, err := s.db.Query(s.q(`SELECT id, ts, host, severity, tag, message FROM syslog_events ORDER BY id DESC LIMIT ?`), limit)
 	if err != nil {
 		return nil, err
 	}

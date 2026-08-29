@@ -37,8 +37,14 @@ tek dosya, kurulum gerektirmez.
 - **GeoIP + ASN**: ülke bayrağı ve ağ sahibi (MaxMind offline veya ip-api.com)
 
 ### Kayıt ve veri
-- **SQLite veri tabanı**: saniyelik örnekler, dakikalık uç nokta/DNS/bağlantı kayıtları, otomatik temizlik
+- **SQLite (dev modu)** veya **PostgreSQL/TimescaleDB (ölçek modu)**: saniyelik örnekler, dakikalık uç nokta/DNS/bağlantı kayıtları, otomatik temizlik; TimescaleDB'de hypertable + continuous aggregate + retention (ham 7g → 1dk 90g → 1sa 2y)
 - **PCAP kayıt**: yakalama anında ham paketleri Wireshark uyumlu `.pcap` dosyasına yazma, boyut rotasyonu, tarayıcıdan indirme
+
+### Ölçek altyapısı (Faz 4)
+- **Depo seçimi**: `-db` dosya yolu → SQLite, `postgres://` DSN → PostgreSQL/TimescaleDB (pgx)
+- **NATS JetStream kuyruğu**: ingest → processor ayrışması, replay/kayıp toleransı, çoklu replika ingest
+- **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`), tek-node docker-compose demo (`deploy/`)
+- **Yük testi**: `bazntms-loadgen` sentetik agent filosu + k6 senaryosu (`loadtest/`)
 
 ### Analiz ve otomasyon
 - **AI analizi**: OpenAI-uyumlu her servis (Ollama, LM Studio, llama.cpp, OpenAI...)

@@ -35,13 +35,13 @@ const (
 )
 
 type Poller struct {
-	store *store.Store
+	store store.Store
 	vault *vault.Vault
 	stop  chan struct{}
 	done  chan struct{}
 }
 
-func New(st *store.Store, v *vault.Vault) *Poller {
+func New(st store.Store, v *vault.Vault) *Poller {
 	return &Poller{store: st, vault: v, stop: make(chan struct{}), done: make(chan struct{})}
 }
 
