@@ -180,9 +180,10 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentsList, UI icin filo gorunumu (UI auth'u ile korunur).
+// Site-sinirli kimlikte (RBAC site scope) yalnizca kendi sitesi doner.
 func (s *Server) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 	window := time.Duration(2*s.telemetryInterval) * time.Second
-	agents, err := s.store.ListAgents(window)
+	agents, err := s.store.ListAgents(window, SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -202,7 +203,7 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	window := time.Duration(2*s.telemetryInterval) * time.Second
-	agents, _ := s.store.ListAgents(window)
+	agents, _ := s.store.ListAgents(window, SiteScope(identityFromCtx(r)))
 	var withRates *store.AgentWithRates
 	for i := range agents {
 		if agents[i].ID == id {
@@ -231,6 +232,7 @@ func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("agent silindi", "agent_id", id)
+	s.audit(r, identityFromCtx(r), "agent.delete", fmt.Sprintf("agent:%d", id), "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 

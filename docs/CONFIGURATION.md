@@ -130,6 +130,54 @@ zaman çözümlenmez.
 Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 `-db` ile taşınabilir; boyut kontrolü için `ls -la <db>*` (WAL dahil).
 
+## RBAC, SSO ve Denetim (Faz 5)
+
+### Roller
+
+Tek-şifre modu (`-auth-password`) **admin** kimliği olarak çalışmaya devam
+eder. Kalıcı kullanıcılar `-auth-password` ile ilk girişten sonra
+`/api/v1/users` üzerinden açılır (bcrypt saklanır):
+
+| Rol | Görüntüleme | Yakalama/kayıt | AI/rapor | Cihaz yönetimi | Agent silme | Kullanıcı/token/audit |
+|---|---|---|---|---|---|---|
+| `admin` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `netops` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| `analyst` | ✓ | ✗ | ✓ | ✗ | ✗ | ✗ |
+| `viewer` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+
+`site` alanı dolu kullanıcılar yalnızca kendi sitelerinin agent'larını görür.
+
+### SSO (OIDC)
+
+```yaml
+oidc:
+  issuer: https://keycloak.kurum.local/realms/bazntms
+  client_id: bazntms
+  client_secret: gizli
+  group_roles:
+    bazntms-admin: admin
+    bazntms-netops: netops
+    bazntms-analyst: analyst
+  default_role: viewer
+```
+
+Giriş: `GET /api/auth/oidc/login` (arayüz oturum açma sayfasından da
+bağlanır). Grup/rol claim'i `groups` veya `roles` okunur.
+
+### Entegrasyon API token'ları
+
+`POST /api/v1/tokens {"name":"grafana","role":"analyst"}` → düz token
+(`bnt_...`) **bir kez** döner; `Authorization: Bearer bnt_...` ile kullanılır.
+`DELETE /api/v1/tokens/{id}` ile iptal edilir.
+
+### Denetim kaydı (audit log)
+
+Tüm kritik işlemler (giriş/başarısız giriş, kullanıcı/token/cihaz/agent
+değişiklikleri, yakalama başlat/durdur, AI analizi, yetki reddi) append-only
+`audit_events` tablosuna yazılır. Her kayıt önceki kaydın hash'ini taşır
+(SHA-256 zinciri); `GET /api/v1/audit/verify` zinciri yeniden hesaplayarak
+bütünlüğü kanıtlar.
+
 ## Ölçek Altyapısı (Faz 4)
 
 ### PostgreSQL / TimescaleDB

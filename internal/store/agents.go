@@ -118,10 +118,19 @@ type AgentWithRates struct {
 	Conns  int         `json:"conns"`
 }
 
-// ListAgents, filo gorunumu: online durumu + son orneklerden hesaplanmis verimler.
-func (s *sqlStore) ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error) {
-	rows, err := s.db.Query(s.q(`SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
-		FROM agents ORDER BY last_seen DESC`))
+// ListAgents, filo gorunumu: online durumu + son orneklerden hesaplanmis
+// verimler. site bos degilse yalnizca o sitenin agent'lari doner (Faz 5.1
+// site scope).
+func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error) {
+	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
+		FROM agents`
+	args := []any{}
+	if site != "" {
+		q += ` WHERE site = ?`
+		args = append(args, site)
+	}
+	q += ` ORDER BY last_seen DESC`
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}

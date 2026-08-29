@@ -25,6 +25,7 @@ import { Card } from './components/Card'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
+  const [identity, setIdentity] = useState<{ username: string; role: string } | null>(null)
   const { stats, connections, alertEvents, record, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
@@ -37,8 +38,11 @@ export default function App() {
   useEffect(() => {
     fetch('/api/auth/status')
       .then((r) => r.json())
-      .then((d: { required: boolean; authenticated: boolean }) => {
+      .then((d: { required: boolean; authenticated: boolean; username?: string; role?: string }) => {
         setAuthState(d.required && !d.authenticated ? 'locked' : 'open')
+        if (d.authenticated && d.username) {
+          setIdentity({ username: d.username, role: d.role ?? 'viewer' })
+        }
       })
       .catch(() => setAuthState('open'))
   }, [])
@@ -107,7 +111,8 @@ export default function App() {
   if (authState === 'locked') {
     return (
       <LoginScreen
-        onSuccess={() => {
+        onSuccess={(ident) => {
+          setIdentity(ident)
           setAuthState('open')
           reconnect()
         }}
@@ -131,6 +136,7 @@ export default function App() {
         onStop={stop}
         starting={starting}
         onLogout={logout}
+        identity={identity}
       />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">

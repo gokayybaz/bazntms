@@ -211,6 +211,42 @@ CREATE TABLE IF NOT EXISTS insights (
 	period_minutes INTEGER NOT NULL,
 	summary        TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+	id            BIGSERIAL PRIMARY KEY,
+	username      TEXT    NOT NULL UNIQUE,
+	password_hash TEXT    NOT NULL DEFAULT '',
+	role          TEXT    NOT NULL DEFAULT 'viewer',
+	site          TEXT    NOT NULL DEFAULT '',
+	enabled       INTEGER NOT NULL DEFAULT 1,
+	created_at    BIGINT  NOT NULL,
+	last_login    BIGINT  NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+	id         BIGSERIAL PRIMARY KEY,
+	name       TEXT    NOT NULL,
+	token_hash TEXT    NOT NULL UNIQUE,
+	role       TEXT    NOT NULL DEFAULT 'viewer',
+	site       TEXT    NOT NULL DEFAULT '',
+	created_at BIGINT  NOT NULL,
+	last_used  BIGINT  NOT NULL DEFAULT 0,
+	revoked    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+	id        BIGSERIAL PRIMARY KEY,
+	ts        BIGINT  NOT NULL,
+	username  TEXT    NOT NULL,
+	role      TEXT    NOT NULL DEFAULT '',
+	action    TEXT    NOT NULL,
+	target    TEXT    NOT NULL DEFAULT '',
+	detail    TEXT    NOT NULL DEFAULT '',
+	ip        TEXT    NOT NULL DEFAULT '',
+	prev_hash TEXT    NOT NULL DEFAULT '',
+	hash      TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts);
 `)
 	return err
 }

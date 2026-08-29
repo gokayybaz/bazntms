@@ -41,6 +41,7 @@ type Server struct {
 	alerts            *alert.Manager
 	geo               *geoip.Resolver
 	auth              *AuthManager
+	oidc              *OIDCManager
 	enrollToken       string
 	telemetryInterval int
 	agentPCAP         bool
@@ -59,7 +60,7 @@ type TelemetrySink interface {
 	PublishTelemetry(agentID int64, version, remoteIP string, ts int64, batch *telemetry.TelemetryBatch) error
 }
 
-func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool, v *vault.Vault, ingest TelemetrySink) *Server {
+func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool, v *vault.Vault, ingest TelemetrySink, oidcOpts *OIDCOptions) *Server {
 	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
@@ -70,7 +71,8 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 		aiClient: aiClient,
 		alerts:   alerts,
 		geo:      geo,
-		auth:     NewAuthManager(password),
+		auth:     NewAuthManager(password, st),
+		oidc:     NewOIDCManager(derefOIDC(oidcOpts)),
 	}
 	if telemetryInterval <= 0 {
 		telemetryInterval = defaultTelemetryInterval
@@ -111,31 +113,40 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 	return s
 }
 
+func derefOIDC(o *OIDCOptions) OIDCOptions {
+	if o == nil {
+		return OIDCOptions{}
+	}
+	return *o
+}
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/interfaces", s.handleInterfaces)
 	mux.HandleFunc("GET /api/connections", s.handleConnections)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
-	mux.HandleFunc("POST /api/capture/start", s.handleCaptureStart)
-	mux.HandleFunc("POST /api/capture/stop", s.handleCaptureStop)
+	mux.Handle("POST /api/capture/start", s.requirePerm(PermOperate, http.HandlerFunc(s.handleCaptureStart)))
+	mux.Handle("POST /api/capture/stop", s.requirePerm(PermOperate, http.HandlerFunc(s.handleCaptureStop)))
 	mux.HandleFunc("GET /api/history", s.handleHistory)
 	mux.HandleFunc("GET /api/compare", s.handleCompare)
-	mux.HandleFunc("GET /api/report", s.handleReport)
+	mux.Handle("GET /api/report", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReport)))
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)
+	mux.HandleFunc("GET /api/auth/oidc/login", s.handleOIDCLogin)
+	mux.HandleFunc("GET /api/auth/oidc/callback", s.handleOIDCCallback)
 	mux.HandleFunc("GET /api/alerts", s.handleAlertsGet)
-	mux.HandleFunc("PUT /api/alerts", s.handleAlertsPut)
+	mux.Handle("PUT /api/alerts", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsPut)))
 	mux.HandleFunc("GET /api/alerts/events", s.handleAlertEvents)
-	mux.HandleFunc("POST /api/record/start", s.handleRecordStart)
-	mux.HandleFunc("POST /api/record/stop", s.handleRecordStop)
+	mux.Handle("POST /api/record/start", s.requirePerm(PermOperate, http.HandlerFunc(s.handleRecordStart)))
+	mux.Handle("POST /api/record/stop", s.requirePerm(PermOperate, http.HandlerFunc(s.handleRecordStop)))
 	mux.HandleFunc("GET /api/record/status", s.handleRecordStatus)
 	mux.HandleFunc("GET /api/record/files", s.handleRecordFiles)
 	mux.HandleFunc("GET /api/record/download", s.handleRecordDownload)
 	mux.HandleFunc("GET /api/ai/status", s.handleAIStatus)
 	mux.HandleFunc("GET /api/ai/models", s.handleAIModels)
-	mux.HandleFunc("POST /api/ai/analyze", s.handleAIAnalyze)
+	mux.Handle("POST /api/ai/analyze", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIAnalyze)))
 	mux.HandleFunc("GET /api/ai/insights", s.handleAIInsights)
 
 	// /api/v1 — kurumsal API sablonu (Faz 1 ingest uclari da buraya gelir)
@@ -149,18 +160,29 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/agent/telemetry", s.agentAuth(http.HandlerFunc(s.handleAgentTelemetry)))
 	mux.HandleFunc("GET /api/v1/processes", s.handleProcesses)
 
-	// filo yonetimi (UI auth'u ile korunur)
+	// filo yonetimi (UI auth'u ile korunur; silme = netops+)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
 	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
-	mux.HandleFunc("DELETE /api/v1/agents/{id}", s.handleAgentDelete)
+	mux.Handle("DELETE /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentDelete)))
 
-	// cihazlar ve ag cihazi verileri (Faz 3)
+	// cihazlar ve ag cihazi verileri (Faz 3; ekleme/silme = netops+)
 	mux.HandleFunc("GET /api/v1/devices", s.handleDevicesList)
-	mux.HandleFunc("POST /api/v1/devices", s.handleDeviceAdd)
-	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.handleDeviceDelete)
+	mux.Handle("POST /api/v1/devices", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceAdd)))
+	mux.Handle("DELETE /api/v1/devices/{id}", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceDelete)))
 	mux.HandleFunc("GET /api/v1/devices/{id}/interfaces", s.handleDeviceIfaces)
 	mux.HandleFunc("GET /api/v1/flows", s.handleFlows)
 	mux.HandleFunc("GET /api/v1/syslog", s.handleSyslogEvents)
+
+	// RBAC yonetimi (Faz 5): kullanicilar, token'lar, denetim kaydi — admin
+	mux.HandleFunc("GET /api/v1/users", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleUsersList)).ServeHTTP)
+	mux.Handle("POST /api/v1/users", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleUserCreate)))
+	mux.Handle("PUT /api/v1/users/{id}", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleUserUpdate)))
+	mux.Handle("DELETE /api/v1/users/{id}", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleUserDelete)))
+	mux.HandleFunc("GET /api/v1/tokens", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleTokensList)).ServeHTTP)
+	mux.Handle("POST /api/v1/tokens", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleTokenCreate)))
+	mux.Handle("DELETE /api/v1/tokens/{id}", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleTokenDelete)))
+	mux.HandleFunc("GET /api/v1/audit", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAuditList)).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/audit/verify", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAuditVerify)).ServeHTTP)
 
 	// gozlemlenebilirlik (auth muaf — Prometheus/healthcheck standartlari)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -324,12 +346,14 @@ func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("yakalama basladi", "device", req.Device)
+	s.audit(r, identityFromCtx(r), "capture.start", "iface:"+req.Device, "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
 	s.engine.Stop()
 	slog.Info("yakalama durduruldu")
+	s.audit(r, identityFromCtx(r), "capture.stop", "", "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -440,6 +464,7 @@ func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	s.audit(r, identityFromCtx(r), "alerts.update", "", "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -459,6 +484,7 @@ func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("pcap kaydi basladi")
+	s.audit(r, identityFromCtx(r), "record.start", "", "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -469,6 +495,7 @@ func (s *Server) handleRecordStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("pcap kaydi durduruldu", "file", info.File, "packets", info.Packets)
+	s.audit(r, identityFromCtx(r), "record.stop", "file:"+info.File, "")
 	writeJSON(w, map[string]any{"ok": true, "file": info.File, "packets": info.Packets, "bytes": info.Bytes})
 }
 
@@ -558,6 +585,7 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
 		slog.Error("AI analiz kaydi hatasi", "err", err)
 	}
 	slog.Info("AI analizi tamamlandi", "sure", time.Since(started).Round(time.Second).String())
+	s.audit(r, identityFromCtx(r), "ai.analyze", "", fmt.Sprintf("%d dk model=%s", req.Minutes, model))
 	writeJSON(w, map[string]any{"ok": true, "id": id, "model": model, "summary": summary})
 }
 

@@ -23,7 +23,8 @@ const maxQueuedBatches = 100
 
 // Options, agent istemcisi yapilandirmasi.
 type Options struct {
-	HubURL      string
+	HubURL      string   // tek hub (geriye uyumlu)
+	HubURLs     []string // birden cok hub: failover sirasi (Faz 5.4)
 	EnrollToken string
 	Name        string
 	Site        string
@@ -40,8 +41,9 @@ type State struct {
 }
 
 type Client struct {
-	opts Options
-	http *http.Client
+	opts   Options
+	http   *http.Client
+	hubIdx int // aktif hub indeksi (failover icin kayar)
 }
 
 func New(opts Options) *Client {
@@ -51,7 +53,38 @@ func New(opts Options) *Client {
 	if opts.HTTPTimeout <= 0 {
 		opts.HTTPTimeout = 15 * time.Second
 	}
+	if opts.HubURL != "" && len(opts.HubURLs) == 0 {
+		opts.HubURLs = []string{opts.HubURL}
+	}
 	return &Client{opts: opts, http: &http.Client{Timeout: opts.HTTPTimeout}}
+}
+
+// urls, failover havuzunu dondurur; bos ise tek bos URL (hata mesaji icin).
+func (c *Client) urls() []string {
+	if len(c.opts.HubURLs) > 0 {
+		return c.opts.HubURLs
+	}
+	return []string{""}
+}
+
+// withFailover, islemi hub havuzunda calistirir: aktif hub'dan baslar,
+// hata halinde siradaki URL'yi dener; basarili hub'a yapisir (Faz 5.4).
+func (c *Client) withFailover(fn func(baseURL string) error) error {
+	pool := c.urls()
+	var lastErr error
+	for i := 0; i < len(pool); i++ {
+		idx := (c.hubIdx + i) % len(pool)
+		if err := fn(pool[idx]); err != nil {
+			if len(pool) > 1 {
+				slog.Warn("hub yanit vermedi, siradaki deneniyor", "hub", pool[idx], "err", err)
+			}
+			lastErr = err
+			continue
+		}
+		c.hubIdx = idx
+		return nil
+	}
+	return lastErr
 }
 
 // State, varsa diskten agent kimligini yukler.
@@ -94,15 +127,18 @@ func (c *Client) Enroll() (State, error) {
 		Arch:            runtime.GOARCH,
 	}
 	body, _ := json.Marshal(hello)
-	req, err := http.NewRequest(http.MethodPost, c.opts.HubURL+"/api/v1/agent/hello", bytes.NewReader(body))
-	if err != nil {
-		return st, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Enroll-Token", c.opts.EnrollToken)
 
 	var reply telemetry.HubReply
-	if err := c.doJSON(req, &reply); err != nil {
+	err := c.withFailover(func(baseURL string) error {
+		req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/agent/hello", bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Enroll-Token", c.opts.EnrollToken)
+		return c.doJSON(req, &reply)
+	})
+	if err != nil {
 		return st, err
 	}
 	if !reply.Accepted {
@@ -208,24 +244,26 @@ func (c *Client) postBatch(st State, ts int64, batch telemetry.TelemetryBatch) e
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, c.opts.HubURL+"/api/v1/agent/telemetry", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+st.Token)
-	var reply struct {
-		OK       bool `json:"ok"`
-		Interval int  `json:"interval"`
-	}
-	if err := c.doJSON(req, &reply); err != nil {
-		return err
-	}
-	if reply.Interval > 0 && reply.Interval != c.opts.IntervalSec {
-		c.opts.IntervalSec = reply.Interval
-		slog.Debug("interval guncellendi", "interval", reply.Interval)
-	}
-	return nil
+	return c.withFailover(func(baseURL string) error {
+		req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/agent/telemetry", bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+st.Token)
+		var reply struct {
+			OK       bool `json:"ok"`
+			Interval int  `json:"interval"`
+		}
+		if err := c.doJSON(req, &reply); err != nil {
+			return err
+		}
+		if reply.Interval > 0 && reply.Interval != c.opts.IntervalSec {
+			c.opts.IntervalSec = reply.Interval
+			slog.Debug("interval guncellendi", "interval", reply.Interval)
+		}
+		return nil
+	})
 }
 
 func (c *Client) doJSON(req *http.Request, out any) error {
