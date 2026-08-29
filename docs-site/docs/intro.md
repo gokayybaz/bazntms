@@ -1,3 +1,7 @@
+---
+slug: /
+---
+
 # bazNTMS
 
 **bazNTMS**, merkezi hub + uç agent + ağ cihazı entegrasyonları üçlüsüne
