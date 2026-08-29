@@ -29,17 +29,18 @@ import (
 )
 
 type Server struct {
-	engine    *capture.Engine
-	hub       *Hub
-	staticFS  fs.FS
-	store     *store.Store
-	dbPath    string
-	aiClient  *ai.Client
-	alerts    *alert.Manager
-	geo       *geoip.Resolver
-	auth      *AuthManager
+	engine            *capture.Engine
+	hub               *Hub
+	staticFS          fs.FS
+	store             *store.Store
+	dbPath            string
+	aiClient          *ai.Client
+	alerts            *alert.Manager
+	geo               *geoip.Resolver
+	auth              *AuthManager
 	enrollToken       string
 	telemetryInterval int
+	agentPCAP         bool
 
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
@@ -48,7 +49,7 @@ type Server struct {
 	registry     *prometheus.Registry
 }
 
-func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int) *Server {
+func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool) *Server {
 	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
@@ -65,7 +66,13 @@ func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string,
 	}
 	s.enrollToken = enrollToken
 	s.telemetryInterval = telemetryInterval
-
+	s.agentPCAP = agentPCAP
+	if s.enrollToken == "" {
+		// otomatik token uret; hub banner'i loglar
+		buf := make([]byte, 12)
+		rand.Read(buf)
+		s.enrollToken = hex.EncodeToString(buf)
+	}
 	// Prometheus metrikleri
 	s.httpRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "bazntms_http_requests_total",
@@ -128,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
 	mux.Handle("POST /api/v1/agent/telemetry", s.agentAuth(http.HandlerFunc(s.handleAgentTelemetry)))
+	mux.HandleFunc("GET /api/v1/processes", s.handleProcesses)
 
 	// filo yonetimi (UI auth'u ile korunur)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
@@ -544,3 +552,6 @@ func (s *Server) handleAIInsights(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, insights)
 }
+
+// EnrollToken, otomatik uretilen enrollment token'ini dondurur (banner logu icin).
+func (s *Server) EnrollToken() string { return s.enrollToken }

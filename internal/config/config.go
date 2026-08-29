@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/knadh/koanf/v2"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 )
 
 const (
@@ -27,12 +27,12 @@ const (
 // bayraklarin uzun adlariyla birebir eslesir (database.path <- -db hariç
 // eslenmis takma adlar asagida belirtilir).
 type HubConfig struct {
-	Port           int    `koanf:"port"`
-	Dev            bool   `koanf:"dev"`
-	Database       struct {
+	Port     int  `koanf:"port"`
+	Dev      bool `koanf:"dev"`
+	Database struct {
 		Path string `koanf:"path"`
 	} `koanf:"database"`
-	RetentionHours int    `koanf:"retention_hours"`
+	RetentionHours int `koanf:"retention_hours"`
 	Auth           struct {
 		Password string `koanf:"password"`
 	} `koanf:"auth"`
@@ -48,8 +48,8 @@ type HubConfig struct {
 		MaxMB int    `koanf:"max_mb"`
 	} `koanf:"record"`
 	GeoIP struct {
-		Dir          string `koanf:"dir"`
-		IPAPILookup  bool   `koanf:"ip_api_lookup"`
+		Dir         string `koanf:"dir"`
+		IPAPILookup bool   `koanf:"ip_api_lookup"`
 	} `koanf:"geoip"`
 	Log struct {
 		Level  string `koanf:"level"`
@@ -69,7 +69,11 @@ type AgentConfig struct {
 		Site string `koanf:"site"`
 	} `koanf:"agent"`
 	Collect struct {
-		IntervalSeconds int `koanf:"interval_seconds"`
+		IntervalSeconds int    `koanf:"interval_seconds"`
+		PCAP            bool   `koanf:"pcap"`           // surec atfi icin paket yakalama (root/admin gerekir)
+		PCAPInterface   string `koanf:"pcap_interface"` // bos = otomatik secim
+		PCAPRecord      bool   `koanf:"pcap_record"`    // ham paketleri diske yaz (hub politikasi da acik olmali)
+		PCAPDir         string `koanf:"pcap_dir"`       // PCAP kayit dizini
 	} `koanf:"collect"`
 	Log struct {
 		Level  string `koanf:"level"`
@@ -79,19 +83,19 @@ type AgentConfig struct {
 
 // hubFlagKeys, YAML/ortam anahtarlarindan bayrak adina esleme tablosudur.
 var hubFlagKeys = map[string]string{
-	"port":              "port",
-	"dev":               "dev",
-	"database.path":     "db",
-	"retention_hours":   "retention-hours",
-	"auth.password":     "auth-password",
-	"llm.base_url":      "llm-base-url",
-	"llm.api_key":       "llm-api-key",
-	"llm.model":         "llm-model",
-	"llm.max_tokens":    "llm-max-tokens",
-	"llm.no_think":      "llm-no-think",
-	"record.dir":        "record-dir",
-	"record.max_mb":     "record-max-mb",
-	"geoip.dir":         "geoip-dir",
+	"port":                "port",
+	"dev":                 "dev",
+	"database.path":       "db",
+	"retention_hours":     "retention-hours",
+	"auth.password":       "auth-password",
+	"llm.base_url":        "llm-base-url",
+	"llm.api_key":         "llm-api-key",
+	"llm.model":           "llm-model",
+	"llm.max_tokens":      "llm-max-tokens",
+	"llm.no_think":        "llm-no-think",
+	"record.dir":          "record-dir",
+	"record.max_mb":       "record-max-mb",
+	"geoip.dir":           "geoip-dir",
 	"geoip.ip_api_lookup": "ip-api-lookup",
 }
 

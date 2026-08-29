@@ -107,6 +107,24 @@ login ekranına düşer; 60 sn'de bir de oturum denetimi yapılır. Grafikler
 (ThroughputChart, CompareCard, DayBars) harici grafik kütüphanesi olmadan,
 elle yazılmış SVG'dir.
 
+## Süreç Bazlı Trafik Atfı (Faz 2)
+
+`pkg/proctraffic` + `internal/agent/attr.go`: **nethogs yöntemi** — agent pcap
+ile paket yakalar (yalnızca başlıklar, snaplen 128), 4'lü çifti donemlik
+soket-tablosu → PID eşlemesiyle süreçe çevirir ve delta üretir.
+
+| Platform | Soket→PID kaynağı |
+|----------|-------------------|
+| Linux    | `/proc/net/*` inode ↔ `/proc/[pid]/fd` (root: tüm süreçler) |
+| macOS    | `lsof -F pcnt` (root: tüm süreçler) |
+| Windows  | `netstat -ano` + gopsutil süreç adları |
+
+Hub politikası (`-agent-pcap`) + agent isteği (`-pcap`) ikisi de açıkken çalışır;
+izin yoksa atıf devre dışı kalır, temel telemetri aksamaz. Ham PCAP kaydı
+(`-record`) da aynı politika kapısıyla agent'ta yerel olarak döner.
+İleri faz: eBPF (Linux) ve ETW (Windows) sağlayıcılar aynı arayüzün arkasına
+eklenerek daha hassas sayım sağlanır.
+
 ## Veri akışı özeti
 
 ```

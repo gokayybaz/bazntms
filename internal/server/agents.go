@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -79,7 +80,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name zorunlu", http.StatusBadRequest)
 		return
 	}
-	if hello.ProtocolVersion > version1 {
+	if hello.ProtocolVersion > maxProtocolVersion {
 		unauthorized(w, "protokol surumu hub'dan yeni")
 		return
 	}
@@ -107,6 +108,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		AgentID:                  id,
 		AgentToken:               agentToken,
 		TelemetryIntervalSeconds: s.telemetryInterval,
+		PCAPEnabled:              s.agentPCAP,
 	})
 }
 
@@ -139,13 +141,34 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.TouchAgent(agent.ID, agent.Version, ip); err != nil {
 		slog.Error("agent touch hatasi", "agent_id", agent.ID, "err", err)
 	}
+	if len(batch.ProcessTraffic) > 0 {
+		if err := s.store.SaveProcessTraffic(agent.ID, ts, batch.ProcessTraffic); err != nil {
+			slog.Error("surec trafik kaydi hatasi", "agent_id", agent.ID, "err", err)
+		}
+	}
 	slog.Debug("telemetri alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
 	writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
 }
 
+// handleProcesses, surec bazli trafik top-listesi (UI auth ile korunur).
+func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
+	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
+	if minutes <= 0 || minutes > 60*24*7 {
+		minutes = 60
+	}
+	agentID, _ := strconv.ParseInt(r.URL.Query().Get("agent_id"), 10, 64)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, err := s.store.TopProcessTraffic(time.Now().Add(-time.Duration(minutes)*time.Minute), agentID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, list)
+}
+
 // handleAgentsList, UI icin filo gorunumu (UI auth'u ile korunur).
 func (s *Server) handleAgentsList(w http.ResponseWriter, r *http.Request) {
-	window := time.Duration(2*s.telemetryInterval)*time.Second
+	window := time.Duration(2*s.telemetryInterval) * time.Second
 	agents, err := s.store.ListAgents(window)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -165,7 +188,7 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent bulunamadi", http.StatusNotFound)
 		return
 	}
-	window := time.Duration(2*s.telemetryInterval)*time.Second
+	window := time.Duration(2*s.telemetryInterval) * time.Second
 	agents, _ := s.store.ListAgents(window)
 	var withRates *store.AgentWithRates
 	for i := range agents {
@@ -199,7 +222,10 @@ func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // version1, desteklenen en yuksek agent protokol surumu.
-const version1 = 1
+const maxProtocolVersion = 1
+
+// version1 geriye uyumluluk icin korunuyor.
+const version1 = maxProtocolVersion
 
 func parseID(s string) (int64, error) {
 	var id int64

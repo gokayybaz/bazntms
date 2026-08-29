@@ -111,9 +111,9 @@ type AgentRate struct {
 
 type AgentWithRates struct {
 	Agent
-	Online bool         `json:"online"`
-	Rates  []AgentRate  `json:"rates"`
-	Conns  int          `json:"conns"`
+	Online bool        `json:"online"`
+	Rates  []AgentRate `json:"rates"`
+	Conns  int         `json:"conns"`
 }
 
 // ListAgents, filo gorunumu: online durumu + son orneklerden hesaplanmis verimler.

@@ -17,6 +17,7 @@ import { CompareCard } from './components/CompareCard'
 import { ReportCard } from './components/ReportCard'
 import { LoginScreen } from './components/LoginScreen'
 import { AgentsCard } from './components/AgentsCard'
+import { ProcessesCard } from './components/ProcessesCard'
 import { Card } from './components/Card'
 
 export default function App() {
@@ -134,6 +135,10 @@ export default function App() {
 
         <Card title="Agent Filosu" right={<span className="text-xs text-slate-500">merkezi izleme</span>}>
           <AgentsCard refreshKey={historyRefresh} />
+        </Card>
+
+        <Card title="Süreç Trafiği (Agentlar)" right={<span className="text-xs text-slate-500">Faz 2 · atıf</span>}>
+          <ProcessesCard />
         </Card>
 
         <Card title="Ağ Verimi">

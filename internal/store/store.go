@@ -168,6 +168,20 @@ CREATE TABLE IF NOT EXISTS agent_conn_latest (
 	PRIMARY KEY (agent_id, proto, local_addr, remote_addr)
 );
 
+CREATE TABLE IF NOT EXISTS process_traffic (
+	ts        INTEGER NOT NULL,
+	agent_id  INTEGER NOT NULL,
+	pid       INTEGER NOT NULL DEFAULT 0,
+	process   TEXT    NOT NULL DEFAULT '',
+	proto     TEXT    NOT NULL DEFAULT '',
+	remote_ip TEXT    NOT NULL DEFAULT '',
+	port      INTEGER NOT NULL DEFAULT 0,
+	bytes_in  INTEGER NOT NULL DEFAULT 0,
+	bytes_out INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pt_ts ON process_traffic(ts);
+CREATE INDEX IF NOT EXISTS idx_pt_proc ON process_traffic(process, ts);
+
 CREATE TABLE IF NOT EXISTS alert_events (
 	id      INTEGER PRIMARY KEY AUTOINCREMENT,
 	ts      INTEGER NOT NULL,
@@ -292,6 +306,7 @@ func (s *Store) Prune(retention time.Duration) error {
 		`DELETE FROM dns_queries WHERE ts < ?`,
 		`DELETE FROM alert_events WHERE ts < ?`,
 		`DELETE FROM agent_iface_samples WHERE ts < ?`,
+		`DELETE FROM process_traffic WHERE ts < ?`,
 	} {
 		if _, err := s.db.Exec(q, cutoff); err != nil {
 			return err

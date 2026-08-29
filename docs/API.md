@@ -245,6 +245,18 @@ Enrollment: header `X-Enroll-Token: <hub -enroll-token>` zorunlu.
 | `GET /api/v1/agents/{id}` | Agent detayı + güncel bağlantı envanteri |
 | `DELETE /api/v1/agents/{id}` | Agent'ı ve telemetrisini sil |
 
+### `GET /api/v1/processes?minutes=60&agent_id=0&limit=20` *(UI auth)*
+
+Süreç bazlı trafik top-listesi (Faz 2, nethogs yöntemi: agent'ta pcap + soket→PID
+eşlemesi; `agent_iface_samples` gibi `ts` filtresiyle):
+
+```json
+[ { "process": "chrome", "bytes_in": 900, "bytes_out": 100, "total": 1000, "agent_count": 1 } ]
+```
+
+Hub `-agent-pcap` politikası + agent'ta `-pcap` ikisi de açık olmalı; ham PCAP
+kaydı için ek olarak agent'ta `-record`.
+
 Agent çalıştırma:
 
 ```bash

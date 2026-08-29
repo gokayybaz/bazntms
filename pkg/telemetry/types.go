@@ -43,10 +43,23 @@ type ConnectionSample struct {
 	Process    string `json:"process,omitempty"`
 }
 
+// ProcessTrafficSample, agent'in bir donem icinde surec bazli trafik
+// farklaridir (delta). Hub tarafinda process_traffic tablosuna yazilir.
+type ProcessTrafficSample struct {
+	PID      int32  `json:"pid"`
+	Process  string `json:"process"`
+	Proto    string `json:"proto"`
+	RemoteIP string `json:"remote_ip"`
+	Port     uint16 `json:"port"`
+	BytesIn  uint64 `json:"bytes_in"`
+	BytesOut uint64 `json:"bytes_out"`
+}
+
 // TelemetryBatch, agent'in periyodik toplu gonderimi.
 type TelemetryBatch struct {
-	TS             int64              `json:"ts"`
-	Interfaces     []InterfaceSample  `json:"interfaces"`
-	Connections    []ConnectionSample `json:"connections"`
-	DroppedPackets uint64             `json:"dropped_packets,omitempty"`
+	TS             int64                  `json:"ts"`
+	Interfaces     []InterfaceSample      `json:"interfaces"`
+	Connections    []ConnectionSample     `json:"connections"`
+	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`
+	DroppedPackets uint64                 `json:"dropped_packets,omitempty"`
 }

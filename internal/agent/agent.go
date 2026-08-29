@@ -23,13 +23,14 @@ const maxQueuedBatches = 100
 
 // Options, agent istemcisi yapilandirmasi.
 type Options struct {
-	HubURL        string
-	EnrollToken   string
-	Name          string
-	Site          string
-	StateFile     string
-	IntervalSec   int
-	HTTPTimeout   time.Duration
+	HubURL      string
+	EnrollToken string
+	Name        string
+	Site        string
+	StateFile   string
+	IntervalSec int
+	HTTPTimeout time.Duration
+	PCAPEnabled bool // hub politikasi: agent'ta derin toplama/PCAP izinli
 }
 
 // State, diskte tutulan kalici agent kimligi (token kaybolursa yeniden enroll gerekir).
@@ -115,8 +116,12 @@ func (c *Client) Enroll() (State, error) {
 	if reply.TelemetryIntervalSeconds > 0 {
 		c.opts.IntervalSec = reply.TelemetryIntervalSeconds
 	}
+	c.opts.PCAPEnabled = reply.PCAPEnabled
 	return st, nil
 }
+
+// PCAPEnabled, hub politikasina gore derin toplama/PCAP iznini dondurur.
+func (c *Client) PCAPEnabled() bool { return c.opts.PCAPEnabled }
 
 // Collect, bu anki telemetriyi toplar.
 func (c *Client) Collect() telemetry.TelemetryBatch {
@@ -163,7 +168,7 @@ func (c *Client) Send(st State, batch telemetry.TelemetryBatch) error {
 }
 
 type queuedBatch struct {
-	TS   int64                  `json:"ts"`
+	TS   int64                    `json:"ts"`
 	Data telemetry.TelemetryBatch `json:"data"`
 }
 
