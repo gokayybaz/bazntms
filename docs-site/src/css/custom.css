@@ -1,0 +1,30 @@
+/* bazNTMS marka paleti — Infima degiskenleri (Faz 7.4) */
+
+:root {
+  --ifm-color-primary: #0e7490;
+  --ifm-color-primary-dark: #0c6881;
+  --ifm-color-primary-darker: #0a6278;
+  --ifm-color-primary-darkest: #085063;
+  --ifm-color-primary-light: #0e85a8;
+  --ifm-color-primary-lighter: #118db1;
+  --ifm-color-primary-lightest: #17a1c9;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+  --ifm-code-font-size: 92%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #22d3ee;
+  --ifm-color-primary-dark: #17c2dd;
+  --ifm-color-primary-darker: #12b5cf;
+  --ifm-color-primary-darkest: #0e95aa;
+  --ifm-color-primary-light: #43dbf2;
+  --ifm-color-primary-lighter: #63e1f4;
+  --ifm-color-primary-lightest: #8fe9f7;
+  --ifm-background-color: #020617;
+  --ifm-background-surface-color: #0f172a;
+  --ifm-font-color-base: #e2e8f0;
+  --ifm-navbar-background-color: #020617;
+  --ifm-footer-background-color: #020617;
+  --ifm-card-background-color: #0f172a;
+}
