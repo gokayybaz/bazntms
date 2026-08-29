@@ -74,7 +74,7 @@ jobs:
           npm install
           npm run build
 
-      - name: Build binary
+      - name: Build binaries
         env:
           CGO_ENABLED: '1'
           CGO_CFLAGS: ${{ matrix.goos == 'windows' && '-I/c/npcap-sdk/Include' || '' }}
@@ -82,13 +82,18 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
           EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
-          go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
-            -o "bazntms-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" .
+          LDFLAGS="-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=$VERSION"
+          go build -trimpath -ldflags "$LDFLAGS" \
+            -o "bazntms-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-hub
+          go build -trimpath -ldflags "$LDFLAGS" \
+            -o "bazntms-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-agent
 
       - uses: actions/upload-artifact@v4
         with:
           name: bazntms-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: bazntms-*
+          path: |
+            bazntms-*
+            !bazntms-agent.yml
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

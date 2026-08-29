@@ -582,3 +582,6 @@ func (s *Store) RecentInsights(limit int) ([]Insight, error) {
 	}
 	return out, rows.Err()
 }
+
+// Ping, veritabani baglantisini dogrular (/readyz icin).
+func (s *Store) Ping() error { return s.db.Ping() }

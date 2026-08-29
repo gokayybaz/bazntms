@@ -59,7 +59,7 @@ tek dosya, kurulum gerektirmez.
 cd frontend && npm install && npm run build && cd ..
 
 # 2) Backend'i derle (frontend embed edilir)
-go build -o bazntms .
+go build -o bazntms ./cmd/bazntms-hub
 
 # 3) Yönetici yetkisiyle çalıştır
 sudo ./bazntms -auth-password gizliSifre123 -llm-base-url http://localhost:11434/v1

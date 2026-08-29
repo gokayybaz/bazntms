@@ -15,8 +15,8 @@ geoip/*.mmdb
 
 # frontend
 frontend/node_modules/
-frontend/dist/*
-!frontend/dist/.gitkeep
+web/dist/*
+!web/dist/.gitkeep
 
 # diger
 *.log

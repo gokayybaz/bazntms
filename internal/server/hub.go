@@ -2,7 +2,7 @@ package server
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -54,14 +54,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	h.clients[conn] = struct{}{}
 	h.mu.Unlock()
-	log.Printf("ws istemci baglandi (toplam: %d)", h.count())
+	slog.Info("ws istemci baglandi", "toplam", h.count())
 
 	defer func() {
 		h.mu.Lock()
 		delete(h.clients, conn)
 		h.mu.Unlock()
 		conn.Close()
-		log.Printf("ws istemci ayrildi (toplam: %d)", h.count())
+		slog.Info("ws istemci ayrildi", "toplam", h.count())
 	}()
 
 	// istemciden gelen ping/pong ve kapatma mesajlarini oku

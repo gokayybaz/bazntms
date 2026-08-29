@@ -1,16 +1,22 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
@@ -19,22 +25,29 @@ import (
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/sysmon"
+	"github.com/gokayybaz/bazntms/internal/version"
 )
 
 type Server struct {
-	engine   *capture.Engine
-	hub      *Hub
-	staticFS fs.FS
-	store    *store.Store
-	dbPath   string
-	aiClient *ai.Client
-	alerts   *alert.Manager
-	geo      *geoip.Resolver
-	auth     *AuthManager
+	engine    *capture.Engine
+	hub       *Hub
+	staticFS  fs.FS
+	store     *store.Store
+	dbPath    string
+	aiClient  *ai.Client
+	alerts    *alert.Manager
+	geo       *geoip.Resolver
+	auth      *AuthManager
+
+	httpRequests *prometheus.CounterVec
+	httpDuration *prometheus.HistogramVec
+	wsClients    prometheus.Gauge
+	captureRun   prometheus.Gauge
+	registry     *prometheus.Registry
 }
 
 func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string) *Server {
-	return &Server{
+	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
 		staticFS: staticFS,
@@ -45,6 +58,31 @@ func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string,
 		geo:      geo,
 		auth:     NewAuthManager(password),
 	}
+
+	// Prometheus metrikleri
+	s.httpRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "bazntms_http_requests_total",
+		Help: "HTTP istek sayisi (method, path sablonu, durum kodu)",
+	}, []string{"method", "path", "status"})
+	s.httpDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "bazntms_http_request_duration_seconds",
+		Help:    "HTTP istek sureleri (saniye)",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"method", "path"})
+	s.wsClients = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "bazntms_ws_clients",
+		Help: "Bagli WebSocket istemci sayisi",
+	})
+	s.captureRun = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "bazntms_capture_running",
+		Help: "Paket yakalama aktif mi (1/0)",
+	})
+	// server-basina registry: testlerde coklu New() cagrisi guvenli olur
+	s.registry = prometheus.NewRegistry()
+	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun)
+	s.registry.MustRegister(collectors.NewGoCollector())
+
+	return s
 }
 
 func (s *Server) Handler() http.Handler {
@@ -73,6 +111,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/models", s.handleAIModels)
 	mux.HandleFunc("POST /api/ai/analyze", s.handleAIAnalyze)
 	mux.HandleFunc("GET /api/ai/insights", s.handleAIInsights)
+
+	// /api/v1 — kurumsal API sablonu (Faz 1 ingest uclari da buraya gelir)
+	mux.HandleFunc("GET /api/v1/status", s.handleStatus)
+	mux.HandleFunc("GET /api/v1/interfaces", s.handleInterfaces)
+	mux.HandleFunc("GET /api/v1/connections", s.handleConnections)
+	mux.HandleFunc("GET /api/v1/version", s.handleVersion)
+
+	// gozlemlenebilirlik (auth muaf — Prometheus/healthcheck standartlari)
+	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /readyz", s.handleReadyz)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
+
 	mux.HandleFunc("GET /ws", s.hub.ServeWS)
 	mux.HandleFunc("/api/", http.NotFound)
 
@@ -98,7 +148,84 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
-	return logRequest(s.auth.middleware(mux))
+	return s.observe(s.auth.middleware(mux))
+}
+
+// statusWriter, yanit durum kodunu yakalar (metrik + loglama icin).
+type statusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.code = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func newRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// observe, tum isteklere request-id atar, Prometheus metriklerini gunceller
+// ve yapılandırılmış slog kaydı dusurur. /ws ve /metrics sessizdir.
+func (s *Server) observe(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ws" || r.URL.Path == "/metrics" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		rid := newRequestID()
+		w.Header().Set("X-Request-Id", rid)
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, code: http.StatusOK}
+		next.ServeHTTP(sw, r)
+
+		pattern := r.Pattern
+		if pattern == "" {
+			pattern = r.URL.Path
+		}
+		dur := time.Since(start)
+		s.httpRequests.WithLabelValues(r.Method, pattern, strconv.Itoa(sw.code)).Inc()
+		s.httpDuration.WithLabelValues(r.Method, pattern).Observe(dur.Seconds())
+		slog.Info("http",
+			"method", r.Method,
+			"path", pattern,
+			"status", sw.code,
+			"duration_ms", dur.Milliseconds(),
+			"request_id", rid,
+		)
+	})
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Ping(); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		writeJSON(w, map[string]any{"status": "unavailable", "error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"status": "ready"})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	s.wsClients.Set(float64(s.hub.count()))
+	if s.engine.Snapshot().Running {
+		s.captureRun.Set(1)
+	} else {
+		s.captureRun.Set(0)
+	}
+	promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, version.Info())
 }
 
 func serveIndex(w http.ResponseWriter, fsys fs.FS) {
@@ -109,16 +236,6 @@ func serveIndex(w http.ResponseWriter, fsys fs.FS) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
-}
-
-func logRequest(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		if r.URL.Path != "/ws" {
-			log.Printf("%s %s (%s)", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
-		}
-	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -162,13 +279,13 @@ func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	log.Printf("yakalama basladi: %s", req.Device)
+	slog.Info("yakalama basladi", "device", req.Device)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
 	s.engine.Stop()
-	log.Printf("yakalama durduruldu")
+	slog.Info("yakalama durduruldu")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -297,7 +414,7 @@ func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	log.Printf("pcap kaydi basladi")
+	slog.Info("pcap kaydi basladi")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -307,7 +424,7 @@ func (s *Server) handleRecordStop(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	log.Printf("pcap kaydi durduruldu: %s (%d paket)", info.File, info.Packets)
+	slog.Info("pcap kaydi durduruldu", "file", info.File, "packets", info.Packets)
 	writeJSON(w, map[string]any{"ok": true, "file": info.File, "packets": info.Packets, "bytes": info.Bytes})
 }
 
@@ -394,9 +511,9 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
 		PeriodMinutes: req.Minutes, Summary: summary,
 	})
 	if err != nil {
-		log.Printf("analiz kaydi hatasi: %v", err)
+		slog.Error("AI analiz kaydi hatasi", "err", err)
 	}
-	log.Printf("AI analizi tamamlandi (%s)", time.Since(started).Round(time.Second))
+	slog.Info("AI analizi tamamlandi", "sure", time.Since(started).Round(time.Second).String())
 	writeJSON(w, map[string]any{"ok": true, "id": id, "model": model, "summary": summary})
 }
 

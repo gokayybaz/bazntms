@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    outDir: '../web/dist',
+    emptyOutDir: true,
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8080',

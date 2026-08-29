@@ -19,7 +19,7 @@ Paket yakalama ayrıcalıklı bir işlemdir:
   set CGO_ENABLED=1
   set CGO_CFLAGS=-I C:\npcap-sdk\Include
   set CGO_LDFLAGS=-L C:\npcap-sdk\Lib\x64
-  go build -o bazntms.exe .
+  go build -o bazntms.exe ./cmd/bazntms-hub
   ```
 - **WSL2**: yakalama sanal ağda kalır; gerçek trafik için native Windows kullanın.
 

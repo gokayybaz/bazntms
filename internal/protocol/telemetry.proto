@@ -1,0 +1,78 @@
+// bazNTMS agent ↔ hub telgraf protokolu — ilk taslak (Faz 0)
+//
+// Bu dosya Faz 0'da yalnizca sozlesme taslagidir; Go kodu uretimi (protoc +
+// protoc-gen-go) Faz 1'de buf ile yapilacaktir. Alan adlari, Faz 1'in
+// ingest API'siyle birebir eslesir.
+//
+// Tasarim ilkeleri:
+//   - geriye uyumlu ekleme: minor, kirici degisiklik: major (ProtocolVersion)
+//   - tum zamanlar unix sn; byte alanlari uint64
+//   - agent kimligi transport (mTLS/token) uzerinden tasınır; mesajlarda agent_id yok
+
+syntax = "proto3";
+
+package bazntms.telemetry.v1;
+
+option go_package = "github.com/gokayybaz/bazntms/internal/protocol/telemetryv1";
+
+// AgentHello, enrollment/ilk baglanti handshake'i (Faz 1).
+message AgentHello {
+  string agent_name   = 1;  // kullanicinin verdigi ad
+  string site         = 2;  // site/site-group etiketi
+  string agent_version = 3; // agent binary surumu (SemVer)
+  uint32 protocol_version = 4; // desteklenen en yuksek protokol surumu
+  string os           = 5;  // runtime.GOOS
+  string arch         = 6;  // runtime.GOARCH
+  repeated string capabilities = 7; // "connections","dns","pcap","ebpf","etw" ...
+}
+
+// HubReply, AgentHello'ya yanit; kabul/red + politika.
+message HubReply {
+  bool accepted = 1;
+  string reason = 2;        // reddedildiyse aciklama
+  uint32 protocol_version = 3; // hub'in sectigi surum (min(agent, hub))
+  int64 telemetry_interval_seconds = 4; // toplama/raporlama araligi
+  bool pcap_enabled = 5;    // agent'ta PCAP kaydina izin var mi
+}
+
+// InterfaceSample, arayuz bazli bant genisliği ornekleri.
+message InterfaceSample {
+  string name       = 1;
+  uint64 rx_bytes   = 2;
+  uint64 tx_bytes   = 3;
+  uint64 rx_packets = 4;
+  uint64 tx_packets = 5;
+}
+
+// ConnectionSample, aktif soket envanteri (surec bilgisi platform izinlerine bagli).
+message ConnectionSample {
+  string proto       = 1; // tcp | udp
+  string local_addr  = 2;
+  string remote_addr = 3;
+  string status      = 4;
+  int32  pid         = 5;
+  string process     = 6;
+}
+
+// DnsQuerySample, agent uzerinden gecen DNS sorgu sayaclari.
+message DnsQuerySample {
+  string domain    = 1;
+  uint64 queries   = 2;
+  uint64 responses = 3;
+}
+
+// TelemetryBatch, agent'in periyodik toplu gonderimi (Faz 1).
+message TelemetryBatch {
+  int64  ts_unix            = 1;  // batch olusturma zamani
+  repeated InterfaceSample interfaces = 2;
+  repeated ConnectionSample connections = 3;
+  repeated DnsQuerySample   dns_queries = 4;
+  uint64 dropped_packets    = 5;
+}
+
+// Heartbeat, agent canlilik sinyali (telemetry araligindan bagimsiz).
+message Heartbeat {
+  int64  ts_unix       = 1;
+  double cpu_percent   = 2; // agent surecinin kendi kullanımı (Faz 1: opsiyonel)
+  uint64 mem_rss_bytes = 3;
+}
