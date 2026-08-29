@@ -182,6 +182,67 @@ CREATE TABLE IF NOT EXISTS process_traffic (
 CREATE INDEX IF NOT EXISTS idx_pt_ts ON process_traffic(ts);
 CREATE INDEX IF NOT EXISTS idx_pt_proc ON process_traffic(process, ts);
 
+CREATE TABLE IF NOT EXISTS devices (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	name         TEXT    NOT NULL,
+	host         TEXT    NOT NULL,
+	kind         TEXT    NOT NULL DEFAULT 'other',
+	snmp_version INTEGER NOT NULL DEFAULT 2,
+	community    TEXT    NOT NULL DEFAULT '',
+	v3_user      TEXT    NOT NULL DEFAULT '',
+	v3_auth_proto TEXT   NOT NULL DEFAULT '',
+	v3_auth_pass TEXT    NOT NULL DEFAULT '',
+	v3_priv_proto TEXT   NOT NULL DEFAULT '',
+	v3_priv_pass TEXT    NOT NULL DEFAULT '',
+	poll_seconds INTEGER NOT NULL DEFAULT 60,
+	enabled      INTEGER NOT NULL DEFAULT 1,
+	sys_name     TEXT    NOT NULL DEFAULT '',
+	sys_descr    TEXT    NOT NULL DEFAULT '',
+	added_at     INTEGER NOT NULL,
+	last_poll    INTEGER NOT NULL DEFAULT 0,
+	last_error   TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS device_iface_samples (
+	device_id   INTEGER NOT NULL,
+	ts          INTEGER NOT NULL,
+	if_index    INTEGER NOT NULL,
+	name        TEXT    NOT NULL DEFAULT '',
+	alias       TEXT    NOT NULL DEFAULT '',
+	speed       INTEGER NOT NULL DEFAULT 0,
+	oper_status INTEGER NOT NULL DEFAULT 0,
+	rx_bytes    INTEGER NOT NULL DEFAULT 0,
+	tx_bytes    INTEGER NOT NULL DEFAULT 0,
+	in_errors   INTEGER NOT NULL DEFAULT 0,
+	out_errors  INTEGER NOT NULL DEFAULT 0,
+	in_discards INTEGER NOT NULL DEFAULT 0,
+	out_discards INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_dev_iface ON device_iface_samples(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS flows (
+	ts      INTEGER NOT NULL,
+	device  TEXT    NOT NULL DEFAULT '',
+	src     TEXT    NOT NULL DEFAULT '',
+	dst     TEXT    NOT NULL DEFAULT '',
+	src_port INTEGER NOT NULL DEFAULT 0,
+	dst_port INTEGER NOT NULL DEFAULT 0,
+	proto   TEXT    NOT NULL DEFAULT '',
+	packets INTEGER NOT NULL DEFAULT 0,
+	octets  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_flows_ts ON flows(ts);
+
+CREATE TABLE IF NOT EXISTS syslog_events (
+	id       INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts       INTEGER NOT NULL,
+	host     TEXT    NOT NULL DEFAULT '',
+	severity INTEGER NOT NULL DEFAULT 7,
+	tag      TEXT    NOT NULL DEFAULT '',
+	message  TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_syslog_ts ON syslog_events(ts);
+
 CREATE TABLE IF NOT EXISTS alert_events (
 	id      INTEGER PRIMARY KEY AUTOINCREMENT,
 	ts      INTEGER NOT NULL,
@@ -307,6 +368,7 @@ func (s *Store) Prune(retention time.Duration) error {
 		`DELETE FROM alert_events WHERE ts < ?`,
 		`DELETE FROM agent_iface_samples WHERE ts < ?`,
 		`DELETE FROM process_traffic WHERE ts < ?`,
+		`DELETE FROM flows WHERE ts < ?`,
 	} {
 		if _, err := s.db.Exec(q, cutoff); err != nil {
 			return err
