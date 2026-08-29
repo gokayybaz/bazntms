@@ -45,6 +45,9 @@ type HubConfig struct {
 		GroupRoles   map[string]string `koanf:"group_roles"`  // grup → rol (admin|netops|analyst|viewer)
 		DefaultRole  string            `koanf:"default_role"` // eslesmeyen gruplarin rolu (varsayilan viewer)
 	} `koanf:"oidc"`
+	Updates struct {
+		Dir string `koanf:"dir"` // guncelleme kanali dizini (bos = kapali); icerik: bazntmsctl update sign
+	} `koanf:"updates"`
 	Capture struct {
 		Enabled bool `koanf:"enabled"` // hub'in kendi paket yakalamasi; coklu replikada kapatilir
 	} `koanf:"capture"`
@@ -97,6 +100,12 @@ type AgentConfig struct {
 		PCAPRecord      bool   `koanf:"pcap_record"`    // ham paketleri diske yaz (hub politikasi da acik olmali)
 		PCAPDir         string `koanf:"pcap_dir"`       // PCAP kayit dizini
 	} `koanf:"collect"`
+	Update struct {
+		Enabled       bool   `koanf:"enabled"`        // imza dogrulamali otomatik guncelleme (Faz 7.3)
+		Channel       string `koanf:"channel"`        // stable | beta
+		PublicKey     string `koanf:"public_key"`     // hex ed25519; bos = yalnizca sha256
+		IntervalHours int    `koanf:"interval_hours"` // 0 → 6 saat
+	} `koanf:"update"`
 	Log struct {
 		Level  string `koanf:"level"`
 		Format string `koanf:"format"`
@@ -124,6 +133,8 @@ var hubFlagKeys = map[string]string{
 	"record.max_mb":       "record-max-mb",
 	"geoip.dir":           "geoip-dir",
 	"geoip.ip_api_lookup": "ip-api-lookup",
+	"updates.dir":         "updates-dir",
+	"enroll_token":        "enroll-token",
 }
 
 // LoadHub, -config ile verilen YAML dosyasini (varsa) yukler, BAZNTMS_* ortam

@@ -1,0 +1,321 @@
+// bazntms-hub — merkezi sunucu: ingest, REST/WS API, dashboard, uyarılar,
+// AI analizi ve rapor motoru. Faz 4 ile olcek altyapisi: SQLite veya
+// PostgreSQL/TimescaleDB depo, opsiyonel NATS JetStream kuyrugu, graceful
+// shutdown ve coklu-replika rolleri (capture/alerts/poller anahtarlari).
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/gokayybaz/bazntms/internal/ai"
+	"github.com/gokayybaz/bazntms/internal/alert"
+	"github.com/gokayybaz/bazntms/internal/capture"
+	"github.com/gokayybaz/bazntms/internal/config"
+	"github.com/gokayybaz/bazntms/internal/devpoll"
+	"github.com/gokayybaz/bazntms/internal/flows"
+	"github.com/gokayybaz/bazntms/internal/geoip"
+	"github.com/gokayybaz/bazntms/internal/logging"
+	"github.com/gokayybaz/bazntms/internal/queue"
+	"github.com/gokayybaz/bazntms/internal/server"
+	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/internal/syslogd"
+	"github.com/gokayybaz/bazntms/internal/vault"
+	"github.com/gokayybaz/bazntms/internal/version"
+	"github.com/gokayybaz/bazntms/web"
+)
+
+func main() {
+	fl := flag.NewFlagSet("bazntms-hub", flag.ExitOnError)
+	port := fl.String("port", "8080", "HTTP sunucu portu")
+	dev := fl.Bool("dev", false, "frontend embed'i atla (vite dev server ile gelistirme)")
+	dbPath := fl.String("db", "bazntms.db", "SQLite dosyasi veya postgres:// DSN (Faz 4.1)")
+	retentionH := fl.Int("retention-hours", 24*7, "veritabani saklama suresi (saat, SQLite/Prune modu)")
+	natsURL := fl.String("nats", "", "NATS JetStream adresi (bos = kuyruk kapali, dogrudan yazim; ex: nats://localhost:4222)")
+	captureOn := fl.Bool("capture", true, "hub'in kendi paket yakalamasi (coklu replikada kapatilir)")
+	alertsOn := fl.Bool("alerts", true, "uyari motoru (coklu replikada tek replikada acilir)")
+	pollerOn := fl.Bool("poller", true, "SNMP cihaz poller'i (coklu replikada tek replikada acilir)")
+	llmURL := fl.String("llm-base-url", "", "AI servisi adresi (OpenAI-uyumlu; ex: http://localhost:11434/v1)")
+	llmKey := fl.String("llm-api-key", "", "AI API anahtari (yerel modeller icin gerekmez)")
+	llmModel := fl.String("llm-model", "", "varsayilan model (ex: llama3.2, qwen2.5:7b)")
+	llmMaxTokens := fl.Int("llm-max-tokens", 0, "istek basina token limiti (0=dahili varsayilan)")
+	llmNoThink := fl.Bool("llm-no-think", false, "Qwen3 tarzi modellerde dusunme modunu kapat (/no_think)")
+	recordDir := fl.String("record-dir", "captures", "PCAP kayit dosyalarinin dizini")
+	recordMaxMB := fl.Int("record-max-mb", 100, "PCAP dosyasi basina maksimum boyut (MB)")
+	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
+	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
+	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
+	configPath := fl.String("config", "", "YAML config dosyasi (bayraklar ustunlukte)")
+	logLevel := fl.String("log-level", "", "log seviyesi: debug|info|warn|error (config'i override eder)")
+	logFormat := fl.String("log-format", "", "log formati: json|text (config'i override eder)")
+	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
+	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
+	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
+	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
+	flowPort := fl.String("flow-port", "", "NetFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
+	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
+	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
+	showVersion := fl.Bool("version", false, "surum bilgisini yaz ve cik")
+	fl.Parse(os.Args[1:])
+
+	if *showVersion {
+		fmt.Printf("bazntms-hub %s (protokol v%d, %s)\n", version.Version, version.ProtocolVersion, version.Info()["go_version"])
+		return
+	}
+
+	cfg, err := config.LoadHub(fl, *configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "config:", err)
+		os.Exit(1)
+	}
+	if *logLevel != "" {
+		cfg.Log.Level = *logLevel
+	}
+	if *logFormat != "" {
+		cfg.Log.Format = *logFormat
+	}
+	logging.Setup(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format})
+
+	// graceful shutdown zemini (Faz 4.4): SIGINT/SIGTERM → http Shutdown →
+	// defer'lar (collector, alerts, poller, kuyruk) sirayla kapanir
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	slog.Info("bazNTMS hub basliyor",
+		"version", version.Version,
+		"protocol_version", version.ProtocolVersion,
+		"port", *port,
+	)
+	slog.Info("baz Network Traffic Monitoring System",
+		"db", *dbPath,
+		"nats", *natsURL != "",
+		"capture", *captureOn,
+		"alerts", *alertsOn,
+		"poller", *pollerOn,
+		"retention_hours", *retentionH,
+		"auth", *authPassword != "",
+	)
+
+	if *authPassword == "" {
+		if env := os.Getenv("AUTH_PASSWORD"); env != "" {
+			*authPassword = env
+		}
+	}
+	if *authPassword == "" {
+		slog.Warn("kimlik dogrulama kapali — LAN uzerinden herkes erisebilir", "cozum", "-auth-password ile sifre belirleyin")
+	}
+
+	var static fs.FS
+	if !*dev {
+		sub, err := web.Dist()
+		if err != nil {
+			slog.Error("frontend embed okunamadi", "err", err)
+			os.Exit(1)
+		}
+		static = sub
+	} else {
+		slog.Info("dev modu: statik dosyalar serve edilmiyor, vite dev server kullanin")
+	}
+
+	st, err := store.Open(*dbPath)
+	if err != nil {
+		slog.Error("veritabani acilamadi", "err", err)
+		os.Exit(1)
+	}
+	defer st.Close()
+
+	// NATS JetStream kuyrugu (Faz 4.2): ingest → processor ayrismasi
+	var q *queue.Queue
+	if *natsURL != "" {
+		q, err = queue.Connect(*natsURL)
+		if err != nil {
+			slog.Error("nats baglantisi kurulamadi", "url", *natsURL, "err", err)
+			os.Exit(1)
+		}
+		defer q.Close()
+		if err := q.RunProcessor(ctx, st, 4); err != nil {
+			slog.Error("kuyruk processor baslatilamadi", "err", err)
+			os.Exit(1)
+		}
+		slog.Info("nats jetstream aktif", "url", *natsURL, "stream", "BAZNTMS")
+	}
+
+	engine := capture.NewEngine()
+	engine.SetRecordOptions(*recordDir, uint64(*recordMaxMB)<<20)
+	if *captureOn {
+		collector := store.NewCollector(engine, st, *dbPath, time.Duration(*retentionH)*time.Hour)
+		collector.Start()
+		defer collector.Stop()
+	} else {
+		slog.Info("hub paket yakalamasi kapali (coklu replika ingest modu)")
+	}
+
+	alertCfg := alert.DefaultConfig()
+	if raw, err := st.LoadAlertConfig(); err == nil && raw != "" {
+		if json.Unmarshal([]byte(raw), &alertCfg) != nil {
+			slog.Warn("uyari ayarlari okunamadi, varsayilanlar kullaniliyor")
+			alertCfg = alert.DefaultConfig()
+		}
+	}
+	alertCfg = alert.NormalizeConfig(alertCfg)
+	alerts := alert.NewManager(alertCfg, st, engine)
+	if *alertsOn {
+		alerts.Start()
+		defer alerts.Stop()
+	} else {
+		slog.Info("uyari motoru kapali (coklu replika ingest modu)")
+	}
+
+	geo := geoip.New(
+		filepath.Join(*geoipDir, "GeoLite2-Country.mmdb"),
+		filepath.Join(*geoipDir, "GeoLite2-ASN.mmdb"),
+		*ipAPILookup,
+	)
+
+	aiCfg := ai.ConfigFromEnv()
+	if *llmURL != "" {
+		aiCfg.BaseURL = strings.TrimRight(*llmURL, "/")
+	}
+	if *llmKey != "" {
+		aiCfg.APIKey = *llmKey
+	}
+	if *llmModel != "" {
+		aiCfg.Model = *llmModel
+	}
+	if *llmMaxTokens > 0 {
+		aiCfg.MaxTokens = *llmMaxTokens
+	}
+	if *llmNoThink {
+		aiCfg.NoThink = true
+	}
+	aiClient := ai.NewClient(aiCfg)
+	if aiCfg.Enabled() {
+		slog.Info("AI aktif", "model", aiCfg.Model, "base_url", aiCfg.BaseURL)
+	} else {
+		slog.Info("AI pasif", "cozum", "-llm-base-url http://localhost:11434/v1 veya LLM_API_KEY")
+	}
+
+	if *agentPCAP {
+		slog.Info("agent PCAP politikasi acik")
+	}
+	v, err := vault.Open(*vaultKeyFile)
+	if err != nil {
+		slog.Error("kimlik kasasi acilamadi", "err", err)
+		os.Exit(1)
+	}
+
+	var sink server.TelemetrySink
+	if q != nil {
+		sink = q
+	}
+	var oidcOpts *server.OIDCOptions
+	if cfg.OIDC.Issuer != "" {
+		oidcOpts = &server.OIDCOptions{
+			Issuer:       cfg.OIDC.Issuer,
+			ClientID:     cfg.OIDC.ClientID,
+			ClientSecret: cfg.OIDC.ClientSecret,
+			RedirectURL:  cfg.OIDC.RedirectURL,
+			GroupRoles:   cfg.OIDC.GroupRoles,
+			DefaultRole:  cfg.OIDC.DefaultRole,
+		}
+		slog.Info("SSO (OIDC) aktif", "issuer", cfg.OIDC.Issuer, "client_id", cfg.OIDC.ClientID)
+	}
+	srv := server.New(static, engine, st, *dbPath, aiClient, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
+	if autoTok := srv.EnrollToken(); *enrollToken == "" {
+		slog.Info("otomatik enrollment token uretildi", "enroll_token", autoTok)
+	}
+	if *updatesDir != "" {
+		srv.SetUpdatesDir(*updatesDir)
+		slog.Info("agent guncelleme kanali aktif", "dir", *updatesDir)
+	}
+
+	// cihaz SNMP poller
+	poller := devpoll.New(st, v)
+	if *pollerOn {
+		poller.Start()
+		defer poller.Stop()
+	} else {
+		slog.Info("snmp poller kapali (coklu replika ingest modu)")
+	}
+
+	// NetFlow v5 collector — kuyruk aciksa mesajlar JetStream'e gider
+	if *flowPort != "" {
+		flc := &flows.Collector{OnFlows: func(device string, rows []flows.Row) {
+			srows := make([]store.FlowRow, 0, len(rows))
+			for _, f := range rows {
+				srows = append(srows, store.FlowRow(f))
+			}
+			if q != nil {
+				if err := q.PublishFlows(srows); err != nil {
+					slog.Error("akis kuyruguna yayinlama hatasi", "err", err)
+				}
+				return
+			}
+			if err := st.SaveFlows(srows); err != nil {
+				slog.Error("akis kaydi hatasi", "err", err)
+			}
+		}}
+		if err := flc.Listen("0.0.0.0:" + *flowPort); err != nil {
+			slog.Error("flow collector dinlenemedi", "port", *flowPort, "err", err)
+		} else {
+			slog.Info("netflow v5 collector dinliyor", "port", *flowPort)
+			defer flc.Close()
+		}
+	}
+
+	// Syslog alici — kuyruk aciksa mesajlar JetStream'e gider
+	if *syslogPort != "" {
+		sl := &syslogd.Listener{OnEvent: func(srcIP string, ev syslogd.Event) {
+			se := store.SyslogEvent{
+				Ts: time.Now().Unix(), Host: ev.Host, Severity: ev.Severity,
+				Tag: ev.Tag, Message: ev.Message,
+			}
+			if q != nil {
+				if err := q.PublishSyslog(se); err != nil {
+					slog.Error("syslog kuyruguna yayinlama hatasi", "err", err)
+				}
+				return
+			}
+			if err := st.SaveSyslogEvent(se); err != nil {
+				slog.Error("syslog kaydi hatasi", "err", err)
+			}
+		}}
+		if err := sl.Listen("0.0.0.0:" + *syslogPort); err != nil {
+			slog.Error("syslog dinlenemedi", "port", *syslogPort, "err", err)
+		} else {
+			slog.Info("syslog alici dinliyor", "port", *syslogPort)
+			defer sl.Close()
+		}
+	}
+
+	addr := "0.0.0.0:" + *port
+	hs := &http.Server{Addr: addr, Handler: srv.Handler()}
+	go func() {
+		slog.Info("http dinleniyor", "addr", addr)
+		if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("http sunucu hatasi", "err", err)
+			stop() // graceful shutdown akisini tetikle ve cik
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("kapanis sinyali alindi, graceful shutdown")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := hs.Shutdown(shutdownCtx); err != nil {
+		slog.Error("http shutdown hatasi", "err", err)
+	}
+}

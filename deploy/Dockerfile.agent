@@ -1,0 +1,21 @@
+# bazntms-agent imajı (Faz 7.1): k8s DaemonSet ile uç node'larda çalışır.
+# Build context repo köküdür:
+#   docker build -f deploy/Dockerfile.agent -t ghcr.io/gokayybaz/bazntms-agent:local .
+#
+# Not: konteyner içinde paket yakalama (PCAP) yalnızca host network +
+# NET_RAW/NET_ADMIN yetkileriyle çalışır; DaemonSet values'a bakın.
+
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache gcc musl-dev libpcap-dev
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 go build -trimpath \
+    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=container" \
+    -o /out/bazntms-agent ./cmd/bazntms-agent
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates libpcap tzdata
+COPY --from=build /out/bazntms-agent /usr/local/bin/bazntms-agent
+ENTRYPOINT ["bazntms-agent"]

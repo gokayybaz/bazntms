@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bazntms.fullname" . }}-config
+  labels:
+    {{- include "bazntms.labels" . | nindent 4 }}
+data:
+  hub.yaml: |
+    port: {{ .Values.config.port }}
+    database:
+      path: {{ .Values.config.database.path | quote }}
+    nats:
+      url: {{ .Values.config.nats.url | quote }}
+    capture:
+      enabled: {{ .Values.replicaRoles.capture.enabled }}
+    alerts:
+      enabled: {{ .Values.replicaRoles.alerts.enabled }}
+    poller:
+      enabled: {{ .Values.replicaRoles.poller.enabled }}
+    retention_hours: {{ .Values.config.retention_hours }}
+    telemetry_interval: {{ .Values.config.telemetry_interval }}
+    log:
+      level: {{ .Values.config.log.level }}
+      format: {{ .Values.config.log.format }}

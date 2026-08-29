@@ -1,0 +1,23 @@
+bazNTMS hub kuruldu.
+
+1. Dashboard adresi:
+{{- if .Values.ingress.enabled }}
+   Ingress: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}
+{{- else }}
+   kubectl port-forward svc/{{ include "bazntms.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+   → http://localhost:{{ .Values.service.port }}
+{{- end }}
+
+2. Enrollment token'i deployment loglarindan alin (rastgele uretildiyse):
+   kubectl logs deploy/{{ include "bazntms.fullname" . }} | grep enroll_token
+
+3. Agent kurulumu:
+   BAZNTMS_HUB__URL=http://<hub-adresi> \
+   BAZNTMS_HUB__TOKEN=<enroll-token> \
+   bazntms-agent
+
+Notlar:
+- capture/alerts/poller rolleri values.yaml → replicaRoles ile yonetilir.
+  N replika ingest icin bu rolleri kapatip tek "controller" replikasi kullanin.
+- Kuyruk icin NATS JetStream, depo icin PostgreSQL/TimescaleDB adresleri
+  values.yaml → config bolumundedir.

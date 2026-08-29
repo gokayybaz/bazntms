@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bazntms.fullname" . }}
+  labels:
+    {{- include "bazntms.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+    {{- if gt (int .Values.service.flowPort) 0 }}
+    - name: netflow
+      port: {{ .Values.service.flowPort }}
+      targetPort: netflow
+      protocol: UDP
+    {{- end }}
+    {{- if gt (int .Values.service.syslogPort) 0 }}
+    - name: syslog
+      port: {{ .Values.service.syslogPort }}
+      targetPort: syslog
+      protocol: UDP
+    {{- end }}
+  selector:
+    app.kubernetes.io/name: {{ include "bazntms.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}

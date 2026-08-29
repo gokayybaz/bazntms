@@ -1,7 +1,7 @@
-# binary
-bazntms
-bazntms.exe
-bazntms-*
+# binary (yalnizca repo koku — deploy/helm/bazntms dizinini yutmasin!)
+/bazntms
+/bazntms.exe
+/bazntms-*
 
 # veri tabani / kayitlar
 *.db

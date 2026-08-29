@@ -1,0 +1,8 @@
+apiVersion: v2
+name: bazntms
+description: bazNTMS — hub + agent ag trafigi izleme platformu (hub Deployment'i)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: gokayybaz

@@ -46,6 +46,12 @@ tek dosya, kurulum gerektirmez.
 - **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`), tek-node docker-compose demo (`deploy/`)
 - **Yük testi**: `bazntms-loadgen` sentetik agent filosu + k6 senaryosu (`loadtest/`)
 
+### Dağıtım ve operasyon (Faz 7)
+- **Yönetim CLI**: `bazntmsctl setup` (kurulum sihirbazı), `update keygen/sign` (ed25519 imza kanalı)
+- **Paketler**: deb/rpm (nfpm + systemd), Windows MSI (WiX), macOS pkg (launchd) — release CI otomatik üretir
+- **Otomatik agent güncellemesi**: stable/beta kanalları, SHA-256 + ed25519 imza doğrulamalı, atomik binary değişimi
+- **Dokümantasyon**: `docs/UPGRADE-RUNBOOK.md`, `docs/DR-RUNBOOK.md`, Docusaurus iskeleti (`docs-site/`)
+
 ### Analiz ve otomasyon
 - **AI analizi**: OpenAI-uyumlu her servis (Ollama, LM Studio, llama.cpp, OpenAI...)
   - **Parça parça gönderme**: veri 4 parçaya bölünüp ayrı isteklerle gider — küçük modellerde context şişmez
