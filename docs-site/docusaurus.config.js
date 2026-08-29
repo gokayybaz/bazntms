@@ -17,6 +17,27 @@ const config = {
   organizationName: 'gokayybaz',
   projectName: 'bazntms',
   i18n: { defaultLocale: 'tr', locales: ['tr'] },
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap',
+      },
+    },
+  ],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -25,7 +46,7 @@ const config = {
         title: 'bazNTMS',
         logo: { src: 'img/bazntms.svg' },
         items: [
-          { to: '/docs', label: 'Kurulum', position: 'left' },
+          { to: '/docs/installation', label: 'Kurulum', position: 'left' },
           { to: '/docs/reference/api', label: 'API', position: 'left' },
           { to: '/docs/reference/upgrading', label: 'Güncelleme', position: 'left' },
           {
@@ -37,7 +58,34 @@ const config = {
       },
       footer: {
         style: 'dark',
-        copyright: `bazNTMS · MIT · Go + React · ${new Date().getFullYear()}`,
+        links: [
+          {
+            title: 'Dokümanlar',
+            items: [
+              { label: 'Kurulum', to: '/docs/installation' },
+              { label: 'API Referansı', to: '/docs/reference/api' },
+              { label: 'Yapılandırma', to: '/docs/reference/configuration' },
+            ],
+          },
+          {
+            title: 'Operasyon',
+            items: [
+              { label: 'Upgrade Runbook', to: '/docs/reference/upgrading' },
+              { label: 'Felaket Kurtarma', to: '/docs/reference/dr' },
+              { label: 'Mimari', to: '/docs/reference/architecture' },
+            ],
+          },
+          {
+            title: 'Proje',
+            items: [
+              {
+                label: 'GitHub',
+                href: 'https://github.com/gokayybaz/bazntms',
+              },
+            ],
+          },
+        ],
+        copyright: 'bazNTMS · MIT Lisansı',
       },
     }),
   presets: [
