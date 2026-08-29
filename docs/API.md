@@ -272,6 +272,46 @@ en fazla 100 batch) ve bağlantı geri gelince otomatik bosaltilir.
 
 ---
 
+## Cihazlar, NetFlow ve Syslog (Faz 3, UI auth ile korunur)
+
+### `GET /api/v1/devices`
+
+Kayıtlı cihazlar: `{id, name, host, kind, snmp_version, poll_seconds, enabled, sys_name, sys_descr, last_poll, last_error}`.
+Kimlik bilgileri yanıt масkedelenir.
+
+### `POST /api/v1/devices`
+
+```json
+{
+  "name": "core-sw", "host": "10.0.0.2", "kind": "switch",
+  "snmp_version": 2, "community": "gizli",
+  "poll_seconds": 60
+}
+```
+
+v3 için: `"v3_user"`, `"v3_auth_proto"` (SHA/SHA256/SHA512/MD5), `"v3_auth_pass"`,
+`"v3_priv_proto"` (AES/AES256/DES), `"v3_priv_pass"`. Hassas alanlar AES-256-GCM
+kasada şifrelenir (`vault.key` dosyası, ilk çalıştırmada üretilir — **kaybedilirse
+cihaz kimlikleri kurtarılamaz**).
+
+### Cihaz verileri
+
+| Uç | Açıklama |
+|----|----------|
+| `DELETE /api/v1/devices/{id}` | Cihazı ve örneklerini sil |
+| `GET /api/v1/devices/{id}/interfaces` | Son örneklerden arayüz listesi + ↓/↑ verimleri + hata sayaçları |
+
+### `GET /api/v1/flows?minutes=15&limit=20`
+
+NetFlow v5 akışları: `{ts, device, src, dst, src_port, dst_port, proto, packets, octets}`
+(octets'e göre azalan). Collector: `-flow-port 2055`.
+
+### `GET /api/v1/syslog?limit=100`
+
+RFC3164 olayları: `{id, ts, host, severity (0-7), tag, message}`. Alıcı: `-syslog-port 5514`.
+
+---
+
 ## Sysmon
 
 ### `GET /api/connections`

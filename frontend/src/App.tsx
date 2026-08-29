@@ -18,6 +18,9 @@ import { ReportCard } from './components/ReportCard'
 import { LoginScreen } from './components/LoginScreen'
 import { AgentsCard } from './components/AgentsCard'
 import { ProcessesCard } from './components/ProcessesCard'
+import { DevicesCard } from './components/DevicesCard'
+import { FlowsCard } from './components/FlowsCard'
+import { SyslogCard } from './components/SyslogCard'
 import { Card } from './components/Card'
 
 export default function App() {
@@ -140,6 +143,20 @@ export default function App() {
         <Card title="Süreç Trafiği (Agentlar)" right={<span className="text-xs text-slate-500">Faz 2 · atıf</span>}>
           <ProcessesCard />
         </Card>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card title="Cihazlar (SNMP)" right={<span className="text-xs text-slate-500">router · switch · firewall · ap</span>}>
+            <DevicesCard refreshKey={historyRefresh} />
+          </Card>
+          <div className="space-y-4">
+            <Card title="NetFlow v5 Akışları" right={<span className="text-xs text-slate-500">son 15 dk · top 20</span>}>
+              <FlowsCard />
+            </Card>
+            <Card title="Syslog Olayları" right={<span className="text-xs text-slate-500">RFC3164</span>}>
+              <SyslogCard />
+            </Card>
+          </div>
+        </div>
 
         <Card title="Ağ Verimi">
           <ThroughputChart history={stats.history} running={stats.running} />

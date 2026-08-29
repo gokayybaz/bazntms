@@ -25,6 +25,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/sysmon"
+	"github.com/gokayybaz/bazntms/internal/vault"
 	"github.com/gokayybaz/bazntms/internal/version"
 )
 
@@ -41,6 +42,7 @@ type Server struct {
 	enrollToken       string
 	telemetryInterval int
 	agentPCAP         bool
+	vault             *vault.Vault
 
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
@@ -49,7 +51,7 @@ type Server struct {
 	registry     *prometheus.Registry
 }
 
-func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool) *Server {
+func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool, v *vault.Vault) *Server {
 	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
@@ -67,6 +69,7 @@ func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string,
 	s.enrollToken = enrollToken
 	s.telemetryInterval = telemetryInterval
 	s.agentPCAP = agentPCAP
+	s.vault = v
 	if s.enrollToken == "" {
 		// otomatik token uret; hub banner'i loglar
 		buf := make([]byte, 12)
@@ -141,6 +144,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
 	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", s.handleAgentDelete)
+
+	// cihazlar ve ag cihazi verileri (Faz 3)
+	mux.HandleFunc("GET /api/v1/devices", s.handleDevicesList)
+	mux.HandleFunc("POST /api/v1/devices", s.handleDeviceAdd)
+	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.handleDeviceDelete)
+	mux.HandleFunc("GET /api/v1/devices/{id}/interfaces", s.handleDeviceIfaces)
+	mux.HandleFunc("GET /api/v1/flows", s.handleFlows)
+	mux.HandleFunc("GET /api/v1/syslog", s.handleSyslogEvents)
 
 	// gozlemlenebilirlik (auth muaf — Prometheus/healthcheck standartlari)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
