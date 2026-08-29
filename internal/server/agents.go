@@ -159,6 +159,12 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 			slog.Error("surec trafik kaydi hatasi", "agent_id", agent.ID, "err", err)
 		}
 	}
+	if len(batch.Subnets) > 0 {
+		// topoloji kesfi (Faz 6.1): agent'in yerel aglari
+		if err := s.store.SaveAgentSubnets(agent.ID, agent.Name, batch.Subnets); err != nil {
+			slog.Error("subnet kaydi hatasi", "agent_id", agent.ID, "err", err)
+		}
+	}
 	slog.Debug("telemetri alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
 	writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
 }

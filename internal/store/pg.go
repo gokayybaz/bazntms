@@ -247,6 +247,21 @@ CREATE TABLE IF NOT EXISTS audit_events (
 	hash      TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts);
+
+CREATE TABLE IF NOT EXISTS topology_links (
+	id          BIGSERIAL PRIMARY KEY,
+	ts          BIGINT  NOT NULL,
+	kind        TEXT    NOT NULL,
+	source_type TEXT    NOT NULL,
+	source_id   BIGINT  NOT NULL DEFAULT 0,
+	source_name TEXT    NOT NULL DEFAULT '',
+	local_port  TEXT    NOT NULL DEFAULT '',
+	peer_type   TEXT    NOT NULL DEFAULT 'host',
+	peer_id     BIGINT  NOT NULL DEFAULT 0,
+	peer_name   TEXT    NOT NULL DEFAULT '',
+	peer_ip     TEXT    NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_topo_dedup ON topology_links(kind, source_type, source_id, local_port, peer_name, peer_ip);
 `)
 	return err
 }

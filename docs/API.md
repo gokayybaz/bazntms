@@ -324,6 +324,52 @@ SSO akışı (config'te `oidc.issuer` tanımlıysa aktif). Grup→rol eşlemesi
 
 ---
 
+## İleri Analiz (Faz 6, UI auth ile korunur)
+
+### `GET /api/v1/topology`
+
+Canlı ağ haritası modeli: `{generated_at, devices[], agents[], links[]}`.
+Kenar kaynakları: **LLDP/CDP** (SNMP keşfi), **ARP** (cihaz port uç noktaları),
+**subnet** (agent'ların bildirdiği yerel ağlar — CIDR). Kenarlar dedupe edilir;
+`ts` = son görülme.
+
+### Uyarı tipleri (Faz 6.2 anomali)
+
+`GET /api/alerts/events` içinde `kind:"anomaly"`: saat-of-day istatistiksel
+baseline (son 7 gün) ile 5 dakikalık pencere verimi arasındaki z-skoru sapması.
+Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
+`{"anomaly":{"enabled":true,"sensitivity":3.0,"min_samples":120,"window_min":5}}`.
+
+### Bildirim kanalları (Faz 6.3)
+
+`PUT /api/alerts` → `notifiers` bölümüne yeni kanallar:
+
+```json
+{
+  "notifiers": {
+    "teams_url": "https://outlook.office.com/webhook/...",
+    "webhook_v2_url": "https://siem.example.com/bazntms",
+    "webhook_v2_secret": "paylastiginiz-gizli",
+    "email_host": "smtp.kurum.local",
+    "email_port": 587,
+    "email_from": "bazntms@kurum.local",
+    "email_to": ["noc@kurum.local"],
+    "email_user": "bazntms",
+    "email_pass": "gizli"
+  }
+}
+```
+
+Webhook v2, gövdeyi `X-BazNTMS-Signature: sha256=<hmac>` ile imzalar.
+
+### Kurumsal rapor
+
+`GET /api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,
+paket düşme), kapasite (büyüme, toplam trafik) ve banding (p50/p95/p99)
+tablo­ları; HTML olarak üretilir.
+
+---
+
 ## Cihazlar, NetFlow ve Syslog (Faz 3, UI auth ile korunur)
 
 ### `GET /api/v1/devices`
