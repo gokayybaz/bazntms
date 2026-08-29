@@ -9,7 +9,7 @@ import (
 // --- surec bazli trafik (Faz 2) ---
 
 // SaveProcessTraffic, agent'in donemlik surec trafik deltalarini yazar.
-func (s *Store) SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error {
+func (s *sqlStore) SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error {
 	if len(samples) == 0 {
 		return nil
 	}
@@ -18,9 +18,9 @@ func (s *Store) SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO process_traffic
+	stmt, err := tx.Prepare(s.q(`INSERT INTO process_traffic
 		(ts, agent_id, pid, process, proto, remote_ip, port, bytes_in, bytes_out)
-		VALUES (?,?,?,?,?,?,?,?,?)`)
+		VALUES (?,?,?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ type ProcessTrafficUsage struct {
 
 // TopProcessTraffic, donemdeki surec bazli trafiği toplar. agentID 0 ise
 // tum agentlar dahildir.
-func (s *Store) TopProcessTraffic(since time.Time, agentID int64, limit int) ([]ProcessTrafficUsage, error) {
+func (s *sqlStore) TopProcessTraffic(since time.Time, agentID int64, limit int) ([]ProcessTrafficUsage, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -60,7 +60,7 @@ func (s *Store) TopProcessTraffic(since time.Time, agentID int64, limit int) ([]
 	q += ` GROUP BY process ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := s.db.Query(q, args...)
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}

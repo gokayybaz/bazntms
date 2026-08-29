@@ -27,13 +27,15 @@ import (
 	"github.com/gokayybaz/bazntms/internal/sysmon"
 	"github.com/gokayybaz/bazntms/internal/vault"
 	"github.com/gokayybaz/bazntms/internal/version"
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
 type Server struct {
 	engine            *capture.Engine
 	hub               *Hub
 	staticFS          fs.FS
-	store             *store.Store
+	store             store.Store
+	ingest            TelemetrySink // nil ise telemetri dogrudan store'a yazilir
 	dbPath            string
 	aiClient          *ai.Client
 	alerts            *alert.Manager
@@ -51,12 +53,19 @@ type Server struct {
 	registry     *prometheus.Registry
 }
 
-func New(staticFS fs.FS, engine *capture.Engine, st *store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool, v *vault.Vault) *Server {
+// TelemetrySink, agent telemetrisini kuyruga aktaran arayuzdur (Faz 4.2,
+// NATS JetStream). nil ise handler dogrudan store'a yazar (kuyruksuz mod).
+type TelemetrySink interface {
+	PublishTelemetry(agentID int64, version, remoteIP string, ts int64, batch *telemetry.TelemetryBatch) error
+}
+
+func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, aiClient *ai.Client, alerts *alert.Manager, geo *geoip.Resolver, password string, enrollToken string, telemetryInterval int, agentPCAP bool, v *vault.Vault, ingest TelemetrySink) *Server {
 	s := &Server{
 		engine:   engine,
 		hub:      NewHub(engine, alerts, geo),
 		staticFS: staticFS,
 		store:    st,
+		ingest:   ingest,
 		dbPath:   dbPath,
 		aiClient: aiClient,
 		alerts:   alerts,

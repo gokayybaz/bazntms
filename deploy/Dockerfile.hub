@@ -1,0 +1,28 @@
+# bazntms-hub imajı (Faz 4.4). Build context repo köküdür:
+#   docker build -f deploy/Dockerfile.hub -t ghcr.io/gokayybaz/bazntms-hub:local .
+#
+# 3 aşama: frontend (vite) → hub (cgo + libpcap) → minimal çalışma imajı.
+
+FROM node:22-alpine AS ui
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache gcc musl-dev libpcap-dev
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=ui /ui/dist web/dist
+RUN CGO_ENABLED=1 go build -trimpath \
+    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=container" \
+    -o /out/bazntms-hub ./cmd/bazntms-hub
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates libpcap tzdata
+COPY --from=build /out/bazntms-hub /usr/local/bin/bazntms-hub
+EXPOSE 8080 2055/udp 5514/udp
+ENTRYPOINT ["bazntms-hub"]

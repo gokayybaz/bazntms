@@ -27,19 +27,21 @@ func TokenHash(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func (s *Store) RegisterAgent(a Agent) (int64, error) {
+func (s *sqlStore) RegisterAgent(a Agent) (int64, error) {
 	now := time.Now().Unix()
-	res, err := s.db.Exec(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip)
-		VALUES (?,?,?,?,?,?,?,?)`, a.Name, a.Site, a.TokenHash, now, now, a.Version, a.ProtocolVersion, a.RemoteIP)
+	var id int64
+	err := s.db.QueryRow(s.q(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip)
+		VALUES (?,?,?,?,?,?,?,?) RETURNING id`),
+		a.Name, a.Site, a.TokenHash, now, now, a.Version, a.ProtocolVersion, a.RemoteIP).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
-func (s *Store) AgentByTokenHash(hash string) (*Agent, error) {
-	row := s.db.QueryRow(`SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
-		FROM agents WHERE token_hash = ?`, hash)
+func (s *sqlStore) AgentByTokenHash(hash string) (*Agent, error) {
+	row := s.db.QueryRow(s.q(`SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
+		FROM agents WHERE token_hash = ?`), hash)
 	var a Agent
 	a.TokenHash = hash
 	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP)
@@ -50,20 +52,20 @@ func (s *Store) AgentByTokenHash(hash string) (*Agent, error) {
 }
 
 // TouchAgent, telemetri/heartbeat'te cagrılır: son gorulme + meta gunceller.
-func (s *Store) TouchAgent(id int64, version, remoteIP string) error {
-	_, err := s.db.Exec(`UPDATE agents SET last_seen = ?, version = ?, remote_ip = ? WHERE id = ?`,
+func (s *sqlStore) TouchAgent(id int64, version, remoteIP string) error {
+	_, err := s.db.Exec(s.q(`UPDATE agents SET last_seen = ?, version = ?, remote_ip = ? WHERE id = ?`),
 		time.Now().Unix(), version, remoteIP, id)
 	return err
 }
 
-func (s *Store) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error {
+func (s *sqlStore) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO agent_iface_samples
-		(agent_id, ts, name, rx_bytes, tx_bytes, rx_packets, tx_packets) VALUES (?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO agent_iface_samples
+		(agent_id, ts, name, rx_bytes, tx_bytes, rx_packets, tx_packets) VALUES (?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -76,17 +78,17 @@ func (s *Store) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.In
 	return tx.Commit()
 }
 
-func (s *Store) ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error {
+func (s *sqlStore) ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM agent_conn_latest WHERE agent_id = ?`, agentID); err != nil {
+	if _, err := tx.Exec(s.q(`DELETE FROM agent_conn_latest WHERE agent_id = ?`), agentID); err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(`INSERT INTO agent_conn_latest
-		(agent_id, proto, local_addr, remote_addr, status, pid, process) VALUES (?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(s.q(`INSERT INTO agent_conn_latest
+		(agent_id, proto, local_addr, remote_addr, status, pid, process) VALUES (?,?,?,?,?,?,?)`))
 	if err != nil {
 		return err
 	}
@@ -117,9 +119,9 @@ type AgentWithRates struct {
 }
 
 // ListAgents, filo gorunumu: online durumu + son orneklerden hesaplanmis verimler.
-func (s *Store) ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error) {
-	rows, err := s.db.Query(`SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
-		FROM agents ORDER BY last_seen DESC`)
+func (s *sqlStore) ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error) {
+	rows, err := s.db.Query(s.q(`SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
+		FROM agents ORDER BY last_seen DESC`))
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +142,9 @@ func (s *Store) ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error)
 
 	// her agent icin son orneklerden arayuz verimleri (ilk/son karsilastirma)
 	for i := range out {
-		rows2, err := s.db.Query(`SELECT name, rx_bytes, tx_bytes, ts FROM (
+		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, ts FROM (
 			SELECT name, rx_bytes, tx_bytes, ts FROM agent_iface_samples
-			WHERE agent_id = ? ORDER BY ts DESC LIMIT 400) ORDER BY ts ASC`, out[i].ID)
+			WHERE agent_id = ? ORDER BY ts DESC LIMIT 400) sq ORDER BY ts ASC`), out[i].ID)
 		if err != nil {
 			continue
 		}
@@ -181,16 +183,16 @@ func (s *Store) ListAgents(onlineWindow time.Duration) ([]AgentWithRates, error)
 				LastSeen: l.ts,
 			})
 		}
-		if err := s.db.QueryRow(`SELECT COUNT(*) FROM agent_conn_latest WHERE agent_id = ?`, out[i].ID).Scan(&out[i].Conns); err != nil {
+		if err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM agent_conn_latest WHERE agent_id = ?`), out[i].ID).Scan(&out[i].Conns); err != nil {
 			out[i].Conns = 0
 		}
 	}
 	return out, nil
 }
 
-func (s *Store) LatestAgentConnections(agentID int64) []telemetry.ConnectionSample {
-	rows, err := s.db.Query(`SELECT proto, local_addr, remote_addr, status, pid, process
-		FROM agent_conn_latest WHERE agent_id = ? ORDER BY process, local_addr`, agentID)
+func (s *sqlStore) LatestAgentConnections(agentID int64) []telemetry.ConnectionSample {
+	rows, err := s.db.Query(s.q(`SELECT proto, local_addr, remote_addr, status, pid, process
+		FROM agent_conn_latest WHERE agent_id = ? ORDER BY process, local_addr`), agentID)
 	if err != nil {
 		return nil
 	}
@@ -206,9 +208,9 @@ func (s *Store) LatestAgentConnections(agentID int64) []telemetry.ConnectionSamp
 	return out
 }
 
-func (s *Store) AgentByID(id int64) (*Agent, error) {
-	row := s.db.QueryRow(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip
-		FROM agents WHERE id = ?`, id)
+func (s *sqlStore) AgentByID(id int64) (*Agent, error) {
+	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip
+		FROM agents WHERE id = ?`), id)
 	var a Agent
 	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP)
 	if err != nil {
@@ -217,13 +219,13 @@ func (s *Store) AgentByID(id int64) (*Agent, error) {
 	return &a, nil
 }
 
-func (s *Store) DeleteAgent(id int64) error {
+func (s *sqlStore) DeleteAgent(id int64) error {
 	for _, q := range []string{
 		`DELETE FROM agents WHERE id = ?`,
 		`DELETE FROM agent_iface_samples WHERE agent_id = ?`,
 		`DELETE FROM agent_conn_latest WHERE agent_id = ?`,
 	} {
-		if _, err := s.db.Exec(q, id); err != nil {
+		if _, err := s.db.Exec(s.q(q), id); err != nil {
 			return err
 		}
 	}

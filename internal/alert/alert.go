@@ -82,7 +82,7 @@ func DefaultConfig() Config {
 type Manager struct {
 	mu     sync.Mutex
 	cfg    Config
-	st     *store.Store
+	st     store.Store
 	engine *capture.Engine
 
 	bwInCount  int
@@ -96,7 +96,7 @@ type Manager struct {
 	notifier *Notifier
 }
 
-func NewManager(cfg Config, st *store.Store, engine *capture.Engine) *Manager {
+func NewManager(cfg Config, st store.Store, engine *capture.Engine) *Manager {
 	return &Manager{
 		cfg:      cfg,
 		st:       st,

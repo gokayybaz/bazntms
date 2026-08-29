@@ -15,7 +15,7 @@ import (
 //   - 10 dakikalik: eski kayitlarin temizligi
 type Collector struct {
 	engine    *capture.Engine
-	store     *Store
+	store     Store
 	dbPath    string
 	retention time.Duration
 	stopCh    chan struct{}
@@ -34,7 +34,7 @@ type dnsCumul struct {
 	Queries, Responses uint64
 }
 
-func NewCollector(engine *capture.Engine, st *Store, dbPath string, retention time.Duration) *Collector {
+func NewCollector(engine *capture.Engine, st Store, dbPath string, retention time.Duration) *Collector {
 	return &Collector{
 		engine:    engine,
 		store:     st,

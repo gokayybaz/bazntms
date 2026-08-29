@@ -1,13 +1,16 @@
 # Mimari
 
 bazNTMS, tek Go binary'si içinde çalışan bir monolittir: yakalama motoru,
-SQLite collector, uyarı motoru, AI istemcisi, rapor üreticisi ve HTTP/WS
-sunucusu aynı süreçte yaşar. Frontend derlenip binary'ye gömülür
-(`go:embed all:frontend/dist`).
+SQLite/PostgreSQL collector, uyarı motoru, AI istemcisi, rapor üreticisi ve
+HTTP/WS sunucusu aynı süreçte yaşar. Frontend derlenip binary'ye gömülür
+(`go:embed all:frontend/dist`). Faz 4 ile depo katmanı `store.Store`
+arayüzüne ayrıldı: SQLite dev modunda kalır, ölçek modunda
+PostgreSQL/TimescaleDB + opsiyonel NATS JetStream kuyruğu devreye girer.
 
 ```
 main.go
-  ├─ store.Open()            SQLite aç + migrasyon
+  ├─ store.Open()            SQLite (dosya) veya PostgreSQL/TimescaleDB (postgres:// DSN) aç + migrasyon
+  ├─ queue.Connect()         opsiyonel NATS JetStream (ingest → processor ayrışması)
   ├─ capture.NewEngine()     yakalama motoru
   ├─ store.NewCollector()    örnekleyici (saniye/dakika yazımları)
   ├─ alert.NewManager()      uyarı kural motoru
@@ -129,7 +132,7 @@ eklenerek daha hassas sayım sağlanır.
 
 ```
 paket ─► process() ─► memory aggregates ─► WS tick (1 sn) ─► UI
-                       └► Collector ─► SQLite (1 sn / 1 dk)
+                       └► Collector ─► Store: SQLite | PostgreSQL/TimescaleDB (1 sn / 1 dk)
                                            │
                         AI analiz ◄────────┤
                         Rapor (HTML/PDF) ◄─┤

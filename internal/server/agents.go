@@ -113,6 +113,8 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentTelemetry, batch veriyi kaydeder ve last_seen gunceller.
+// Kuyruk (ingest sink) yapilandirilmis ise batch JetStream'e yayinlanir ve
+// yazim arka planda store-writer processor'u tarafindan yapilir (Faz 4.2).
 func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 	agent := agentFromCtx(r)
 	if agent == nil {
@@ -129,6 +131,17 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		ts = time.Now().Unix()
 	}
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+	if s.ingest != nil {
+		if err := s.ingest.PublishTelemetry(agent.ID, agent.Version, ip, ts, &batch); err != nil {
+			slog.Error("telemetri kuyrugu yayinlama hatasi", "agent_id", agent.ID, "err", err)
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		slog.Debug("telemetri kuyruga alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces))
+		writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
+		return
+	}
 
 	if err := s.store.SaveIfaceSamples(agent.ID, ts, batch.Interfaces); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

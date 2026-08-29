@@ -30,10 +30,23 @@ type HubConfig struct {
 	Port     int  `koanf:"port"`
 	Dev      bool `koanf:"dev"`
 	Database struct {
-		Path string `koanf:"path"`
+		Path string `koanf:"path"` // SQLite dosya yolu veya postgres:// DSN (Faz 4.1)
 	} `koanf:"database"`
-	RetentionHours int `koanf:"retention_hours"`
-	Auth           struct {
+	RetentionHours    int `koanf:"retention_hours"`
+	TelemetryInterval int `koanf:"telemetry_interval"`
+	NATS              struct {
+		URL string `koanf:"url"` // bos = kuyruk kapali (dogrudan store yazimi)
+	} `koanf:"nats"`
+	Capture struct {
+		Enabled bool `koanf:"enabled"` // hub'in kendi paket yakalamasi; coklu replikada kapatilir
+	} `koanf:"capture"`
+	Alerts struct {
+		Enabled bool `koanf:"enabled"` // uyari motoru; coklu replikada tek replikada acilir
+	} `koanf:"alerts"`
+	Poller struct {
+		Enabled bool `koanf:"enabled"` // SNMP poller; coklu replikada tek replikada acilir
+	} `koanf:"poller"`
+	Auth struct {
 		Password string `koanf:"password"`
 	} `koanf:"auth"`
 	LLM struct {
@@ -87,6 +100,11 @@ var hubFlagKeys = map[string]string{
 	"dev":                 "dev",
 	"database.path":       "db",
 	"retention_hours":     "retention-hours",
+	"telemetry_interval":  "telemetry-interval",
+	"nats.url":            "nats",
+	"capture.enabled":     "capture",
+	"alerts.enabled":      "alerts",
+	"poller.enabled":      "poller",
 	"auth.password":       "auth-password",
 	"llm.base_url":        "llm-base-url",
 	"llm.api_key":         "llm-api-key",
