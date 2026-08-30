@@ -14,6 +14,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/compliance"
 	"github.com/gokayybaz/bazntms/internal/update"
 	"github.com/gokayybaz/bazntms/internal/version"
 )
@@ -34,6 +36,11 @@ func main() {
 	switch args[0] {
 	case "setup":
 		if err := cmdSetup(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "hata:", err)
+			os.Exit(1)
+		}
+	case "verify":
+		if err := cmdVerify(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "hata:", err)
 			os.Exit(1)
 		}
@@ -58,7 +65,95 @@ Komutlar:
   update keygen -out DIR             ed25519 güncelleme anahtar çifti üretir
   update sign -key SEED -out DIR -version vX.y.z -channel stable FILE...
                                      güncelleme dosyalarını imzalar ve manifest üretir
+  verify -bundle FILE [-pubkey KEY]  5651 delil paketini offline doğrular
+                                     (zincir + Merkle + TSA token + manifest imzası)
 `)
+}
+
+// cmdVerify, delil paketini offline doğrular (Faz 9.4, A.5.28).
+func cmdVerify(args []string) error {
+	fs := flag.NewFlagSet("verify", flag.ExitOnError)
+	bundlePath := fs.String("bundle", "", "delil paketi JSON dosyası (zorunlu)")
+	pubPath := fs.String("pubkey", "", "manifest imza doğrulaması için ed25519 public key PEM")
+	out := fs.String("out", "", "doğrulama raporu dosyası (boş → stdout)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *bundlePath == "" {
+		return fmt.Errorf("-bundle zorunlu")
+	}
+	data, err := os.ReadFile(*bundlePath)
+	if err != nil {
+		return err
+	}
+	var bundle compliance.EvidenceBundle
+	if err := json.Unmarshal(data, &bundle); err != nil {
+		return fmt.Errorf("paket okuma: %w", err)
+	}
+
+	var pub ed25519.PublicKey
+	if *pubPath != "" {
+		pemData, err := os.ReadFile(*pubPath)
+		if err != nil {
+			return err
+		}
+		block, _ := pem.Decode(pemData)
+		if block == nil || len(block.Bytes) != ed25519.PublicKeySize {
+			return fmt.Errorf("public key PEM geçersiz")
+		}
+		pub = ed25519.PublicKey(block.Bytes)
+	}
+
+	rep := compliance.VerifyBundle(&bundle, pub)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "bazNTMS delil paketi doğrulaması\n")
+	fmt.Fprintf(&b, "  paket        : %s\n", *bundlePath)
+	fmt.Fprintf(&b, "  aralık       : %s .. %s\n",
+		time.Unix(bundle.From, 0).Format("02.01.2006 15:04"),
+		time.Unix(bundle.To, 0).Format("02.01.2006 15:04"))
+	fmt.Fprintf(&b, "  kayıt sayısı : %d (doğrulanan: %d)\n", len(bundle.Logs), rep.CheckedRecords)
+	fmt.Fprintf(&b, "  checkpoint   : %d\n", len(bundle.Checkpoints))
+	fmt.Fprintf(&b, "  zincir       : %s\n", verdict(rep.OK && rep.BrokenSeq == 0, rep.BrokenSeq))
+	fmt.Fprintf(&b, "  merkle       : %s\n", passFail(rep.MerkleOK))
+	fmt.Fprintf(&b, "  günlük mühür : %s\n", passFail(rep.DailyOK))
+	if rep.SigChecked {
+		fmt.Fprintf(&b, "  imza         : %s\n", passFail(rep.SigOK))
+	}
+	for _, n := range rep.Notes {
+		fmt.Fprintf(&b, "  • %s\n", n)
+	}
+	if rep.OK {
+		fmt.Fprintln(&b, "\nSONUÇ: Paket bütünlüğü DOĞRULANDI ✓")
+	} else {
+		fmt.Fprintln(&b, "\nSONUÇ: Paket bütünlüğü DOĞRULANAMADI ✗")
+	}
+
+	if *out != "" {
+		if err := os.WriteFile(*out, []byte(b.String()), 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("rapor yazıldı: %s\n", *out)
+	}
+	fmt.Print(b.String())
+	if !rep.OK {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func verdict(ok bool, brokenSeq int64) string {
+	if ok && brokenSeq == 0 {
+		return "SAĞLAM ✓"
+	}
+	return fmt.Sprintf("BOZUK ✗ (kayıt #%d)", brokenSeq)
+}
+
+func passFail(ok bool) string {
+	if ok {
+		return "GEÇTİ ✓"
+	}
+	return "BAŞARISIZ ✗"
 }
 
 // --- setup sihirbazi ---

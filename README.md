@@ -52,6 +52,11 @@ tek dosya, kurulum gerektirmez.
 - **Otomatik agent güncellemesi**: stable/beta kanalları, SHA-256 + ed25519 imza doğrulamalı, atomik binary değişimi
 - **Dokümantasyon**: `docs/UPGRADE-RUNBOOK.md`, `docs/DR-RUNBOOK.md`, Docusaurus sitesi (`docs-site/`)
 
+### Uyumluluk (Faz 9)
+- **5651 log imzalama**: hash-zincirli loglar + saatlik Merkle checkpoint + günlük RFC 3161 nitelikli zaman damgası + ed25519 manifest imzası; WORM depoda 2 yıl saklama
+- **Delil paketi**: tarih aralıklı çıkarım, PII maskeleme, `bazntmsctl verify` ile offline doğrulama — adli süreçler için
+- **ISO 27001**: Annex A kontrol haritası, imzalı log inceleme/erişim inceleme tutanakları, zaman sapması alarmı (A.8.17)
+
 ## Dokümantasyon Sitesi
 
 Docusaurus sitesi her push'ta GitHub Pages'e otomatik yayınlanır

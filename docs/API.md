@@ -372,6 +372,37 @@ Yeni uyarı tipleri (Faz 8.5): `vpn_down`, `sdwan_sla_breach`,
 
 ---
 
+## 5651 Uyumluluk (Faz 9, imzalama `-compliance` ile açılır)
+
+### `GET /api/v1/compliance/status` *(view)*
+
+Panel durumu: `{config, records, last_record_ts, last_hourly?, last_daily?}`.
+`last_daily.tsa_status`: `ok` (nitelikli zaman damgası alındı), `none`
+(TSA yapılandırılmamış) veya `error:<mesaj>`.
+
+### `GET /api/v1/compliance/evidence?from=2026-08-01&to=2026-09-01&mask=true` *(admin)*
+
+Delil paketi (A.5.28): `{generated_at, from, to, masked, logs[], checkpoints[], verification}`.
+Paket, kayıt hash zinciri + saatlik Merkle checkpoint'leri + günlük mühür
+(TSA token + imza) içerir. `mask=true` → IP/MAC/kullanıcı PII maskeleme
+(A.5.34/A.8.11; paket düzeyinde, ham kayıt değişmez). Doğrulama:
+
+```bash
+bazntmsctl verify -bundle paket.json -pubkey compliance.key.pub
+```
+
+### `GET /api/v1/compliance/reviews?limit=50` *(admin)* · `POST` *(admin)*
+
+İnceleme tutanakları: `{"kind":"log"|"access","period":"2026-08","notes":"...","finding":""}`.
+Tutanaklar audit zincirine de işlenir (A.8.15 log incelemesi / A.8.2 erişim incelemesi).
+
+### `GET /api/report?type=compliance` *(view)*
+
+ISO 27001:2022 Annex A kontrol haritası + 5651 motoru durumu (HTML) —
+denetçiye sunulabilir uyum raporu.
+
+---
+
 
 ### Uyarı tipleri (Faz 6.2 anomali)
 

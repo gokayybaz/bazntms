@@ -23,6 +23,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
+	"github.com/gokayybaz/bazntms/internal/compliance"
 	"github.com/gokayybaz/bazntms/internal/config"
 	"github.com/gokayybaz/bazntms/internal/devpoll"
 	"github.com/gokayybaz/bazntms/internal/flows"
@@ -67,6 +68,12 @@ func main() {
 	flowPort := fl.String("flow-port", "", "NetFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
+	complianceOn := fl.Bool("compliance", false, "5651 log imzalama motoru (Faz 9): hash-zincir + Merkle checkpoint + gunluk muhur")
+	tsaURL := fl.String("tsa-url", "", "RFC 3161 zaman damgasi servisi (TSA) adresi")
+	complianceKey := fl.String("compliance-key", "compliance.key", "Manifest imza anahtari (ed25519 PEM; yoksa uretilir)")
+	wormDir := fl.String("worm-dir", "", "Gunluk imzali log paketi dizini (WORM)")
+	maskPII := fl.Bool("mask-pii", false, "Delil paketinde PII maskeleme (A.5.34)")
+	complianceRetention := fl.Int("compliance-retention-days", 730, "Ham uyum logu saklama suresi (gun; 5651 minimum 730)")
 	showVersion := fl.Bool("version", false, "surum bilgisini yaz ve cik")
 	fl.Parse(os.Args[1:])
 
@@ -87,6 +94,10 @@ func main() {
 		cfg.Log.Format = *logFormat
 	}
 	logging.Setup(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format})
+	if *complianceKey == "" {
+		*complianceKey = "compliance.key"
+	}
+	_ = complianceKey // config.LoadHub flag'e yazar (aşağıda kullanılır)
 
 	// graceful shutdown zemini (Faz 4.4): SIGINT/SIGTERM → http Shutdown →
 	// defer'lar (collector, alerts, poller, kuyruk) sirayla kapanir
@@ -242,6 +253,30 @@ func main() {
 		slog.Info("agent guncelleme kanali aktif", "dir", *updatesDir)
 	}
 
+	// 5651 uyumlu loglama (Faz 9)
+	if *complianceOn {
+		sealer, err := compliance.NewSealer(st, compliance.Config{
+			Enabled:       true,
+			TSAURL:        *tsaURL,
+			SignKeyFile:   *complianceKey,
+			WormDir:       *wormDir,
+			RetentionDays: *complianceRetention,
+		})
+		if err != nil {
+			slog.Error("compliance sealer baslatilamadi", "err", err)
+			os.Exit(1)
+		}
+		sealer.Start()
+		defer sealer.Stop()
+		slog.Info("5651 log imzalama aktif",
+			"tsa", *tsaURL != "", "imza", true, "worm", *wormDir != "",
+			"retention_days", *complianceRetention)
+	}
+	srv.SetCompliance(server.ComplianceInfo{
+		Enabled: *complianceOn, TSAURL: *tsaURL, SignKey: *complianceOn,
+		WormDir: *wormDir, MaskPII: *maskPII, RetentionDays: *complianceRetention,
+	})
+
 	// cihaz SNMP poller
 	poller := devpoll.New(st, v)
 	if *pollerOn {
@@ -276,7 +311,8 @@ func main() {
 		}
 	}
 
-	// Syslog alici — kuyruk aciksa mesajlar JetStream'e gider
+	// Syslog alici — kuyruk aciksa mesajlar JetStream'e gider; uyum loglari
+	// her iki yolda da compliance_logs zincirine eklenir (Faz 9.1)
 	if *syslogPort != "" {
 		sl := &syslogd.Listener{OnEvent: func(srcIP string, ev syslogd.Event) {
 			se := store.SyslogEvent{
@@ -287,10 +323,17 @@ func main() {
 				if err := q.PublishSyslog(se); err != nil {
 					slog.Error("syslog kuyruguna yayinlama hatasi", "err", err)
 				}
-				return
+			} else {
+				if err := st.SaveSyslogEvent(se); err != nil {
+					slog.Error("syslog kaydi hatasi", "err", err)
+				}
 			}
-			if err := st.SaveSyslogEvent(se); err != nil {
-				slog.Error("syslog kaydi hatasi", "err", err)
+			if _, err := st.AppendComplianceLog(store.ComplianceLog{
+				Ts: se.Ts, SourceType: "syslog", SourceName: ev.Host,
+				SrcIP: srcIP, SrcMAC: store.ExtractMAC(ev.Message), Category: "syslog",
+				Message: fmt.Sprintf("[%d] %s: %s", ev.Severity, ev.Tag, ev.Message),
+			}); err != nil {
+				slog.Error("compliance log hatasi", "err", err)
 			}
 		}}
 		if err := sl.Listen("0.0.0.0:" + *syslogPort); err != nil {

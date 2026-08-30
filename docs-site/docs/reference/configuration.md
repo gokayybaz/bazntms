@@ -187,6 +187,25 @@ bütünlüğü kanıtlar.
 
 ## İleri Analiz (Faz 6)
 
+### FortiGate REST API entegrasyonu (Faz 8)
+
+Arayüzde cihaz eklerken **vendor: FortiGate** seçilir; alanlar:
+
+| Alan | Açıklama |
+|------|----------|
+| `api_url` | `https://<cihaz>[:port]` — REST API adresi |
+| `api_token` | System > Admin > REST API Admin token'ı — vault'ta şifreli saklanır, **read-only profil önerilir** |
+| `api_verify_tls` | Self-signed sertifika kullanıyorsanız kapatın |
+| `vdom` | boş/`root` → tek VDOM; `all` → tüm VDOM'lar taranır |
+
+Toplanan veriler: sistem durumu (serial/firmware/uptime), CPU/RAM/disk,
+oturum sayısı, arayüz sayaçları, IPsec/SSL VPN, SD-WAN health-check,
+politika hit sayaçları. Uyarı eşikleri uyarı ayarlarında `forti` bölümünden
+yönetilir (`vpn_down`, `sdwan_latency_ms`, `sdwan_loss_pct`, `max_sessions`).
+
+İstekler arasında hız koruması (varsayılan 150 ms) uygulanır; yönetim CPU
+bütçesini korumak için poll aralığını 60 sn altına düşürmeyin.
+
 ### Anomali tespiti (AI'sız)
 
 Uyarı ayarlarından (`PUT /api/alerts` veya arayüz) yönetilir:

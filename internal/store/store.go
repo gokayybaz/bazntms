@@ -178,6 +178,19 @@ type Store interface {
 	FortiVPNsDown(freshWithin time.Duration) ([]VPNDownRow, error)
 	RecentFortiSDWANAll(since time.Time) ([]SDWANRow, error)
 	RecentDeviceResourcesAll(since time.Time) ([]ResourceRow, error)
+
+	// 5651 uyumlu loglama (Faz 9)
+	AppendComplianceLog(e ComplianceLog) (int64, error)
+	ComplianceHashesBetween(from, to int64) ([][]byte, int64, int64, int, error)
+	ComplianceLogsBetween(from, to int64) ([]ComplianceLog, error)
+	ComplianceStats() (total int64, lastTs int64, err error)
+	PruneComplianceLogs(retentionDays int) error
+	SaveLogCheckpoint(cp LogCheckpoint) (int64, error)
+	CheckpointExists(kind string, bucketStart int64) (bool, error)
+	LatestLogCheckpoint(kind string) (*LogCheckpoint, error)
+	LogCheckpointsBetween(from, to int64) ([]LogCheckpoint, error)
+	SaveComplianceReview(r ComplianceReview) (int64, error)
+	RecentComplianceReviews(limit int) ([]ComplianceReview, error)
 }
 
 // sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
@@ -189,6 +202,8 @@ type sqlStore struct {
 	ts bool // TimescaleDB eklentisi aktif (pg modunda anlamlı)
 
 	auditMu sync.Mutex // audit hash-zinciri tutarliligi (Faz 5.3)
+
+	complianceMu sync.Mutex // 5651 log zinciri tutarliligi (Faz 9.1)
 }
 
 // Open, veri deposunu acar: DSN postgres:// ile basliyorsa PostgreSQL
@@ -448,6 +463,47 @@ CREATE TABLE IF NOT EXISTS fortigate_policy_hits (
 	bytes     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_forti_policy ON fortigate_policy_hits(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS compliance_logs (
+	seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts          INTEGER NOT NULL,
+	source_type TEXT    NOT NULL,
+	source_name TEXT    NOT NULL DEFAULT '',
+	src_ip      TEXT    NOT NULL DEFAULT '',
+	src_mac     TEXT    NOT NULL DEFAULT '',
+	user_id     TEXT    NOT NULL DEFAULT '',
+	category    TEXT    NOT NULL DEFAULT 'event',
+	message     TEXT    NOT NULL,
+	prev_hash   TEXT    NOT NULL DEFAULT '',
+	hash        TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_comp_logs_ts ON compliance_logs(ts);
+
+CREATE TABLE IF NOT EXISTS log_checkpoints (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	kind         TEXT    NOT NULL,
+	bucket_start INTEGER NOT NULL,
+	bucket_end   INTEGER NOT NULL,
+	record_count INTEGER NOT NULL DEFAULT 0,
+	prev_root    TEXT    NOT NULL DEFAULT '',
+	root         TEXT    NOT NULL DEFAULT '',
+	tsa_status   TEXT    NOT NULL DEFAULT '',
+	tsa_time     INTEGER NOT NULL DEFAULT 0,
+	tsa_token    BLOB,
+	signature    TEXT    NOT NULL DEFAULT '',
+	signed_at    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_comp_cp ON log_checkpoints(kind, bucket_start);
+
+CREATE TABLE IF NOT EXISTS compliance_reviews (
+	id       INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts       INTEGER NOT NULL,
+	username TEXT    NOT NULL,
+	kind     TEXT    NOT NULL,
+	period   TEXT    NOT NULL DEFAULT '',
+	notes    TEXT    NOT NULL DEFAULT '',
+	finding  TEXT    NOT NULL DEFAULT ''
+);
 
 CREATE TABLE IF NOT EXISTS device_iface_samples (
 	device_id   INTEGER NOT NULL,
