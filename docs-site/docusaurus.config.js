@@ -49,6 +49,7 @@ const config = {
           { to: '/docs/installation', label: 'Kurulum', position: 'left' },
           { to: '/docs/reference/api', label: 'API', position: 'left' },
           { to: '/docs/reference/upgrading', label: 'Güncelleme', position: 'left' },
+          { to: '/docs/reference/troubleshooting', label: 'Sorun Giderme', position: 'left' },
           {
             href: 'https://github.com/gokayybaz/bazntms',
             label: 'GitHub',
@@ -73,6 +74,7 @@ const config = {
               { label: 'Upgrade Runbook', to: '/docs/reference/upgrading' },
               { label: 'Felaket Kurtarma', to: '/docs/reference/dr' },
               { label: 'Mimari', to: '/docs/reference/architecture' },
+              { label: 'Sorun Giderme', to: '/docs/reference/troubleshooting' },
             ],
           },
           {

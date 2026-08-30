@@ -7,6 +7,7 @@
 //   docs/ARCHITECTURE.md   → docs/reference/architecture.md
 //   docs/UPGRADE-RUNBOOK.md → docs/reference/upgrading.md
 //   docs/DR-RUNBOOK.md     → docs/reference/dr.md
+//   docs/TROUBLESHOOTING.md → docs/reference/troubleshooting.md
 //
 // Kaynak dosyalar GitHub'da sürümlenir; site her build'de güncel içerik alır.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -24,6 +25,7 @@ const docs = [
   { src: 'ARCHITECTURE.md', out: 'architecture.md', title: 'Mimari', pos: 12 },
   { src: 'UPGRADE-RUNBOOK.md', out: 'upgrading.md', title: 'Güncelleme (Upgrade)', pos: 13 },
   { src: 'DR-RUNBOOK.md', out: 'dr.md', title: 'Felaket Kurtarma (DR)', pos: 14 },
+  { src: 'TROUBLESHOOTING.md', out: 'troubleshooting.md', title: 'Sorun Giderme', pos: 15 },
 ];
 
 let copied = 0;

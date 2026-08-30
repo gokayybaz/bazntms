@@ -308,7 +308,7 @@ export default function Home() {
         {/* HERO */}
         <section className={styles.hero}>
           <div className={styles.heroInner}>
-            <p className={`${styles.kicker} ${styles.fadeUp}`}>enterprise network traffic monitoring</p>
+            <p className={`${styles.kicker} ${styles.fadeUp}`}>kurumsal ağ trafiği izleme platformu</p>
             <h1 className={`${styles.title} ${styles.fadeUp1}`}>
               baz<span>NTMS</span>
             </h1>
@@ -345,6 +345,9 @@ export default function Home() {
 
         {/* SAYILAR */}
         <section className={styles.statsBand}>
+          <p className={styles.statsCaption} data-reveal>
+            Ölçek mimarisi tasarım hedefleri — <code>bazntms-loadgen</code> ve k6 ile doğrulanır
+          </p>
           <div className={styles.stats}>
             {STATS.map((s, i) => (
               <div key={s.label} data-reveal style={{ transitionDelay: `${i * 70}ms` }}>

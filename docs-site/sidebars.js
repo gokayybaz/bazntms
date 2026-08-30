@@ -14,6 +14,7 @@ const sidebars = {
         'reference/architecture',
         'reference/upgrading',
         'reference/dr',
+        'reference/troubleshooting',
       ],
     },
   ],

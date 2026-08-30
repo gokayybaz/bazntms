@@ -171,6 +171,19 @@
   padding: 44px 24px 0;
 }
 
+.statsCaption {
+  text-align: center;
+  color: var(--dim);
+  font-size: 12.5px;
+  margin: 0 0 16px;
+}
+
+.statsCaption code {
+  color: #67e8f9;
+  background: transparent;
+  padding: 0;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
