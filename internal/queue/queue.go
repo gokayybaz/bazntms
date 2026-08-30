@@ -14,6 +14,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -231,6 +232,14 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 		if err := st.SaveSyslogEvent(ev); err != nil {
 			q.retry(msg, err)
 			return
+		}
+		// 5651 uyum zinciri (Faz 9.1): syslog kaynakli kayitlar
+		if _, err := st.AppendComplianceLog(store.ComplianceLog{
+			Ts: ev.Ts, SourceType: "syslog", SourceName: ev.Host,
+			SrcMAC: store.ExtractMAC(ev.Message), Category: "syslog",
+			Message: fmt.Sprintf("[%d] %s: %s", ev.Severity, ev.Tag, ev.Message),
+		}); err != nil {
+			slog.Error("compliance log hatasi", "err", err)
 		}
 	default:
 		msg.Term()

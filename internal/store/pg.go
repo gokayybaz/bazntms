@@ -185,8 +185,8 @@ CREATE TABLE IF NOT EXISTS fortigate_sdwan (
 CREATE INDEX IF NOT EXISTS idx_forti_sdwan ON fortigate_sdwan(device_id, ts);
 
 CREATE TABLE IF NOT EXISTS fortigate_policy_hits (
-	ts        BIGINT NOT NULL,
-	device_id BIGINT NOT NULL,
+	ts        BIGINT  NOT NULL,
+	device_id BIGINT  NOT NULL,
 	vdom      TEXT    NOT NULL DEFAULT '',
 	policy_id BIGINT  NOT NULL,
 	name      TEXT    NOT NULL DEFAULT '',
@@ -195,6 +195,47 @@ CREATE TABLE IF NOT EXISTS fortigate_policy_hits (
 	bytes     BIGINT  NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_forti_policy ON fortigate_policy_hits(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS compliance_logs (
+	seq         BIGSERIAL PRIMARY KEY,
+	ts          BIGINT  NOT NULL,
+	source_type TEXT    NOT NULL,
+	source_name TEXT    NOT NULL DEFAULT '',
+	src_ip      TEXT    NOT NULL DEFAULT '',
+	src_mac     TEXT    NOT NULL DEFAULT '',
+	user_id     TEXT    NOT NULL DEFAULT '',
+	category    TEXT    NOT NULL DEFAULT 'event',
+	message     TEXT    NOT NULL,
+	prev_hash   TEXT    NOT NULL DEFAULT '',
+	hash        TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_comp_logs_ts ON compliance_logs(ts);
+
+CREATE TABLE IF NOT EXISTS log_checkpoints (
+	id           BIGSERIAL PRIMARY KEY,
+	kind         TEXT    NOT NULL,
+	bucket_start BIGINT  NOT NULL,
+	bucket_end   BIGINT  NOT NULL,
+	record_count INTEGER NOT NULL DEFAULT 0,
+	prev_root    TEXT    NOT NULL DEFAULT '',
+	root         TEXT    NOT NULL DEFAULT '',
+	tsa_status   TEXT    NOT NULL DEFAULT '',
+	tsa_time     BIGINT  NOT NULL DEFAULT 0,
+	tsa_token    BYTEA,
+	signature    TEXT    NOT NULL DEFAULT '',
+	signed_at    BIGINT  NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_comp_cp ON log_checkpoints(kind, bucket_start);
+
+CREATE TABLE IF NOT EXISTS compliance_reviews (
+	id       BIGSERIAL PRIMARY KEY,
+	ts       BIGINT  NOT NULL,
+	username TEXT    NOT NULL,
+	kind     TEXT    NOT NULL,
+	period   TEXT    NOT NULL DEFAULT '',
+	notes    TEXT    NOT NULL DEFAULT '',
+	finding  TEXT    NOT NULL DEFAULT ''
+);
 
 CREATE TABLE IF NOT EXISTS device_iface_samples (
 	device_id   BIGINT NOT NULL,
@@ -317,6 +358,7 @@ CREATE TABLE IF NOT EXISTS topology_links (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_topo_dedup ON topology_links(kind, source_type, source_id, local_port, peer_name, peer_ip);
 `)
+
 	return err
 }
 

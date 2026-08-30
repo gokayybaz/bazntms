@@ -48,6 +48,14 @@ type HubConfig struct {
 	Updates struct {
 		Dir string `koanf:"dir"` // guncelleme kanali dizini (bos = kapali); icerik: bazntmsctl update sign
 	} `koanf:"updates"`
+	Compliance struct {
+		Enabled       bool   `koanf:"enabled"`        // 5651 log imzalama motoru (Faz 9)
+		TSAURL        string `koanf:"tsa_url"`        // RFC 3161 zaman damgasi servisi (bos → atlanir)
+		SignKeyFile   string `koanf:"sign_key_file"`  // ed25519 PEM (yoksa uretilir)
+		WormDir       string `koanf:"worm_dir"`       // gunluk imzali paket dizini (bos → yazilmaz)
+		MaskPII       bool   `koanf:"mask_pii"`       // delil paketinde PII maskeleme (A.5.34)
+		RetentionDays int    `koanf:"retention_days"` // ham log saklama (0 → 730 gun)
+	} `koanf:"compliance"`
 	Capture struct {
 		Enabled bool `koanf:"enabled"` // hub'in kendi paket yakalamasi; coklu replikada kapatilir
 	} `koanf:"capture"`
@@ -114,27 +122,32 @@ type AgentConfig struct {
 
 // hubFlagKeys, YAML/ortam anahtarlarindan bayrak adina esleme tablosudur.
 var hubFlagKeys = map[string]string{
-	"port":                "port",
-	"dev":                 "dev",
-	"database.path":       "db",
-	"retention_hours":     "retention-hours",
-	"telemetry_interval":  "telemetry-interval",
-	"nats.url":            "nats",
-	"capture.enabled":     "capture",
-	"alerts.enabled":      "alerts",
-	"poller.enabled":      "poller",
-	"auth.password":       "auth-password",
-	"llm.base_url":        "llm-base-url",
-	"llm.api_key":         "llm-api-key",
-	"llm.model":           "llm-model",
-	"llm.max_tokens":      "llm-max-tokens",
-	"llm.no_think":        "llm-no-think",
-	"record.dir":          "record-dir",
-	"record.max_mb":       "record-max-mb",
-	"geoip.dir":           "geoip-dir",
-	"geoip.ip_api_lookup": "ip-api-lookup",
-	"updates.dir":         "updates-dir",
-	"enroll_token":        "enroll-token",
+	"port":                     "port",
+	"dev":                      "dev",
+	"database.path":            "db",
+	"retention_hours":          "retention-hours",
+	"telemetry_interval":       "telemetry-interval",
+	"nats.url":                 "nats",
+	"capture.enabled":          "capture",
+	"alerts.enabled":           "alerts",
+	"poller.enabled":           "poller",
+	"auth.password":            "auth-password",
+	"llm.base_url":             "llm-base-url",
+	"llm.api_key":              "llm-api-key",
+	"llm.model":                "llm-model",
+	"llm.max_tokens":           "llm-max-tokens",
+	"llm.no_think":             "llm-no-think",
+	"record.dir":               "record-dir",
+	"record.max_mb":            "record-max-mb",
+	"geoip.dir":                "geoip-dir",
+	"geoip.ip_api_lookup":      "ip-api-lookup",
+	"updates.dir":              "updates-dir",
+	"enroll_token":             "enroll-token",
+	"compliance.enabled":       "compliance",
+	"compliance.tsa_url":       "tsa-url",
+	"compliance.sign_key_file": "compliance-key",
+	"compliance.worm_dir":      "worm-dir",
+	"compliance.mask_pii":      "mask-pii",
 }
 
 // LoadHub, -config ile verilen YAML dosyasini (varsa) yukler, BAZNTMS_* ortam

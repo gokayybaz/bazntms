@@ -340,6 +340,46 @@ Kenar kaynakları: **LLDP/CDP** (SNMP keşfi), **ARP** (cihaz port uç noktalar�
 **subnet** (agent'ların bildirdiği yerel ağlar — CIDR). Kenarlar dedupe edilir;
 `ts` = son görülme.
 
+---
+
+## FortiGate REST API (Faz 8, UI auth ile korunur)
+
+Cihaz `vendor: "fortigate"` ile eklendiğinde poller SNMP yerine FortiOS
+REST API'yi kullanır. Cihaz ekleme isteğine ek alanlar:
+
+```json
+{
+  "name": "fgt-ofis", "host": "10.9.9.1", "kind": "firewall", "vendor": "fortigate",
+  "api_url": "https://10.9.9.1", "api_token": "REST-API-TOKEN",
+  "api_verify_tls": true, "vdom": "root", "poll_seconds": 60
+}
+```
+
+- `api_token` **vault'ta AES-256-GCM ile şifreli** saklanır ve hiçbir API
+  yanıtında döndürülmez. Read-only REST API admin profili önerilir.
+- `vdom`: boş/`root` → tek VDOM; `all` → tüm VDOM'lar taranır (veri VDOM
+  etiketli saklanır).
+- `api_verify_tls: false` → self-signed sertifika kabul edilir.
+- Toplanan veriler: `monitor/system/status|resource/usage|interface`,
+  `monitor/vpn/ipsec|ssl`, `monitor/virtual-wan/health-check`,
+  `cmdb/firewall/policy` (hit sayaçları).
+
+Cihaz veri uçları (`?minutes=` pencere parametreli):
+
+| Uç | İçerik |
+|---|---|
+| `GET /api/v1/devices/{id}/resources` | CPU/RAM/disk % + oturum sayısı zaman serisi |
+| `GET /api/v1/devices/{id}/vpn` | IPsec tüneller + SSL kullanıcıları (durum, uptime, trafiği) |
+| `GET /api/v1/devices/{id}/sdwan` | SD-WAN health-check: member bazlı latency/jitter/loss |
+| `GET /api/v1/devices/{id}/policies` | Penceredeki en aktif politika hit'leri (delta) |
+
+Yeni uyarı tipleri (Faz 8.5): `vpn_down`, `sdwan_sla_breach`,
+`high_sessions` — `PUT /api/alerts` ile `forti` bölümünden yönetilir:
+`{"forti":{"vpn_down":true,"sdwan_latency_ms":200,"sdwan_jitter_ms":50,"sdwan_loss_pct":5,"max_sessions":20000}}`.
+
+---
+
+
 ### Uyarı tipleri (Faz 6.2 anomali)
 
 `GET /api/alerts/events` içinde `kind:"anomaly"`: saat-of-day istatistiksel

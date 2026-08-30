@@ -42,7 +42,8 @@ type Server struct {
 	geo               *geoip.Resolver
 	auth              *AuthManager
 	oidc              *OIDCManager
-	updatesDir        string // guncelleme kanali dizini (Faz 7.3; bos = kapali)
+	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
+	compliance        ComplianceInfo // 5651 uyum durumu (Faz 9)
 	enrollToken       string
 	telemetryInterval int
 	agentPCAP         bool
@@ -191,6 +192,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleTokenDelete)))
 	mux.HandleFunc("GET /api/v1/audit", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAuditList)).ServeHTTP)
 	mux.HandleFunc("GET /api/v1/audit/verify", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAuditVerify)).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/compliance/status", s.handleComplianceStatus)
+	mux.HandleFunc("GET /api/v1/compliance/evidence", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleComplianceEvidence)).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/compliance/reviews", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleComplianceReviewsGet)).ServeHTTP)
+	mux.Handle("POST /api/v1/compliance/reviews", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleComplianceReviewAdd)))
 
 	// gozlemlenebilirlik (auth muaf — Prometheus/healthcheck standartlari)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -439,6 +444,22 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		htmlBytes, err := data.RenderEnterpriseHTML()
+		if err != nil {
+			http.Error(w, "HTML üretilemedi: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(htmlBytes)
+		return
+	}
+	// Faz 9.5: ISO 27001 kontrol haritası + 5651 durum raporu
+	if r.URL.Query().Get("type") == "compliance" {
+		data, err := report.BuildComplianceData(s.store)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		htmlBytes, err := report.RenderComplianceHTML(data)
 		if err != nil {
 			http.Error(w, "HTML üretilemedi: "+err.Error(), http.StatusInternalServerError)
 			return

@@ -50,6 +50,32 @@ const IconSpark = () => (
   </svg>
 );
 
+const IconTopo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="5" cy="5" r="2.2" />
+    <circle cx="19" cy="5" r="2.2" />
+    <circle cx="12" cy="12" r="2.6" />
+    <circle cx="5" cy="19" r="2.2" />
+    <circle cx="19" cy="19" r="2.2" />
+    <path d="M6.6 6.6 10.2 10.2M17.4 6.6 13.8 10.2M6.6 17.4 10.2 13.8M17.4 17.4 13.8 13.8" />
+  </svg>
+);
+
+const IconRocket = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.8-.8.8-2.2 0-3-.8-.8-2.2-.8-3 0z" />
+    <path d="M9 13 6.5 10.5C9 8 12 6.5 16 6c2-.2 3 .8 2.8 2.8-.5 4-2 7-4.5 9.5L12 15.5" />
+    <path d="M14 10a1.5 1.5 0 1 0 .01 0z" />
+  </svg>
+);
+
+const IconStamp = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l7.5 3.3v5c0 4.7-3.2 8.8-7.5 10.7-4.3-1.9-7.5-6-7.5-10.7v-5L12 2z" />
+    <path d="M8.5 12.2l2.4 2.4 4.6-5" />
+  </svg>
+);
+
 const FEATURES = [
   {
     icon: <IconTraffic />,
@@ -64,7 +90,12 @@ const FEATURES = [
   {
     icon: <IconDevices />,
     title: 'Cihaz Entegrasyonları',
-    text: 'SNMPv3 poller, NetFlow v5 toplayıcı ve syslog alıcı; LLDP/CDP/ARP keşfiyle canlı ağ topolojisi. Cihaz kimlik bilgileri AES-256-GCM kasada şifrelenir.',
+    text: 'SNMPv3, NetFlow v5 ve syslog alıcısının üzerine FortiGate REST API: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve kaynak/oturum izleme.',
+  },
+  {
+    icon: <IconTopo />,
+    title: 'Canlı Ağ Topolojisi',
+    text: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita: hub–cihaz–agent ilişkileri ve port düzeyi komşuluklar tek bakışta.',
   },
   {
     icon: <IconScale />,
@@ -80,6 +111,16 @@ const FEATURES = [
     icon: <IconSpark />,
     title: 'Akıllı Operasyon',
     text: 'İstatistiksel anomali tespiti (saatlik baseline + z-skoru), SLA/kapasite/banding raporları ve Teams, Slack, SMTP, imzalı webhook bildirim kanalları.',
+  },
+  {
+    icon: <IconRocket />,
+    title: 'Dağıtım ve Operasyon',
+    text: 'Docker/Helm ile k8s dağıtımı; deb/rpm/MSI/pkg installer’lar; ed25519 imza doğrulamalı otomatik agent güncelleme kanalı (stable/beta).',
+  },
+  {
+    icon: <IconStamp />,
+    title: '5651 Uyumluluk ve ISO 27001',
+    text: 'Loglar Merkle checkpoint + RFC 3161 zaman damgası ile imzalanır, WORM depoda 2 yıl saklanır; delil paketi, offline doğrulama ve ISO kontrol haritası.',
   },
 ];
 
