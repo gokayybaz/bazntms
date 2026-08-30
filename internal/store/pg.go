@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS devices (
 	name         TEXT    NOT NULL,
 	host         TEXT    NOT NULL,
 	kind         TEXT    NOT NULL DEFAULT 'other',
+	vendor       TEXT    NOT NULL DEFAULT 'snmp',
 	snmp_version INTEGER NOT NULL DEFAULT 2,
 	community    TEXT    NOT NULL DEFAULT '',
 	v3_user      TEXT    NOT NULL DEFAULT '',
@@ -133,6 +134,10 @@ CREATE TABLE IF NOT EXISTS devices (
 	v3_auth_pass TEXT    NOT NULL DEFAULT '',
 	v3_priv_proto TEXT   NOT NULL DEFAULT '',
 	v3_priv_pass TEXT    NOT NULL DEFAULT '',
+	api_url      TEXT    NOT NULL DEFAULT '',
+	api_token_enc TEXT   NOT NULL DEFAULT '',
+	api_verify_tls INTEGER NOT NULL DEFAULT 1,
+	vdom         TEXT    NOT NULL DEFAULT '',
 	poll_seconds INTEGER NOT NULL DEFAULT 60,
 	enabled      INTEGER NOT NULL DEFAULT 1,
 	sys_name     TEXT    NOT NULL DEFAULT '',
@@ -141,6 +146,55 @@ CREATE TABLE IF NOT EXISTS devices (
 	last_poll    BIGINT  NOT NULL DEFAULT 0,
 	last_error   TEXT    NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS device_resources (
+	ts        BIGINT NOT NULL,
+	device_id BIGINT NOT NULL,
+	cpu_pct   DOUBLE PRECISION NOT NULL DEFAULT 0,
+	mem_pct   DOUBLE PRECISION NOT NULL DEFAULT 0,
+	disk_pct  DOUBLE PRECISION NOT NULL DEFAULT 0,
+	sessions  BIGINT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_dev_res ON device_resources(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS fortigate_vpn_status (
+	device_id BIGINT NOT NULL,
+	vdom      TEXT   NOT NULL DEFAULT '',
+	kind      TEXT   NOT NULL,
+	name      TEXT   NOT NULL,
+	peer      TEXT   NOT NULL DEFAULT '',
+	status    TEXT   NOT NULL DEFAULT '',
+	uptime    BIGINT NOT NULL DEFAULT 0,
+	rx_bytes  BIGINT NOT NULL DEFAULT 0,
+	tx_bytes  BIGINT NOT NULL DEFAULT 0,
+	ts        BIGINT NOT NULL,
+	PRIMARY KEY (device_id, vdom, kind, name)
+);
+
+CREATE TABLE IF NOT EXISTS fortigate_sdwan (
+	ts       BIGINT NOT NULL,
+	device_id BIGINT NOT NULL,
+	vdom      TEXT    NOT NULL DEFAULT '',
+	member    TEXT    NOT NULL,
+	health_check TEXT NOT NULL DEFAULT '',
+	latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+	jitter_ms  DOUBLE PRECISION NOT NULL DEFAULT 0,
+	packet_loss_pct DOUBLE PRECISION NOT NULL DEFAULT 0,
+	state      TEXT   NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_forti_sdwan ON fortigate_sdwan(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS fortigate_policy_hits (
+	ts        BIGINT NOT NULL,
+	device_id BIGINT NOT NULL,
+	vdom      TEXT    NOT NULL DEFAULT '',
+	policy_id BIGINT  NOT NULL,
+	name      TEXT    NOT NULL DEFAULT '',
+	action    TEXT    NOT NULL DEFAULT '',
+	hits      BIGINT  NOT NULL DEFAULT 0,
+	bytes     BIGINT  NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_forti_policy ON fortigate_policy_hits(device_id, ts);
 
 CREATE TABLE IF NOT EXISTS device_iface_samples (
 	device_id   BIGINT NOT NULL,

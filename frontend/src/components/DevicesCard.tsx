@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatBits } from '../lib/format'
+import { FortiPanel } from './FortiPanel'
 
 interface Device {
   id: number
   name: string
   host: string
   kind: string
+  vendor: string // snmp | fortigate
   snmp_version: number
+  api_url: string
+  vdom: string
   poll_seconds: number
   enabled: boolean
   sys_name: string
@@ -60,6 +64,19 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
     setDetail({ id, name, ifaces: data })
   }, [])
 
+  // vendor rozeti ve detay düğmesi etiketi
+  const vendorBadge = (d: Device) =>
+    d.vendor === 'fortigate' ? (
+      <span className="rounded border border-orange-500/40 bg-orange-500/10 px-1.5 py-0.5 font-mono text-[9px] uppercase text-orange-300">
+        rest api
+      </span>
+    ) : (
+      <span className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">
+        snmp v{d.snmp_version === 3 ? '3' : '2c'}
+      </span>
+    )
+  const detailLabel = (d: Device) => (d.vendor === 'fortigate' ? 'fortigate detay' : 'arayüzler')
+
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
@@ -70,7 +87,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
           {showForm ? 'Vazgeç' : '+ Cihaz Ekle'}
         </button>
         <span className="text-[11px] text-slate-500">
-          SNMPv2c/v3 ile yoklanır · kimlik bilgileri AES-GCM kasada şifreli
+          SNMPv2c/v3 veya FortiGate REST API ile yoklanır · kimlik bilgileri AES-GCM kasada şifreli
         </span>
       </div>
 
@@ -78,7 +95,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
       {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{error}</p>}
 
       {loaded && devices.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-600">Cihaz yok — SNMP poller için cihaz ekleyin.</p>
+        <p className="py-6 text-center text-sm text-slate-600">Cihaz yok — SNMP poller veya FortiGate REST için cihaz ekleyin.</p>
       ) : (
         <div className="space-y-2">
           {devices.map((d) => (
@@ -87,9 +104,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                 <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{d.kind}</span>
                 <span className="font-mono text-sm font-semibold text-slate-100">{d.name}</span>
                 <span className="font-mono text-xs text-slate-500">{d.host}</span>
-                <span className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">
-                  snmp v{d.snmp_version === 3 ? '3' : '2c'}
-                </span>
+                {vendorBadge(d)}
                 <span className="ml-auto font-mono text-[10px] text-slate-600">
                   {d.last_poll > 0 ? `son poll: ${new Date(d.last_poll * 1000).toLocaleTimeString('tr-TR')}` : 'hiç poll edilmedi'}
                 </span>
@@ -97,7 +112,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                   onClick={() => showIfaces(d.id, d.name)}
                   className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
                 >
-                  arayüzler
+                  {detailLabel(d)}
                 </button>
                 <button
                   onClick={() => remove(d.id)}
@@ -113,7 +128,10 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
               {d.last_error && (
                 <p className="mt-1 truncate font-mono text-[11px] text-rose-400/80" title={d.last_error}>⚠ {d.last_error}</p>
               )}
-              {detail?.id === d.id && (
+              {detail?.id === d.id && d.vendor === 'fortigate' && (
+                <FortiPanel deviceId={d.id} />
+              )}
+              {detail?.id === d.id && d.vendor !== 'fortigate' && (
                 <div className="mt-2 max-h-64 overflow-y-auto rounded border border-slate-800">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-900/80">
@@ -151,9 +169,11 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
 
 function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: string) => void }) {
   const [form, setForm] = useState({
-    name: '', host: '', kind: 'router', snmp_version: 2,
+    name: '', host: '', kind: 'router', vendor: 'snmp', snmp_version: 2,
     community: '', v3_user: '', v3_auth_proto: 'SHA', v3_auth_pass: '',
-    v3_priv_proto: 'AES', v3_priv_pass: '', poll_seconds: 60,
+    v3_priv_proto: 'AES', v3_priv_pass: '',
+    api_url: '', api_token: '', api_verify_tls: true, vdom: 'root',
+    poll_seconds: 60,
   })
   const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }))
   const inputCls =
@@ -185,12 +205,25 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
         <select value={form.kind} onChange={(e) => set('kind', e.target.value)} className={inputCls}>
           {['router', 'switch', 'firewall', 'ap', 'other'].map((k) => <option key={k} value={k}>{k}</option>)}
         </select>
-        <select value={form.snmp_version} onChange={(e) => set('snmp_version', +e.target.value)} className={inputCls}>
-          <option value={2}>SNMP v2c</option>
-          <option value={3}>SNMP v3</option>
+        <select value={form.vendor} onChange={(e) => set('vendor', e.target.value)} className={inputCls}>
+          <option value="snmp">SNMP</option>
+          <option value="fortigate">FortiGate (REST API)</option>
         </select>
       </div>
-      {form.snmp_version === 2 ? (
+
+      {form.vendor === 'fortigate' ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <input value={form.api_url} onChange={(e) => set('api_url', e.target.value)} placeholder="api_url * (https://10.0.0.1)" className={inputCls} />
+            <input value={form.vdom} onChange={(e) => set('vdom', e.target.value)} placeholder="vdom (root veya all)" className={inputCls} />
+          </div>
+          <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="REST API token * (kasada şifrelenir; read-only profil önerilir)" className={inputCls} />
+          <label className="flex items-center gap-2 text-[11px] text-slate-500">
+            <input type="checkbox" checked={form.api_verify_tls} onChange={(e) => set('api_verify_tls', e.target.checked)} className="accent-cyan-500" />
+            TLS sertifikasını doğrula (self-signed kurulumlarda kapatın)
+          </label>
+        </div>
+      ) : form.snmp_version === 2 ? (
         <input type="password" value={form.community} onChange={(e) => set('community', e.target.value)} placeholder="community (kasada şifrelenir)" className={inputCls} />
       ) : (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -203,6 +236,14 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
             {['AES', 'AES256', 'DES'].map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
           <input type="password" value={form.v3_priv_pass} onChange={(e) => set('v3_priv_pass', e.target.value)} placeholder="priv pass" className={inputCls} />
+        </div>
+      )}
+      {form.vendor === 'snmp' && (
+        <div className="flex items-center gap-2">
+          <select value={form.snmp_version} onChange={(e) => set('snmp_version', +e.target.value)} className={inputCls + ' max-w-32'}>
+            <option value={2}>SNMP v2c</option>
+            <option value={3}>SNMP v3</option>
+          </select>
         </div>
       )}
       <div className="flex items-center gap-2">

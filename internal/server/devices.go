@@ -8,23 +8,29 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
 type deviceRequest struct {
-	Name        string `json:"name"`
-	Host        string `json:"host"`
-	Kind        string `json:"kind"`
-	SNMPVersion int    `json:"snmp_version"`
-	Community   string `json:"community"`
-	V3User      string `json:"v3_user"`
-	V3AuthProto string `json:"v3_auth_proto"`
-	V3AuthPass  string `json:"v3_auth_pass"`
-	V3PrivProto string `json:"v3_priv_proto"`
-	V3PrivPass  string `json:"v3_priv_pass"`
-	PollSeconds int    `json:"poll_seconds"`
+	Name         string `json:"name"`
+	Host         string `json:"host"`
+	Kind         string `json:"kind"`
+	Vendor       string `json:"vendor"` // snmp | fortigate (Faz 8)
+	SNMPVersion  int    `json:"snmp_version"`
+	Community    string `json:"community"`
+	V3User       string `json:"v3_user"`
+	V3AuthProto  string `json:"v3_auth_proto"`
+	V3AuthPass   string `json:"v3_auth_pass"`
+	V3PrivProto  string `json:"v3_priv_proto"`
+	V3PrivPass   string `json:"v3_priv_pass"`
+	APIURL       string `json:"api_url"`   // fortigate: https://host:port
+	APIToken     string `json:"api_token"` // fortigate: düz metin → vault
+	APIVerifyTLS bool   `json:"api_verify_tls"`
+	VDOM         string `json:"vdom"`
+	PollSeconds  int    `json:"poll_seconds"`
 }
 
 func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +40,7 @@ func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// kimlik bilgilerini UI'ya gonderme; sadece dolum durumu
+	// (APIToken zaten json:"-" ile hiçbir koşulda serileştirilmez)
 	for i := range list {
 		list[i].Community = maskNonEmpty(list[i].Community)
 		list[i].V3AuthPass = maskNonEmpty(list[i].V3AuthPass)
@@ -62,11 +69,32 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 	if req.Kind == "" {
 		req.Kind = "other"
 	}
+	if req.Vendor == "" {
+		req.Vendor = "snmp"
+	}
+	if req.Vendor != "snmp" && req.Vendor != "fortigate" {
+		http.Error(w, "vendor snmp veya fortigate olmalı", http.StatusBadRequest)
+		return
+	}
 	if req.SNMPVersion != 3 {
 		req.SNMPVersion = 2
 	}
 	if req.PollSeconds <= 0 {
 		req.PollSeconds = 60
+	}
+	// fortigate dogrulamasi: api_url + token zorunlu
+	if req.Vendor == "fortigate" {
+		if !strings.HasPrefix(req.APIURL, "https://") && !strings.HasPrefix(req.APIURL, "http://") {
+			http.Error(w, "fortigate için api_url https:// ile başlamalı", http.StatusBadRequest)
+			return
+		}
+		if req.APIToken == "" {
+			http.Error(w, "fortigate için api_token zorunlu (REST API admin token'ı)", http.StatusBadRequest)
+			return
+		}
+		if req.VDOM == "" {
+			req.VDOM = "root"
+		}
 	}
 	// hassas alanlari sifrele
 	var err error
@@ -79,24 +107,27 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 	mustEncrypt(&req.Community)
 	mustEncrypt(&req.V3AuthPass)
 	mustEncrypt(&req.V3PrivPass)
+	mustEncrypt(&req.APIToken)
 	if err != nil {
 		http.Error(w, "şifreleme: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	id, err := s.store.AddDevice(store.Device{
-		Name: req.Name, Host: req.Host, Kind: req.Kind,
+		Name: req.Name, Host: req.Host, Kind: req.Kind, Vendor: req.Vendor,
 		SNMPVersion: req.SNMPVersion, Community: req.Community,
 		V3User: req.V3User, V3AuthProto: req.V3AuthProto, V3AuthPass: req.V3AuthPass,
 		V3PrivProto: req.V3PrivProto, V3PrivPass: req.V3PrivPass,
+		APIURL: req.APIURL, APIToken: req.APIToken,
+		APIVerifyTLS: req.APIVerifyTLS, VDOM: req.VDOM,
 		PollSeconds: req.PollSeconds, Enabled: true,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slog.Info("cihaz eklendi", "id", id, "name", req.Name, "host", req.Host, "kind", req.Kind)
-	s.audit(r, identityFromCtx(r), "device.add", fmt.Sprintf("device:%d", id), req.Name+" ("+req.Host+")")
+	slog.Info("cihaz eklendi", "id", id, "name", req.Name, "host", req.Host, "kind", req.Kind, "vendor", req.Vendor)
+	s.audit(r, identityFromCtx(r), "device.add", fmt.Sprintf("device:%d", id), req.Name+" ("+req.Host+", "+req.Vendor+")")
 	writeJSON(w, map[string]any{"ok": true, "id": id})
 }
 

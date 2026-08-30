@@ -170,6 +170,7 @@ func main() {
 		}
 	}
 	alertCfg = alert.NormalizeConfig(alertCfg)
+	alertCfg = alert.NormalizeFortiConfig(alertCfg)
 	alerts := alert.NewManager(alertCfg, st, engine)
 	if *alertsOn {
 		alerts.Start()

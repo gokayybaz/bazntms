@@ -8,24 +8,29 @@ import (
 // --- cihaz envanteri, SNMP ornekleri, NetFlow, syslog (Faz 3) ---
 
 type Device struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Host        string `json:"host"`
-	Kind        string `json:"kind"`                // router | switch | firewall | ap | other
-	SNMPVersion int    `json:"snmp_version"`        // 2 (v2c) veya 3 (v3)
-	Community   string `json:"community,omitempty"` // sifreli (v2c)
-	V3User      string `json:"v3_user,omitempty"`
-	V3AuthProto string `json:"v3_auth_proto,omitempty"` // MD5|SHA|SHA256|SHA384|SHA512
-	V3AuthPass  string `json:"v3_auth_pass,omitempty"`  // sifreli
-	V3PrivProto string `json:"v3_priv_proto,omitempty"` // DES|AES|AES192|AES256
-	V3PrivPass  string `json:"v3_priv_pass,omitempty"`  // sifreli
-	PollSeconds int    `json:"poll_seconds"`
-	Enabled     bool   `json:"enabled"`
-	SysName     string `json:"sys_name"`
-	SysDescr    string `json:"sys_descr"`
-	AddedAt     int64  `json:"added_at"`
-	LastPoll    int64  `json:"last_poll"`
-	LastError   string `json:"last_error,omitempty"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Host         string `json:"host"`
+	Kind         string `json:"kind"`                // router | switch | firewall | ap | other
+	Vendor       string `json:"vendor"`              // snmp (varsayılan) | fortigate (Faz 8)
+	SNMPVersion  int    `json:"snmp_version"`        // 2 (v2c) veya 3 (v3)
+	Community    string `json:"community,omitempty"` // sifreli (v2c)
+	V3User       string `json:"v3_user,omitempty"`
+	V3AuthProto  string `json:"v3_auth_proto,omitempty"` // MD5|SHA|SHA256|SHA384|SHA512
+	V3AuthPass   string `json:"v3_auth_pass,omitempty"`  // sifreli
+	V3PrivProto  string `json:"v3_priv_proto,omitempty"` // DES|AES|AES192|AES256
+	V3PrivPass   string `json:"v3_priv_pass,omitempty"`  // sifreli
+	APIURL       string `json:"api_url,omitempty"`       // https://host:port (fortigate)
+	APIToken     string `json:"-"`                       // sifreli (fortigate; API yanıtına asla girmez)
+	APIVerifyTLS bool   `json:"api_verify_tls"`          // false → self-signed kabul
+	VDOM         string `json:"vdom,omitempty"`          // bos → root; "all" → tum vdomlar
+	PollSeconds  int    `json:"poll_seconds"`
+	Enabled      bool   `json:"enabled"`
+	SysName      string `json:"sys_name"`
+	SysDescr     string `json:"sys_descr"`
+	AddedAt      int64  `json:"added_at"`
+	LastPoll     int64  `json:"last_poll"`
+	LastError    string `json:"last_error,omitempty"`
 }
 
 type DeviceIface struct {
@@ -59,13 +64,17 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 	if d.PollSeconds <= 0 {
 		d.PollSeconds = 60
 	}
+	if d.Vendor == "" {
+		d.Vendor = "snmp"
+	}
 	var id int64
 	err := s.db.QueryRow(s.q(`INSERT INTO devices
-		(name, host, kind, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
-		 poll_seconds, enabled, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
-		d.Name, d.Host, d.Kind, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
-		d.V3PrivProto, d.V3PrivPass, d.PollSeconds, btoi(d.Enabled), time.Now().Unix()).Scan(&id)
+		(name, host, kind, vendor, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
+		 api_url, api_token_enc, api_verify_tls, vdom, poll_seconds, enabled, added_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		d.Name, d.Host, d.Kind, d.Vendor, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
+		d.V3PrivProto, d.V3PrivPass, d.APIURL, d.APIToken, btoi(d.APIVerifyTLS), d.VDOM,
+		d.PollSeconds, btoi(d.Enabled), time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -73,8 +82,9 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 }
 
 func (s *sqlStore) ListDevices() ([]Device, error) {
-	rows, err := s.db.Query(s.q(`SELECT id, name, host, kind, snmp_version, community, v3_user, v3_auth_proto,
-		v3_auth_pass, v3_priv_proto, v3_priv_pass, poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error
+	rows, err := s.db.Query(s.q(`SELECT id, name, host, kind, vendor, snmp_version, community, v3_user, v3_auth_proto,
+		v3_auth_pass, v3_priv_proto, v3_priv_pass, api_url, api_token_enc, api_verify_tls, vdom,
+		poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error
 		FROM devices ORDER BY id`))
 	if err != nil {
 		return nil, err
@@ -83,8 +93,9 @@ func (s *sqlStore) ListDevices() ([]Device, error) {
 	out := []Device{}
 	for rows.Next() {
 		var d Device
-		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.SNMPVersion, &d.Community, &d.V3User,
-			&d.V3AuthProto, &d.V3AuthPass, &d.V3PrivProto, &d.V3PrivPass, &d.PollSeconds, &d.Enabled,
+		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.Vendor, &d.SNMPVersion, &d.Community, &d.V3User,
+			&d.V3AuthProto, &d.V3AuthPass, &d.V3PrivProto, &d.V3PrivPass, &d.APIURL, &d.APIToken,
+			&d.APIVerifyTLS, &d.VDOM, &d.PollSeconds, &d.Enabled,
 			&d.SysName, &d.SysDescr, &d.AddedAt, &d.LastPoll, &d.LastError); err != nil {
 			return nil, err
 		}
@@ -122,6 +133,50 @@ func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr 
 	_, err := s.db.Exec(s.q(`UPDATE devices SET last_poll = ?, sys_name = ?, sys_descr = ?, last_error = ? WHERE id = ?`),
 		time.Now().Unix(), sysName, sysDescr, lastErr, id)
 	return err
+}
+
+// ensureDeviceColumns, eski kurulumlardaki devices tablosuna Faz 8 kolonlarini
+// ekler (CREATE TABLE IF NOT EXISTS mevcut tabloyu degistirmedigi icin).
+func (s *sqlStore) ensureDeviceColumns() error {
+	cols := []struct{ name, def string }{
+		{"vendor", "TEXT NOT NULL DEFAULT 'snmp'"},
+		{"api_url", "TEXT NOT NULL DEFAULT ''"},
+		{"api_token_enc", "TEXT NOT NULL DEFAULT ''"},
+		{"api_verify_tls", "INTEGER NOT NULL DEFAULT 1"},
+		{"vdom", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, c := range cols {
+		exists := false
+		if s.pg {
+			var n int
+			err := s.db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_name = 'devices' AND column_name = $1`, c.name).Scan(&n)
+			if err == nil {
+				exists = n > 0
+			}
+		} else {
+			rows, err := s.db.Query(`PRAGMA table_info(devices)`)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var cid int
+				var name, ctype string
+				var notnull, pk int
+				var dflt sql.NullString
+				if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == c.name {
+					exists = true
+				}
+			}
+			rows.Close()
+		}
+		if !exists {
+			if _, err := s.db.Exec(s.q(`ALTER TABLE devices ADD COLUMN ` + c.name + ` ` + c.def)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
