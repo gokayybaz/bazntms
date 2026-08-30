@@ -126,6 +126,9 @@ export interface AgentRate {
   tx_bps: number
   rx_bytes: number
   tx_bytes: number
+  pps: number
+  rx_packets: number
+  tx_packets: number
   last_seen: number
 }
 

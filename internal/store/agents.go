@@ -103,12 +103,15 @@ func (s *sqlStore) ReplaceConnLatest(agentID int64, conns []telemetry.Connection
 
 // AgentRate, son iki ornekten hesaplanan arayuz verim bilgisidir.
 type AgentRate struct {
-	Name     string  `json:"name"`
-	RxBps    float64 `json:"rx_bps"`
-	TxBps    float64 `json:"tx_bps"`
-	RxBytes  uint64  `json:"rx_bytes"`
-	TxBytes  uint64  `json:"tx_bytes"`
-	LastSeen int64   `json:"last_seen"`
+	Name      string  `json:"name"`
+	RxBps     float64 `json:"rx_bps"`
+	TxBps     float64 `json:"tx_bps"`
+	RxBytes   uint64  `json:"rx_bytes"`
+	TxBytes   uint64  `json:"tx_bytes"`
+	Pps       float64 `json:"pps"`
+	RxPackets uint64  `json:"rx_packets"`
+	TxPackets uint64  `json:"tx_packets"`
+	LastSeen  int64   `json:"last_seen"`
 }
 
 type AgentWithRates struct {
@@ -151,15 +154,16 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 
 	// her agent icin son orneklerden arayuz verimleri (ilk/son karsilastirma)
 	for i := range out {
-		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, ts FROM (
-			SELECT name, rx_bytes, tx_bytes, ts FROM agent_iface_samples
+		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts FROM (
+			SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts FROM agent_iface_samples
 			WHERE agent_id = ? ORDER BY ts DESC LIMIT 400) sq ORDER BY ts ASC`), out[i].ID)
 		if err != nil {
 			continue
 		}
 		type sample struct {
-			rx, tx uint64
-			ts     int64
+			rx, tx         uint64
+			rxPkts, txPkts uint64
+			ts             int64
 		}
 		first := map[string]sample{}
 		last := map[string]sample{}
@@ -167,7 +171,7 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 		for rows2.Next() {
 			var name string
 			var sm sample
-			if err := rows2.Scan(&name, &sm.rx, &sm.tx, &sm.ts); err != nil {
+			if err := rows2.Scan(&name, &sm.rx, &sm.tx, &sm.rxPkts, &sm.txPkts, &sm.ts); err != nil {
 				break
 			}
 			if _, ok := first[name]; !ok {
@@ -183,13 +187,17 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 			if l.ts <= f.ts {
 				continue
 			}
+			dt := float64(l.ts - f.ts)
 			out[i].Rates = append(out[i].Rates, AgentRate{
-				Name:     name,
-				RxBps:    float64(l.rx-f.rx) / float64(l.ts-f.ts),
-				TxBps:    float64(l.tx-f.tx) / float64(l.ts-f.ts),
-				RxBytes:  l.rx,
-				TxBytes:  l.tx,
-				LastSeen: l.ts,
+				Name:      name,
+				RxBps:     float64(l.rx-f.rx) / dt,
+				TxBps:     float64(l.tx-f.tx) / dt,
+				RxBytes:   l.rx,
+				TxBytes:   l.tx,
+				Pps:       float64((l.rxPkts-f.rxPkts)+(l.txPkts-f.txPkts)) / dt,
+				RxPackets: l.rxPkts,
+				TxPackets: l.txPkts,
+				LastSeen:  l.ts,
 			})
 		}
 		if err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM agent_conn_latest WHERE agent_id = ?`), out[i].ID).Scan(&out[i].Conns); err != nil {

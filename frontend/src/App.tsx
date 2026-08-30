@@ -17,6 +17,7 @@ import { CompareCard } from './components/CompareCard'
 import { ReportCard } from './components/ReportCard'
 import { LoginScreen } from './components/LoginScreen'
 import { AgentsCard } from './components/AgentsCard'
+import { Overview } from './components/Overview'
 import { ProcessesCard } from './components/ProcessesCard'
 import { DevicesCard } from './components/DevicesCard'
 import { FlowsCard } from './components/FlowsCard'
@@ -143,6 +144,12 @@ export default function App() {
       />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
+        <div className="flex items-center gap-2">
+          <h1 className="text-[13px] font-semibold uppercase tracking-widest text-slate-300">Genel Bakış</h1>
+          <span className="text-xs text-slate-500">agent filosu + cihaz telemetrisi tek ekranda</span>
+        </div>
+        <Overview refreshKey={historyRefresh} alertEvents={alertEvents} />
+
         <StatCards stats={stats} />
 
         <Card title="Ağ Topolojisi" right={<span className="text-xs text-slate-500">Faz 6 · LLDP/CDP/ARP + agent subnetleri</span>}>
