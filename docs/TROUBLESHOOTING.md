@@ -49,9 +49,14 @@ sc start bazntms-agent
   çalıştırın.
 - Config'i elle dolduracaksanız: `C:\ProgramData\bazntms\agent.yml` içindeki
   `hub.url` ve `hub.token` değerlerini girin, sonra servisi başlatın.
-- Servis başlamıyor ama MSI kurulduysa: Olay Görüntüleyici → Windows
-  Uygulamaları → `bazNTMS Agent` loglarını inceleyin. En sık neden: hub adresine
-  erişilemiyor (enrollment başarısız) veya token hatalı.
+- Servis başlamıyor ama MSI kurulduysa: servis modunda loglar
+  `C:\ProgramData\bazntms\agent.log` dosyasına yazılır (v0.2.2+) — en sık
+  neden: hub adresine erişilemiyor (enrollment başarısız) veya token hatalı.
+  Eski sürümde servis logları kaybolur; binary'yi interaktif çalıştırıp hatayı
+  görün:
+  ```bat
+  "C:\Program Files\bazNTMS\bazntms-agent.exe" -config "C:\ProgramData\bazntms\agent.yml"
+  ```
 - Servis kurulumu hata 1053 veriyorsa (zaman aşımı) binary eski bir sürüm
   olabilir; SCM dispatcher desteği v0.2.1 ile geldi — release'ten güncel MSI'ı alın.
 
