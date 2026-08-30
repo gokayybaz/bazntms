@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AlertConfig, AlertEvent } from '../types'
 
-const KIND_STYLES: Record<string, string> = {
+export const KIND_STYLES: Record<string, string> = {
   bw: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
   port: 'bg-rose-500/10 text-rose-400 ring-rose-500/20',
   proc: 'bg-sky-500/10 text-sky-400 ring-sky-500/20',
   target: 'bg-violet-500/10 text-violet-400 ring-violet-500/20',
+  anomaly: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
+  vpn_down: 'bg-rose-500/10 text-rose-400 ring-rose-500/20',
+  sdwan_sla_breach: 'bg-orange-500/10 text-orange-300 ring-orange-500/20',
+  high_sessions: 'bg-orange-500/10 text-orange-300 ring-orange-500/20',
 }
-const KIND_LABELS: Record<string, string> = {
+export const KIND_LABELS: Record<string, string> = {
   bw: 'bant genişliği',
   port: 'şüpheli port',
   proc: 'yeni süreç',
   target: 'yeni hedef',
+  anomaly: 'anomali',
+  vpn_down: 'vpn down',
+  sdwan_sla_breach: 'sd-wan sla',
+  high_sessions: 'yüksek oturum',
 }
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
@@ -114,6 +122,10 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           </div>
         </div>
 
+        <p className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-600">
+          Yerel yakalama gerektirir <span className="font-normal normal-case text-slate-700">— hub'ın kendi ağ yakalaması aktifken tetiklenir</span>
+        </p>
+
         <div className="rounded-lg border border-slate-800 p-3 space-y-2">
           <Toggle checked={cfg.bandwidth.enabled} onChange={(v) => setCfg((c) => c && { ...c, bandwidth: { ...c.bandwidth, enabled: v } })} label="Bant genişliği zirvesi" />
           <div className="grid grid-cols-3 gap-2 text-xs text-slate-500">
@@ -154,6 +166,52 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           <label className="block text-xs text-slate-500">en az transfer (MB)
             <input type="number" min={0} value={cfg.new_target.min_total_mb} onChange={(e) => setCfg((c) => c && { ...c, new_target: { ...c.new_target, min_total_mb: +e.target.value || 0 } })} className={inputCls} />
           </label>
+        </div>
+
+        <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+          <Toggle
+            checked={cfg.anomaly.enabled}
+            onChange={(v) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, enabled: v } })}
+            label="İstatistiksel anomali (z-skoru baseline)"
+          />
+          <div className="grid grid-cols-3 gap-2 text-xs text-slate-500">
+            <label className="space-y-1">hassasiyet (z-skoru)
+              <input type="number" min={0.5} step={0.5} value={cfg.anomaly.sensitivity} onChange={(e) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, sensitivity: +e.target.value || 3 } })} className={inputCls} />
+            </label>
+            <label className="space-y-1">min örnek
+              <input type="number" min={1} value={cfg.anomaly.min_samples} onChange={(e) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, min_samples: +e.target.value || 1 } })} className={inputCls} />
+            </label>
+            <label className="space-y-1">pencere (dk)
+              <input type="number" min={1} value={cfg.anomaly.window_min} onChange={(e) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, window_min: +e.target.value || 1 } })} className={inputCls} />
+            </label>
+          </div>
+        </div>
+
+        <p className="pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-slate-600">
+          Filo/cihaz tabanlı <span className="font-normal normal-case text-slate-700">— hub yakalaması gerekmez, cihaz poll'undan gelir</span>
+        </p>
+
+        <div className="rounded-lg border border-orange-500/20 p-3 space-y-2">
+          <Toggle
+            checked={cfg.forti.vpn_down}
+            onChange={(v) => setCfg((c) => c && { ...c, forti: { ...c.forti, vpn_down: v } })}
+            label="FortiGate: VPN tüneli/kullanıcısı down"
+          />
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+            <label className="space-y-1">sd-wan gecikme eşiği (ms)
+              <input type="number" min={0} value={cfg.forti.sdwan_latency_ms} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, sdwan_latency_ms: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+            <label className="space-y-1">sd-wan jitter eşiği (ms)
+              <input type="number" min={0} value={cfg.forti.sdwan_jitter_ms} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, sdwan_jitter_ms: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+            <label className="space-y-1">sd-wan kayıp eşiği (%)
+              <input type="number" min={0} max={100} value={cfg.forti.sdwan_loss_pct} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, sdwan_loss_pct: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+            <label className="space-y-1">maks. oturum (0=kapalı)
+              <input type="number" min={0} value={cfg.forti.max_sessions} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, max_sessions: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+          </div>
+          <p className="text-[10.5px] text-slate-600">Eşik 0 ise o kontrol kapalıdır (VPN down hariç, ayrı toggle).</p>
         </div>
 
         <div className="rounded-lg border border-slate-800 p-3 space-y-2">

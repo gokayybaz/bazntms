@@ -149,7 +149,7 @@ export interface AgentWithRates {
 export interface AlertEvent {
   id: number
   ts: number
-  kind: 'bw' | 'port' | 'proc' | 'target'
+  kind: 'bw' | 'port' | 'proc' | 'target' | 'anomaly' | 'vpn_down' | 'sdwan_sla_breach' | 'high_sessions'
   key: string
   message: string
 }
@@ -161,6 +161,8 @@ export interface AlertConfig {
   ports: { enabled: boolean; ports: number[] }
   new_proc: { enabled: boolean; ignore: string[] }
   new_target: { enabled: boolean; min_total_mb: number }
+  anomaly: { enabled: boolean; sensitivity: number; min_samples: number; window_min: number }
+  forti: { vpn_down: boolean; sdwan_latency_ms: number; sdwan_jitter_ms: number; sdwan_loss_pct: number; max_sessions: number }
   notifiers: {
     desktop: boolean
     generic_url: string
