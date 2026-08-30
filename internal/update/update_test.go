@@ -54,8 +54,12 @@ func TestInstallSwap(t *testing.T) {
 	if err != nil || string(data) != "v2-binary" {
 		t.Fatalf("degisim yok: %s %v", data, err)
 	}
-	if fi, _ := os.Stat(exe); fi.Mode()&0o111 == 0 {
-		t.Fatal("yeni binary calistirilabilir degil")
+	// exec-bit kavrami yalnizca Unix'te anlamlidir; Windows'ta Go mode
+	// bitleri dosya uzantisindan (.exe) turetilir.
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(exe); fi.Mode()&0o111 == 0 {
+			t.Fatal("yeni binary calistirilabilir degil")
+		}
 	}
 	CleanupOld(exe)
 	if _, err := os.Stat(exe + ".old"); !os.IsNotExist(err) {
