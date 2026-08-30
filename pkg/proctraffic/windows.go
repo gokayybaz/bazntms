@@ -3,6 +3,7 @@
 package proctraffic
 
 import (
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -60,7 +61,7 @@ func (p *windowsProvider) Snapshot() map[Key]ProcInfo {
 			pid := int32(pid64)
 			proc := p.procName(pid)
 			a := Key{Proto: proto, LocalIP: "0.0.0.0", LocalPort: lp, RemoteIP: rIP, RemotePort: rp}
-			b := Key{Proto: proto, LocalIP: rIP, LocalPort: rp, RemoteIP: "0.0.0.0", LocalPort: lp}
+			b := Key{Proto: proto, LocalIP: rIP, LocalPort: rp, RemoteIP: "0.0.0.0", RemotePort: lp}
 			info := ProcInfo{PID: pid, Process: proc}
 			out[a] = info
 			out[b] = info
@@ -87,4 +88,17 @@ func (p *windowsProvider) procName(pid int32) string {
 		p.names = map[int32]string{}
 	}
 	return n
+}
+
+// splitAddr, netstat adresini (1.2.3.4:80 | [::]:80) port ve IP'ye ayırır.
+func splitAddr(s string) (uint16, string) {
+	host, port, err := net.SplitHostPort(s)
+	if err != nil {
+		return 0, ""
+	}
+	p64, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return 0, ""
+	}
+	return uint16(p64), strings.Trim(host, "[]")
 }

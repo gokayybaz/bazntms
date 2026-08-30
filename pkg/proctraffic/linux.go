@@ -71,9 +71,9 @@ func parseProcNet() map[Key]ProcInfo {
 			}
 			inode := fields[9]
 			a := Key{Proto: proto, LocalIP: localIP, LocalPort: localPort, RemoteIP: remoteIP, RemotePort: remotePort}
-			b := Key{Proto: proto, LocalIP: remoteIP, LocalPort: remotePort, RemoteIP: localIP, LocalPort: localPort}
-			out[a] = ProcInfo{Inode: inode}
-			out[b] = ProcInfo{Inode: inode}
+			b := Key{Proto: proto, LocalIP: remoteIP, LocalPort: remotePort, RemoteIP: localIP, RemotePort: localPort}
+			out[a] = ProcInfo{inode: inode}
+			out[b] = ProcInfo{inode: inode}
 		}
 		f.Close()
 	}
@@ -126,10 +126,10 @@ func formatIP(ip []byte) string {
 func attachPIDs(m map[Key]ProcInfo) {
 	inodeToKeys := map[string][]Key{}
 	for k, pi := range m {
-		if pi.Inode == "" {
+		if pi.inode == "" {
 			continue
 		}
-		inodeToKeys[pi.Inode] = append(inodeToKeys[pi.Inode], k)
+		inodeToKeys[pi.inode] = append(inodeToKeys[pi.inode], k)
 	}
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -156,7 +156,7 @@ func attachPIDs(m map[Key]ProcInfo) {
 				pi := m[k]
 				pi.PID = int32(pid)
 				pi.Process = comm
-				pi.Inode = ""
+				pi.inode = ""
 				m[k] = pi
 			}
 		}
