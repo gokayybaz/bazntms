@@ -50,4 +50,25 @@ helm install bazntms deploy/helm/bazntms \
   --set auth.existingSecret=bazntms-auth
 ```
 
+## Windows (MSI)
+
+Release sayfasındaki MSI, servisi kurar; **kurulum sırasında sunucu
+bilgisi verilebilir** — ayrıca elle config düzenlemeye gerek kalmaz:
+
+```bat
+:: sunucu bilgisiyle kurulum
+msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+
+:: servisi başlat (Start=auto olduğundan yeniden başlatmada kendiliğinden açılır)
+sc start bazntms-agent
+```
+
+- Property'ler `HKLM\SOFTWARE\bazNTMS\Agent` altına yazılır; agent önceliği
+  `flag > registry > config.yml` şeklindedir. Yönetilen/GPO kurulumlarda
+  property'lerin geçmesi için yükseltilmiş komut satırı kullanın.
+- Config'i elle düzenlemek isterseniz: `C:\ProgramData\bazntms\agent.yml`
+  kurulumla gelir; `hub.url` + `hub.token` doldurup servisi başlatın.
+- MSI, servisi kurulum anında başlatmaz — hub bilgisi girilmeden başlayan
+  servis hata verip kurulumu düşürür (hata 1920) diye tasarım gereği.
+
 Kaynaklar: `docs/CONFIGURATION.md`, `deploy/`.

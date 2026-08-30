@@ -1,5 +1,7 @@
 // bazntms-agent — uclara kurulan telemetri daemon'i: enrollment, periyodik
 // telemetri gonderimi, offline disk kuyrugu ve graceful shutdown.
+// Windows'ta SCM (Service Control Manager) tarafindan baslatildiginda servis
+// dispatcher'ina baglanir (bkz. service_windows.go).
 package main
 
 import (
@@ -60,18 +62,20 @@ func main() {
 		cfg = &config.AgentConfig{}
 	}
 
-	// config -> flag override'lari
+	// config -> flag override'lari; araya platform katmani girer
+	// (Windows'ta MSI property'lerinden yazilan kayit defteri degerleri,
+	// oncelik: flag > registry > config)
 	if *hubURL == "" {
-		*hubURL = cfg.Hub.URL
+		*hubURL = firstNonEmpty(platformValue("hub_url"), cfg.Hub.URL)
 	}
 	if *enrollToken == "" {
-		*enrollToken = cfg.Hub.Token
+		*enrollToken = firstNonEmpty(platformValue("enroll_token"), cfg.Hub.Token)
 	}
 	if *name == "" {
 		*name = cfg.Agent.Name
 	}
 	if *site == "" {
-		*site = cfg.Agent.Site
+		*site = firstNonEmpty(platformValue("site"), cfg.Agent.Site)
 	}
 	intervalSec := *interval
 	if intervalSec <= 0 {
@@ -139,126 +143,160 @@ func main() {
 		IntervalSec: intervalSec,
 	})
 
-	st, err := client.Enroll()
-	if err != nil {
-		slog.Error("enrollment basarisiz", "err", err)
-		os.Exit(1)
-	}
-	slog.Info("agent kayitli", "agent_id", st.AgentID)
-
-	// derin toplama: agent istegi + hub politikasi ikisi de acik olmali
-	pcapWant := *pcapFlag || cfg.Collect.PCAP
-	var attrEng *agent.AttrEngine
-	if pcapWant && client.PCAPEnabled() {
-		iface := *pcapIface
-		if iface == "" {
-			iface = cfg.Collect.PCAPInterface
-		}
-		if iface == "" || iface == "auto" {
-			iface = autoIface()
-		}
-		attrEng, err = agent.NewAttrEngine(iface)
+	// run, agent'in omuz dongusunu yurutur; stop kapaninca temiz cikar.
+	// Windows servis modunda ayni fonksiyon SCM handler'i tarafindan
+	// calistirilir (Stop/Shutdown -> stop kapanir).
+	run := func(stop chan struct{}) error {
+		st, err := client.Enroll()
 		if err != nil {
-			slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err)
-			attrEng = nil
-		} else {
-			slog.Info("surec atfi aktif", "iface", iface)
-			defer attrEng.Stop()
+			return fmt.Errorf("enrollment basarisiz: %w", err)
 		}
-	} else if pcapWant {
-		slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub'i -agent-pcap ile baslatin")
-	}
+		slog.Info("agent kayitli", "agent_id", st.AgentID)
 
-	// ham PCAP kaydi: politika + agent istegi
-	if *recordFlag || cfg.Collect.PCAPRecord {
-		if client.PCAPEnabled() {
+		// derin toplama: agent istegi + hub politikasi ikisi de acik olmali
+		pcapWant := *pcapFlag || cfg.Collect.PCAP
+		var attrEng *agent.AttrEngine
+		if pcapWant && client.PCAPEnabled() {
 			iface := *pcapIface
+			if iface == "" {
+				iface = cfg.Collect.PCAPInterface
+			}
 			if iface == "" || iface == "auto" {
 				iface = autoIface()
 			}
-			dir := *recordDir
-			if dir == "" {
-				dir = cfg.Collect.PCAPDir
-			}
-			recEngine := capture.NewEngine()
-			recEngine.SetRecordOptions(dir, uint64(100)<<20)
-			if err := recEngine.Start(iface); err != nil {
-				slog.Warn("PCAP yakalama acilamadi", "err", err)
-			} else if err := recEngine.StartRecording(); err != nil {
-				slog.Warn("PCAP kayit baslatilamadi", "err", err)
-				recEngine.Stop()
+			attrEng, err = agent.NewAttrEngine(iface)
+			if err != nil {
+				slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err)
+				attrEng = nil
 			} else {
-				slog.Info("ham PCAP kaydi basladi", "iface", iface, "dir", dir)
-				defer recEngine.Stop()
+				slog.Info("surec atfi aktif", "iface", iface)
+				defer attrEng.Stop()
 			}
-		} else {
-			slog.Info("ham PCAP kaydi icin hub politikasi kapali")
+		} else if pcapWant {
+			slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub'i -agent-pcap ile baslatin")
+		}
+
+		// ham PCAP kaydi: politika + agent istegi
+		if *recordFlag || cfg.Collect.PCAPRecord {
+			if client.PCAPEnabled() {
+				iface := *pcapIface
+				if iface == "" || iface == "auto" {
+					iface = autoIface()
+				}
+				dir := *recordDir
+				if dir == "" {
+					dir = cfg.Collect.PCAPDir
+				}
+				recEngine := capture.NewEngine()
+				recEngine.SetRecordOptions(dir, uint64(100)<<20)
+				if err := recEngine.Start(iface); err != nil {
+					slog.Warn("PCAP yakalama acilamadi", "err", err)
+				} else if err := recEngine.StartRecording(); err != nil {
+					slog.Warn("PCAP kayit baslatilamadi", "err", err)
+					recEngine.Stop()
+				} else {
+					slog.Info("ham PCAP kaydi basladi", "iface", iface, "dir", dir)
+					defer recEngine.Stop()
+				}
+			} else {
+				slog.Info("ham PCAP kaydi icin hub politikasi kapali")
+			}
+		}
+
+		// otomatik guncelleme (Faz 7.3): periyodik manifest kontrolu; yukselme
+		// varsa indir + dogrula + binary'yi degistir + cik (supervisor yeniden
+		// baslatir: systemd/launchd/k8s restartPolicy:Always)
+		if !*updateEnabled {
+			*updateEnabled = cfg.Update.Enabled
+		}
+		if *updateChannel == "stable" && cfg.Update.Channel != "" {
+			*updateChannel = cfg.Update.Channel
+		}
+		if *updateKey == "" {
+			*updateKey = cfg.Update.PublicKey
+		}
+		if *updateInterval == 6 && cfg.Update.IntervalHours > 0 {
+			*updateInterval = cfg.Update.IntervalHours
+		}
+		var updateTicker *time.Ticker
+		if *updateEnabled {
+			updateTicker = time.NewTicker(time.Duration(*updateInterval) * time.Hour)
+			defer updateTicker.Stop()
+			slog.Info("otomatik guncelleme aktif", "channel", *updateChannel,
+				"interval_hours", *updateInterval, "imza", *updateKey != "")
+			go func() {
+				for range updateTicker.C {
+					upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey)
+					applied, err := upd.Apply(version.Version)
+					if err != nil {
+						slog.Warn("guncelleme kontrolu basarisiz", "err", err)
+						continue
+					}
+					if applied {
+						slog.Info("guncelleme kuruldu, yeniden baslatiliyor", "channel", *updateChannel)
+						update.CleanupOld(os.Args[0])
+						os.Exit(0)
+					}
+				}
+			}()
+		}
+
+		timer := time.NewTimer(time.Duration(client.Interval()) * time.Second)
+		defer timer.Stop()
+		slog.Info("telemetri dongusu basladi", "interval", client.Interval())
+
+		for {
+			select {
+			case <-stop:
+				slog.Info("kapatiliyor")
+				return nil
+			case <-timer.C:
+				batch := client.Collect()
+				if attrEng != nil {
+					batch.ProcessTraffic = attrEng.Deltas()
+				}
+				if err := client.Send(st, batch); err != nil {
+					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)
+				} else {
+					slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
+				}
+				timer.Reset(time.Duration(client.Interval()) * time.Second)
+			}
 		}
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	// otomatik guncelleme (Faz 7.3): periyodik manifest kontrolu; yukselme
-	// varsa indir + dogrula + binary'yi degistir + cik (supervisor yeniden
-	// baslatir: systemd/launchd/k8s restartPolicy:Always)
-	if !*updateEnabled {
-		*updateEnabled = cfg.Update.Enabled
-	}
-	if *updateChannel == "stable" && cfg.Update.Channel != "" {
-		*updateChannel = cfg.Update.Channel
-	}
-	if *updateKey == "" {
-		*updateKey = cfg.Update.PublicKey
-	}
-	if *updateInterval == 6 && cfg.Update.IntervalHours > 0 {
-		*updateInterval = cfg.Update.IntervalHours
-	}
-	var updateTicker *time.Ticker
-	if *updateEnabled {
-		updateTicker = time.NewTicker(time.Duration(*updateInterval) * time.Hour)
-		defer updateTicker.Stop()
-		slog.Info("otomatik guncelleme aktif", "channel", *updateChannel,
-			"interval_hours", *updateInterval, "imza", *updateKey != "")
-		go func() {
-			for range updateTicker.C {
-				upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey)
-				applied, err := upd.Apply(version.Version)
-				if err != nil {
-					slog.Warn("guncelleme kontrolu basarisiz", "err", err)
-					continue
-				}
-				if applied {
-					slog.Info("guncelleme kuruldu, yeniden baslatiliyor", "channel", *updateChannel)
-					update.CleanupOld(os.Args[0])
-					os.Exit(0)
-				}
-			}
-		}()
+	// Windows: SCM tarafindan baslatildiysak servis olarak kos (signal
+	// kanali olmaz; Stop/Shutdown istekleri stop kanalini kapatir).
+	if serviceMode() {
+		if err := runService(run); err != nil {
+			slog.Error("servis sonlandi", "err", err)
+			os.Exit(1)
+		}
+		return
 	}
 
-	timer := time.NewTimer(time.Duration(client.Interval()) * time.Second)
-	defer timer.Stop()
-	slog.Info("telemetri dongusu basladi", "interval", client.Interval())
+	stop := make(chan struct{})
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		close(stop)
+	}()
 
-	for {
-		select {
-		case <-stop:
-			slog.Info("kapatiliyor")
-			return
-		case <-timer.C:
-			batch := client.Collect()
-			if attrEng != nil {
-				batch.ProcessTraffic = attrEng.Deltas()
-			}
-			if err := client.Send(st, batch); err != nil {
-				slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)
-			} else {
-				slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
-			}
-			timer.Reset(time.Duration(client.Interval()) * time.Second)
+	if err := run(stop); err != nil {
+		slog.Error("agent sonlandi", "err", err)
+		os.Exit(1)
+	}
+}
+
+// firstNonEmpty, bos olmayan ilk degeri dondurur.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
 		}
 	}
+	return ""
 }
 
 // autoIface, atf/kayit icin ilk uygun arayuzu secer (up, loopback degil).

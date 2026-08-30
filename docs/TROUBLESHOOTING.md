@@ -27,7 +27,33 @@ Paket yakalama ayrıcalıklı bir işlemdir:
 
 - Sadece `up` ve loopback olmayan arayüzler listelenir
 - VPN/filtre sürücüleri trafiği başka sanal arayüze taşıyabilir; doğru arayüzü seçin
-- macOS'ta `en0` genelde Wi-Fi, `enX` Ethernet'tir
+
+## Windows MSI / servis kurulumu
+
+### "Service bazNTMS agent failed to start" (hata 1920)
+
+MSI, servisi kurulum anında **başlatmaz** — config doldurulmadan başlayan servis
+hata verip kurulumu düşürürdü. Bu yüzden kurulum sırası:
+
+```bat
+:: 1. Kurulum — sunucu bilgisi opsiyonel property olarak verilebilir
+msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+
+:: 2. Servisi başlat (config'e girmişseniz property vermenize gerek yok)
+sc start bazntms-agent
+```
+
+- Property'ler `HKLM\SOFTWARE\bazNTMS\Agent` altına yazılır; agent önceliği
+  `flag > registry > config.yml` şeklindedir. Yönetilen/GPO kurulumlarda
+  property'lerin geçmesi için kurulumu yükseltilmiş (elevated) komut satırından
+  çalıştırın.
+- Config'i elle dolduracaksanız: `C:\ProgramData\bazntms\agent.yml` içindeki
+  `hub.url` ve `hub.token` değerlerini girin, sonra servisi başlatın.
+- Servis başlamıyor ama MSI kurulduysa: Olay Görüntüleyici → Windows
+  Uygulamaları → `bazNTMS Agent` loglarını inceleyin. En sık neden: hub adresine
+  erişilemiyor (enrollment başarısız) veya token hatalı.
+- Servis kurulumu hata 1053 veriyorsa (zaman aşımı) binary eski bir sürüm
+  olabilir; SCM dispatcher desteği v0.2.1 ile geldi — release'ten güncel MSI'ı alın.
 
 ## AI analizi sorunları
 

@@ -15,6 +15,13 @@
   <Product Id='*' Name='bazNTMS Agent' Language='1033'
            Version='$(var.VERSION)' Manufacturer='bazNTMS'
            UpgradeCode='4C5B1D9E-8A54-4F72-9A66-9F9B0AB1B7A1'>
+    <!-- Kurulum sirasinda sunucu bilgisi:
+         msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+         Degerler HKLM\SOFTWARE\bazNTMS\Agent altina yazilir (env degiskenleri
+         servis tarafindan reboot'a kadar gorulmedigi icin kayit defteri) -->
+    <Property Id='HUBURL' Secure='yes' />
+    <Property Id='ENROLLTOKEN' Secure='yes' />
+    <Property Id='SITE' Secure='yes' />
     <Package InstallerVersion='200' Compressed='yes' InstallScope='perMachine'
              Description='bazNTMS network telemetry agent' />
     <MajorUpgrade AllowSameVersionUpgrades='yes'
@@ -22,17 +29,40 @@
     <Media Id='1' Cabinet='agent.cab' EmbedCab='yes' />
 
     <Directory Id='TARGETDIR' Name='SourceDir'>
+      <Directory Id='CommonAppDataFolder'>
+        <!-- C:\ProgramData\bazntms\agent.yml: kurulumla konan varsayilan
+             konfigurasyon; servis bu dosya ile baslar, kullanici doldurur -->
+        <Directory Id='DATADIR' Name='bazntms'>
+          <Component Id='AgentDataConfig' Guid='B2E3F4A5-6C7D-8E9F-0A1B-223344556677'>
+            <File Id='AgentDataConfigFile' Source='$(var.CONF)' Name='agent.yml' KeyPath='yes' />
+          </Component>
+          <!-- msiexec property'leri (HUBURL/ENROLLTOKEN/SITE) kayit defterine
+               yazilir; agent bos degerleri yok sayar, o zaman config.yml
+               devrede kalir. Env degiskenleri SCM tarafindan reboot'a kadar
+               tazelenmedigi icin servis konfigurasyonu kayit defterinden okur -->
+          <Component Id='AgentRegConfig' Guid='C3D4E5F6-7A8B-9C0D-1E2F-334455667788'>
+            <RegistryKey Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'>
+              <RegistryValue Name='hub_url' Type='string' Value='[HUBURL]' KeyPath='yes' />
+              <RegistryValue Name='enroll_token' Type='string' Value='[ENROLLTOKEN]' />
+              <RegistryValue Name='site' Type='string' Value='[SITE]' />
+            </RegistryKey>
+          </Component>
+        </Directory>
+      </Directory>
       <Directory Id='ProgramFiles64Folder'>
         <Directory Id='INSTALLFOLDER' Name='bazNTMS'>
           <Component Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
             <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
+            <!-- Start='install' YOK: kurulum aninda baslatma denemesi config
+                 doldurulmadan 1920 hatasina dusurur; servis auto tipindedir,
+                 konfigurasyon sonrasi sc start bazntms-agent ile baslatilir -->
             <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
                             DisplayName='bazNTMS Agent'
                             Description='Network traffic telemetry agent (bazNTMS)'
                             Type='ownProcess' Start='auto' ErrorControl='normal'
                             Arguments='-config &quot;C:\ProgramData\bazntms\agent.yml&quot;' />
             <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
-                            Start='install' Stop='both' Remove='uninstall' Wait='yes' />
+                            Stop='both' Remove='uninstall' Wait='yes' />
           </Component>
           <Directory Id='CONFIGDIR' Name='config'>
             <Component Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
@@ -47,6 +77,8 @@
     <Feature Id='Main' Level='1'>
       <ComponentRef Id='AgentExe' />
       <ComponentRef Id='AgentConfig' />
+      <ComponentRef Id='AgentDataConfig' />
+      <ComponentRef Id='AgentRegConfig' />
     </Feature>
   </Product>
 </Wix>
