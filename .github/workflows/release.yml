@@ -106,6 +106,7 @@ jobs:
           name: bazntms-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             bazntms-*
+            bazntmsctl-*
             !bazntms-agent.yml
 
   packages:
@@ -199,7 +200,7 @@ jobs:
 
       - name: Artifact'lari imzala
         run: |
-          for f in bazntms-*; do
+          for f in bazntms-* bazntmsctl-*; do
             [ -f "$f" ] || continue
             cosign sign-blob --yes --output-signature "$f.sig" --bundle "$f.bundle" "$f"
           done
@@ -210,6 +211,8 @@ jobs:
           path: |
             bazntms-*.sig
             bazntms-*.bundle
+            bazntmsctl-*.sig
+            bazntmsctl-*.bundle
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -226,8 +229,9 @@ jobs:
         run: |
           # not: glob bazntms-sbom.spdx.json'i da kapsar; dosyayi ikinci kez
           # acikca vermek ayni asset'i iki kez yuklemeye calisir ve cakilir
+          # bazntmsctl-* "bazntms-" prefix'i icermedigi icin ayri verilmeli
           gh release create "${GITHUB_REF_NAME}" \
-            bazntms-* \
+            bazntms-* bazntmsctl-* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "bazNTMS ${GITHUB_REF_NAME}" \
             --generate-notes
