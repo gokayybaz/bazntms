@@ -153,11 +153,19 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 		out = []AgentWithRates{}
 	}
 
-	// her agent icin son orneklerden arayuz verimleri (ilk/son karsilastirma)
+	// her agent icin arayuz verimleri: yalnizca en son iki telemetri
+	// batch'i (ayni ts'e sahip tum arayuzler tek batch olarak yazilir) —
+	// onceden "son 400 satir" (saatlerce surebilen) bir pencere ustunden
+	// ilk/son karsilastirmasi yapiliyordu; hem "canli hiz" gostergesi icin
+	// asiri bayat kaliyor hem de araya bir sayac sifirlanmasi (arayuz
+	// resetlendi/agent yeniden baslatildi) girerse uint64 alt tasmasiyla
+	// (l.rx < f.rx) devasa hatali bir deger uretiyordu.
 	for i := range out {
-		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts FROM (
-			SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts FROM agent_iface_samples
-			WHERE agent_id = ? ORDER BY ts DESC LIMIT 400) sq ORDER BY ts ASC`), out[i].ID)
+		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts
+			FROM agent_iface_samples
+			WHERE agent_id = ? AND ts IN (
+				SELECT DISTINCT ts FROM agent_iface_samples WHERE agent_id = ? ORDER BY ts DESC LIMIT 2
+			) ORDER BY ts ASC`), out[i].ID, out[i].ID)
 		if err != nil {
 			continue
 		}
@@ -189,13 +197,15 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 				continue
 			}
 			dt := float64(l.ts - f.ts)
+			// sayac sifirlandiysa (l < f) o sayaç icin bu turda oran 0
+			// gosterilir — bir sonraki iki tutarli ornekte kendini duzeltir
 			out[i].Rates = append(out[i].Rates, AgentRate{
 				Name:      name,
-				RxBps:     float64(l.rx-f.rx) / dt,
-				TxBps:     float64(l.tx-f.tx) / dt,
+				RxBps:     float64(safeDeltaU64(l.rx, f.rx)) / dt,
+				TxBps:     float64(safeDeltaU64(l.tx, f.tx)) / dt,
 				RxBytes:   l.rx,
 				TxBytes:   l.tx,
-				Pps:       float64((l.rxPkts-f.rxPkts)+(l.txPkts-f.txPkts)) / dt,
+				Pps:       float64(safeDeltaU64(l.rxPkts, f.rxPkts)+safeDeltaU64(l.txPkts, f.txPkts)) / dt,
 				RxPackets: l.rxPkts,
 				TxPackets: l.txPkts,
 				LastSeen:  l.ts,
@@ -206,6 +216,15 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 		}
 	}
 	return out, nil
+}
+
+// safeDeltaU64, iki kumulatif sayac arasindaki farki dondurur; sayac
+// gerilediyse (arayuz/agent resetlendi) uint64 alt tasmasi yerine 0 doner.
+func safeDeltaU64(cur, prev uint64) uint64 {
+	if cur < prev {
+		return 0
+	}
+	return cur - prev
 }
 
 func (s *sqlStore) LatestAgentConnections(agentID int64) []telemetry.ConnectionSample {
@@ -271,9 +290,11 @@ func (s *sqlStore) AgentHistory(agentID int64, since time.Time) ([]Bucket, error
 				b = &Bucket{Ts: cur.ts}
 				agg[cur.ts] = b
 			}
-			b.In += float64(cur.rx-prev.rx) / dt
-			b.Out += float64(cur.tx-prev.tx) / dt
-			b.Pps += float64((cur.rxPkts-prev.rxPkts)+(cur.txPkts-prev.txPkts)) / dt
+			// sayac gerilediyse (arayuz/agent resetlendi) bu nokta icin
+			// uint64 alt tasmasi yerine 0 katkisi verilir
+			b.In += float64(safeDeltaU64(cur.rx, prev.rx)) / dt
+			b.Out += float64(safeDeltaU64(cur.tx, prev.tx)) / dt
+			b.Pps += float64(safeDeltaU64(cur.rxPkts, prev.rxPkts)+safeDeltaU64(cur.txPkts, prev.txPkts)) / dt
 		}
 	}
 	out := make([]Bucket, 0, len(agg))
