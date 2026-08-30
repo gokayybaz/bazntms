@@ -6,9 +6,14 @@ import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
 import { LoginScreen } from './components/LoginScreen'
 import { DashboardPage } from './pages/DashboardPage'
-import { AllCardsPage } from './pages/AllCardsPage'
 import { AgentsListPage } from './pages/AgentsListPage'
 import { AgentDetailPage } from './pages/AgentDetailPage'
+import { DevicesPage } from './pages/DevicesPage'
+import { TopologyPage } from './pages/TopologyPage'
+import { TrafficPage } from './pages/TrafficPage'
+import { AlertsPage } from './pages/AlertsPage'
+import { ReportsPage } from './pages/ReportsPage'
+import { CompliancePage } from './pages/CompliancePage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
@@ -132,19 +137,23 @@ export default function App() {
           <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} />} />
           <Route path="/agentlar" element={<AgentsListPage />} />
           <Route path="/agentlar/:id" element={<AgentDetailPage />} />
+          <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
+          <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
           <Route
-            path="/tum-kartlar"
+            path="/trafik"
             element={
-              <AllCardsPage
+              <TrafficPage
                 stats={stats}
                 connections={connections}
-                alertEvents={alertEvents}
                 record={record}
                 historyRefresh={historyRefresh}
                 onHistoryRefresh={() => setHistoryRefresh((k) => k + 1)}
               />
             }
           />
+          <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
+          <Route path="/raporlar" element={<ReportsPage />} />
+          <Route path="/uyumluluk" element={<CompliancePage refreshKey={historyRefresh} />} />
         </Routes>
       </div>
     </div>

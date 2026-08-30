@@ -11,13 +11,6 @@ const IconGrid = () => (
   </svg>
 )
 
-const IconLayers = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3 2 8l10 5 10-5-10-5Z" />
-    <path d="m2 13 10 5 10-5" />
-  </svg>
-)
-
 const IconServer = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="4" width="20" height="7" rx="1.5" />
@@ -26,10 +19,61 @@ const IconServer = () => (
   </svg>
 )
 
+const IconRouter = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="10" width="20" height="8" rx="1.5" />
+    <path d="M7 10V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v4" />
+    <path d="M6 14h.01M10 14h.01" />
+  </svg>
+)
+
+const IconTopo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="5" cy="5" r="2" />
+    <circle cx="19" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2.3" />
+    <circle cx="5" cy="19" r="2" />
+    <circle cx="19" cy="19" r="2" />
+    <path d="M6.5 6.5 10.2 10.2M17.5 6.5 13.8 10.2M6.5 17.5 10.2 13.8M17.5 17.5 13.8 13.8" />
+  </svg>
+)
+
+const IconActivity = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12h4l3-8 4 16 3-8h6" />
+  </svg>
+)
+
+const IconBell = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+    <path d="M10 20a2 2 0 0 0 4 0" />
+  </svg>
+)
+
+const IconDoc = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" />
+    <path d="M14 2v5h5M8 12h8M8 16h8M8 8h3" />
+  </svg>
+)
+
+const IconShield = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l8 3.5v5.2c0 5-3.4 9.3-8 11.3-4.6-2-8-6.3-8-11.3V5.5L12 2z" />
+    <path d="M9 12l2 2 4-4.5" />
+  </svg>
+)
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: <IconGrid />, end: true },
   { to: '/agentlar', label: "Agent'lar", icon: <IconServer />, end: false },
-  { to: '/tum-kartlar', label: 'Tüm Kartlar', icon: <IconLayers />, end: false },
+  { to: '/cihazlar', label: 'Cihazlar', icon: <IconRouter />, end: false },
+  { to: '/topoloji', label: 'Ağ Topolojisi', icon: <IconTopo />, end: false },
+  { to: '/trafik', label: 'Trafik', icon: <IconActivity />, end: false },
+  { to: '/uyarilar', label: 'Uyarılar', icon: <IconBell />, end: false },
+  { to: '/raporlar', label: 'Raporlar', icon: <IconDoc />, end: false },
+  { to: '/uyumluluk', label: 'Uyumluluk', icon: <IconShield />, end: false },
 ]
 
 export function Sidebar() {
@@ -49,7 +93,7 @@ export function Sidebar() {
         <span className="font-mono text-sm font-bold tracking-tight text-white">bazNTMS</span>
       </div>
 
-      <nav className="flex-1 space-y-0.5 px-2.5 py-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
@@ -68,13 +112,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <div className="border-t border-slate-800 px-4 py-3">
-        <p className="text-[10px] leading-relaxed text-slate-600">
-          Sayfalar aşamalı olarak ayrılıyor — şimdilik detaylı kartların çoğu
-          "Tüm Kartlar" altında.
-        </p>
-      </div>
     </aside>
   )
 }

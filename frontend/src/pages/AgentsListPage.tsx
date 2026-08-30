@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { AgentWithRates } from '../types'
 import { formatBits, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
+import { ProcessesCard } from '../components/ProcessesCard'
 
 function relTime(unix: number): string {
   const secs = Math.max(0, Math.floor(Date.now() / 1000) - unix)
@@ -137,6 +138,10 @@ export function AgentsListPage() {
             </table>
           </div>
         )}
+      </Card>
+
+      <Card title="Süreç Trafiği (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">Faz 2 · atıf</span>}>
+        <ProcessesCard />
       </Card>
     </div>
   )
