@@ -71,7 +71,7 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   return (
-    <aside className="flex w-56 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60">
+    <aside className="sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60">
       <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-4">
         <div className="grid size-10 flex-shrink-0 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
           <svg viewBox="0 0 24 24" className="size-6 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
