@@ -119,6 +119,7 @@ type Store interface {
 	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
 	ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error)
 	LatestAgentConnections(agentID int64) []telemetry.ConnectionSample
+	AgentHistory(agentID int64, since time.Time) ([]Bucket, error)
 	AgentByID(id int64) (*Agent, error)
 	DeleteAgent(id int64) error
 

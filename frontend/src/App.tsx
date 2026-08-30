@@ -7,6 +7,8 @@ import { Sidebar } from './components/Sidebar'
 import { LoginScreen } from './components/LoginScreen'
 import { DashboardPage } from './pages/DashboardPage'
 import { AllCardsPage } from './pages/AllCardsPage'
+import { AgentsListPage } from './pages/AgentsListPage'
+import { AgentDetailPage } from './pages/AgentDetailPage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
@@ -128,6 +130,8 @@ export default function App() {
 
         <Routes>
           <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} />} />
+          <Route path="/agentlar" element={<AgentsListPage />} />
+          <Route path="/agentlar/:id" element={<AgentDetailPage />} />
           <Route
             path="/tum-kartlar"
             element={

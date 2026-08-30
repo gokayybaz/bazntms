@@ -18,8 +18,17 @@ const IconLayers = () => (
   </svg>
 )
 
+const IconServer = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="7" rx="1.5" />
+    <rect x="2" y="13" width="20" height="7" rx="1.5" />
+    <path d="M6 7.5h.01M6 16.5h.01" />
+  </svg>
+)
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: <IconGrid />, end: true },
+  { to: '/agentlar', label: "Agent'lar", icon: <IconServer />, end: false },
   { to: '/tum-kartlar', label: 'Tüm Kartlar', icon: <IconLayers />, end: false },
 ]
 

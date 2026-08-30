@@ -227,6 +227,26 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAgentHistory, Agent Detay sayfasindaki throughput grafigi icin
+// zaman serisi dondurur (ThroughputChart ile ayni Bucket semasi).
+func (s *Server) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
+	if minutes <= 0 || minutes > 60*24*7 {
+		minutes = 60
+	}
+	buckets, err := s.store.AgentHistory(id, time.Now().Add(-time.Duration(minutes)*time.Minute))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, buckets)
+}
+
 func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r.PathValue("id"))
 	if err != nil {

@@ -250,6 +250,7 @@ Enrollment: header `X-Enroll-Token: <hub -enroll-token>` zorunlu.
 |----|----------|
 | `GET /api/v1/agents` | `{id, name, site, online, last_seen, version, remote_ip, rates[{name, rx_bps, tx_bps, pps, rx_bytes, tx_bytes, rx_packets, tx_packets}], conns}` |
 | `GET /api/v1/agents/{id}` | `{agent: <yukarıdaki şema>, connections: [{proto, local_addr, remote_addr, status, pid, process}]}` — son telemetri anındaki gerçek bağlantı envanteri |
+| `GET /api/v1/agents/{id}/history?minutes=60` | `[{ts, in, out, local, pps}]` — tüm arayüzlerin toplamı, ardışık örnekler arası bayt/sn + paket/sn (Agent Detay throughput grafiği) |
 | `DELETE /api/v1/agents/{id}` | Agent'ı ve telemetrisini sil |
 
 ### `GET /api/v1/processes?minutes=60&agent_id=0&limit=20` *(UI auth)*

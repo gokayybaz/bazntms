@@ -167,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	// filo yonetimi (UI auth'u ile korunur; silme = netops+)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
 	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
+	mux.HandleFunc("GET /api/v1/agents/{id}/history", s.handleAgentHistory)
 	mux.Handle("DELETE /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentDelete)))
 
 	// cihazlar ve ag cihazi verileri (Faz 3; ekleme/silme = netops+)

@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"sort"
 	"time"
 
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
@@ -223,6 +224,64 @@ func (s *sqlStore) LatestAgentConnections(agentID int64) []telemetry.ConnectionS
 		out = append(out, c)
 	}
 	return out
+}
+
+// AgentHistory, verilen agent'in ham arayuz orneklerinden zaman serisi
+// hesaplar (tum arayuzlerin toplami, bayt/sn + paket/sn) — Agent Detay
+// sayfasindaki throughput grafiginde kullanilir (ThroughputChart ile
+// ayni Bucket semasi: ts/in/out/local/pps).
+func (s *sqlStore) AgentHistory(agentID int64, since time.Time) ([]Bucket, error) {
+	rows, err := s.db.Query(s.q(`SELECT name, ts, rx_bytes, tx_bytes, rx_packets, tx_packets
+		FROM agent_iface_samples WHERE agent_id = ? AND ts >= ? ORDER BY name, ts ASC`), agentID, since.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type point struct {
+		ts             int64
+		rx, tx         uint64
+		rxPkts, txPkts uint64
+	}
+	byIface := map[string][]point{}
+	for rows.Next() {
+		var name string
+		var p point
+		if err := rows.Scan(&name, &p.ts, &p.rx, &p.tx, &p.rxPkts, &p.txPkts); err != nil {
+			return nil, err
+		}
+		byIface[name] = append(byIface[name], p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// her arayuz icin ardisik ornekler arasi bps/pps hesaplanir; ayni ts'e
+	// denk gelen tum arayuzlerin degerleri toplanir (fleet/agent geneli)
+	agg := map[int64]*Bucket{}
+	for _, pts := range byIface {
+		for i := 1; i < len(pts); i++ {
+			prev, cur := pts[i-1], pts[i]
+			dt := float64(cur.ts - prev.ts)
+			if dt <= 0 {
+				continue
+			}
+			b, ok := agg[cur.ts]
+			if !ok {
+				b = &Bucket{Ts: cur.ts}
+				agg[cur.ts] = b
+			}
+			b.In += float64(cur.rx-prev.rx) / dt
+			b.Out += float64(cur.tx-prev.tx) / dt
+			b.Pps += float64((cur.rxPkts-prev.rxPkts)+(cur.txPkts-prev.txPkts)) / dt
+		}
+	}
+	out := make([]Bucket, 0, len(agg))
+	for _, b := range agg {
+		out = append(out, *b)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ts < out[j].Ts })
+	return out, nil
 }
 
 func (s *sqlStore) AgentByID(id int64) (*Agent, error) {

@@ -15,7 +15,7 @@ const RANGES = [
   { label: '6 saat', minutes: 360 },
 ]
 
-export function ProcessesCard() {
+export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
   const [rows, setRows] = useState<ProcessUsage[]>([])
   const [minutes, setMinutes] = useState(60)
   const [loaded, setLoaded] = useState(false)
@@ -24,7 +24,8 @@ export function ProcessesCard() {
     let stop = false
     const load = async () => {
       try {
-        const res = await fetch(`/api/v1/processes?minutes=${minutes}&limit=20`)
+        const agentParam = agentId ? `&agent_id=${agentId}` : ''
+        const res = await fetch(`/api/v1/processes?minutes=${minutes}&limit=20${agentParam}`)
         if (res.status === 401) return
         const data = await res.json()
         if (!stop) {
@@ -41,7 +42,7 @@ export function ProcessesCard() {
       stop = true
       window.clearInterval(id)
     }
-  }, [minutes])
+  }, [minutes, agentId])
 
   const max = Math.max(1, ...rows.map((r) => r.total))
 
