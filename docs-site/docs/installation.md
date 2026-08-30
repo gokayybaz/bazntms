@@ -52,22 +52,27 @@ helm install bazntms deploy/helm/bazntms \
 
 ## Windows (MSI)
 
-Release sayfasındaki MSI, servisi kurar; **kurulum sırasında sunucu
-bilgisi verilebilir** — ayrıca elle config düzenlemeye gerek kalmaz:
+Release sayfasındaki MSI'ı **çift tıklayınca gerçek bir kurulum sihirbazı**
+açılır: karşılama ekranından sonra Hub adresi / kayıt (enroll) belirteci /
+site alanlarını dolduran bir "Sunucu Ayarları" ekranı gelir — terminal
+gerekmez.
+
+Yönetilen/GPO/sessiz dağıtım için komut satırından da aynı property'ler
+verilebilir (sihirbaz o zaman atlanır):
 
 ```bat
-:: sunucu bilgisiyle kurulum
-msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+:: sunucu bilgisiyle sessiz kurulum
+msiexec /i bazntms-agent-amd64.msi /qn HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
 
 :: servisi başlat (Start=auto olduğundan yeniden başlatmada kendiliğinden açılır)
 sc start bazntms-agent
 ```
 
 - Property'ler `HKLM\SOFTWARE\bazNTMS\Agent` altına yazılır; agent önceliği
-  `flag > registry > config.yml` şeklindedir. Yönetilen/GPO kurulumlarda
-  property'lerin geçmesi için yükseltilmiş komut satırı kullanın.
-- Config'i elle düzenlemek isterseniz: `C:\ProgramData\bazntms\agent.yml`
-  kurulumla gelir; `hub.url` + `hub.token` doldurup servisi başlatın.
+  `flag > registry > config.yml` şeklindedir.
+- Sihirbazdaki alanları (veya komut satırı property'lerini) boş bırakırsanız
+  `C:\ProgramData\bazntms\agent.yml` kurulumla gelir; `hub.url` + `hub.token`
+  doldurup servisi başlatabilirsiniz.
 - MSI, servisi kurulum anında başlatmaz — hub bilgisi girilmeden başlayan
   servis hata verip kurulumu düşürür (hata 1920) diye tasarım gereği.
 

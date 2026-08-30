@@ -110,7 +110,7 @@ jobs:
             !bazntms-agent.yml
 
   packages:
-    name: Packages (deb/rpm/msi)
+    name: Packages (deb/rpm)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -124,11 +124,8 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Install tooling (nfpm, wixl)
-        run: |
-          # ubuntu 24.04'te wixl msitools'tan ayrilmis durumda
-          sudo apt-get update && sudo apt-get install -y msitools wixl
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Install tooling (nfpm)
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Build deb/rpm (amd64 + arm64)
         env:
@@ -147,27 +144,53 @@ jobs:
           done
           rm -f nfpm-expanded.yaml
 
-      - name: Build MSI (windows-amd64)
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          wixl -v -a x64 -o bazntms-agent-amd64.msi \
-            -D VERSION="$VERSION" \
-            -D EXE=bazntms-agent-windows-amd64.exe \
-            -D CONF=deploy/config/bazntms-agent.yml.example \
-            deploy/msi/bazntms-agent.wxs
-
       - uses: actions/upload-artifact@v4
         with:
           name: bazntms-packages
           path: |
             bazntms-*.deb
             bazntms-*.rpm
-            bazntms-*.msi
             !bazntms-agent.yml
+
+  msi:
+    name: Packages (msi)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      # v6/v7'de "Open Source Maintenance Fee" EULA'si zorunlu kilindigi
+      # icin BILEREK 4.0.5'e pinlendi (bkz. error WIX7015) — sessizce kabul
+      # etmek yerine son ucretsiz major surumde kaliniyor
+      - name: WiX Toolset v4 kurulumu
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          wix extension add --global WixToolset.UI.wixext/4.0.5
+
+      - name: MSI derle (windows-amd64)
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          wix build -arch x64 -o bazntms-agent-amd64.msi `
+            -d VERSION=$version `
+            -d EXE=bazntms-agent-windows-amd64.exe `
+            -d CONF=deploy\config\bazntms-agent.yml.example `
+            -ext WixToolset.UI.wixext `
+            deploy\msi\bazntms-agent.wxs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bazntms-msi
+          path: bazntms-*.msi
 
   supply-chain:
     name: Supply chain (SBOM, scan, sign)
-    needs: [build, packages]
+    needs: [build, packages, msi]
     runs-on: ubuntu-latest
     permissions:
       contents: read

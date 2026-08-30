@@ -33,11 +33,13 @@ Paket yakalama ayrıcalıklı bir işlemdir:
 ### "Service bazNTMS agent failed to start" (hata 1920)
 
 MSI, servisi kurulum anında **başlatmaz** — config doldurulmadan başlayan servis
-hata verip kurulumu düşürürdü. Bu yüzden kurulum sırası:
+hata verip kurulumu düşürürdü. MSI'ı çift tıklarsanız sihirbaz Hub adresi/
+enroll token/site alanlarını zaten sorar; komut satırından sessiz kurulumda
+sıra:
 
 ```bat
-:: 1. Kurulum — sunucu bilgisi opsiyonel property olarak verilebilir
-msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+:: 1. Kurulum — sunucu bilgisi opsiyonel property olarak verilebilir (/qn: sihirbazı atla)
+msiexec /i bazntms-agent-amd64.msi /qn HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
 
 :: 2. Servisi başlat (config'e girmişseniz property vermenize gerek yok)
 sc start bazntms-agent

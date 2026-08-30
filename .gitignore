@@ -28,3 +28,6 @@ web/dist/*
 
 # kimlik kasasi master key (gizli, makineye ozel)
 /vault.key
+
+# yerel `wix build` calistirmalari icin extension/nuget onbellegi
+.wix/

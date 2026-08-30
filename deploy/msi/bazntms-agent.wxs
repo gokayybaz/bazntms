@@ -1,78 +1,84 @@
-<?xml version='1.0' encoding='windows-1252'?>
+<?xml version='1.0' encoding='utf-8'?>
 <!--
-  bazNTMS agent — Windows MSI tanimi (Faz 7.3).
-  CI'da wixl (msitools) ile derlenir; VERSION ve kaynak dosya adi CI
-  tarafindan saglanir:
-    wixl -v -arch x64 -o bazntms-agent.msi \
-      -D VERSION=0.2.0 -D EXE=bazntms-agent-windows-amd64.exe \
-      deploy/msi/bazntms-agent.wxs
+  bazNTMS agent — Windows MSI tanimi (WiX Toolset v4).
+  CI'da `wix build` ile (windows-latest runner) derlenir; VERSION/EXE/CONF
+  degiskenleri CI tarafindan saglanir:
+    wix build -arch x64 -o bazntms-agent-amd64.msi ^
+      -d VERSION=0.2.0 -d EXE=bazntms-agent-windows-amd64.exe ^
+      -d CONF=deploy\config\bazntms-agent.yml.example ^
+      -ext WixToolset.UI.wixext deploy\msi\bazntms-agent.wxs
 
-  Not: wixl, Fragment icindeki ComponentGroup + Component Directory=
-  referanslarini cozumleyemez; component'ler dogrudan Directory agacina
-  gomulur (klasik WiX duzeni).
+  Kurulum sihirbazi: elle yazilmis 2 ekranli bir sihirbaz (Karsilama +
+  Sunucu Ayarlari) kullanir; stok WixUI_Minimal setinden BILEREK
+  kacinilmistir — o setin ilk ekrani zorunlu bir "Lisans Sozlesmesi" onay
+  kutusu iceriyor ve elimizde gercek bir EULA metni yok. Bunun yerine yalniz
+  ProgressDlg'i (kurulum ilerleme cubugu) ve ilgili ilerleme metinlerini
+  (WixUI_ErrorProgressText) UI eklentisinden odunc aliyoruz; geri kalan
+  butun dialoglar bu dosyada tanimlidir.
 -->
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id='*' Name='bazNTMS Agent' Language='1033'
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name='bazNTMS Agent' Language='1033'
            Version='$(var.VERSION)' Manufacturer='bazNTMS'
-           UpgradeCode='4C5B1D9E-8A54-4F72-9A66-9F9B0AB1B7A1'>
-    <!-- Kurulum sirasinda sunucu bilgisi:
-         msiexec /i bazntms-agent-amd64.msi HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
+           UpgradeCode='4C5B1D9E-8A54-4F72-9A66-9F9B0AB1B7A1'
+           InstallerVersion='500' Compressed='yes' Scope='perMachine'>
+    <!-- Kurulum sihirbazinda toplanan sunucu bilgisi (Sunucu Ayarlari
+         ekranindaki Edit alanlari bu ozelliklere yazar). Sessiz kurulum
+         icin eskisi gibi msiexec komut satirindan da atanabilir:
+         msiexec /i bazntms-agent-amd64.msi /qn HUBURL=https://hub.example.com ENROLLTOKEN=xxx SITE=ofis-a
          Degerler HKLM\SOFTWARE\bazNTMS\Agent altina yazilir (env degiskenleri
          servis tarafindan reboot'a kadar gorulmedigi icin kayit defteri) -->
     <Property Id='HUBURL' Secure='yes' />
     <Property Id='ENROLLTOKEN' Secure='yes' />
     <Property Id='SITE' Secure='yes' />
-    <Package InstallerVersion='200' Compressed='yes' InstallScope='perMachine'
-             Description='bazNTMS network telemetry agent' />
+
     <MajorUpgrade AllowSameVersionUpgrades='yes'
                   DowngradeErrorMessage='Daha yeni bir surum kurulu.' />
     <Media Id='1' Cabinet='agent.cab' EmbedCab='yes' />
 
-    <Directory Id='TARGETDIR' Name='SourceDir'>
-      <Directory Id='CommonAppDataFolder'>
-        <!-- C:\ProgramData\bazntms\agent.yml: kurulumla konan varsayilan
-             konfigurasyon; servis bu dosya ile baslar, kullanici doldurur -->
-        <Directory Id='DATADIR' Name='bazntms'>
-          <Component Id='AgentDataConfig' Guid='B2E3F4A5-6C7D-8E9F-0A1B-223344556677'>
-            <File Id='AgentDataConfigFile' Source='$(var.CONF)' Name='agent.yml' KeyPath='yes' />
-          </Component>
-          <!-- msiexec property'leri (HUBURL/ENROLLTOKEN/SITE) kayit defterine
-               yazilir; agent bos degerleri yok sayar, o zaman config.yml
-               devrede kalir. Env degiskenleri SCM tarafindan reboot'a kadar
-               tazelenmedigi icin servis konfigurasyonu kayit defterinden okur -->
-          <Component Id='AgentRegConfig' Guid='C3D4E5F6-7A8B-9C0D-1E2F-334455667788'>
-            <RegistryKey Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'>
-              <RegistryValue Name='hub_url' Type='string' Value='[HUBURL]' KeyPath='yes' />
-              <RegistryValue Name='enroll_token' Type='string' Value='[ENROLLTOKEN]' />
-              <RegistryValue Name='site' Type='string' Value='[SITE]' />
-            </RegistryKey>
+    <!-- C:\ProgramData\bazntms\agent.yml: kurulumla konan varsayilan
+         konfigurasyon; servis bu dosya ile baslar, kullanici doldurur -->
+    <StandardDirectory Id='CommonAppDataFolder'>
+      <Directory Id='DATADIR' Name='bazntms'>
+        <Component Id='AgentDataConfig' Guid='B2E3F4A5-6C7D-8E9F-0A1B-223344556677'>
+          <File Id='AgentDataConfigFile' Source='$(var.CONF)' Name='agent.yml' KeyPath='yes' />
+        </Component>
+        <!-- Sihirbazda girilen (veya msiexec property'si olarak verilen)
+             HUBURL/ENROLLTOKEN/SITE kayit defterine yazilir; agent bos
+             degerleri yok sayar, o zaman config.yml devrede kalir. Env
+             degiskenleri SCM tarafindan reboot'a kadar tazelenmedigi icin
+             servis konfigurasyonu kayit defterinden okur -->
+        <Component Id='AgentRegConfig' Guid='C3D4E5F6-7A8B-9C0D-1E2F-334455667788'>
+          <RegistryKey Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'>
+            <RegistryValue Name='hub_url' Type='string' Value='[HUBURL]' KeyPath='yes' />
+            <RegistryValue Name='enroll_token' Type='string' Value='[ENROLLTOKEN]' />
+            <RegistryValue Name='site' Type='string' Value='[SITE]' />
+          </RegistryKey>
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id='ProgramFiles64Folder'>
+      <Directory Id='INSTALLFOLDER' Name='bazNTMS'>
+        <Component Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
+          <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
+          <!-- Start='install' YOK: kurulum aninda baslatma denemesi config
+               doldurulmadan 1920 hatasina dusurur; servis auto tipindedir,
+               konfigurasyon sonrasi sc start bazntms-agent ile baslatilir -->
+          <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
+                          DisplayName='bazNTMS Agent'
+                          Description='Network traffic telemetry agent (bazNTMS)'
+                          Type='ownProcess' Start='auto' ErrorControl='normal'
+                          Arguments='-config &quot;C:\ProgramData\bazntms\agent.yml&quot;' />
+          <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
+                          Stop='both' Remove='uninstall' Wait='yes' />
+        </Component>
+        <Directory Id='CONFIGDIR' Name='config'>
+          <Component Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
+            <File Id='AgentConfigExample' Source='$(var.CONF)' Name='agent.yml.example' KeyPath='yes' />
           </Component>
         </Directory>
       </Directory>
-      <Directory Id='ProgramFiles64Folder'>
-        <Directory Id='INSTALLFOLDER' Name='bazNTMS'>
-          <Component Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
-            <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
-            <!-- Start='install' YOK: kurulum aninda baslatma denemesi config
-                 doldurulmadan 1920 hatasina dusurur; servis auto tipindedir,
-                 konfigurasyon sonrasi sc start bazntms-agent ile baslatilir -->
-            <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
-                            DisplayName='bazNTMS Agent'
-                            Description='Network traffic telemetry agent (bazNTMS)'
-                            Type='ownProcess' Start='auto' ErrorControl='normal'
-                            Arguments='-config &quot;C:\ProgramData\bazntms\agent.yml&quot;' />
-            <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
-                            Stop='both' Remove='uninstall' Wait='yes' />
-          </Component>
-          <Directory Id='CONFIGDIR' Name='config'>
-            <Component Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
-              <File Id='AgentConfigExample' Source='$(var.CONF)' Name='agent.yml.example' KeyPath='yes' />
-            </Component>
-          </Directory>
-        </Directory>
-      </Directory>
-      <Directory Id='ProgramMenuFolder' />
-    </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id='ProgramMenuFolder' />
 
     <Feature Id='Main' Level='1'>
       <ComponentRef Id='AgentExe' />
@@ -80,5 +86,88 @@
       <ComponentRef Id='AgentDataConfig' />
       <ComponentRef Id='AgentRegConfig' />
     </Feature>
-  </Product>
+
+    <!-- ================= Kurulum sihirbazi ================= -->
+    <UI>
+      <!-- Sadece ProgressDlg + ilerleme metinlerini UI eklentisinden
+           odunc al; tam bir stok dialog seti (WixUI_Minimal vb.) KULLANMA -->
+      <UIRef Id='WixUI_ErrorProgressText' />
+      <DialogRef Id='ProgressDlg' />
+
+      <TextStyle Id='WixUI_Font_Normal' FaceName='Tahoma' Size='8' />
+      <TextStyle Id='WixUI_Font_Bigger' FaceName='Tahoma' Size='12' />
+      <TextStyle Id='WixUI_Font_Title' FaceName='Tahoma' Size='9' Bold='yes' />
+      <Property Id='DefaultUIFont' Value='WixUI_Font_Normal' />
+
+      <!-- Ekran 1: Karsilama + kisa bilgilendirme notu (EULA/onay kutusu
+           YOK — yalnizca bilgi amacli metin) -->
+      <Dialog Id='WelcomeDlg' Width='370' Height='270' Title='bazNTMS Agent Kurulumu'>
+        <Control Id='Title' Type='Text' X='20' Y='15' Width='330' Height='30'
+                 Transparent='yes' NoPrefix='yes'
+                 Text='{\WixUI_Font_Bigger}bazNTMS Agent kurulum sihirbazina hos geldiniz' />
+        <Control Id='Note' Type='Text' X='20' Y='55' Width='330' Height='120' NoPrefix='yes'
+                 Text='Bu arac, calistigi cihazin ag trafigini izleyip merkezi bazNTMS hub&apos;ina raporlayan bir arka plan servisidir (telemetri ajani). Yalnizca yetkili oldugunuz cihazlara kurun.  Devam ederseniz bir sonraki ekranda hub adresi, kayit (enroll) belirteci ve site bilgisini girmeniz istenecek. Bu alanlari bos birakirseniz agent, kurulumla birlikte gelen ornek konfigurasyon dosyasini kullanir.' />
+        <Control Id='BottomLine' Type='Line' X='0' Y='234' Width='370' Height='0' />
+        <Control Id='Back' Type='PushButton' X='180' Y='243' Width='56' Height='17' Disabled='yes' Text='&lt; Geri' />
+        <Control Id='Next' Type='PushButton' X='236' Y='243' Width='56' Height='17' Default='yes' Text='Ileri &gt;'>
+          <Publish Event='NewDialog' Value='ServerConfigDlg' Condition='1' />
+        </Control>
+        <Control Id='Cancel' Type='PushButton' X='304' Y='243' Width='56' Height='17' Cancel='yes' Text='Iptal'>
+          <Publish Event='EndDialog' Value='Exit' Condition='1' />
+        </Control>
+      </Dialog>
+
+      <!-- Ekran 2: Sunucu ayarlari (HUBURL / ENROLLTOKEN / SITE) -->
+      <Dialog Id='ServerConfigDlg' Width='370' Height='270' Title='bazNTMS Agent Kurulumu'>
+        <Control Id='Title' Type='Text' X='20' Y='15' Width='330' Height='15'
+                 Transparent='yes' NoPrefix='yes' Text='{\WixUI_Font_Title}Sunucu Ayarlari' />
+        <Control Id='SubTitle' Type='Text' X='20' Y='32' Width='330' Height='20' NoPrefix='yes'
+                 Text='Agent&apos;in hangi bazNTMS hub&apos;ina baglanacagini belirtin.' />
+
+        <Control Id='HubUrlLabel' Type='Text' X='20' Y='62' Width='140' Height='15' NoPrefix='yes' Text='Hub adresi (URL):' />
+        <Control Id='HubUrlEdit' Type='Edit' X='20' Y='78' Width='330' Height='18' Property='HUBURL' Text='https://hub.ornek.com' />
+
+        <Control Id='TokenLabel' Type='Text' X='20' Y='104' Width='140' Height='15' NoPrefix='yes' Text='Kayit (enroll) belirteci:' />
+        <Control Id='TokenEdit' Type='Edit' X='20' Y='120' Width='330' Height='18' Property='ENROLLTOKEN' />
+
+        <Control Id='SiteLabel' Type='Text' X='20' Y='146' Width='140' Height='15' NoPrefix='yes' Text='Site / konum adi:' />
+        <Control Id='SiteEdit' Type='Edit' X='20' Y='162' Width='330' Height='18' Property='SITE' Text='ofis-a' />
+
+        <Control Id='Hint' Type='Text' X='20' Y='188' Width='330' Height='30' NoPrefix='yes'
+                 Text='Bu alanlari bos birakabilirsiniz; agent daha sonra kayit defterinden (HKLM\SOFTWARE\bazNTMS\Agent) veya ornek konfigurasyon dosyasindan okur.' />
+
+        <Control Id='BottomLine' Type='Line' X='0' Y='234' Width='370' Height='0' />
+        <Control Id='Back' Type='PushButton' X='180' Y='243' Width='56' Height='17' Text='&lt; Geri'>
+          <Publish Event='NewDialog' Value='WelcomeDlg' Condition='1' />
+        </Control>
+        <!-- Kur: kurulum sihirbazinin son adimi — EndDialog/Return, stok
+             WixUI setlerindeki "Install" dugmesiyle AYNI tetikleyicidir;
+             UI dizisini kapatir ve Windows Installer InstallExecuteSequence'i
+             calistirir (ProgressDlg otomatik devreye girer). -->
+        <Control Id='Next' Type='PushButton' X='236' Y='243' Width='56' Height='17' Default='yes' Text='Kur'>
+          <Publish Event='EndDialog' Value='Return' Condition='1' />
+        </Control>
+        <Control Id='Cancel' Type='PushButton' X='304' Y='243' Width='56' Height='17' Cancel='yes' Text='Iptal'>
+          <Publish Event='EndDialog' Value='Exit' Condition='1' />
+        </Control>
+      </Dialog>
+
+      <!-- Ekran 3: Bitis -->
+      <Dialog Id='ExitDlg' Width='370' Height='270' Title='bazNTMS Agent Kurulumu'>
+        <Control Id='Title' Type='Text' X='20' Y='15' Width='330' Height='30'
+                 Transparent='yes' NoPrefix='yes' Text='{\WixUI_Font_Bigger}bazNTMS Agent kuruldu' />
+        <Control Id='Note' Type='Text' X='20' Y='55' Width='330' Height='80' NoPrefix='yes'
+                 Text='Servis kuruldu (baslangic turu: otomatik) ama henuz baslatilmadi. Sunucu ayarlarini sonradan degistirmek icin kayit defterini duzenleyip &quot;sc start bazntms-agent&quot; ile servisi baslatabilirsiniz.' />
+        <Control Id='BottomLine' Type='Line' X='0' Y='234' Width='370' Height='0' />
+        <Control Id='Finish' Type='PushButton' X='236' Y='243' Width='56' Height='17' Default='yes' Cancel='yes' Text='Bitir'>
+          <Publish Event='EndDialog' Value='Return' Condition='1' />
+        </Control>
+      </Dialog>
+
+      <InstallUISequence>
+        <Show Dialog='WelcomeDlg' Before='ProgressDlg' Condition='NOT Installed' />
+        <Show Dialog='ExitDlg' OnExit='success' />
+      </InstallUISequence>
+    </UI>
+  </Package>
 </Wix>
