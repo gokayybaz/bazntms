@@ -1,4 +1,5 @@
 import { ReportCard } from '../components/ReportCard'
+import { EnterpriseReportCard } from '../components/EnterpriseReportCard'
 import { Card } from '../components/Card'
 
 export function ReportsPage() {
@@ -9,7 +10,41 @@ export function ReportsPage() {
         <span className="text-xs text-slate-500">HTML/PDF rapor üretimi</span>
       </div>
 
-      <Card title="Rapor Üretimi" right={<span className="text-xs text-slate-500">HTML · PDF</span>}>
+      <Card
+        title="Kurumsal Rapor"
+        right={<span className="text-xs text-slate-500">SLA · kapasite · banding</span>}
+      >
+        <EnterpriseReportCard />
+      </Card>
+
+      <Card
+        title="Uyumluluk Raporu"
+        right={<span className="text-xs text-slate-500">ISO 27001 + 5651</span>}
+      >
+        <div className="space-y-3">
+          <a
+            href="/api/report?type=compliance"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3.5 py-1.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+          >
+            HTML Görüntüle
+          </a>
+          <p className="text-xs text-slate-500">
+            ISO 27001 Annex A kontrol haritası + 5651 log imzalama durumu (son saatlik checkpoint, son günlük mühür, imzalı
+            kayıt sayısı). Ham delil paketi (PII maskeleme, offline doğrulama) için{' '}
+            <a href="/uyumluluk" className="text-cyan-400 hover:underline">
+              Uyumluluk sayfasına
+            </a>{' '}
+            bakın.
+          </p>
+        </div>
+      </Card>
+
+      <Card
+        title="Ağ Trafiği Raporu"
+        right={<span className="text-xs text-slate-500">hub'ın yerel yakalaması</span>}
+      >
         <ReportCard />
       </Card>
     </div>
