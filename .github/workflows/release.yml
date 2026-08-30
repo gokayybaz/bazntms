@@ -125,7 +125,8 @@ jobs:
 
       - name: Install tooling (nfpm, wixl)
         run: |
-          sudo apt-get update && sudo apt-get install -y msitools
+          # ubuntu 24.04'te wixl msitools'tan ayrilmis durumda
+          sudo apt-get update && sudo apt-get install -y msitools wixl
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Build deb/rpm (amd64 + arm64)
