@@ -15,9 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gokayybaz/bazntms/pkg/telemetry"
+	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
 func pgStoreFor(t *testing.T, image string) Store {
@@ -31,6 +33,11 @@ func pgStoreFor(t *testing.T, image string) Store {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
+	// ForSQL, Postgres sorgusu yanitlayana dek bekler; dinlenen port yetmez
+	// (init sirasinda sunucu bir kez yeniden baslar)
+	dsnFor := func(host string, port network.Port) string {
+		return fmt.Sprintf("postgres://bazntms:test@%s:%s/bazntms?sslmode=disable", host, port.Port())
+	}
 	req := testcontainers.ContainerRequest{
 		Image:        image,
 		ExposedPorts: []string{"5432/tcp"},
@@ -39,7 +46,7 @@ func pgStoreFor(t *testing.T, image string) Store {
 			"POSTGRES_PASSWORD": "test",
 			"POSTGRES_DB":       "bazntms",
 		},
-		WaitingFor: wait.ForListeningPort("5432/tcp"),
+		WaitingFor: wait.ForSQL("5432/tcp", "pgx", dsnFor).WithStartupTimeout(2 * time.Minute),
 	}
 	ctr, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -58,7 +65,7 @@ func pgStoreFor(t *testing.T, image string) Store {
 	if err != nil {
 		t.Fatalf("port: %v", err)
 	}
-	dsn := fmt.Sprintf("postgres://bazntms:test@%s:%s/bazntms?sslmode=disable", host, port.Port())
+	dsn := dsnFor(host, port)
 
 	st, err := Open(dsn)
 	if err != nil {
