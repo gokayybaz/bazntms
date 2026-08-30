@@ -47,6 +47,9 @@ Notlar:
 Tek seferlik kurulum:
 
 ```bash
+# 0. bazntmsctl: `make` ile derleyin veya GitHub Release sayfasından indirin
+#    (bazntmsctl-darwin-arm64, bazntmsctl-linux-amd64, ...)
+
 # 1. İmzalama anahtarı (imzalama makinesinde, bir kez)
 bazntmsctl update keygen -out updates/keys
 # public key'i agent'lara dağıtın (config: update.public_key)

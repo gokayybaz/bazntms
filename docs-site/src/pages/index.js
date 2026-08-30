@@ -130,8 +130,8 @@ const STEPS = [
     code: 'git clone https://github.com/gokayybaz/bazntms\ncd bazntms\ndocker compose -f deploy/docker-compose.yml up --build\n# → http://localhost:8080 · şifre: demo123',
   },
   {
-    label: 'Hub’ı yapılandırın',
-    code: './bazntmsctl setup          # interaktif sihirbaz → hub.yml\n./bazntms-hub -config hub.yml',
+    label: 'Hub’ı derleyip yapılandırın',
+    code: 'make                       # frontend + hub + agent + ctl\n./bazntmsctl setup         # interaktif sihirbaz → bazntms-hub.yml\n./bazntms-hub -config bazntms-hub.yml',
   },
   {
     label: 'Agent’ları bağlayın',

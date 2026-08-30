@@ -248,6 +248,36 @@ açılır (`sensitivity: 0` geçersiz kabul edilir).
 `/api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,
 paket düşme oranı), kapasite (dönem büyümesi) ve banding (p50/p95/p99).
 
+## 5651 Uyumlu Log İmzalama (Faz 9)
+
+```bash
+./bazntms-hub -compliance \
+  -tsa-url https://tsa.saglayici.com/tsa \
+  -compliance-key compliance.key \
+  -worm-dir /var/worm/bazntms \
+  -mask-pii -compliance-retention-days 730
+```
+
+| Bayrak | Açıklama |
+|--------|----------|
+| `-compliance` | Motoru açar: syslog/uyum kayıtları hash-zincirli `compliance_logs` tablosuna yazılır |
+| `-tsa-url` | RFC 3161 nitelikli zaman damgası servisi (KamuSM, e-Tugra, TurkTrust vb.). Boşsa mühürleme TSA'sız yapılır (`tsa_status: none`) |
+| `-compliance-key` | ed25519 manifest imza anahtarı (PEM; yoksa üretilir, `.pub` dosyası doğrulama için ayrılır) |
+| `-worm-dir` | Günlük imzalı paket dizini (`YIL/AY/gün` yapısı; `O_EXCL` ile üzerine yazılmaz) |
+| `-mask-pii` | Delil paketinde IP/MAC/kullanıcı maskeleme (A.5.34/A.8.11) |
+| `-compliance-retention-days` | Ham log saklama (varsayılan 730 gün = 5651 2 yıl) |
+
+**İmza modeli:** her kayıt prev_hash zinciri taşır → saatlik Merkle checkpoint'leri → günün saatlik köklerinden günlük kök → RFC 3161 TSA + ed25519 manifest imzası → WORM paketi.
+
+**Delil paketi:** arayüzde tarih aralığı seçip indirin (veya `GET /api/v1/compliance/evidence?from=&to=&mask=`), sonra offline doğrulayın:
+
+```bash
+bazntmsctl verify -bundle bazntms-delil-20260801-20260901.json \
+  -pubkey compliance.key.pub -out rapor.txt
+```
+
+**Uyarı:** `time_drift` (A.8.17) — checkpoint saatleri sistem saatinden ileri saptığında üretilir; NTP senkronizasyonunu doğrulayın. Uyumluluk beyanı için hukuki danışmanlık gereklidir; bu özellik teknik kanıt üretir.
+
 ## Ölçek Altyapısı (Faz 4)
 
 ### PostgreSQL / TimescaleDB

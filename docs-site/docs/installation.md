@@ -7,9 +7,13 @@ sidebar_position: 1
 ## Hızlı başlangıç (sihirbaz)
 
 ```bash
-./bazntmsctl setup            # interaktif: port, şifre, depo, NATS → hub.yaml
-./bazntms-hub -config hub.yaml
+make                          # frontend + hub + agent + ctl tek komutla
+./bazntmsctl setup            # interaktif: port, şifre, depo, NATS → bazntms-hub.yml
+./bazntms-hub -config bazntms-hub.yml
 ```
+
+`bazntmsctl` ayrıca GitHub Release sayfasından platformunuza uygun
+ön-derli binary olarak indirilebilir (`bazntmsctl-<os>-<arch>`).
 
 ## Docker Compose (tek-node demo)
 
