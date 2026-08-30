@@ -26,11 +26,15 @@ func TestAnomalyFires(t *testing.T) {
 	m, st := newAnomalyManager(t, DefaultConfig())
 	now := time.Now().Unix()
 
-	// guvenilir baseline: 200 ornek ~1000 bps (az dalgalanma)
-	for i := int64(0); i < 200; i++ {
+	// guvenilir baseline: degerler ~1000 bps (az dalgalanma). Ornekler son
+	// ~2 saate 2 sn aralikla serpistirilir; boylece test gunun hangi
+	// dakikasinda kosarsa kosun guncel saat kovasinda >=120 ornek olur
+	// (saat sinirina duyarli degil). Tum baseline, 5 dk'lik karsilastirma
+	// penceresinin disinda kalir (>= 310 sn once).
+	for i := 0; i < 2000; i++ {
 		val := float64(1000 + (i%20)*10) // 1000-1190
 		if err := st.InsertSample(store.Sample{
-			Ts: now - int64(30+i) - 1000, Device: "en0", BpsIn: val, BpsOut: 0, Pps: 1,
+			Ts: now - int64(310+i*2), Device: "en0", BpsIn: val, BpsOut: 0, Pps: 1,
 		}); err != nil {
 			t.Fatalf("baseline ornek: %v", err)
 		}

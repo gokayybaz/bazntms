@@ -85,14 +85,20 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatalf("surec sorgu: %v %+v", err, procs)
 	}
 
-	// temizlik: 30 saniyeden eski kayitlar silinir, yeniler kalir
+	// temizlik: 30 saniyeden eski kayitlar silinir, yeniler kalir. Kalan
+	// sayi prune ile test baslangici arasindaki saniye kaymasina bagli
+	// oldugundan (30-29 gibi) olcek kontrolu yapilir: kalan her ornek
+	// TCP:5, UDP:2 tasir.
 	if err := st.Prune(30 * time.Second); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
+	rem, err := st.PeriodTotals(time.Now().Add(-time.Hour))
+	if err != nil || rem.Samples == 0 || rem.Samples >= 120 {
+		t.Fatalf("prune sonrasi kalan ornek sayisi hatali: %v %+v", err, rem)
+	}
 	protos2, _ := st.ProtocolTotals(time.Now().Add(-time.Hour))
-	// kalan ~30 ornek x (TCP:5, UDP:2)
-	if len(protos2) != 2 || protos2["TCP"] != 150 || protos2["UDP"] != 60 {
-		t.Fatalf("prune sonrasi kalan kayitlar hatali: %v", protos2)
+	if protos2["TCP"] != uint64(5*rem.Samples) || protos2["UDP"] != uint64(2*rem.Samples) {
+		t.Fatalf("prune sonrasi kalan kayitlar hatali: %v (%d ornek)", protos2, rem.Samples)
 	}
 }
 
