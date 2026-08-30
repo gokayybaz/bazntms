@@ -103,7 +103,7 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 |----------|-----------|---------|
 | macOS    | `sudo` (BPF erişimi) | Xcode CLT |
 | Linux    | `sudo` veya `setcap cap_net_raw+ep` | `libpcap-dev` |
-| Windows  | [Npcap](https://npcap.com) + yönetici | Npcap SDK + mingw-w64 |
+| Windows  | [Npcap](https://npcap.com) + yönetici | (gerek yok — `gopacket/pcap` Windows'ta cgo kullanmaz) |
 
 - Go **1.22+** (yeni `http.ServeMux` kalıpları için)
 - Node.js **18+** (yalnızca frontend derlemek için)

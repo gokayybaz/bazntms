@@ -14,13 +14,15 @@ Paket yakalama ayrıcalıklı bir işlemdir:
   ```
   Derleme için `libpcap-dev` (Debian/Ubuntu) veya `libpcap-devel` (RHEL) gerekir.
 - **Windows**: [Npcap](https://npcap.com) kurulu olmalı ve uygulama **yönetici
-  olarak** başlatılmalı. Derleme için Npcap SDK (`C:\npcap-sdk`) + mingw-w64:
-  ```cmd
-  set CGO_ENABLED=1
-  set CGO_CFLAGS=-I C:\npcap-sdk\Include
-  set CGO_LDFLAGS=-L C:\npcap-sdk\Lib\x64
-  go build -o bazntms.exe ./cmd/bazntms-hub
-  ```
+  olarak** başlatılmalı — ama yalnızca gerçekten paket yakalıyorsanız: hub
+  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener, agent ise
+  varsayılan olarak yakalamaz (`-pcap=false`, yalnızca süreç bazlı trafik
+  atfı için opsiyonel). Npcap kurulu değilse uygulama çökmez, sadece
+  yakalama çalışmaz.
+  **Derleme için Npcap SDK/mingw-w64 GEREKMEZ** — `gopacket/pcap`, Windows'ta
+  cgo kullanmaz; `wpcap.dll`'i yalnızca yakalama fiilen başladığında
+  (syscall ile) çalışma zamanında yükler. Düz `go build -o bazntms.exe
+  ./cmd/bazntms-hub` yeterlidir.
 - **WSL2**: yakalama sanal ağda kalır; gerçek trafik için native Windows kullanın.
 
 ### Arayüz listesi boş / seçilen arayüz trafik göstermiyor
@@ -130,8 +132,10 @@ Reasoning modeller (Qwen3, DeepSeek-R1) cevaptan önce uzun düşünme üretir:
   `xcode-select --install`
 - **frontend/dist embed hatası**: önce `cd frontend && npm install && npm run build`
   çalıştırın; `make` iki adımı sırayla yapar
-- **Cross-compile**: hedef platformun libpcap/Npcap'i gerekir; Makefile'daki
-  `cross-mac` / `cross-linux` hedeflerine bakın
+- **Cross-compile**: hedef platformun (cgo kullanan) libpcap'i gerekir —
+  Makefile'daki `cross-mac` / `cross-linux` hedefleri yalnızca darwin/linux
+  içindir, Windows hedefi yok (CI'da doğrudan `windows-latest` runner'ında
+  derlenir, cgo gerekmediği için ek SDK istemez)
 
 ## Log örnekleri
 
