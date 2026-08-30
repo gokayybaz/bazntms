@@ -1,0 +1,167 @@
+# bazNTMS — ölçek mimarisi (Kubernetes olmadan, docker compose ile; Faz 4.4)
+#
+# deploy/helm/bazntms'in aynaladığı üretim topolojisi:
+#   N × hub-ingest     salt ingest replikaları (capture/alerts/poller kapalı);
+#                      NATS JetStream durable "store-writer" tüketiciyi
+#                      paylaşarak paralel yazar (replika ekleyince ölçeklenir)
+#   1 × hub-controller durumlu roller: uyarı motoru + SNMP poller +
+#                      NetFlow/Syslog UDP alıcıları (tek sahipli)
+#   lb (nginx)         agent trafiğini ingest havuzuna dağıtır (k8s Service
+#                      karşılığı; Docker iç DNS'i ile dinamik upstream)
+#   TimescaleDB + NATS JetStream
+#
+# Kullanım:
+#   docker compose -f deploy/docker-compose.scale.yml up --build
+#
+# Ingest replika sayısını değiştirme:
+#   docker compose -f deploy/docker-compose.scale.yml up -d --scale hub-ingest=4
+#
+# Sentetik filo yükü (opsiyonel):
+#   docker compose -f deploy/docker-compose.scale.yml --profile loadgen up -d loadgen
+#
+# Uçlar:
+#   dashboard  → http://localhost:8080  (hub-controller; oturumlar replika-içi
+#                bellekte tutulur, bu yüzden panel tek replikaya bağlanır)
+#   agent API  → http://localhost:8081  (lb → hub-ingest havuzu; agent'lar
+#                oturum kullanmaz, enrollment token ile çalışır)
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: bazntms
+      POSTGRES_PASSWORD: bazntms
+      POSTGRES_DB: bazntms
+    volumes:
+      - tsdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bazntms -d bazntms"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --- durumlu kontrolcü: uyarı + poller + cihaz alıcıları (tek replika) ---
+  hub-controller:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.hub
+    command:
+      - "-capture=false" # paket yakalama yalnızca host'taki agent'larda anlamlı
+      - "-flow-port"
+      - "2055" # NetFlow v5 (tek alıcı: NATS'e kuyruklar)
+      - "-syslog-port"
+      - "5514"
+      - "-enroll-token"
+      - "scale-enroll-token"
+    ports:
+      - "8080:8080"
+      - "2055:2055/udp"
+      - "5514:5514/udp"
+    environment:
+      BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
+      BAZNTMS_NATS__URL: nats://nats:4222
+      BAZNTMS_LOG__FORMAT: json
+      AUTH_PASSWORD: demo123
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # --- ingest filosu: replika ekledikçe yatay ölçeklenir ---
+  hub-ingest:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.hub
+    command:
+      - "-capture=false"
+      - "-alerts=false"
+      - "-poller=false"
+      - "-enroll-token"
+      - "scale-enroll-token"
+    environment:
+      BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
+      BAZNTMS_NATS__URL: nats://nats:4222
+      BAZNTMS_LOG__FORMAT: json
+    deploy:
+      replicas: 2
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # --- k8s Service karşılığı: agent trafiğini ingest havuzuna dağıtır ---
+  lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/lb.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      hub-ingest:
+        condition: service_healthy
+
+  # --- gerçek agent'lar (konteyner içi telemetri; pcap için host net + NET_RAW) ---
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    command:
+      - "-hub-url"
+      - "http://lb:8081"
+      - "-enroll-token"
+      - "scale-enroll-token"
+      - "-site"
+      - "docker-scale"
+    deploy:
+      replicas: 2
+    depends_on:
+      lb:
+        condition: service_healthy
+
+  # --- sentetik filo (opsiyonel: --profile loadgen) ---
+  loadgen:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.loadgen
+    profiles: ["loadgen"]
+    command:
+      - "-hub"
+      - "http://lb:8081"
+      - "-token"
+      - "scale-enroll-token"
+      - "-agents"
+      - "100"
+      - "-site"
+      - "loadgen-scale"
+    depends_on:
+      lb:
+        condition: service_healthy
+
+volumes:
+  tsdata:

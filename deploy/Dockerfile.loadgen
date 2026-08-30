@@ -1,0 +1,17 @@
+# bazntms-loadgen imajı: sentetik agent filosu (bkz. loadtest/)
+# Build context repo köküdür:
+#   docker build -f deploy/Dockerfile.loadgen -t bazntms-loadgen:local .
+
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache gcc musl-dev libpcap-dev
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=1 go build -trimpath \
+    -o /out/bazntms-loadgen ./cmd/bazntms-loadgen
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=build /out/bazntms-loadgen /usr/local/bin/bazntms-loadgen
+ENTRYPOINT ["bazntms-loadgen"]

@@ -137,6 +137,10 @@ const STEPS = [
     label: 'Agent’ları bağlayın',
     code: './bazntms-agent -hub-url https://hub.example.com \\\n  -enroll-token <hub-loglarındaki-token>\n# deb · rpm · MSI · pkg paketleri release sayfasında',
   },
+  {
+    label: 'Ölçek mimarisi (k8s olmadan)',
+    code: 'docker compose -f deploy/docker-compose.scale.yml up --build\n# 2 × ingest replikası + kontrolcü + nginx LB + JetStream\n# --scale hub-ingest=4 → yatay büyüt · dashboard: :8080 · agent API: :8081',
+  },
 ];
 
 const STATS = [
@@ -373,7 +377,7 @@ export default function Home() {
           <p className={styles.overline} data-reveal>
             Hızlı Başlangıç
           </p>
-          <h2 data-reveal>Üç adımda çalışır durumda</h2>
+          <h2 data-reveal>Dört adımda çalışır durumda</h2>
           <div className={styles.steps}>
             {STEPS.map((s, i) => (
               <div key={s.label} className={styles.step} data-reveal style={{ transitionDelay: `${i * 80}ms` }}>

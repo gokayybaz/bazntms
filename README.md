@@ -43,7 +43,7 @@ tek dosya, kurulum gerektirmez.
 ### Ölçek altyapısı (Faz 4)
 - **Depo seçimi**: `-db` dosya yolu → SQLite, `postgres://` DSN → PostgreSQL/TimescaleDB (pgx)
 - **NATS JetStream kuyruğu**: ingest → processor ayrışması, replay/kayıp toleransı, çoklu replika ingest
-- **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`), tek-node docker-compose demo (`deploy/`)
+- **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`), tek-node docker-compose demo (`deploy/docker-compose.yml`), k8s olmadan ölçek mimarisi (N × ingest + kontrolcü + LB: `deploy/docker-compose.scale.yml`)
 - **Yük testi**: `bazntms-loadgen` sentetik agent filosu + k6 senaryosu (`loadtest/`)
 
 ### Dağıtım ve operasyon (Faz 7)

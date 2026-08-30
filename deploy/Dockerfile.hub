@@ -16,7 +16,7 @@ RUN apk add --no-cache gcc musl-dev libpcap-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-COPY --from=ui /ui/dist web/dist
+COPY --from=ui /web/dist web/dist
 RUN CGO_ENABLED=1 go build -trimpath \
     -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=container" \
     -o /out/bazntms-hub ./cmd/bazntms-hub
