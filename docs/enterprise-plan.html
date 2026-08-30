@@ -133,6 +133,9 @@
   .f5 { border-left-color: var(--rose); }    .f5 .no { color: var(--rose); }
   .f6 { border-left-color: var(--fuchsia); } .f6 .no { color: var(--fuchsia); }
   .f7 { border-left-color: var(--muted); }   .f7 .no { color: var(--muted); }
+  .f8 { border-left-color: #fb923c; }        .f8 .no { color: #fb923c; }
+  .f9 { border-left-color: #2dd4bf; }        .f9 .no { color: #2dd4bf; }
+  .f10 { border-left-color: #a3e635; }       .f10 .no { color: #a3e635; }
 
   @media (max-width: 900px) {
     .layout { flex-direction: column; }
@@ -168,6 +171,9 @@
     <a class="faz" href="#faz5">Faz 5 — Güvenlik / RBAC / HA</a>
     <a class="faz" href="#faz6">Faz 6 — İleri Analiz</a>
     <a class="faz" href="#faz7">Faz 7 — Dağıtım / Operasyon</a>
+    <a class="faz" href="#faz8">Faz 8 — FortiGate Entegrasyonu</a>
+    <a class="faz" href="#faz9">Faz 9 — 5651 Uyumluluk</a>
+    <a class="faz" href="#faz10">Faz 10 — ISMS Yönetişimi</a>
     <a href="#teknoloji">Teknoloji Kararları</a>
     <a href="#riskler">Riskler</a>
     <a href="#kapasite">Kapasite Hedefleri</a>
@@ -343,6 +349,55 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
     <tr><td>Güncelleme kanalı</td><td>stable / beta kanalları, imza doğrulamalı otomatik agent güncellemesi</td></tr>
     <tr><td>Dokümantasyon</td><td>Docusaurus sitesi, kurulum sihirbazı, upgrade runbook</td></tr>
   </table>
+</div>
+
+<h2 id="faz8"><span class="tag">FAZ 8</span>FortiGate REST API Derin Entegrasyonu <span class="status">4-6 hafta</span></h2>
+<div class="faz f8">
+  <div class="faz-head"><span class="no">FAZ 8</span><h3>Vendor Driver Mimarisi + FortiGate</h3><span class="status">4-6 hafta</span></div>
+  <p class="ozet">SNMP'nin göremediği durum ve politika düzlemini REST API ile toplar: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri, kaynak/oturum. DeviceDriver soyutlamasıyla gelecekteki vendor'lar aynı çatıya eklenir.</p>
+  <table>
+    <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
+    <tr><td class="no">8.1</td><td>DeviceDriver + cihaz modeli</td><td><code>Poll(ctx, Device) → Snapshot</code> arayüzü; SNMP mevcut mantığın arkaya alınması; devices tablosuna <code>vendor/api_url/api_token_enc(vault)/api_verify_tls/vdom</code></td></tr>
+    <tr><td class="no">8.2</td><td>FortiGate istemcisi</td><td><code>internal/fortigate</code>: Bearer token, TLS verify toggle, VDOM (tek hedef / all), sayfalama, retry/backoff, zarf ayrıştırma</td></tr>
+    <tr><td class="no">8.3</td><td>Tier 1 — durum/kaynak</td><td><code>monitor/system/status|cpu|memory|disk|interface</code> → <code>device_resources</code> + mevcut arayüz örnek akışı</td></tr>
+    <tr><td class="no">8.4</td><td>Tier 2 — güvenlik durumu</td><td><code>monitor/vpn/ipsec|ssl</code>, <code>monitor/virtual-wan/health-check</code>, <code>cmdb/firewall/policy</code> hit trendleri → <code>fortigate_vpn/sdwan/policy_hits</code></td></tr>
+    <tr><td class="no">8.5</td><td>Uyarı kuralları</td><td><code>vpn_down</code>, <code>sdwan_sla_breach</code>, <code>high_sessions</code> — mevcut cooldown + bildirim kanalları</td></tr>
+    <tr><td class="no">8.6</td><td>UI + API</td><td>DevicesCard vendor seçimi; FortiGate detay paneli (kaynak, VPN, SD-WAN, politika); <code>/api/v1/devices/{id}/resources|vpn|sdwan|policies</code></td></tr>
+  </table>
+  <p class="cikan">Ağ güvenlik aygıtının tam durumu — SNMP + REST tek panelde; vendor mimarisi ileride Mikrotik/UniFi/Palo Alto'ya açık</p>
+</div>
+
+<h2 id="faz9"><span class="tag">FAZ 9</span>5651 Log İmzalama + ISO 27001 Kanıt Katmanı <span class="status">7-9 hafta</span></h2>
+<div class="faz f9">
+  <div class="faz-head"><span class="no">FAZ 9</span><h3>Adli Kanıt Düzeyinde Loglama</h3><span class="status">7-9 hafta</span></div>
+  <p class="ozet">Tüm loglar Merkle checkpoint + günlük RFC 3161 nitelikli zaman damgası (+ P12 e-imza) ile imzalanır, WORM depoda 2 yıl saklanır; delil paketi ve offline doğrulama ile adli süreçlerde kullanılabilir bütünlük sağlanır. ISO 27001 Annex A için kontrol haritası + inceleme iş akışları üretilir.</p>
+  <table>
+    <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
+    <tr><td class="no">9.1</td><td>Log şeması + boru hattı</td><td>Yapılandırılmış log modeli (NTP zaman, src IP/MAC, olay); syslog/agent/FortiGate → NATS tek hat; A.8.17 zaman sapması alarmı</td></tr>
+    <tr><td class="no">9.2</td><td>Bütünlük motoru</td><td>Saatlik Merkle checkpoint + zincirleme; sağlayıcı-bağımsız RFC 3161 TSA istemcisi; P12 e-imza; günlük imza döngüsü; PKCS#11 opsiyonel</td></tr>
+    <tr><td class="no">9.3</td><td>Saklama (A.5.33)</td><td>2 yıl ham log saklama; günlük imzalı paketlerin S3 Object Lock / disk WORM'a aktarımı; zstd</td></tr>
+    <tr><td class="no">9.4</td><td>Delil paketi (A.5.28)</td><td>Tarih aralığı → paket (loglar + zincir + token + doğrulama raporu); <code>bazntmsctl verify</code> offline doğrulama; kurcalama tespiti</td></tr>
+    <tr><td class="no">9.5</td><td>ISO kontrol haritası</td><td>Annex A → özellik/kanıt matrisi; denetçiye HTML/PDF uyumluluk raporu</td></tr>
+    <tr><td class="no">9.6-9.7</td><td>İnceleme iş akışları</td><td>Log inceleme tutanakları (A.8.15, imzalı) + periyodik erişim incelemesi (A.8.2, onay imzalı)</td></tr>
+    <tr><td class="no">9.8-9.11</td><td>SYGVP hazırlığı, panel, PII, testler</td><td>Sistem yöneticisi modülü; uygunluk paneli; KVKK-duyarlı PII maskeleme (A.5.34/A.8.11); kurcalama/hacim testleri</td></tr>
+  </table>
+  <p class="cikan">5651 üç profil (yerleşim yeri, erişim sağlayıcı, kurum ağı) için modüler imzalı saklama + ISO kanıt üretimi</p>
+</div>
+
+<h2 id="faz10"><span class="tag">FAZ 10</span>Tam ISMS Yönetişim Modülü <span class="status">6-8 hafta</span></h2>
+<div class="faz f10">
+  <div class="faz-head"><span class="no">FAZ 10</span><h3>ISO 27001 Yönetişim Araçları</h3><span class="status">6-8 hafta</span></div>
+  <p class="ozet">Faz 9 kanıt omurgası üzerinde ISMS yönetişim ürün yüzeyi: risk defteri, SoA, politika yönetimi, iç denetim programı, yönetim incelemesi, tedarikçi güvenliği ve tek tıkla denetçi paketi.</p>
+  <table>
+    <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
+    <tr><td class="no">10.1</td><td>Risk defteri</td><td>Varlık envanteri (cihaz/agent/site otomatik), tehdit-zaafiyet, etki×olasılık skoru, muamele planı, kalıntı risk</td></tr>
+    <tr><td class="no">10.2</td><td>SoA</td><td>93 Annex A kontrolü; uygula/hariç kararları + gerekçeler; Faz 9 haritasından otomatik kanıt bağlantıları</td></tr>
+    <tr><td class="no">10.3</td><td>Politika yönetimi</td><td>Doküman sürümleme, onay akışı, yayın/duyuru</td></tr>
+    <tr><td class="no">10.4</td><td>İç denetim programı</td><td>Denetim planı, bulgu kaydı, CAPA takibi, kapanış doğrulaması</td></tr>
+    <tr><td class="no">10.5-10.7</td><td>Yönetim incelemesi, tedarikçi, süreklilik</td><td>Metrik panoları; tedarikçi kayıt/gözden geçirme (A.5.19-22); BCDR şablonları + Faz 5 DR kanıtları</td></tr>
+    <tr><td class="no">10.8</td><td>Denetçi paketi</td><td>SoA + risk defteri + kanıtlar + inceleme kayıtları tek dışa aktarım</td></tr>
+  </table>
+  <p class="cikan">ISO 27001 sertifikasyon sürecinin tüm teknik kanıtlarını ve yönetişimini tek panelden yöneten modül</p>
 </div>
 
 <h2 id="teknoloji"><span class="tag">03</span>Teknoloji Kararları</h2>

@@ -18,11 +18,12 @@ type Config struct {
 	Enabled     bool `json:"enabled"`
 	CooldownMin int  `json:"cooldown_min"`
 
-	Bandwidth BandwidthConfig `json:"bandwidth"`
-	Ports     PortsConfig     `json:"ports"`
-	NewProc   ProcConfig      `json:"new_proc"`
-	NewTarget TargetConfig    `json:"new_target"`
-	Anomaly   AnomalyConfig   `json:"anomaly"` // Faz 6.2: istatistiksel baseline
+	Bandwidth BandwidthConfig  `json:"bandwidth"`
+	Ports     PortsConfig      `json:"ports"`
+	NewProc   ProcConfig       `json:"new_proc"`
+	NewTarget TargetConfig     `json:"new_target"`
+	Anomaly   AnomalyConfig    `json:"anomaly"` // Faz 6.2: istatistiksel baseline
+	Forti     FortiAlertConfig `json:"forti"`   // Faz 8.5: vpn/sdwan/oturum eşikleri
 
 	Notifiers Notifiers `json:"notifiers"`
 }
@@ -87,6 +88,7 @@ func DefaultConfig() Config {
 			Enabled: true, MinTotalMB: 10,
 		},
 		Anomaly:   DefaultAnomalyConfig(),
+		Forti:     DefaultFortiAlertConfig(),
 		Notifiers: Notifiers{Desktop: true},
 	}
 }
@@ -160,6 +162,10 @@ func (m *Manager) run() {
 			// anomali degerlendirmesi: 5 dakikada bir (Faz 6.2)
 			if m.tickN%300 == 1 {
 				m.checkAnomaly(cfg)
+			}
+			// FortiGate uyarilari: dakikada bir (Faz 8.5)
+			if m.tickN%60 == 1 {
+				m.checkForti(cfg)
 			}
 		}
 	}

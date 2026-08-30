@@ -214,6 +214,12 @@ func kindLabel(kind string) string {
 		return "Yeni Hedef"
 	case "anomaly":
 		return "Anomali"
+	case "vpn_down":
+		return "VPN Düşüşü"
+	case "sdwan_sla_breach":
+		return "SD-WAN SLA"
+	case "high_sessions":
+		return "Oturum Eşiği"
 	default:
 		return strings.ToUpper(kind)
 	}

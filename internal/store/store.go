@@ -166,6 +166,18 @@ type Store interface {
 	HourlyBpsStats() ([]HourStat, error)
 	AvgBpsSince(since time.Time) (float64, error)
 	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
+
+	// FortiGate REST toplama (Faz 8)
+	SaveDeviceResources(r DeviceResource) error
+	LatestDeviceResources(deviceID int64, minutes int) ([]DeviceResource, error)
+	SaveFortiVPNStatus(deviceID int64, ts int64, rows []FortiVPNStatus) error
+	LatestFortiVPN(deviceID int64) ([]FortiVPNStatus, error)
+	SaveFortiSDWAN(deviceID int64, ts int64, rows []FortiSDWANSample) error
+	SaveFortiPolicyHits(deviceID int64, ts int64, rows []FortiPolicyHit) error
+	TopFortiPolicies(deviceID int64, since time.Time, limit int) ([]FortiPolicyHit, error)
+	FortiVPNsDown(freshWithin time.Duration) ([]VPNDownRow, error)
+	RecentFortiSDWANAll(since time.Time) ([]SDWANRow, error)
+	RecentDeviceResourcesAll(since time.Time) ([]ResourceRow, error)
 }
 
 // sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
@@ -207,7 +219,12 @@ func openSQLite(path string) (Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &sqlStore{db: db}, nil
+	s := &sqlStore{db: db}
+	if err := s.ensureDeviceColumns(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
+	}
+	return s, nil
 }
 
 func openPostgres(dsn string) (Store, error) {
@@ -224,6 +241,10 @@ func openPostgres(dsn string) (Store, error) {
 		return nil, fmt.Errorf("postgres migrasyon: %w", err)
 	}
 	s := &sqlStore{db: db, pg: true}
+	if err := s.ensureDeviceColumns(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
+	}
 	s.ts = setupTimescale(db) // best-effort; yoksa duz PostgreSQL modu
 	return s, nil
 }
@@ -358,6 +379,7 @@ CREATE TABLE IF NOT EXISTS devices (
 	name         TEXT    NOT NULL,
 	host         TEXT    NOT NULL,
 	kind         TEXT    NOT NULL DEFAULT 'other',
+	vendor       TEXT    NOT NULL DEFAULT 'snmp',
 	snmp_version INTEGER NOT NULL DEFAULT 2,
 	community    TEXT    NOT NULL DEFAULT '',
 	v3_user      TEXT    NOT NULL DEFAULT '',
@@ -365,6 +387,10 @@ CREATE TABLE IF NOT EXISTS devices (
 	v3_auth_pass TEXT    NOT NULL DEFAULT '',
 	v3_priv_proto TEXT   NOT NULL DEFAULT '',
 	v3_priv_pass TEXT    NOT NULL DEFAULT '',
+	api_url      TEXT    NOT NULL DEFAULT '',
+	api_token_enc TEXT   NOT NULL DEFAULT '',
+	api_verify_tls INTEGER NOT NULL DEFAULT 1,
+	vdom         TEXT    NOT NULL DEFAULT '',
 	poll_seconds INTEGER NOT NULL DEFAULT 60,
 	enabled      INTEGER NOT NULL DEFAULT 1,
 	sys_name     TEXT    NOT NULL DEFAULT '',
@@ -373,6 +399,55 @@ CREATE TABLE IF NOT EXISTS devices (
 	last_poll    INTEGER NOT NULL DEFAULT 0,
 	last_error   TEXT    NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS device_resources (
+	ts        INTEGER NOT NULL,
+	device_id INTEGER NOT NULL,
+	cpu_pct   REAL    NOT NULL DEFAULT 0,
+	mem_pct   REAL    NOT NULL DEFAULT 0,
+	disk_pct  REAL    NOT NULL DEFAULT 0,
+	sessions  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_dev_res ON device_resources(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS fortigate_vpn_status (
+	device_id INTEGER NOT NULL,
+	vdom      TEXT    NOT NULL DEFAULT '',
+	kind      TEXT    NOT NULL,
+	name      TEXT    NOT NULL,
+	peer      TEXT    NOT NULL DEFAULT '',
+	status    TEXT    NOT NULL DEFAULT '',
+	uptime    INTEGER NOT NULL DEFAULT 0,
+	rx_bytes  INTEGER NOT NULL DEFAULT 0,
+	tx_bytes  INTEGER NOT NULL DEFAULT 0,
+	ts        INTEGER NOT NULL,
+	PRIMARY KEY (device_id, vdom, kind, name)
+);
+
+CREATE TABLE IF NOT EXISTS fortigate_sdwan (
+	ts       INTEGER NOT NULL,
+	device_id INTEGER NOT NULL,
+	vdom      TEXT    NOT NULL DEFAULT '',
+	member    TEXT    NOT NULL,
+	health_check TEXT NOT NULL DEFAULT '',
+	latency_ms REAL   NOT NULL DEFAULT 0,
+	jitter_ms  REAL   NOT NULL DEFAULT 0,
+	packet_loss_pct REAL NOT NULL DEFAULT 0,
+	state      TEXT   NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_forti_sdwan ON fortigate_sdwan(device_id, ts);
+
+CREATE TABLE IF NOT EXISTS fortigate_policy_hits (
+	ts        INTEGER NOT NULL,
+	device_id INTEGER NOT NULL,
+	vdom      TEXT    NOT NULL DEFAULT '',
+	policy_id INTEGER NOT NULL,
+	name      TEXT    NOT NULL DEFAULT '',
+	action    TEXT    NOT NULL DEFAULT '',
+	hits      INTEGER NOT NULL DEFAULT 0,
+	bytes     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_forti_policy ON fortigate_policy_hits(device_id, ts);
 
 CREATE TABLE IF NOT EXISTS device_iface_samples (
 	device_id   INTEGER NOT NULL,
@@ -605,6 +680,10 @@ func (s *sqlStore) Prune(retention time.Duration) error {
 		`DELETE FROM flows WHERE ts < ?`,
 		`DELETE FROM device_iface_samples WHERE ts < ?`, // Faz 4.3: eksik olan iki tablo
 		`DELETE FROM syslog_events WHERE ts < ?`,
+		`DELETE FROM device_resources WHERE ts < ?`, // Faz 8
+		`DELETE FROM fortigate_sdwan WHERE ts < ?`,
+		`DELETE FROM fortigate_policy_hits WHERE ts < ?`,
+		`DELETE FROM fortigate_vpn_status WHERE ts < ?`, // upsert tablosu: bayat satırlar (tünel silinmişse) temizlenir
 	} {
 		if _, err := s.db.Exec(s.q(q), cutoff); err != nil {
 			return err

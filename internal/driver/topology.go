@@ -1,8 +1,9 @@
-package devpoll
+package driver
 
 // Topoloji kesfi (Faz 6.1): SNMP uzerinden LLDP-MIB, CISCO-CDP-MIB ve
 // IP-MIB (ARP) tablolari yurutulerek komsuluklar cikarilir. Her protokol
 // best-effort'tur: desteklenmeyen cihazlarda sessizce atlanir.
+// Faz 8.1 refactor: kenarlar yazilmaz, Snapshot'a dondurulur.
 
 import (
 	"encoding/hex"
@@ -39,8 +40,8 @@ const maxArpLinksPerDevice = 256
 
 func timeNowUnix() int64 { return time.Now().Unix() }
 
-// discoverTopology, tek cihaz icin komsuluklari toplar ve store'a yazar.
-func (p *Poller) discoverTopology(conn *gosnmp.GoSNMP, d store.Device, sourceName string, ifaces map[int64]store.DeviceIface) {
+// discoverTopology, tek cihaz icin komsuluklari toplar ve dondurur (yazim scheduler'da).
+func discoverTopology(conn *gosnmp.GoSNMP, d store.Device, sourceName string, ifaces map[int64]store.DeviceIface) []store.TopologyLink {
 	var links []store.TopologyLink
 
 	if l := discoverLLDP(conn, d, sourceName, ifaces); len(l) > 0 {
@@ -53,14 +54,10 @@ func (p *Poller) discoverTopology(conn *gosnmp.GoSNMP, d store.Device, sourceNam
 		links = append(links, a...)
 	}
 
-	for _, l := range links {
-		if err := p.store.UpsertTopologyLink(l); err != nil {
-			slog.Warn("topoloji kenari yazilamadi", "device", d.Name, "err", err)
-		}
-	}
 	if len(links) > 0 {
 		slog.Info("topoloji kesfi", "device", d.Name, "kenar", len(links))
 	}
+	return links
 }
 
 // discoverLLDP, lldpRemTable + lldpLocPortId tablolarindan komsu cihazlari cikarir.
