@@ -23,6 +23,7 @@ import { FlowsCard } from './components/FlowsCard'
 import { SyslogCard } from './components/SyslogCard'
 import { TopologyCard } from './components/TopologyCard'
 import { ComplianceCard } from './components/ComplianceCard'
+import { IsmsCard } from './components/IsmsCard'
 import { Card } from './components/Card'
 
 export default function App() {
@@ -253,6 +254,13 @@ export default function App() {
           right={<span className="text-xs text-slate-500">imzalı loglar · delil paketi · inceleme</span>}
         >
           <ComplianceCard refreshKey={historyRefresh} />
+        </Card>
+
+        <Card
+          title="ISMS Yönetişimi (ISO 27001)"
+          right={<span className="text-xs text-slate-500">Faz 10 · risk · SoA · politika · denetim</span>}
+        >
+          <IsmsCard refreshKey={historyRefresh} />
         </Card>
 
         <footer className="pb-6 pt-2 text-center text-[11px] text-slate-600">
