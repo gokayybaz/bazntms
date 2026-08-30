@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -89,7 +90,17 @@ func main() {
 	if *logFormat != "" {
 		format = *logFormat
 	}
-	logging.Setup(logging.Options{Level: level, Format: format})
+	logOpts := logging.Options{Level: level, Format: format}
+	if serviceMode() {
+		// servis modunda stdout kaybolur; loglari config ile ayni dizine yaz
+		// (C:\ProgramData\bazntms\agent.log)
+		if f, ferr := os.OpenFile(filepath.Join(filepath.Dir(*configPath), "agent.log"),
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); ferr == nil {
+			logOpts.Out = f
+			defer f.Close()
+		}
+	}
+	logging.Setup(logOpts)
 
 	hostname, _ := os.Hostname()
 	if *name == "" {

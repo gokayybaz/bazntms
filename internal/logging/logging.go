@@ -4,6 +4,7 @@
 package logging
 
 import (
+	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -12,8 +13,9 @@ import (
 
 // Options, loglama yapilandirmasi.
 type Options struct {
-	Level  string // debug | info | warn | error (varsayilan info)
-	Format string // json | text (varsayilan text; prod/hub icin json onerilir)
+	Level  string    // debug | info | warn | error (varsayilan info)
+	Format string    // json | text (varsayilan text; prod/hub icin json onerilir)
+	Out    io.Writer // nil → stdout (servis modunda dosya verilir)
 }
 
 // Setup, slog varsayilan logger'ini kurar ve stdlib log cikisini ayni
@@ -24,10 +26,14 @@ func Setup(opts Options) *slog.Logger {
 
 	var handler slog.Handler
 	hopts := &slog.HandlerOptions{Level: level}
+	out := io.Writer(os.Stdout)
+	if opts.Out != nil {
+		out = opts.Out
+	}
 	if opts.Format == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, hopts)
+		handler = slog.NewJSONHandler(out, hopts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, hopts)
+		handler = slog.NewTextHandler(out, hopts)
 	}
 
 	logger := slog.New(handler)
