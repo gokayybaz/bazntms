@@ -224,8 +224,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # not: glob bazntms-sbom.spdx.json'i da kapsar; dosyayi ikinci kez
+          # acikca vermek ayni asset'i iki kez yuklemeye calisir ve cakilir
           gh release create "${GITHUB_REF_NAME}" \
-            bazntms-* bazntms-sbom.spdx.json \
+            bazntms-* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "bazNTMS ${GITHUB_REF_NAME}" \
             --generate-notes
