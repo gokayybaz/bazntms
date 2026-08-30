@@ -111,11 +111,48 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
 
 ## Frontend (`frontend/`)
 
-Vite + React + Tailwind v4. `useLive` hook'u WS'i birincil, 2 saniyelik REST
-yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş). 401 görülürse App
-login ekranına düşer; 60 sn'de bir de oturum denetimi yapılır. Grafikler
-(ThroughputChart, CompareCard, DayBars) harici grafik kütüphanesi olmadan,
-elle yazılmış SVG'dir.
+Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
+birincil, 2 saniyelik REST yoklamasını yedek kaynak yapar (WS koparsa
+otomatik dönüş). 401 görülürse App login ekranına düşer; 60 sn'de bir de
+oturum denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
+harici grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
+
+### Sayfa yapısı (routing)
+
+`App.tsx` bir kabuk: sol sabit `Sidebar` (rota listesi) + üst `Header` (WS
+durumu, kullanıcı kimliği, çıkış — hub'ın kendi yerel yakalamasıyla ilgili
+hiçbir kontrol barındırmaz, bkz. aşağıdaki not) + `<Routes>` içinde sayfa
+gövdesi. Backend zaten SPA history-fallback sağladığı için (`server.go`:
+bilinmeyen path → `index.html`) istemci tarafı routing ek backend desteği
+gerektirmeden çalışır.
+
+| Rota | Sayfa | Veri kaynağı |
+|------|-------|--------------|
+| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i |
+| `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
+| `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
+| `/topoloji` | Ağ topolojisi (SVG, hub+spoke) | `GET /api/v1/topology` |
+| `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
+| `/raporlar` | Yerel yakalama + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
+| `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
+| `*` | 404 | — |
+
+Her sayfa **yalnızca kendi ihtiyacı olan uçları** kendi `useEffect`'inde
+çeker (genelde 5–20 sn aralıklı `setInterval` ile); ortak bir global store
+yok. Kendi polling'i olmayan birkaç bileşen (`DevicesCard`, `TopologyCard`,
+`ComplianceCard` vb.) `refreshKey` prop'una bağlıdır — bu değer
+`App.tsx`'te 20 sn'de bir otomatik artan `historyRefresh` state'inden gelir
+(önceden kaldırılan Trafik sayfasındaki elle "geçmişi yenile" düğmesinin
+yerini almıştır).
+
+**Not — hub'ın kendi yerel yakalaması:** Hub, merkezi bir toplama noktası
+olarak konumlandığı için navbar'da kendi arayüz seçici/yakalama başlat-
+durdur kontrolleri **yok** — yalnızca agent/cihaz filosundan gelen veriler
+görünür. Yerel yakalamayla ilgili bileşenler (StatCards, ThroughputChart,
+EndpointsTable, ConnectionsTable, DnsCard, AICard, CompareCard, PcapCard
+vb.) bu nedenle kaldırıldı; ilgili REST uçları (`/api/capture/*`,
+`/api/history`, `/api/report` — yerel varyant) backend'de hâlâ durur ve
+CLI/otomasyon veya tek-makine (standalone) kurulumlar için kullanılabilir.
 
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 
