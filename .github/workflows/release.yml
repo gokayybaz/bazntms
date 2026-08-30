@@ -148,9 +148,10 @@ jobs:
       - name: Build MSI (windows-amd64)
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          wixl -v -o bazntms-agent-amd64.msi \
+          wixl -v -a x64 -o bazntms-agent-amd64.msi \
             -D VERSION="$VERSION" \
             -D EXE=bazntms-agent-windows-amd64.exe \
+            -D CONF=deploy/config/bazntms-agent.yml.example \
             deploy/msi/bazntms-agent.wxs
 
       - uses: actions/upload-artifact@v4

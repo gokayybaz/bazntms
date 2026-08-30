@@ -3,9 +3,13 @@
   bazNTMS agent — Windows MSI tanimi (Faz 7.3).
   CI'da wixl (msitools) ile derlenir; VERSION ve kaynak dosya adi CI
   tarafindan saglanir:
-    wixl -v -o bazntms-agent.msi \
+    wixl -v -arch x64 -o bazntms-agent.msi \
       -D VERSION=0.2.0 -D EXE=bazntms-agent-windows-amd64.exe \
       deploy/msi/bazntms-agent.wxs
+
+  Not: wixl, Fragment icindeki ComponentGroup + Component Directory=
+  referanslarini cozumleyemez; component'ler dogrudan Directory agacina
+  gomulur (klasik WiX duzeni).
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id='*' Name='bazNTMS Agent' Language='1033'
@@ -15,38 +19,34 @@
              Description='bazNTMS network telemetry agent' />
     <MajorUpgrade AllowSameVersionUpgrades='yes'
                   DowngradeErrorMessage='Daha yeni bir surum kurulu.' />
-    <MediaTemplate EmbedCab='yes' />
+    <Media Id='1' Cabinet='agent.cab' EmbedCab='yes' />
 
     <Directory Id='TARGETDIR' Name='SourceDir'>
       <Directory Id='ProgramFiles64Folder'>
         <Directory Id='INSTALLFOLDER' Name='bazNTMS'>
-          <Directory Id='CONFIGDIR' Name='config' />
+          <Component Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
+            <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
+            <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
+                            DisplayName='bazNTMS Agent'
+                            Description='Network traffic telemetry agent (bazNTMS)'
+                            Type='ownProcess' Start='auto' ErrorControl='normal'
+                            Arguments='-config &quot;C:\ProgramData\bazntms\agent.yml&quot;' />
+            <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
+                            Start='install' Stop='both' Remove='uninstall' Wait='yes' />
+          </Component>
+          <Directory Id='CONFIGDIR' Name='config'>
+            <Component Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
+              <File Id='AgentConfigExample' Source='$(var.CONF)' Name='agent.yml.example' KeyPath='yes' />
+            </Component>
+          </Directory>
         </Directory>
       </Directory>
       <Directory Id='ProgramMenuFolder' />
     </Directory>
 
     <Feature Id='Main' Level='1'>
-      <ComponentGroupRef Id='AgentComponents' />
+      <ComponentRef Id='AgentExe' />
+      <ComponentRef Id='AgentConfig' />
     </Feature>
   </Product>
-
-  <Fragment>
-    <ComponentGroup Id='AgentComponents'>
-      <Component Directory='INSTALLFOLDER' Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
-        <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
-        <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
-                        DisplayName='bazNTMS Agent'
-                        Description='Network traffic telemetry agent (bazNTMS)'
-                        Type='ownProcess' Start='auto' ErrorControl='normal'
-                        Arguments='-config &quot;C:\ProgramData\bazntms\agent.yml&quot;' />
-        <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
-                        Start='install' Stop='both' Remove='uninstall' Wait='yes' />
-      </Component>
-      <Component Directory='CONFIGDIR' Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
-        <File Id='AgentConfigExample' Source='deploy/config/bazntms-agent.yml.example'
-              Name='agent.yml.example' KeyPath='yes' />
-      </Component>
-    </ComponentGroup>
-  </Fragment>
 </Wix>
