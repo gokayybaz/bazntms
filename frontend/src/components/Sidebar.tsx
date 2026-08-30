@@ -79,7 +79,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60">
-      <div className="flex h-[57px] items-center gap-2.5 border-b border-slate-800 px-4">
+      <div className="flex items-center gap-2.5 border-b border-slate-800 px-4 py-3.5">
         <div className="grid size-8 flex-shrink-0 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
           <svg viewBox="0 0 24 24" className="size-4.5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
@@ -90,10 +90,15 @@ export function Sidebar() {
             <path d="M6.2 6.2 10.6 10.6m6.8-4.4-4.4 4.4M6.2 17.8l4.4-4.4m6.8 4.4-4.4-4.4" strokeLinecap="round" />
           </svg>
         </div>
-        <span className="font-mono text-sm font-bold tracking-tight text-white">bazNTMS</span>
+        <div className="min-w-0">
+          <p className="font-mono text-sm font-bold leading-tight tracking-tight text-white">bazNTMS</p>
+          <p className="truncate text-[8.5px] uppercase leading-tight tracking-[0.1em] text-slate-500">
+            Network Traffic Monitoring
+          </p>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
+      <nav className="flex-1 space-y-0.5 px-2.5 py-3">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

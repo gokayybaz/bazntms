@@ -8,25 +8,6 @@ export function Header({ connected, onLogout, identity }: Props) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-2.5">
-          <div className="grid size-9 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
-            <svg viewBox="0 0 24 24" className="size-5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
-              <circle cx="5" cy="5" r="1.6" />
-              <circle cx="19" cy="5" r="1.6" />
-              <circle cx="5" cy="19" r="1.6" />
-              <circle cx="19" cy="19" r="1.6" />
-              <path d="M6.2 6.2 10.6 10.6m6.8-4.4-4.4 4.4M6.2 17.8l4.4-4.4m6.8 4.4-4.4-4.4" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="font-mono text-[15px] font-bold leading-tight tracking-tight text-white">bazNTMS</h1>
-            <p className="text-[9.5px] uppercase leading-tight tracking-[0.14em] text-slate-500">
-              Network Traffic Monitoring System
-            </p>
-          </div>
-        </div>
-
         <span
           className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
             connected
