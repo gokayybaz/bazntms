@@ -1,0 +1,7 @@
+name: t
+arch: "${ARCH}"
+version: "${VERSION}"
+contents:
+  - src: ./linux-${ARCH}-file
+    dst: /usr/local/bin/t
+expandenv: true
