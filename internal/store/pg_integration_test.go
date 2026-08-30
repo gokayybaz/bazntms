@@ -131,10 +131,16 @@ func TestPostgresStore(t *testing.T) {
 	if err := st.TouchAgent(id, "0.2", "10.0.0.9"); err != nil {
 		t.Fatalf("touch: %v", err)
 	}
+	// verim hesabi icin iki farkli zaman damgasi gerekir (ilk/son delta)
+	if err := st.SaveIfaceSamples(id, now-60, []telemetry.InterfaceSample{
+		{Name: "eth0", RxBytes: 500, TxBytes: 250, RxPackets: 5, TxPackets: 2},
+	}); err != nil {
+		t.Fatalf("iface ornek1: %v", err)
+	}
 	if err := st.SaveIfaceSamples(id, now, []telemetry.InterfaceSample{
 		{Name: "eth0", RxBytes: 1000, TxBytes: 500, RxPackets: 10, TxPackets: 5},
 	}); err != nil {
-		t.Fatalf("iface ornek: %v", err)
+		t.Fatalf("iface ornek2: %v", err)
 	}
 	agents, err := st.ListAgents(time.Hour, "")
 	if err != nil || len(agents) != 1 || !agents[0].Online || len(agents[0].Rates) != 1 {
