@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import type { NetInterface } from './types'
 import { useLive } from './lib/useLive'
 import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
@@ -22,10 +21,6 @@ export default function App() {
   const { stats, connections, alertEvents, record, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
-  const [interfaces, setInterfaces] = useState<NetInterface[]>([])
-  const [selected, setSelected] = useState('')
-  const [error, setError] = useState('')
-  const [starting, setStarting] = useState(false)
   const [historyRefresh, setHistoryRefresh] = useState(0)
 
   useEffect(() => {
@@ -39,19 +34,6 @@ export default function App() {
       })
       .catch(() => setAuthState('open'))
   }, [])
-
-  useEffect(() => {
-    if (authState !== 'open') return
-    setError('')
-    fetch('/api/interfaces')
-      .then((r) => r.json())
-      .then((list: NetInterface[]) => {
-        setInterfaces(list)
-        const pick = list.find((i) => i.up && i.can_sniff && !i.loopback)
-        if (pick) setSelected(pick.name)
-      })
-      .catch(() => setError('Arayüz listesi alınamadı'))
-  }, [authState])
 
   // oturum denetimi: WS handshake aninda dogrulanir; oturum sonradan
   // sona ererse burada fark edilip login ekranina donulur
@@ -67,31 +49,6 @@ export default function App() {
     }, 60_000)
     return () => window.clearInterval(id)
   }, [authState])
-
-  const start = useCallback(async () => {
-    if (!selected) return
-    setStarting(true)
-    setError('')
-    try {
-      const res = await fetch('/api/capture/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device: selected }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data)
-      if (data.error) setError(data.error)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setStarting(false)
-    }
-  }, [selected])
-
-  const stop = useCallback(async () => {
-    await fetch('/api/capture/stop', { method: 'POST' }).catch(() => {})
-    setError('')
-  }, [])
 
   const logout = useCallback(async () => {
     await fetch('/api/logout', { method: 'POST' }).catch(() => {})
@@ -117,22 +74,7 @@ export default function App() {
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="min-w-0 flex-1">
-        <Header
-          interfaces={interfaces}
-          selected={selected}
-          onSelect={(n) => {
-            setSelected(n)
-            setError('')
-          }}
-          running={stats.running}
-          error={error || stats.error}
-          connected={connected}
-          onStart={start}
-          onStop={stop}
-          starting={starting}
-          onLogout={logout}
-          identity={identity}
-        />
+        <Header connected={connected} onLogout={logout} identity={identity} />
 
         <Routes>
           <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} />} />
