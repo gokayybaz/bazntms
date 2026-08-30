@@ -25,3 +25,6 @@ web/dist/*
 # diger
 *.log
 .DS_Store
+
+# kimlik kasasi master key (gizli, makineye ozel)
+/vault.key
