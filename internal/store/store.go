@@ -191,6 +191,38 @@ type Store interface {
 	LogCheckpointsBetween(from, to int64) ([]LogCheckpoint, error)
 	SaveComplianceReview(r ComplianceReview) (int64, error)
 	RecentComplianceReviews(limit int) ([]ComplianceReview, error)
+
+	// ISMS yönetişimi (Faz 10)
+	SyncIsmsAssetsFromFleet() (int, error)
+	ListIsmsAssets() ([]IsmsAsset, error)
+	UpdateIsmsAsset(a IsmsAsset) error
+	DeleteIsmsAsset(id int64) error
+	AddIsmsRisk(r IsmsRisk) (int64, error)
+	ListIsmsRisks() ([]IsmsRisk, error)
+	UpdateIsmsRisk(r IsmsRisk) error
+	DeleteIsmsRisk(id int64) error
+	ListIsmsSoa() ([]IsmsSoaItem, error)
+	UpdateIsmsSoa(item IsmsSoaItem) error
+	IsmsSoaCounts() (total, applicable, implemented, verified, excluded int, err error)
+	AddIsmsPolicy(p IsmsPolicy) (int64, error)
+	ListIsmsPolicies() ([]IsmsPolicy, error)
+	UpdateIsmsPolicy(p IsmsPolicy) error
+	AddIsmsPolicyVersion(v IsmsPolicyVersion) (int64, error)
+	ListIsmsPolicyVersions(policyID int64) ([]IsmsPolicyVersion, error)
+	AddIsmsAudit(a IsmsAudit) (int64, error)
+	ListIsmsAudits() ([]IsmsAudit, error)
+	UpdateIsmsAudit(a IsmsAudit) error
+	AddIsmsFinding(f IsmsFinding) (int64, error)
+	ListIsmsFindings(auditID int64) ([]IsmsFinding, error)
+	UpdateIsmsFinding(f IsmsFinding) error
+	AddIsmsMgmtReview(r IsmsMgmtReview) (int64, error)
+	ListIsmsMgmtReviews(limit int) ([]IsmsMgmtReview, error)
+	AddIsmsSupplier(sp IsmsSupplier) (int64, error)
+	ListIsmsSuppliers() ([]IsmsSupplier, error)
+	UpdateIsmsSupplier(sp IsmsSupplier) error
+	DeleteIsmsSupplier(id int64) error
+	AddIsmsContinuityTest(t IsmsContinuityTest) (int64, error)
+	ListIsmsContinuityTests(limit int) ([]IsmsContinuityTest, error)
 }
 
 // sqlStore, Store arayuzunun tek somut gerceklemesidir; SQLite ve PostgreSQL
@@ -239,6 +271,10 @@ func openSQLite(path string) (Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
 	}
+	if err := s.seedIsmsSoa(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("SoA seed: %w", err)
+	}
 	return s, nil
 }
 
@@ -259,6 +295,10 @@ func openPostgres(dsn string) (Store, error) {
 	if err := s.ensureDeviceColumns(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
+	}
+	if err := s.seedIsmsSoa(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("SoA seed: %w", err)
 	}
 	s.ts = setupTimescale(db) // best-effort; yoksa duz PostgreSQL modu
 	return s, nil
@@ -624,6 +664,137 @@ CREATE TABLE IF NOT EXISTS topology_links (
 	peer_ip     TEXT    NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_topo_dedup ON topology_links(kind, source_type, source_id, local_port, peer_name, peer_ip);
+
+CREATE TABLE IF NOT EXISTS isms_assets (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	kind        TEXT    NOT NULL,
+	name        TEXT    NOT NULL,
+	owner       TEXT    NOT NULL DEFAULT '',
+	criticality TEXT    NOT NULL DEFAULT 'orta',
+	auto        INTEGER NOT NULL DEFAULT 0,
+	notes       TEXT    NOT NULL DEFAULT '',
+	created_at  INTEGER NOT NULL,
+	UNIQUE (kind, name)
+);
+
+CREATE TABLE IF NOT EXISTS isms_risks (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	asset_id       INTEGER NOT NULL DEFAULT 0,
+	threat         TEXT    NOT NULL,
+	vulnerability  TEXT    NOT NULL DEFAULT '',
+	impact         INTEGER NOT NULL DEFAULT 3,
+	likelihood     INTEGER NOT NULL DEFAULT 3,
+	treatment      TEXT    NOT NULL DEFAULT 'mitigate',
+	plan           TEXT    NOT NULL DEFAULT '',
+	res_impact     INTEGER NOT NULL DEFAULT 0,
+	res_likelihood INTEGER NOT NULL DEFAULT 0,
+	owner          TEXT    NOT NULL DEFAULT '',
+	status         TEXT    NOT NULL DEFAULT 'open',
+	created_at     INTEGER NOT NULL,
+	review_ts      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS isms_soa (
+	control_id    TEXT    PRIMARY KEY,
+	category      TEXT    NOT NULL,
+	title         TEXT    NOT NULL,
+	applicable    INTEGER NOT NULL DEFAULT 1,
+	justification TEXT    NOT NULL DEFAULT '',
+	status        TEXT    NOT NULL DEFAULT 'planned',
+	evidence      TEXT    NOT NULL DEFAULT '',
+	owner         TEXT    NOT NULL DEFAULT '',
+	updated_at    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS isms_policies (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	ref          TEXT    NOT NULL UNIQUE,
+	title        TEXT    NOT NULL,
+	owner        TEXT    NOT NULL DEFAULT '',
+	status       TEXT    NOT NULL DEFAULT 'draft',
+	version      TEXT    NOT NULL DEFAULT '1.0',
+	approved_by  TEXT    NOT NULL DEFAULT '',
+	approved_at  INTEGER NOT NULL DEFAULT 0,
+	published_at INTEGER NOT NULL DEFAULT 0,
+	next_review  INTEGER NOT NULL DEFAULT 0,
+	created_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS isms_policy_versions (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	policy_id   INTEGER NOT NULL,
+	version     TEXT    NOT NULL,
+	content     TEXT    NOT NULL DEFAULT '',
+	change_note TEXT    NOT NULL DEFAULT '',
+	created_by  TEXT    NOT NULL DEFAULT '',
+	created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_isms_polver ON isms_policy_versions(policy_id);
+
+CREATE TABLE IF NOT EXISTS isms_audits (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	title        TEXT    NOT NULL,
+	scope        TEXT    NOT NULL DEFAULT '',
+	planned_date TEXT    NOT NULL DEFAULT '',
+	performed_at INTEGER NOT NULL DEFAULT 0,
+	auditor      TEXT    NOT NULL DEFAULT '',
+	status       TEXT    NOT NULL DEFAULT 'planned',
+	summary      TEXT    NOT NULL DEFAULT '',
+	created_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS isms_findings (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	audit_id    INTEGER NOT NULL,
+	ref         TEXT    NOT NULL DEFAULT '',
+	description TEXT    NOT NULL,
+	severity    TEXT    NOT NULL DEFAULT 'orta',
+	control_id  TEXT    NOT NULL DEFAULT '',
+	capa        TEXT    NOT NULL DEFAULT '',
+	capa_owner  TEXT    NOT NULL DEFAULT '',
+	capa_due    TEXT    NOT NULL DEFAULT '',
+	status      TEXT    NOT NULL DEFAULT 'open',
+	closed_at   INTEGER NOT NULL DEFAULT 0,
+	verified_by TEXT    NOT NULL DEFAULT '',
+	created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_isms_findings ON isms_findings(audit_id);
+
+CREATE TABLE IF NOT EXISTS isms_mgmt_reviews (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts         INTEGER NOT NULL,
+	period     TEXT    NOT NULL DEFAULT '',
+	attendees  TEXT    NOT NULL DEFAULT '',
+	inputs     TEXT    NOT NULL DEFAULT '',
+	decisions  TEXT    NOT NULL DEFAULT '',
+	actions    TEXT    NOT NULL DEFAULT '',
+	created_by TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS isms_suppliers (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	name         TEXT    NOT NULL,
+	service      TEXT    NOT NULL DEFAULT '',
+	criticality  TEXT    NOT NULL DEFAULT 'orta',
+	data_access  TEXT    NOT NULL DEFAULT '',
+	contract_ref TEXT    NOT NULL DEFAULT '',
+	risk         TEXT    NOT NULL DEFAULT '',
+	last_review  INTEGER NOT NULL DEFAULT 0,
+	next_review  INTEGER NOT NULL DEFAULT 0,
+	notes        TEXT    NOT NULL DEFAULT '',
+	created_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS isms_continuity_tests (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	kind         TEXT    NOT NULL DEFAULT 'restore',
+	title        TEXT    NOT NULL,
+	performed_at INTEGER NOT NULL,
+	result       TEXT    NOT NULL DEFAULT '',
+	evidence     TEXT    NOT NULL DEFAULT '',
+	notes        TEXT    NOT NULL DEFAULT '',
+	created_by   TEXT    NOT NULL DEFAULT ''
+);
 `)
 	return err
 }
