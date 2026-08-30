@@ -136,11 +136,14 @@ jobs:
           chmod +x deploy/nfpm/postinstall.sh deploy/nfpm/postremove.sh
           for arch in amd64 arm64; do
             export ARCH="$arch" VERSION
+            # nfpm config dosyasinda env genisletme yapmaz; once envsubst
             for fmt in deb rpm; do
-              nfpm package -p "$fmt" -f deploy/nfpm/agent.yaml \
+              envsubst '$ARCH $VERSION' < deploy/nfpm/agent.yaml > nfpm-expanded.yaml
+              nfpm package -p "$fmt" -f nfpm-expanded.yaml \
                 -t "bazntms-agent-${arch}.${fmt}"
             done
           done
+          rm -f nfpm-expanded.yaml
 
       - name: Build MSI (windows-amd64)
         run: |
