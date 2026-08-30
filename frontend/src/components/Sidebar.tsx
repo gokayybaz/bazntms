@@ -79,9 +79,9 @@ const NAV_ITEMS = [
 export function Sidebar() {
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60">
-      <div className="flex items-center gap-2.5 border-b border-slate-800 px-4 py-3.5">
-        <div className="grid size-8 flex-shrink-0 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
-          <svg viewBox="0 0 24 24" className="size-4.5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-4">
+        <div className="grid size-10 flex-shrink-0 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
+          <svg viewBox="0 0 24 24" className="size-6 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
             <circle cx="5" cy="5" r="1.6" />
             <circle cx="19" cy="5" r="1.6" />
@@ -91,9 +91,11 @@ export function Sidebar() {
           </svg>
         </div>
         <div className="min-w-0">
-          <p className="font-mono text-sm font-bold leading-tight tracking-tight text-white">bazNTMS</p>
-          <p className="truncate text-[8.5px] uppercase leading-tight tracking-[0.1em] text-slate-500">
-            Network Traffic Monitoring
+          <p className="font-mono text-base font-bold leading-tight tracking-tight text-white">bazNTMS</p>
+          <p className="text-[8.5px] uppercase leading-[1.35] tracking-[0.1em] text-slate-500">
+            Network Traffic
+            <br />
+            Monitoring System
           </p>
         </div>
       </div>
