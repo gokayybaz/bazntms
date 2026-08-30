@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatBits } from '../lib/format'
 import { FortiPanel } from './FortiPanel'
 
@@ -102,7 +103,9 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
             <div key={d.id} className="rounded-md border border-slate-800 bg-slate-900/50 px-3.5 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{d.kind}</span>
-                <span className="font-mono text-sm font-semibold text-slate-100">{d.name}</span>
+                <Link to={`/cihazlar/${d.id}`} className="font-mono text-sm font-semibold text-cyan-300 hover:text-cyan-200 hover:underline">
+                  {d.name}
+                </Link>
                 <span className="font-mono text-xs text-slate-500">{d.host}</span>
                 {vendorBadge(d)}
                 <span className="ml-auto font-mono text-[10px] text-slate-600">

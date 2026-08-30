@@ -9,6 +9,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { AgentsListPage } from './pages/AgentsListPage'
 import { AgentDetailPage } from './pages/AgentDetailPage'
 import { DevicesPage } from './pages/DevicesPage'
+import { DeviceDetailPage } from './pages/DeviceDetailPage'
 import { TopologyPage } from './pages/TopologyPage'
 import { TrafficPage } from './pages/TrafficPage'
 import { AlertsPage } from './pages/AlertsPage'
@@ -138,6 +139,7 @@ export default function App() {
           <Route path="/agentlar" element={<AgentsListPage />} />
           <Route path="/agentlar/:id" element={<AgentDetailPage />} />
           <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
+          <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
           <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
           <Route
             path="/trafik"
