@@ -38,12 +38,6 @@ const IconTopo = () => (
   </svg>
 )
 
-const IconActivity = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12h4l3-8 4 16 3-8h6" />
-  </svg>
-)
-
 const IconBell = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
@@ -70,7 +64,6 @@ const NAV_ITEMS = [
   { to: '/agentlar', label: "Agent'lar", icon: <IconServer />, end: false },
   { to: '/cihazlar', label: 'Cihazlar', icon: <IconRouter />, end: false },
   { to: '/topoloji', label: 'Ağ Topolojisi', icon: <IconTopo />, end: false },
-  { to: '/trafik', label: 'Trafik', icon: <IconActivity />, end: false },
   { to: '/uyarilar', label: 'Uyarılar', icon: <IconBell />, end: false },
   { to: '/raporlar', label: 'Raporlar', icon: <IconDoc />, end: false },
   { to: '/uyumluluk', label: 'Uyumluluk', icon: <IconShield />, end: false },

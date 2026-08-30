@@ -10,7 +10,6 @@ import { AgentDetailPage } from './pages/AgentDetailPage'
 import { DevicesPage } from './pages/DevicesPage'
 import { DeviceDetailPage } from './pages/DeviceDetailPage'
 import { TopologyPage } from './pages/TopologyPage'
-import { TrafficPage } from './pages/TrafficPage'
 import { AlertsPage } from './pages/AlertsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ComplianceOverviewPage } from './pages/ComplianceOverviewPage'
@@ -23,10 +22,20 @@ import { GovernancePage } from './pages/GovernancePage'
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
   const [identity, setIdentity] = useState<{ username: string; role: string } | null>(null)
-  const { stats, connections, alertEvents, record, connected, reconnect } = useLive(
+  const { alertEvents, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
   const [historyRefresh, setHistoryRefresh] = useState(0)
+
+  // Cihazlar/Topoloji/Uyumluluk gibi sayfalar kendi polling'i olmadan
+  // yalnızca refreshKey değiştiğinde yeniden yükleniyor — önceden bu
+  // Trafik sayfasındaki elle "geçmişi yenile" düğmesiyle tetikleniyordu;
+  // sayfa kaldırılınca yerine periyodik otomatik yenileme kondu.
+  useEffect(() => {
+    if (authState !== 'open') return
+    const id = window.setInterval(() => setHistoryRefresh((k) => k + 1), 20_000)
+    return () => window.clearInterval(id)
+  }, [authState])
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -88,18 +97,6 @@ export default function App() {
           <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
           <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
           <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
-          <Route
-            path="/trafik"
-            element={
-              <TrafficPage
-                stats={stats}
-                connections={connections}
-                record={record}
-                historyRefresh={historyRefresh}
-                onHistoryRefresh={() => setHistoryRefresh((k) => k + 1)}
-              />
-            }
-          />
           <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
           <Route path="/raporlar" element={<ReportsPage />} />
           <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
