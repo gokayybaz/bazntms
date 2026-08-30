@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import type { AlertEvent } from '../types'
 import { formatNum } from '../lib/format'
-import { AlertsCard, KIND_LABELS, KIND_STYLES } from '../components/AlertsCard'
+import { AlertsCard } from '../components/AlertsCard'
+import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
 import { Card } from '../components/Card'
 
 export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {

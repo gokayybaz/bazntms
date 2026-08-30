@@ -18,6 +18,7 @@ import { SoaPage } from './pages/SoaPage'
 import { PoliciesPage } from './pages/PoliciesPage'
 import { AuditsPage } from './pages/AuditsPage'
 import { GovernancePage } from './pages/GovernancePage'
+import { NotFoundPage } from './pages/NotFoundPage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="/uyumluluk/politikalar" element={<PoliciesPage />} />
           <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
           <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
     </div>
