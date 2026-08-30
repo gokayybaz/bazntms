@@ -1,6 +1,8 @@
 # binary (yalnizca repo koku — deploy/helm/bazntms dizinini yutmasin!)
 /bazntms
 /bazntms.exe
+/bazntms-agent
+/bazntmsctl
 /bazntms-*
 
 # veri tabani / kayitlar

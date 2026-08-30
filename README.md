@@ -84,14 +84,15 @@ Docusaurus sitesi her push'ta GitHub Pages'e otomatik yayınlanır
 ## Hızlı Başlangıç
 
 ```bash
-# 1) Frontend'i derle
-cd frontend && npm install && npm run build && cd ..
+# 1) Her şeyi derle: frontend + hub + agent + ctl (tek komut)
+make
 
-# 2) Backend'i derle (frontend embed edilir)
-go build -o bazntms ./cmd/bazntms-hub
+# 2) Kurulum sihirbazı ile yapılandırma üret (isteğe bağlı)
+./bazntmsctl setup            # interaktif: port, şifre, depo, NATS → bazntms-hub.yml
 
 # 3) Yönetici yetkisiyle çalıştır
 sudo ./bazntms -auth-password gizliSifre123 -llm-base-url http://localhost:11434/v1
+# veya: sudo ./bazntms-hub -config bazntms-hub.yml
 ```
 
 Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yakalamayı Başlat**.

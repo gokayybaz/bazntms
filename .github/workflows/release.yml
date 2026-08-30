@@ -87,6 +87,8 @@ jobs:
             -o "bazntms-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-hub
           go build -trimpath -ldflags "$LDFLAGS" \
             -o "bazntms-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-agent
+          go build -trimpath -ldflags "$LDFLAGS" \
+            -o "bazntmsctl-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntmsctl
 
       # macOS pkg installer (Faz 7.3; yalnizca darwin runner'larda)
       - name: Build macOS pkg
