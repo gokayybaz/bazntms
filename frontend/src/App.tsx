@@ -13,7 +13,12 @@ import { TopologyPage } from './pages/TopologyPage'
 import { TrafficPage } from './pages/TrafficPage'
 import { AlertsPage } from './pages/AlertsPage'
 import { ReportsPage } from './pages/ReportsPage'
-import { CompliancePage } from './pages/CompliancePage'
+import { ComplianceOverviewPage } from './pages/ComplianceOverviewPage'
+import { RiskRegisterPage } from './pages/RiskRegisterPage'
+import { SoaPage } from './pages/SoaPage'
+import { PoliciesPage } from './pages/PoliciesPage'
+import { AuditsPage } from './pages/AuditsPage'
+import { GovernancePage } from './pages/GovernancePage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
@@ -97,7 +102,12 @@ export default function App() {
           />
           <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
           <Route path="/raporlar" element={<ReportsPage />} />
-          <Route path="/uyumluluk" element={<CompliancePage refreshKey={historyRefresh} />} />
+          <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
+          <Route path="/uyumluluk/risk" element={<RiskRegisterPage />} />
+          <Route path="/uyumluluk/soa" element={<SoaPage />} />
+          <Route path="/uyumluluk/politikalar" element={<PoliciesPage />} />
+          <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
+          <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
         </Routes>
       </div>
     </div>
