@@ -6,6 +6,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "cd frontend && npm run dev -- --port 5173"],
       "port": 5173
+    },
+    {
+      "name": "docs-site",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd docs-site && npm run dev -- --port 3000"],
+      "port": 3000
     }
   ]
 }
