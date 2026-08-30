@@ -22,7 +22,17 @@ RUN CGO_ENABLED=1 go build -trimpath \
     -o /out/bazntms-hub ./cmd/bazntms-hub
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates libpcap tzdata
+RUN apk add --no-cache ca-certificates libpcap tzdata \
+    && addgroup -S bazntms && adduser -S -G bazntms -H bazntms \
+    && mkdir -p /data && chown bazntms:bazntms /data
 COPY --from=build /out/bazntms-hub /usr/local/bin/bazntms-hub
+# Container'da paket yakalama kapalı (-capture=false, compose dosyalarına bkz.)
+# — hub root olmadan çalışır. Yalnızca tek-makine/standalone kurulumda
+# (yerel yakalama açık) NET_RAW gerekir; o durumda cap_add veya --privileged
+# gerekecektir.
+# /data: db/geoip/captures/worm gibi göreli yollar buraya yazılabilsin diye
+# (kalıcılık için volume olarak bağlayın)
+WORKDIR /data
+USER bazntms
 EXPOSE 8080 2055/udp 5514/udp
 ENTRYPOINT ["bazntms-hub"]

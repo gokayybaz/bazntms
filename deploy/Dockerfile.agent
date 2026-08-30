@@ -18,4 +18,13 @@ RUN CGO_ENABLED=1 go build -trimpath \
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates libpcap tzdata
 COPY --from=build /out/bazntms-agent /usr/local/bin/bazntms-agent
+# Kasıtlı olarak root: setcap (cap_net_raw/cap_net_admin) + non-root exec
+# denendi ama container'a cap_add edilmeden binary hic exec olamiyor
+# ("operation not permitted") — Docker'in varsayilan capability bounding
+# set'i bu ikisini icermiyor ve dosya capability'leri buyuk olcude
+# tanınmıyor. docker-compose.scale.yml'deki agent servisi cap_add
+# vermeden calistigi icin non-root gecis burada geri alindi (bkz. proje
+# degerlendirme notlari). Root olmadan calistirmak istenirse compose'a
+# `cap_add: [NET_RAW, NET_ADMIN]` eklenip Dockerfile'a setcap + USER
+# adimlari geri konabilir.
 ENTRYPOINT ["bazntms-agent"]
