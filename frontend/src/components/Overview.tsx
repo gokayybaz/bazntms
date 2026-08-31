@@ -164,7 +164,7 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
       return
     }
     let stop = false
-    const ids = onlineAgentKey.split(',').slice(0, 8) // fazla agent'ta istek patlamasin
+    const ids = onlineAgentKey.split(',').slice(0, 40) // asiri buyuk filoda istek patlamasin
     const load = async () => {
       try {
         const results = await Promise.all(
@@ -212,20 +212,19 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         source: e.host,
         severity: e.severity,
       })),
-      ...agentConns.flatMap((a) => {
-        // gürültüyü azalt: karşı ucu olan (LISTEN olmayan) bağlantılardan en fazla 4 tane
-        const withRemote = a.conns.filter((c) => c.remote_addr)
-        const pick = (withRemote.length > 0 ? withRemote : a.conns).slice(0, 4)
-        return pick.map((c, i) => ({
+      ...agentConns.flatMap((a) =>
+        // agent'in son telemetri anindaki TUM baglanti envanteri — LISTEN
+        // (karsi ucu olmayan) satirlar da dahil, hicbiri gizlenmiyor
+        a.conns.map((c, i) => ({
           kind: 'agent' as const,
           ts: a.ts,
           key: `a${a.agentName}-${i}-${c.local_addr}-${c.remote_addr ?? ''}`,
-          primary: `${c.local_addr}${c.remote_addr ? ' → ' + c.remote_addr : ''} ${c.proto}${c.process ? ' · ' + c.process : ''}`,
+          primary: `${c.local_addr}${c.remote_addr ? ' → ' + c.remote_addr : ''} ${c.proto}${c.status ? ' · ' + c.status : ''}${c.process ? ' · ' + c.process : ''}`,
           source: a.agentName,
-        }))
-      }),
+        })),
+      ),
     ]
-    return items.sort((a, b) => b.ts - a.ts).slice(0, 20)
+    return items.sort((a, b) => b.ts - a.ts).slice(0, 200)
   }, [flows, syslog, agentConns])
 
   const eventRate = useMemo(() => {
@@ -310,7 +309,7 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         <div className="rounded-md border border-l-2 border-slate-800 border-l-emerald-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Toplam Veri (Agent)</p>
           <p className="mt-1 font-mono text-2xl font-bold text-emerald-300">{formatBytes(agentTraffic.totalBytes)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">agent başlangıcından beri</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">arayüz sayaçları · kümülatif</p>
         </div>
         <div className="rounded-md border border-l-2 border-slate-800 border-l-amber-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Paket Hızı (Agent)</p>
