@@ -72,11 +72,16 @@ func TestTopologyLinks(t *testing.T) {
 
 func TestBaselineStats(t *testing.T) {
 	st := openTest(t)
-	now := time.Now().Unix()
+	now := time.Now()
 
-	// 120 ornek (baseline guvenilirlik esigi)
+	// 120 ornek (baseline guvenilirlik esigi) — mevcut SAATIN BASINDAN
+	// itibaren serpistirilir (simdiden geriye 120sn degil), boylece test
+	// saatin ilk 2 dakikasinda kosarsa kosun (ki bu koşumda 04:01:59'da
+	// tam olarak boyle oldu) ornekler saat sinirini asip bir onceki saat
+	// kovasina dusmez.
+	hourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
 	for i := int64(0); i < 120; i++ {
-		if err := st.InsertSample(Sample{Ts: now - 120 + i, Device: "en0", BpsIn: 1000, BpsOut: 500, Pps: 10}); err != nil {
+		if err := st.InsertSample(Sample{Ts: hourStart.Unix() + i, Device: "en0", BpsIn: 1000, BpsOut: 500, Pps: 10}); err != nil {
 			t.Fatalf("ornek: %v", err)
 		}
 	}

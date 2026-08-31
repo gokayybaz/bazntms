@@ -24,24 +24,30 @@ func newAnomalyManager(t *testing.T, cfg Config) (*Manager, store.Store) {
 
 func TestAnomalyFires(t *testing.T) {
 	m, st := newAnomalyManager(t, DefaultConfig())
-	now := time.Now().Unix()
+	now := time.Now()
 
-	// guvenilir baseline: degerler ~1000 bps (az dalgalanma). Ornekler son
-	// ~2 saate 2 sn aralikla serpistirilir; boylece test gunun hangi
-	// dakikasinda kosarsa kosun guncel saat kovasinda >=120 ornek olur
-	// (saat sinirina duyarli degil). Tum baseline, 5 dk'lik karsilastirma
-	// penceresinin disinda kalir (>= 310 sn once).
-	for i := 0; i < 2000; i++ {
-		val := float64(1000 + (i%20)*10) // 1000-1190
-		if err := st.InsertSample(store.Sample{
-			Ts: now - int64(310+i*2), Device: "en0", BpsIn: val, BpsOut: 0, Pps: 1,
-		}); err != nil {
-			t.Fatalf("baseline ornek: %v", err)
+	// guvenilir baseline: degerler ~1000 bps (az dalgalanma). HourlyBpsStats
+	// saat-of-day kovalarini SON 7 GUNDEN toplar (bkz. topology.go); bu
+	// yuzden ornekleri "simdiden geriye N saniye" seklinde degil, GECMIS
+	// GUNLERİN AYNI saatine (now.Hour()) sabitleyerek ureterek testin
+	// hangi DAKIKADA kosarsa kosun mevcut saat kovasinda >=120 ornek
+	// bulmasini garanti ediyoruz (onceki surum saatin ilk birkac
+	// dakikasinda calisirsa basarisiz oluyordu — bkz. commit mesaji).
+	for day := 1; day <= 5; day++ {
+		hourStart := time.Date(now.Year(), now.Month(), now.Day()-day, now.Hour(), 0, 0, 0, now.Location())
+		for i := 0; i < 40; i++ {
+			val := float64(1000 + (i%20)*10)                       // 1000-1190
+			ts := hourStart.Add(time.Duration(i*90) * time.Second) // saat icinde ~60 dk'ya yayilir
+			if err := st.InsertSample(store.Sample{
+				Ts: ts.Unix(), Device: "en0", BpsIn: val, BpsOut: 0, Pps: 1,
+			}); err != nil {
+				t.Fatalf("baseline ornek: %v", err)
+			}
 		}
 	}
 	// mevcut pencere: ani yukselis (son 5 dk icinde 300K bps)
 	for i := 0; i < 10; i++ {
-		if err := st.InsertSample(store.Sample{Ts: now - int64(i), Device: "en0", BpsIn: 300_000, Pps: 500}); err != nil {
+		if err := st.InsertSample(store.Sample{Ts: now.Unix() - int64(i), Device: "en0", BpsIn: 300_000, Pps: 500}); err != nil {
 			t.Fatalf("spike ornek: %v", err)
 		}
 	}
