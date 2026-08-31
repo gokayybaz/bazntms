@@ -40,7 +40,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.hub
-    command: ["-flow-port", "2055", "-syslog-port", "5514", "-enroll-token", "demo-enroll-token"]
+    command: ["-flow-port", "2055", "-syslog-port", "5514", "-enroll-token", "demo-enroll-token", "-agent-pcap"]
     ports:
       - "8080:8080"
       - "2055:2055/udp" # NetFlow v5

@@ -56,6 +56,7 @@ services:
       dockerfile: deploy/Dockerfile.hub
     command:
       - "-capture=false" # paket yakalama yalnızca host'taki agent'larda anlamlı
+      - "-agent-pcap" # agent'ların surec bazli atif icin pcap yapmasina izin ver (politika)
       - "-flow-port"
       - "2055" # NetFlow v5 (tek alıcı: NATS'e kuyruklar)
       - "-syslog-port"
@@ -91,6 +92,7 @@ services:
       - "-capture=false"
       - "-alerts=false"
       - "-poller=false"
+      - "-agent-pcap" # agent'lar buraya (lb uzerinden) enroll olur — asil politika burasi
       - "-enroll-token"
       - "scale-enroll-token"
     environment:
@@ -138,6 +140,10 @@ services:
       - "scale-enroll-token"
       - "-site"
       - "docker-scale"
+      - "-pcap" # surec bazli trafik atfi; hub politikasi (-agent-pcap) da acik olmali
+    cap_add:
+      - NET_RAW # ham soket + pcap_activate
+      - NET_ADMIN # promiscuous mode (SIOCSIFFLAGS) icin NET_RAW yetmiyor
     deploy:
       replicas: 2
     depends_on:
