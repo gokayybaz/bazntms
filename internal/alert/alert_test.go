@@ -17,7 +17,7 @@ func newTestManager(t *testing.T) (*Manager, store.Store) {
 		t.Fatalf("store: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
-	m := NewManager(DefaultConfig(), st, capture.NewEngine())
+	m := NewManager(DefaultConfig(), st, capture.NewEngine(), 30)
 	return m, st
 }
 
@@ -133,7 +133,7 @@ func TestConfigPersistence(t *testing.T) {
 	if raw == "" {
 		t.Fatal("ayar bos")
 	}
-	m2 := NewManager(DefaultConfig(), m.st, capture.NewEngine())
+	m2 := NewManager(DefaultConfig(), m.st, capture.NewEngine(), 30)
 	_ = m2
 	// UpdateConfig store'a yazdi; Config() guncel degeri dondurmeli
 	if got := m.Config().Bandwidth.InMbps; got != 55.5 {

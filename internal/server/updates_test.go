@@ -38,7 +38,7 @@ func newUpdateServer(t *testing.T) (*httptest.Server, string, string) {
 	}
 
 	engine := capture.NewEngine()
-	mgr := alert.NewManager(alert.DefaultConfig(), st, engine)
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
 	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, "admin-pass-1", "", 30, false, nil, nil, nil)
 	srv.SetUpdatesDir(dir)
 	ts := httptest.NewServer(srv.Handler())

@@ -18,7 +18,7 @@ func newFortiManager(t *testing.T) (*Manager, store.Store) {
 		t.Fatalf("store: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return NewManager(DefaultConfig(), st, capture.NewEngine()), st
+	return NewManager(DefaultConfig(), st, capture.NewEngine(), 30), st
 }
 
 func TestFortiAlerts(t *testing.T) {

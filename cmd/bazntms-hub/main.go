@@ -182,7 +182,7 @@ func main() {
 	}
 	alertCfg = alert.NormalizeConfig(alertCfg)
 	alertCfg = alert.NormalizeFortiConfig(alertCfg)
-	alerts := alert.NewManager(alertCfg, st, engine)
+	alerts := alert.NewManager(alertCfg, st, engine, *telemetryInterval)
 	if *alertsOn {
 		alerts.Start()
 		defer alerts.Stop()

@@ -104,6 +104,14 @@ type Manager struct {
 	bwOutCount int
 	lastFire   map[string]time.Time // key: kind|key -> cooldown
 
+	// agentBw, her online agent icin ardisik bant genisligi esik-asimi
+	// sayaci (checkAgentBandwidth) — anahtar agent ID.
+	agentBw map[int64]*agentBwCounter
+
+	// telemetryInterval, agent filosunun "online" penceresini hesaplamak
+	// icin (bkz. server.go'daki ayni formul) — saniye.
+	telemetryInterval int
+
 	stopCh chan struct{}
 	doneCh chan struct{}
 	tickN  int
@@ -111,15 +119,22 @@ type Manager struct {
 	notifier *Notifier
 }
 
-func NewManager(cfg Config, st store.Store, engine *capture.Engine) *Manager {
+type agentBwCounter struct{ in, out int }
+
+func NewManager(cfg Config, st store.Store, engine *capture.Engine, telemetryInterval int) *Manager {
+	if telemetryInterval <= 0 {
+		telemetryInterval = 30
+	}
 	return &Manager{
-		cfg:      cfg,
-		st:       st,
-		engine:   engine,
-		lastFire: map[string]time.Time{},
-		stopCh:   make(chan struct{}),
-		doneCh:   make(chan struct{}),
-		notifier: &Notifier{},
+		cfg:               cfg,
+		st:                st,
+		engine:            engine,
+		lastFire:          map[string]time.Time{},
+		agentBw:           map[int64]*agentBwCounter{},
+		telemetryInterval: telemetryInterval,
+		stopCh:            make(chan struct{}),
+		doneCh:            make(chan struct{}),
+		notifier:          &Notifier{},
 	}
 }
 
@@ -158,6 +173,20 @@ func (m *Manager) run() {
 				m.checkPorts(cfg, cons)
 				m.checkNewProcess(cfg, cons)
 				m.checkNewTarget(cfg, snap)
+
+				// agent filosu: hub'in kendi yerel yakalamasindan (yukarida)
+				// AYRI olarak, uzak agent'lardan raporlanan baglanti/verim
+				// verisi uzerinde de ayni port/surec/bant genisligi
+				// kurallarini calistir (bkz. checkAgent* — "target" (yeni
+				// hedef) kurali agent tarafinda henuz desteklenmiyor, cunku
+				// agent'lar hub'in TopEndpoints'i gibi hedef-basi kumulatif
+				// bayt toplami raporlamiyor).
+				window := time.Duration(2*m.telemetryInterval) * time.Second
+				if agents, err := m.st.ListAgents(window, ""); err == nil {
+					m.checkAgentPorts(cfg, agents)
+					m.checkAgentNewProcess(cfg, agents)
+					m.checkAgentBandwidth(cfg, agents)
+				}
 			}
 			// anomali degerlendirmesi: 5 dakikada bir (Faz 6.2)
 			if m.tickN%300 == 1 {
@@ -279,6 +308,140 @@ func (m *Manager) checkNewTarget(cfg Config, snap *capture.Snapshot) {
 			name = fmt.Sprintf("%s (%s)", e.Hostname, e.IP)
 		}
 		m.fire("target", e.IP, fmt.Sprintf("Yeni hedefle trafik: %s — toplam %.1f MB", name, float64(e.Total)/1024/1024))
+	}
+}
+
+// --- agent filosu kurallari (checkNewProcess/checkPorts/checkBandwidth'in
+// uzak agent'lardan raporlanan veri uzerindeki karsiligi) ---
+
+// checkAgentPorts, her online agent'in son bildirdigi baglanti listesinde
+// supheli portlari arar (checkPorts ile ayni kural, hub'in kendi
+// sysmon.ListConnections'i yerine agent'in LatestAgentConnections'i).
+func (m *Manager) checkAgentPorts(cfg Config, agents []store.AgentWithRates) {
+	if !cfg.Ports.Enabled {
+		return
+	}
+	set := map[int]struct{}{}
+	for _, p := range cfg.Ports.Ports {
+		set[p] = struct{}{}
+	}
+	for _, a := range agents {
+		if !a.Online {
+			continue
+		}
+		for _, c := range m.st.LatestAgentConnections(a.ID) {
+			if c.RemoteAddr == "" {
+				continue
+			}
+			port := remotePort(c.RemoteAddr)
+			if _, ok := set[port]; !ok {
+				continue
+			}
+			m.fire("port", a.Name+":"+fmt.Sprint(port),
+				fmt.Sprintf("Şüpheli porta bağlantı — agent %s: uzak %s (%s) — yerel %s", a.Name, c.RemoteAddr, c.Process, c.LocalAddr))
+		}
+	}
+}
+
+// checkAgentNewProcess, her online agent icin ayri bir "gorulmusluk" tabani
+// tutar (seenKind agent adiyla scope'lanir) — bir agent'ta gorulen surec
+// digerlerini sessize almaz, her agent kendi taban cizgisini olusturur.
+func (m *Manager) checkAgentNewProcess(cfg Config, agents []store.AgentWithRates) {
+	if !cfg.NewProc.Enabled {
+		return
+	}
+	ignore := map[string]struct{}{}
+	for _, p := range cfg.NewProc.Ignore {
+		ignore[p] = struct{}{}
+	}
+	for _, a := range agents {
+		if !a.Online {
+			continue
+		}
+		seenKind := "agent-proc:" + a.Name
+		cons := m.st.LatestAgentConnections(a.ID)
+		if n, err := m.st.CountAlertSeen(seenKind); err == nil && n == 0 {
+			// bu agent icin ilk degerlendirme: mevcut surecleri sessizce
+			// taban cizgisi yap (agent yeni eklendiginde alarm firtinasi olmasin)
+			for _, c := range cons {
+				if c.Process != "" {
+					m.st.MarkAlertSeen(seenKind, c.Process)
+				}
+			}
+			continue
+		}
+		for _, c := range cons {
+			if c.Process == "" {
+				continue
+			}
+			if _, skip := ignore[c.Process]; skip {
+				continue
+			}
+			seen, _ := m.st.IsAlertSeen(seenKind, c.Process)
+			if seen {
+				continue
+			}
+			m.st.MarkAlertSeen(seenKind, c.Process)
+			m.fire("proc", a.Name+":"+c.Process,
+				fmt.Sprintf("Yeni süreç ağa çıktı — agent %s: %s (pid %d)", a.Name, c.Process, c.PID))
+		}
+	}
+}
+
+// checkAgentBandwidth, checkBandwidth'in agent filosu karsiligi: her online
+// agent'in TUM arayuzlerinin toplam rx/tx bps'ini ayni Mbps esikleriyle
+// karsilastirir. "Ardisik N saniye" sayaci burada ~5sn'lik consEvery
+// tur araligiyla ilerler (checkBandwidth'in 1sn'lik hub-yerel sayacindan
+// farkli olcekte) — cfg.Bandwidth.Seconds bu yuzden agent yolunda "N
+// ardisik degerlendirme" anlamina gelir, tam N saniye degil.
+func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates) {
+	if !cfg.Bandwidth.Enabled {
+		return
+	}
+	need := cfg.Bandwidth.Seconds
+	if need <= 0 {
+		need = 10
+	}
+	seen := map[int64]bool{}
+	for _, a := range agents {
+		seen[a.ID] = true
+		if !a.Online {
+			continue
+		}
+		var rx, tx float64
+		for _, r := range a.Rates {
+			rx += r.RxBps
+			tx += r.TxBps
+		}
+		c := m.agentBw[a.ID]
+		if c == nil {
+			c = &agentBwCounter{}
+			m.agentBw[a.ID] = c
+		}
+		if inMbps := rx * 8 / 1e6; cfg.Bandwidth.InMbps > 0 && inMbps >= cfg.Bandwidth.InMbps {
+			c.in++
+			if c.in == need {
+				m.fire("bw", "agent-in:"+a.Name,
+					fmt.Sprintf("Agent %s: indirme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, inMbps))
+			}
+		} else {
+			c.in = 0
+		}
+		if outMbps := tx * 8 / 1e6; cfg.Bandwidth.OutMbps > 0 && outMbps >= cfg.Bandwidth.OutMbps {
+			c.out++
+			if c.out == need {
+				m.fire("bw", "agent-out:"+a.Name,
+					fmt.Sprintf("Agent %s: gönderme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, outMbps))
+			}
+		} else {
+			c.out = 0
+		}
+	}
+	// offline'a dusen/silinen agent'larin sayaclarini temizle (bellek sizintisi olmasin)
+	for id := range m.agentBw {
+		if !seen[id] {
+			delete(m.agentBw, id)
+		}
 	}
 }
 

@@ -19,7 +19,7 @@ func newAnomalyManager(t *testing.T, cfg Config) (*Manager, store.Store) {
 		t.Fatalf("store: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return NewManager(cfg, st, capture.NewEngine()), st
+	return NewManager(cfg, st, capture.NewEngine(), 30), st
 }
 
 func TestAnomalyFires(t *testing.T) {
