@@ -122,6 +122,7 @@ type Store interface {
 	AgentHistory(agentID int64, since time.Time) ([]Bucket, error)
 	AgentByID(id int64) (*Agent, error)
 	DeleteAgent(id int64) error
+	RenameAgent(id int64, name string) error
 
 	// surec trafigi (Faz 2)
 	SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error

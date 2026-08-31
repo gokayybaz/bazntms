@@ -316,6 +316,11 @@ func (s *sqlStore) AgentByID(id int64) (*Agent, error) {
 	return &a, nil
 }
 
+func (s *sqlStore) RenameAgent(id int64, name string) error {
+	_, err := s.db.Exec(s.q(`UPDATE agents SET name = ? WHERE id = ?`), name, id)
+	return err
+}
+
 func (s *sqlStore) DeleteAgent(id int64) error {
 	for _, q := range []string{
 		`DELETE FROM agents WHERE id = ?`,

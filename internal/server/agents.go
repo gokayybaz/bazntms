@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -20,6 +21,29 @@ import (
 )
 
 const defaultTelemetryInterval = 30
+
+// agentClientIP, agent enrollment/telemetri isteklerinde GORUNTULENECEK
+// (yalnizca bilgi amacli — erisim kontrolu/rate-limit icin KULLANILMAZ)
+// gercek istemci IP'sini cozer. docker-compose.scale.yml topolojisinde
+// agent'lar nginx LB'ye baglanir (bkz. deploy/nginx/lb.conf); LB
+// X-Forwarded-For ekliyor ama r.RemoteAddr LB container'inin kendi IP'sini
+// gosteriyordu (bkz. docs/TROUBLESHOOTING.md). Yalnizca dogrudan-baglanti
+// durumunda (header yok) r.RemoteAddr'a duser; bu fonksiyon guvenlige
+// duyarli hicbir karar icin kullanilmamali (auth.go'daki login rate-limit
+// KASITLI olarak r.RemoteAddr'i dogrudan kullanmaya devam eder — XFF'e
+// guvenmek istemcinin kendi IP'sini sahtelemesine izin verirdi).
+func agentClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if first, _, _ := strings.Cut(xff, ","); strings.TrimSpace(first) != "" {
+			return strings.TrimSpace(first)
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
 
 // agentFromCtx, agentAuth middleware'inin yerlestirdigi kaydi dondurur.
 type ctxKey string
@@ -88,7 +112,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 	buf := make([]byte, 32)
 	rand.Read(buf)
 	agentToken := hex.EncodeToString(buf)
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ip := agentClientIP(r)
 
 	id, err := s.store.RegisterAgent(store.Agent{
 		Name:            hello.Name,
@@ -130,7 +154,7 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 	if ts == 0 {
 		ts = time.Now().Unix()
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	ip := agentClientIP(r)
 
 	if s.ingest != nil {
 		if err := s.ingest.PublishTelemetry(agent.ID, agent.Version, ip, ts, &batch); err != nil {
@@ -260,6 +284,40 @@ func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
 	slog.Info("agent silindi", "agent_id", id)
 	s.audit(r, identityFromCtx(r), "agent.delete", fmt.Sprintf("agent:%d", id), "")
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handleAgentRename, agent'a hub uzerinden yeni bir goruntu adi atar (enroll
+// sirasinda -name ile verilen ad yerine gecer; agent tarafinda hicbir sey
+// degismez, yalnizca kayit defterindeki isim guncellenir).
+func (s *Server) handleAgentRename(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "geçersiz istek gövdesi", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		http.Error(w, "isim boş olamaz", http.StatusBadRequest)
+		return
+	}
+	if len(name) > 128 {
+		http.Error(w, "isim çok uzun (maksimum 128 karakter)", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.RenameAgent(id, name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	slog.Info("agent yeniden adlandirildi", "agent_id", id, "name", name)
+	s.audit(r, identityFromCtx(r), "agent.rename", fmt.Sprintf("agent:%d", id), name)
+	writeJSON(w, map[string]any{"ok": true, "name": name})
 }
 
 // version1, desteklenen en yuksek agent protokol surumu.

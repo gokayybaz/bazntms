@@ -169,6 +169,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
 	mux.HandleFunc("GET /api/v1/agents/{id}/history", s.handleAgentHistory)
 	mux.Handle("DELETE /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentDelete)))
+	mux.Handle("PATCH /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentRename)))
 
 	// cihazlar ve ag cihazi verileri (Faz 3; ekleme/silme = netops+)
 	mux.HandleFunc("GET /api/v1/devices", s.handleDevicesList)

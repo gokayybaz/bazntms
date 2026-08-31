@@ -64,6 +64,20 @@ sc start bazntms-agent
 - Servis kurulumu hata 1053 veriyorsa (zaman aşımı) binary eski bir sürüm
   olabilir; SCM dispatcher desteği v0.2.1 ile geldi — release'ten güncel MSI'ı alın.
 
+## Agent filosu
+
+### Agent'lar sayfasında yanlış/beklenmedik IP adresi görünüyor
+
+Hub, agent'ın IP'sini `X-Forwarded-For` başlığından (varsa) okur, yoksa
+doğrudan bağlantının kaynağına düşer. `deploy/docker-compose.scale.yml`
+gibi bir nginx LB arkasında (bkz. `deploy/nginx/lb.conf`) çalışırken LB
+`X-Forwarded-For` eklemiyorsa ya da hub LB'nin arkasında değil de
+doğrudan agent trafiğini alan farklı bir proxy'nin arkasındaysa, gösterilen
+IP o ara katmanın (proxy/LB container'ı) kendi IP'si olarak görünür —
+gerçek agent IP'si değil. Bu alan yalnızca **gösterim** amaçlıdır; erişim
+kontrolü/rate-limit için kullanılmaz (kimlik doğrulama enroll/agent
+token'larıyla yapılır).
+
 ## AI analizi sorunları
 
 ### "AI yapilandirilmamis"

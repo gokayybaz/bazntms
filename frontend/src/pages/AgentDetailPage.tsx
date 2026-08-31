@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { AgentWithRates, Bucket } from '../types'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
@@ -32,6 +32,7 @@ function relTime(unix: number): string {
 
 export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [agent, setAgent] = useState<AgentWithRates | null>(null)
   const [connections, setConnections] = useState<AgentConnSample[]>([])
   const [history, setHistory] = useState<Bucket[]>([])
@@ -89,6 +90,41 @@ export function AgentDetailPage() {
     }
   }, [id, minutes])
 
+  const renameAgent = async () => {
+    if (!agent || !id) return
+    const name = prompt('Yeni ad:', agent.name)
+    if (!name || !name.trim() || name.trim() === agent.name) return
+    try {
+      const res = await fetch(`/api/v1/agents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+      if (!res.ok) {
+        alert(`Yeniden adlandırma başarısız: ${await res.text()}`)
+        return
+      }
+      setAgent({ ...agent, name: name.trim() })
+    } catch {
+      alert('Yeniden adlandırma başarısız — bağlantı hatası')
+    }
+  }
+
+  const deleteAgent = async () => {
+    if (!agent || !id) return
+    if (!confirm(`"${agent.name}" silinsin mi? Agent'ın tüm telemetrisi de silinir. Bu işlem geri alınamaz.`)) return
+    try {
+      const res = await fetch(`/api/v1/agents/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        alert(`Silme başarısız: ${await res.text()}`)
+        return
+      }
+      navigate('/agentlar')
+    } catch {
+      alert('Silme başarısız — bağlantı hatası')
+    }
+  }
+
   const filteredConns = useMemo(() => {
     const q = connQuery.trim().toLowerCase()
     if (!q) return connections
@@ -137,6 +173,20 @@ export function AgentDetailPage() {
         </span>
         <h1 className="font-mono text-xl font-bold text-slate-100">{agent.name}</h1>
         {agent.site && <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-400">{agent.site}</span>}
+        <button
+          type="button"
+          onClick={renameAgent}
+          className="rounded border border-slate-700 px-2 py-0.5 text-xs text-slate-400 transition hover:border-cyan-500/40 hover:text-cyan-300"
+        >
+          Adı Değiştir
+        </button>
+        <button
+          type="button"
+          onClick={deleteAgent}
+          className="ml-auto rounded border border-rose-900/50 px-2 py-0.5 text-xs text-rose-400 transition hover:border-rose-500/50 hover:bg-rose-500/10"
+        >
+          Agent'ı Sil
+        </button>
       </div>
 
       {/* özet şeridi */}
