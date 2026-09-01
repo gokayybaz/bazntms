@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Overview } from './Overview'
 import type { AlertEvent } from '../types'
@@ -38,7 +38,7 @@ const DEVICES = [
   { id: 1, name: 'switch-1', host: '10.0.0.1', kind: 'switch', vendor: 'generic', snmp_version: 2, enabled: true, last_poll: now, last_error: '' },
 ]
 
-const FLOWS = [{ ts: now - 5, device: 'switch-1', src: '10.0.0.5', dst: '8.8.8.8', src_port: 5353, dst_port: 53, proto: 'udp' }]
+const FLOWS = [{ ts: now - 5, device: 'switch-1', src: '10.0.0.5', dst: '8.8.8.8', src_port: 5353, dst_port: 53, proto: 'udp', packets: 12, octets: 4096 }]
 const SYSLOG = [{ id: 1, ts: now - 10, host: 'switch-1', severity: 5, tag: 'kernel', message: 'baglanti sifirlandi' }]
 
 function agentDetailFor(id: number) {
@@ -112,6 +112,33 @@ describe('Overview', () => {
     expect(agentIdx).toBeGreaterThanOrEqual(0)
     expect(flowIdx).toBeGreaterThan(agentIdx)
     expect(syslogIdx).toBeGreaterThan(flowIdx)
+  })
+
+  it('canlı akış tür filtresi yalnızca seçili türü gösterir, "tümü" hepsini geri getirir', async () => {
+    render(<Overview refreshKey={0} alertEvents={[]} />)
+    await waitFor(() => expect(screen.getByText('proc-1', { exact: false })).toBeInTheDocument())
+
+    // baslangicta uc kaynak da gorunur
+    expect(screen.getByText('baglanti sifirlandi', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(/8\.8\.8\.8/)).toBeInTheDocument()
+
+    // "syslog" filtresine tikla → flow + agent satirlari gizlenir
+    fireEvent.click(screen.getByRole('button', { name: /^syslog/i }))
+    expect(screen.getByText('baglanti sifirlandi', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText(/8\.8\.8\.8/)).not.toBeInTheDocument()
+    expect(screen.queryByText('proc-1', { exact: false })).not.toBeInTheDocument()
+
+    // "tümü" → hepsi geri gelir
+    fireEvent.click(screen.getByRole('button', { name: /^tümü/i }))
+    expect(screen.getByText(/8\.8\.8\.8/)).toBeInTheDocument()
+    expect(screen.getByText('proc-1', { exact: false })).toBeInTheDocument()
+  })
+
+  it('flow satırında bayt + paket hacmini gösterir (API alanları octets/packets)', async () => {
+    render(<Overview refreshKey={0} alertEvents={[]} />)
+    // 4096 bayt → "4.0 KB", 12 paket → "12 pkt"
+    await waitFor(() => expect(screen.getByText(/4\.0 KB/)).toBeInTheDocument())
+    expect(screen.getByText(/12 pkt/)).toBeInTheDocument()
   })
 
   it('açık uyarıları listeler', async () => {

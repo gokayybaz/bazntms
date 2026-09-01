@@ -26,6 +26,8 @@ interface FlowRow {
   src_port: number
   dst_port: number
   proto: string
+  packets: number
+  octets: number
 }
 
 interface SyslogEvent {
@@ -43,12 +45,15 @@ interface AgentConnSample {
   remote_addr?: string
   status?: string
   process?: string
+  pid?: number
 }
 
+type StreamKind = 'flow' | 'syslog' | 'agent'
+
 type StreamItem =
-  | { kind: 'flow'; ts: number; key: string; primary: string; source: string }
+  | { kind: 'flow'; ts: number; key: string; primary: string; source: string; bytes: number; packets: number }
   | { kind: 'syslog'; ts: number; key: string; primary: string; source: string; severity: number }
-  | { kind: 'agent'; ts: number; key: string; primary: string; source: string }
+  | { kind: 'agent'; ts: number; key: string; primary: string; source: string; pid?: number }
 
 const ALERT_KIND_STYLES: Record<string, string> = {
   bw: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -203,6 +208,8 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         key: `f${f.ts}-${f.src}-${f.dst}-${f.src_port}`,
         primary: `${f.src}:${f.src_port} → ${f.dst}:${f.dst_port} ${f.proto}`,
         source: f.device,
+        bytes: f.octets ?? 0,
+        packets: f.packets ?? 0,
       })),
       ...syslog.map((e) => ({
         kind: 'syslog' as const,
@@ -221,11 +228,21 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
           key: `a${a.agentName}-${i}-${c.local_addr}-${c.remote_addr ?? ''}`,
           primary: `${c.local_addr}${c.remote_addr ? ' → ' + c.remote_addr : ''} ${c.proto}${c.status ? ' · ' + c.status : ''}${c.process ? ' · ' + c.process : ''}`,
           source: a.agentName,
+          pid: c.pid,
         })),
       ),
     ]
     return items.sort((a, b) => b.ts - a.ts).slice(0, 200)
   }, [flows, syslog, agentConns])
+
+  // canli akis tur filtresi (flow / agent / syslog) + tur bazli sayaclar
+  const [streamFilter, setStreamFilter] = useState<StreamKind | 'all'>('all')
+  const streamCounts = useMemo(() => {
+    const c: Record<StreamKind, number> = { flow: 0, agent: 0, syslog: 0 }
+    for (const it of stream) c[it.kind]++
+    return c
+  }, [stream])
+  const visibleStream = streamFilter === 'all' ? stream : stream.filter((it) => it.kind === streamFilter)
 
   const eventRate = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
@@ -318,64 +335,103 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         </div>
       </div>
 
-      {/* canlı akış + uyarılar */}
-      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <Card title="Canlı Olay Akışı" right={<span className="text-xs text-slate-500">Agent + NetFlow v5 + Syslog · en yeni üstte</span>}>
-          {stream.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-600">Henüz akış yok — online agent bekleyin ya da cihazları NetFlow/Syslog için hub'a yönlendirin.</p>
-          ) : (
-            <div className="max-h-96 space-y-0.5 overflow-y-auto">
-              {stream.map((it, i) => (
-                <div
-                  key={it.key}
-                  className={`flex items-baseline gap-2.5 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/40 ${i % 2 === 1 ? 'bg-slate-800/15' : ''}`}
-                >
-                  <span className="w-14 flex-shrink-0 text-[10px] text-slate-600">{new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}</span>
-                  {it.kind === 'flow' && (
-                    <span className="flex-shrink-0 rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-cyan-300">flow</span>
-                  )}
-                  {it.kind === 'agent' && (
-                    <span className="flex-shrink-0 rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-violet-300">agent</span>
-                  )}
-                  {it.kind === 'syslog' && (
-                    <span
-                      className={`flex-shrink-0 rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${
-                        it.severity <= 3
-                          ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-                          : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                      }`}
-                    >
-                      syslog
+      {/* canlı olay akışı — tam genişlik */}
+      <Card
+        title="Canlı Olay Akışı"
+        right={
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-slate-500 sm:inline">Agent + NetFlow v5 + Syslog · en yeni üstte</span>
+            <div className="flex items-center gap-1">
+              {(['all', 'flow', 'agent', 'syslog'] as const).map((k) => {
+                const active = streamFilter === k
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setStreamFilter(k)}
+                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                      active ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {k === 'all' ? 'tümü' : k}
+                    <span className={`ml-1 ${active ? 'opacity-60' : 'text-slate-600'}`}>
+                      {k === 'all' ? stream.length : streamCounts[k]}
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-slate-300">{it.primary}</span>
-                  <span className="flex-shrink-0 text-[10px] text-slate-600">{it.source}</span>
-                </div>
-              ))}
+                  </button>
+                )
+              })}
             </div>
-          )}
-        </Card>
+          </div>
+        }
+      >
+        {visibleStream.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-600">
+            {stream.length === 0
+              ? "Henüz akış yok — online agent bekleyin ya da cihazları NetFlow/Syslog için hub'a yönlendirin."
+              : 'Bu türde henüz olay yok.'}
+          </p>
+        ) : (
+          <div className="max-h-[32rem] space-y-0.5 overflow-y-auto">
+            {visibleStream.map((it, i) => (
+              <div
+                key={it.key}
+                className={`flex items-baseline gap-2.5 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/40 ${i % 2 === 1 ? 'bg-slate-800/15' : ''}`}
+              >
+                <span className="w-16 flex-shrink-0 text-right text-[10px] text-slate-600">{new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+                <span className="hidden w-16 flex-shrink-0 text-[10px] text-slate-700 sm:inline">{relTime(it.ts)}</span>
+                {it.kind === 'flow' && (
+                  <span className="flex-shrink-0 rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-cyan-300">flow</span>
+                )}
+                {it.kind === 'agent' && (
+                  <span className="flex-shrink-0 rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-violet-300">agent</span>
+                )}
+                {it.kind === 'syslog' && (
+                  <span
+                    className={`flex-shrink-0 rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${
+                      it.severity <= 3
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                    }`}
+                  >
+                    syslog
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-slate-300">{it.primary}</span>
+                {it.kind === 'flow' && it.bytes > 0 && (
+                  <span className="hidden flex-shrink-0 text-[10px] text-slate-500 md:inline">
+                    {formatBytes(it.bytes)} · {formatNum(it.packets)} pkt
+                  </span>
+                )}
+                {it.kind === 'agent' && it.pid ? (
+                  <span className="hidden flex-shrink-0 text-[10px] text-slate-700 md:inline">pid {it.pid}</span>
+                ) : null}
+                <span className="w-28 flex-shrink-0 truncate text-right text-[10px] text-slate-600">{it.source}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
-        <Card title="Uyarılar" right={<span className="text-xs text-slate-500">{formatNum(alertEvents.length)} olay</span>}>
-          {recentAlerts.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-600">Henüz uyarı yok.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {recentAlerts.map((e) => (
-                <div key={e.id} className="rounded-md border border-slate-800 bg-slate-900/50 px-2.5 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ALERT_KIND_STYLES[e.kind] ?? 'border-slate-700 bg-slate-800 text-slate-400'}`}>
-                      {ALERT_KIND_LABELS[e.kind] ?? e.kind}
-                    </span>
-                    <span className="ml-auto font-mono text-[10px] text-slate-600">{relTime(e.ts)}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-slate-300">{e.message}</p>
+      {/* uyarılar — akışın altında, tam genişlik */}
+      <Card title="Uyarılar" right={<span className="text-xs text-slate-500">{formatNum(alertEvents.length)} olay · bu oturum</span>}>
+        {recentAlerts.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-600">Henüz uyarı yok.</p>
+        ) : (
+          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+            {recentAlerts.map((e) => (
+              <div key={e.id} className="rounded-md border border-slate-800 bg-slate-900/50 px-2.5 py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ALERT_KIND_STYLES[e.kind] ?? 'border-slate-700 bg-slate-800 text-slate-400'}`}>
+                    {ALERT_KIND_LABELS[e.kind] ?? e.kind}
+                  </span>
+                  <span className="ml-auto font-mono text-[10px] text-slate-600">{relTime(e.ts)}</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
+                <p className="mt-1 truncate text-xs text-slate-300">{e.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* agent filosu + topoloji */}
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
