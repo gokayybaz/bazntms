@@ -1,6 +1,8 @@
 # bazNTMS agent ornek yapilandirmasi.
-# Gercek konfigurasyonu /etc/bazntms/agent.yml olarak kopyalayip doldurun
-# (veya interaktif sihirbaz: bazntmsctl setup).
+# Gercek konfigurasyonu /etc/bazntms/agent.yml olarak kopyalayip doldurun.
+# (Not: `bazntmsctl setup` HUB icin kurulum sihirbazidir, agent icin degil
+# — Windows MSI ve macOS .pkg kurulumlari kendi sihirbazlarinda bu
+# alanlari (hub url/token/site) zaten soruyor.)
 
 hub:
   # birden fazla hub: virgulle ayirin → failover sirasi (Faz 5.4)

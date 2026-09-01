@@ -1,11 +1,109 @@
 #!/bin/bash
-# macOS pkg postinstall — LaunchDaemon yuklenir; konfigurasyon yoksa
-# ornek dosyadan agent.yml olarak kopyalanir (dogrudan doldurulabilsin diye).
-if [ ! -f /etc/bazntms/agent.yml ]; then
-    mkdir -p /etc/bazntms
-    cp /usr/local/share/bazntms/bazntms-agent.yml.example /etc/bazntms/agent.yml 2>/dev/null || true
-    echo "bazNTMS agent kuruldu. /etc/bazntms/agent.yml dosyasini doldurup 'sudo launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist' ile baslatin."
+# macOS pkg postinstall — LaunchDaemon yuklenir.
+#
+# Zaten bir config varsa (yukseltme / yeniden kurulum): dokunma, servisi
+# tazele. Yoksa (ilk kurulum): native macOS dialog kutulariyla (AppleScript
+# "display dialog") Hub URL/Enroll Token/Site sorulur — Windows MSI
+# sihirbazindaki "Sunucu Ayarlari" ekraninin macOS esdegeri. Apple'in
+# pkgbuild/Installer.app'i WiX gibi ozel bir "veri girisi" ekrani
+# desteklemiyor (eski InstallerPlugins API'si yillardir fiilen terk
+# edilmis); bu yuzden postinstall (root olarak calisir) konsol
+# kullanicisinin GUI oturumunda osascript ile dialog acan, macOS
+# paketleyicilerinde yaygin kullanilan bir yontem tercih edildi.
+#
+# GUI oturumu yoksa (orn. headless/SSH ile `installer -pkg` calistirildi)
+# ya da kullanici "Atla"/Iptal derse: sessizce eskisi gibi bos bir
+# agent.yml yazip elle doldurmasi icin yonlendirilir — kurulum ASLA
+# bu adimdan dolayi basarisiz olmaz.
+set -u
+
+CONSOLE_USER="$(stat -f '%Su' /dev/console 2>/dev/null || true)"
+
+if [ -f /etc/bazntms/agent.yml ]; then
+    launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist 2>/dev/null || true
+    exit 0
+fi
+
+mkdir -p /etc/bazntms
+
+HUBURL=""
+ENROLLTOKEN=""
+SITE=""
+
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ "$CONSOLE_USER" != "loginwindow" ]; then
+    SCPT="$(mktemp -t bazntms-setup)"
+    cat > "$SCPT" <<'APPLESCRIPT'
+try
+    set introBtn to button returned of (display dialog "bazNTMS Agent kuruldu." & return & return & "Bu arac, calistigi cihazin ag trafigini izleyip merkezi bazNTMS hub'ina raporlayan bir arka plan servisidir. Devam ederseniz sunucu bilgilerini (Hub adresi, kayit belirteci, site) gireceksiniz — bos birakip sonra da elle yapilandirabilirsiniz." with title "bazNTMS Agent Kurulumu" buttons {"Sonra Yaparım", "Devam Et"} default button "Devam Et")
+on error
+    set introBtn to "Sonra Yaparım"
+end try
+
+set hubURL to ""
+set enrollToken to ""
+set siteName to ""
+
+if introBtn is "Devam Et" then
+    try
+        set hubURL to text returned of (display dialog "Hub adresi (URL):" default answer "" with title "bazNTMS — Sunucu Ayarları")
+    end try
+    try
+        set enrollToken to text returned of (display dialog "Kayıt (enroll) belirteci:" default answer "" with title "bazNTMS — Sunucu Ayarları")
+    end try
+    try
+        set siteName to text returned of (display dialog "Site / konum adı:" default answer "" with title "bazNTMS — Sunucu Ayarları")
+    end try
+end if
+
+return hubURL & "|||" & enrollToken & "|||" & siteName
+APPLESCRIPT
+
+    # postinstall root olarak calisir, mktemp da dosyayi root:0600 olarak
+    # yaratir — asagidaki sudo -u CONSOLE_USER onu okuyamaz diye acikca
+    # okunabilir yapiyoruz (icerigi zaten hassas veri icermiyor)
+    chmod 644 "$SCPT"
+    RESULT="$(sudo -u "$CONSOLE_USER" osascript "$SCPT" 2>/dev/null || true)"
+    rm -f "$SCPT"
+
+    HUBURL="$(printf '%s' "$RESULT" | awk -F'\\|\\|\\|' '{print $1}')"
+    ENROLLTOKEN="$(printf '%s' "$RESULT" | awk -F'\\|\\|\\|' '{print $2}')"
+    SITE="$(printf '%s' "$RESULT" | awk -F'\\|\\|\\|' '{print $3}')"
+fi
+
+# yaml_quote: kullanicinin diyalog kutusuna yazdigi serbest metni YAML
+# tek-tirnakli skaler olarak guvenli hale getirir (icindeki '#'/':' vb.
+# YAML'i bozmasin diye) — YAML kurali: gomulu tek tirnak ikiye katlanir.
+yaml_quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+cat > /etc/bazntms/agent.yml <<EOF
+# bazNTMS agent yapilandirmasi (kurulum sihirbazinda uretildi).
+hub:
+  url: $(yaml_quote "$HUBURL")
+  token: $(yaml_quote "$ENROLLTOKEN")
+
+agent:
+  name:
+  site: $(yaml_quote "$SITE")
+
+collect:
+  interval_seconds: 30
+  pcap: false
+  pcap_interface: auto
+  pcap_record: false
+  pcap_dir: /var/lib/bazntms/captures
+
+log:
+  level: info
+  format: json
+EOF
+chmod 644 /etc/bazntms/agent.yml
+
+if [ -n "$HUBURL" ]; then
+    launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist 2>/dev/null || true
+    echo "bazNTMS agent kuruldu ve baslatildi (hub: ${HUBURL})."
 else
-    launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist || true
+    echo "bazNTMS agent kuruldu. /etc/bazntms/agent.yml dosyasini doldurup 'sudo launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist' ile baslatin."
 fi
 exit 0
