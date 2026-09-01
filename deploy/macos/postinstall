@@ -1,10 +1,10 @@
 #!/bin/bash
 # macOS pkg postinstall — LaunchDaemon yuklenir; konfigurasyon yoksa
-# ornek dosyadan kopyalanir (doldurulmasi icin).
+# ornek dosyadan agent.yml olarak kopyalanir (dogrudan doldurulabilsin diye).
 if [ ! -f /etc/bazntms/agent.yml ]; then
     mkdir -p /etc/bazntms
-    cp /usr/local/share/bazntms/agent.yml.example /etc/bazntms/agent.yml.example 2>/dev/null || true
-    echo "bazNTMS agent kuruldu. /etc/bazntms/agent.yml doldurup 'launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist' ile baslatin."
+    cp /usr/local/share/bazntms/bazntms-agent.yml.example /etc/bazntms/agent.yml 2>/dev/null || true
+    echo "bazNTMS agent kuruldu. /etc/bazntms/agent.yml dosyasini doldurup 'sudo launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist' ile baslatin."
 else
     launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist || true
 fi
