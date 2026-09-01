@@ -60,9 +60,15 @@
       <Directory Id='INSTALLFOLDER' Name='bazNTMS'>
         <Component Id='AgentExe' Guid='C9A93B2C-4C1E-4E1A-8E4B-2B7D5B6A1C01'>
           <File Id='AgentExeFile' Source='$(var.EXE)' Name='bazntms-agent.exe' KeyPath='yes' />
-          <!-- Start='install' YOK: kurulum aninda baslatma denemesi config
-               doldurulmadan 1920 hatasina dusurur; servis auto tipindedir,
-               konfigurasyon sonrasi sc start bazntms-agent ile baslatilir -->
+          <!-- ServiceInstall/@Start='install' KASITLI olarak KULLANILMAZ:
+               bu, Windows Installer'in senkron/bloklayan StandardAction'i
+               StartServices'i tetikler — servis SCM'e "basladi" demeden
+               (ornegin config bos oldugu icin hemen cikarsa) MSI hata 1920
+               ile TUM kurulumu geri alir. Bunun yerine asagida ayri, hatayi
+               YOK SAYAN (Return='ignore') bir CustomAction ile, YALNIZCA
+               HUBURL doluysa (sihirbazda girildiyse) kosullu baslatiyoruz —
+               boylece basarili durumda otomatik baslar, basarisiz/bos
+               durumda kurulum asla etkilenmez (bkz. StartAgentService). -->
           <ServiceInstall Id='BazntmsAgentService' Name='bazntms-agent'
                           DisplayName='bazNTMS Agent'
                           Description='Network traffic telemetry agent (bazNTMS)'
@@ -124,17 +130,22 @@
         <Control Id='SubTitle' Type='Text' X='20' Y='32' Width='330' Height='20' NoPrefix='yes'
                  Text='Agent&apos;in hangi bazNTMS hub&apos;ina baglanacagini belirtin.' />
 
+        <!-- Text='...' VERILMEZ: WiX'in Edit kontrolu gercek "watermark"
+             (soluk ipucu) desteklemiyor — Text bir gercek ON-DEGER olurdu,
+             kullanici degistirmeden "Kur"a basarsa property'ye gercekmis
+             gibi girer (ornegin https://hub.ornek.com). Alanlar bilerek
+             bos birakiliyor; asagidaki Hint bunu aciklar. -->
         <Control Id='HubUrlLabel' Type='Text' X='20' Y='62' Width='140' Height='15' NoPrefix='yes' Text='Hub adresi (URL):' />
-        <Control Id='HubUrlEdit' Type='Edit' X='20' Y='78' Width='330' Height='18' Property='HUBURL' Text='https://hub.ornek.com' />
+        <Control Id='HubUrlEdit' Type='Edit' X='20' Y='78' Width='330' Height='18' Property='HUBURL' />
 
         <Control Id='TokenLabel' Type='Text' X='20' Y='104' Width='140' Height='15' NoPrefix='yes' Text='Kayit (enroll) belirteci:' />
         <Control Id='TokenEdit' Type='Edit' X='20' Y='120' Width='330' Height='18' Property='ENROLLTOKEN' />
 
         <Control Id='SiteLabel' Type='Text' X='20' Y='146' Width='140' Height='15' NoPrefix='yes' Text='Site / konum adi:' />
-        <Control Id='SiteEdit' Type='Edit' X='20' Y='162' Width='330' Height='18' Property='SITE' Text='ofis-a' />
+        <Control Id='SiteEdit' Type='Edit' X='20' Y='162' Width='330' Height='18' Property='SITE' />
 
         <Control Id='Hint' Type='Text' X='20' Y='188' Width='330' Height='30' NoPrefix='yes'
-                 Text='Bu alanlari bos birakabilirsiniz; agent daha sonra kayit defterinden (HKLM\SOFTWARE\bazNTMS\Agent) veya ornek konfigurasyon dosyasindan okur.' />
+                 Text='Bu alanlari bos birakabilirsiniz; agent daha sonra kayit defterinden (HKLM\SOFTWARE\bazNTMS\Agent) veya ornek konfigurasyon dosyasindan okur. Hub adresini girerseniz servis kurulum sonunda otomatik baslatilmaya calisilir.' />
 
         <Control Id='BottomLine' Type='Line' X='0' Y='234' Width='370' Height='0' />
         <Control Id='Back' Type='PushButton' X='180' Y='243' Width='56' Height='17' Text='&lt; Geri'>
@@ -157,7 +168,7 @@
         <Control Id='Title' Type='Text' X='20' Y='15' Width='330' Height='30'
                  Transparent='yes' NoPrefix='yes' Text='{\WixUI_Font_Bigger}bazNTMS Agent kuruldu' />
         <Control Id='Note' Type='Text' X='20' Y='55' Width='330' Height='80' NoPrefix='yes'
-                 Text='Servis kuruldu (baslangic turu: otomatik) ama henuz baslatilmadi. Sunucu ayarlarini sonradan degistirmek icin kayit defterini duzenleyip &quot;sc start bazntms-agent&quot; ile servisi baslatabilirsiniz.' />
+                 Text='Servis kuruldu (baslangic turu: otomatik). Hub adresi girdiyseniz servis otomatik baslatilmaya calisildi; girmediyseniz veya baglanti basarisiz olduysa, kayit defterini (HKLM\SOFTWARE\bazNTMS\Agent) duzenleyip &quot;sc start bazntms-agent&quot; ile servisi baslatabilirsiniz.' />
         <Control Id='BottomLine' Type='Line' X='0' Y='234' Width='370' Height='0' />
         <Control Id='Finish' Type='PushButton' X='236' Y='243' Width='56' Height='17' Default='yes' Cancel='yes' Text='Bitir'>
           <Publish Event='EndDialog' Value='Return' Condition='1' />
@@ -169,5 +180,16 @@
         <Show Dialog='BazExitDlg' OnExit='success' />
       </InstallUISequence>
     </UI>
+
+    <!-- Servisi HUBURL doluysa (sihirbazda girildiyse) otomatik baslat.
+         Return='ignore': sc.exe basarisiz olsa/gecikse bile MSI kurulumu
+         ASLA bundan dolayi basarisiz saymaz (1920 riski yok) — en kotu
+         durumda bugunku gibi kullanici elle "sc start" yapar. -->
+    <CustomAction Id='StartAgentService' Directory='INSTALLFOLDER'
+                  ExeCommand='&quot;[SystemFolder]sc.exe&quot; start bazntms-agent'
+                  Execute='deferred' Impersonate='no' Return='ignore' />
+    <InstallExecuteSequence>
+      <Custom Action='StartAgentService' After='StartServices' Condition='HUBURL' />
+    </InstallExecuteSequence>
   </Package>
 </Wix>
