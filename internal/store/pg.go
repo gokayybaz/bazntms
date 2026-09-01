@@ -329,6 +329,17 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 	revoked    INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS enroll_tokens (
+	id         BIGSERIAL PRIMARY KEY,
+	name       TEXT    NOT NULL,
+	token_hash TEXT    NOT NULL UNIQUE,
+	site       TEXT    NOT NULL DEFAULT '',
+	created_at BIGINT  NOT NULL,
+	expires_at BIGINT  NOT NULL DEFAULT 0,
+	last_used  BIGINT  NOT NULL DEFAULT 0,
+	revoked    INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS audit_events (
 	id        BIGSERIAL PRIMARY KEY,
 	ts        BIGINT  NOT NULL,

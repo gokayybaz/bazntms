@@ -156,6 +156,14 @@ type Store interface {
 	RevokeAPIToken(id int64) error
 	DeleteAPIToken(id int64) error
 	TouchAPIToken(id int64) error
+	// enroll_tokens: -enroll-token bayragindaki TEK statik sirrin yaninda,
+	// hub yeniden baslatilmadan olusturulup iptal edilebilen, isimli/opsiyonel
+	// son kullanma tarihli ek enrollment token'lari (Faz 10 — plan P2).
+	CreateEnrollToken(t EnrollToken) (int64, error)
+	EnrollTokenByHash(hash string) (*EnrollToken, error)
+	ListEnrollTokens() ([]EnrollToken, error)
+	RevokeEnrollToken(id int64) error
+	TouchEnrollToken(id int64) error
 	InsertAuditEvent(e AuditEvent) (int64, error)
 	RecentAuditEvents(limit int) ([]AuditEvent, error)
 	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
@@ -634,6 +642,17 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 	role       TEXT    NOT NULL DEFAULT 'viewer',
 	site       TEXT    NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
+	last_used  INTEGER NOT NULL DEFAULT 0,
+	revoked    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS enroll_tokens (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	name       TEXT    NOT NULL,
+	token_hash TEXT    NOT NULL UNIQUE,
+	site       TEXT    NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	expires_at INTEGER NOT NULL DEFAULT 0,
 	last_used  INTEGER NOT NULL DEFAULT 0,
 	revoked    INTEGER NOT NULL DEFAULT 0
 );

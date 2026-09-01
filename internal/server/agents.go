@@ -135,6 +135,31 @@ func (s *Server) agentAuth(next http.Handler) http.Handler {
 	})
 }
 
+// validEnrollToken, sunulan X-Enroll-Token'in ya hub'in TEK statik sirri
+// (-enroll-token) ya da DB'de saklanan, iptal edilmemis ve suresi
+// gecmemis bir enroll_tokens kaydiyla eslesip eslesmedigini kontrol eder.
+// Statik sir icin sabit-zamanli karsilastirma kullanilir (subtle);
+// DB token'lari zaten hash uzerinden aranir (AgentByTokenHash/
+// APITokenByHash'teki mevcut desenle ayni — hash arama, dogrudan sir
+// karsilastirmasi degil, bu yuzden ayrica sabit-zamanli olmasi gerekmez).
+func (s *Server) validEnrollToken(presented string) bool {
+	if presented == "" {
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(presented), []byte(s.enrollToken)) == 1 {
+		return true
+	}
+	t, err := s.store.EnrollTokenByHash(store.TokenHash(presented))
+	if err != nil || t.Revoked {
+		return false
+	}
+	if t.ExpiresAt > 0 && time.Now().Unix() > t.ExpiresAt {
+		return false
+	}
+	go s.store.TouchEnrollToken(t.ID) // best-effort, akisi bloklamaz
+	return true
+}
+
 func unauthorized(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
@@ -156,7 +181,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"error": "çok fazla başarısız enrollment denemesi, bir dakika bekleyin"})
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Enroll-Token")), []byte(s.enrollToken)) != 1 {
+	if !s.validEnrollToken(r.Header.Get("X-Enroll-Token")) {
 		s.enrollAttempts.recordFailure(ip)
 		unauthorized(w, "geçersiz enrollment token")
 		return

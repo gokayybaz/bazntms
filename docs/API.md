@@ -217,7 +217,8 @@ saklanır; hub yalnızca SHA-256 hash'ini tutar.
 
 ### `POST /api/v1/agent/hello` *(UI auth muaf)*
 
-Enrollment: header `X-Enroll-Token: <hub -enroll-token>` zorunlu.
+Enrollment: header `X-Enroll-Token: <hub -enroll-token VEYA aşağıdaki
+/api/v1/enroll-tokens ile üretilmiş bir token>` zorunlu.
 
 ```json
 {"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64"}
@@ -313,6 +314,22 @@ Kendi hesabını silme/kilitleme korumalıdır.
 Entegrasyon API token'ları. Oluşturma: `{name, role, site}` → düz token
 **yalnızca bir kez** döner (`{"token":"bnt_..."}`); sunucuda yalnız hash tutulur.
 Silme = revoke (Bearing anında geçersizleşir).
+
+### `GET /api/v1/enroll-tokens` · `POST /api/v1/enroll-tokens` · `DELETE /api/v1/enroll-tokens/{id}`
+
+Hub'ın `-enroll-token` bayrağındaki **tek statik sırra ek**, DB'de saklanan
+ve hub yeniden başlatılmadan oluşturulup iptal edilebilen enrollment
+token'ları — statik sır sızarsa hub'ı yeniden başlatmadan onu değiştirmenin
+yolu yoktu; bu, o sırra dokunmadan ayrı, kolayca iptal edilebilir token'lar
+eklemenin yoludur. Agent'lar `-enroll-token`/`hub.token` alanına statik sır
+yerine bunlardan birini de verebilir — ikisi de `X-Enroll-Token`
+başlığında aynı şekilde kabul edilir.
+
+Oluşturma: `{name, site?, expires_in_days?}` (`site` şu an yalnız bilgi
+amaçlıdır, zorlanmaz; `expires_in_days` 0/boş = süresiz) → düz token
+**yalnızca bir kez** döner (`{"ok":true,"id":1,"token":"ent_..."}`).
+Silme = revoke (bir sonraki enrollment denemesinde 401 döner).
+Liste: `[{id, name, site, created_at, expires_at, last_used, revoked}]`.
 
 ### `GET /api/v1/audit?limit=100`
 

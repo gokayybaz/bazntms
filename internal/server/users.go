@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -19,6 +20,12 @@ func newAPITokenValue() string {
 	buf := make([]byte, 24)
 	rand.Read(buf)
 	return "bnt_" + hex.EncodeToString(buf)
+}
+
+func newEnrollTokenValue() string {
+	buf := make([]byte, 24)
+	rand.Read(buf)
+	return "ent_" + hex.EncodeToString(buf)
 }
 
 // --- kullanicilar ---
@@ -222,6 +229,70 @@ func (s *Server) handleTokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, identityFromCtx(r), "token.revoke", "token:"+strconv.FormatInt(id, 10), "")
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// --- enrollment token'lari (Faz 10 — plan P2) ---
+//
+// Hub'in -enroll-token bayragindaki TEK statik sirrina ek: hub yeniden
+// baslatilmadan olusturulup iptal edilebilen, isimli/opsiyonel son
+// kullanma tarihli ek enrollment token'lari. Statik sir sizarsa hub'i
+// yeniden baslatmadan iptal etmenin yolu yoktu — bu, o sirri degistirmeden
+// AYRI, kolayca iptal edilebilir token'lar eklemenin yoludur (agent'lar
+// -enroll-token flag'ini degistirmeden bunlardan birini kullanabilir).
+
+func (s *Server) handleEnrollTokensList(w http.ResponseWriter, r *http.Request) {
+	tokens, err := s.store.ListEnrollTokens()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, tokens)
+}
+
+func (s *Server) handleEnrollTokenCreate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name         string `json:"name"`
+		Site         string `json:"site"`
+		ExpiresInDay int    `json:"expires_in_days"` // 0 = suresiz
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "name zorunlu", http.StatusBadRequest)
+		return
+	}
+	var expiresAt int64
+	if req.ExpiresInDay > 0 {
+		expiresAt = time.Now().AddDate(0, 0, req.ExpiresInDay).Unix()
+	}
+	plain := newEnrollTokenValue()
+	id, err := s.store.CreateEnrollToken(store.EnrollToken{
+		Name: req.Name, TokenHash: TokenHashString(plain),
+		Site: req.Site, ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "enroll_token.create", "enroll_token:"+req.Name, "")
+	// duz token YALNIZCA bir kez doner (hash saklanir)
+	writeJSON(w, map[string]any{"ok": true, "id": id, "token": plain})
+}
+
+func (s *Server) handleEnrollTokenDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.RevokeEnrollToken(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "enroll_token.revoke", "enroll_token:"+strconv.FormatInt(id, 10), "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
