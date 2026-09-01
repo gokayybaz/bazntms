@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -177,7 +178,11 @@ func main() {
 			}
 			attrEng, err = agent.NewAttrEngine(iface)
 			if err != nil {
-				slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err)
+				if hint := pcapErrHint(err); hint != "" {
+					slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err, "cozum", hint)
+				} else {
+					slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err)
+				}
 				attrEng = nil
 			} else {
 				slog.Info("surec atfi aktif", "iface", iface)
@@ -201,7 +206,11 @@ func main() {
 				recEngine := capture.NewEngine()
 				recEngine.SetRecordOptions(dir, uint64(100)<<20)
 				if err := recEngine.Start(iface); err != nil {
-					slog.Warn("PCAP yakalama acilamadi", "err", err)
+					if hint := pcapErrHint(err); hint != "" {
+						slog.Warn("PCAP yakalama acilamadi", "err", err, "cozum", hint)
+					} else {
+						slog.Warn("PCAP yakalama acilamadi", "err", err)
+					}
 				} else if err := recEngine.StartRecording(); err != nil {
 					slog.Warn("PCAP kayit baslatilamadi", "err", err)
 					recEngine.Stop()
@@ -306,6 +315,23 @@ func firstNonEmpty(vals ...string) string {
 		if v != "" {
 			return v
 		}
+	}
+	return ""
+}
+
+// pcapErrHint, pcap acilis hatasinin Windows'ta Npcap eksikligi oldugunu
+// tespit edip anlamli bir cozum onerisi dondurur — oncesinde gopacket'in ham
+// "couldn't load wpcap.dll" hatasi tek basina loglaniyordu, bu hatanin
+// Npcap kurulumuyla ilgisi oldugunu bilmeyen bir kullaniciya bir sey ifade
+// etmiyordu (bkz. plan: "Windows'ta Npcap eksikligini sessizce yutmak
+// yerine bildir"). Bos donerse (Windows disi, ya da farkli bir pcap hatasi)
+// cagiran ham hatayi oldugu gibi loglamaya devam eder.
+func pcapErrHint(err error) string {
+	if runtime.GOOS != "windows" || err == nil {
+		return ""
+	}
+	if strings.Contains(err.Error(), "wpcap.dll") {
+		return "Npcap kurulu degil gibi gorunuyor — https://npcap.com adresinden indirip kurun (yonetici olarak calistirin), sonra agent servisini yeniden baslatin"
 	}
 	return ""
 }
