@@ -74,16 +74,20 @@ def main():
 
     # 3) agent filosu — LB uzerinden enroll olup telemetri gonderen 2
     # gercek agent (docker-compose.scale.yml: agent servisi replicas=2)
-    # dashboard API'sinde online gorunmeli. Ilk telemetri dongusu
-    # (varsayilan 30sn) + NATS JetStream uzerinden asenkron yazim icin
-    # birkac kez yeniden denenir.
+    # dashboard API'sinde online gorunmeli. "online" alani enrollment
+    # hemen sonrasi (ilk telemetriden once bile) true olabiliyor — asil
+    # kanit "rates" doluluğu, cunku o ArDIŞIK IKI ornek arasindaki
+    # delta'dan hesaplaniyor (bkz. store.ListAgents), yani en az bir
+    # agent telemetri araligi (varsayilan 30sn) + bir sonraki oraninca
+    # gecmesini gerektirir. Ikisi de saglanana kadar (NATS JetStream
+    # uzerinden asenkron yazim dahil) yeniden denenir.
     online = []
-    deadline = time.time() + 90
+    deadline = time.time() + 150
     while time.time() < deadline:
         status, _, agents = http_json("GET", "/api/v1/agents", cookie=cookie)
         if status == 200 and agents:
             online = [a for a in agents if a.get("online")]
-            if len(online) >= 2:
+            if len(online) >= 2 and any(a.get("rates") for a in online):
                 break
         time.sleep(5)
 
@@ -91,7 +95,8 @@ def main():
           f"gelen online sayisi: {len(online)}")
 
     has_rates = any(a.get("rates") for a in online)
-    check("online agent'larda telemetri verisi (rates) var", has_rates)
+    check("online agent'larda telemetri verisi (rates) var", has_rates,
+          f"agents: {json.dumps(online)[:500]}")
 
     docker_scale_sites = [a.get("site") for a in online if a.get("site") == "docker-scale"]
     check("agent'lar dogru site etiketiyle (docker-scale) kayitli", len(docker_scale_sites) >= 2)
