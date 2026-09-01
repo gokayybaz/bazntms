@@ -98,6 +98,32 @@ jobs:
           RPM_PKG: /tmp/smoketest.rpm
         run: python3 .github/scripts/installer_smoke_test.py
 
+  scale-smoke-test:
+    # installer-smoke-test'ten ayri amac: paketleme degil, deploy/docker-compose.scale.yml'nin
+    # (N x hub-ingest + 1 x hub-controller + nginx lb + TimescaleDB + NATS
+    # JetStream + gercek agent'lar) MIMARI regresyonlarini yakalar — LB
+    # routing, JetStream'in ingest replikalari arasinda kuyruk paylasimi,
+    # agent verisinin gercekten dashboard API'sine ulasmasi (bkz. plan P2).
+    name: Scale stack smoke test (docker-compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ölçek yığınını ayağa kaldır
+        run: |
+          docker compose -f deploy/docker-compose.scale.yml up -d --build --wait --wait-timeout 300
+
+      - name: Duman testi (giriş + agent filosu + telemetri)
+        run: python3 .github/scripts/scale_smoke_test.py
+
+      - name: Loglar (başarısızlıkta teşhis için)
+        if: failure()
+        run: docker compose -f deploy/docker-compose.scale.yml logs --tail=200
+
+      - name: Temizlik
+        if: always()
+        run: docker compose -f deploy/docker-compose.scale.yml down -v
+
   govulncheck:
     name: Vulnerability scan
     runs-on: ubuntu-latest
