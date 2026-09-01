@@ -2,18 +2,22 @@
 # nfpm postinstall (deb + rpm ortak) — systemd birimini yenile/etkinlestir.
 #
 # Zaten bir config varsa (yukseltme / yeniden kurulum): dokunma, sadece
-# etkinlestir. Yoksa (ilk kurulum) VE gercek bir terminale bagliysak
-# (`dpkg -i`/`rpm -ivh` interaktif calistirildi — otomasyon/CI degil):
-# Hub URL/Enroll Token/Site sorulur, Windows MSI ve macOS .pkg
-# sihirbazlarinin Linux esdegeri. Debian'in "debconf" sistemi
-# kullanilmadi (rpm tarafinda esdegeri yok, iki paket formati icin ayri
-# mekanizma gerektirirdi); bunun yerine POSIX `read` ile basit, her iki
-# formatta da ayni sekilde calisan bir terminal istemi kullanildi.
+# etkinlestir. Yoksa (ilk kurulum) VE gercek bir denetim terminali
+# (controlling tty) varsa: Hub URL/Enroll Token/Site sorulur, Windows MSI
+# ve macOS .pkg sihirbazlarinin Linux esdegeri.
 #
-# Terminal yoksa (Ansible/cloud-init/CI gibi otomasyonla kuruldu) ya da
-# kullanici bos gecerse: sessizce eskisi gibi bos bir agent.yml yazip
-# elle doldurmasi icin yonlendirilir — kurulum ASLA bu adimdan basarisiz
-# olmaz.
+# ONEMLI: stdin degil, DOGRUDAN /dev/tty kullanilir. Gercek Docker
+# konteynerinde canli test edildi: dpkg'nin postinst'i normal stdin'i
+# terminale bagli GOSTERIR, ama RPM'in %post'u ASLA gostermez (rpm
+# scriptlet'leri stdin'i her zaman yeniden yonlendirir — paket
+# formatlarindan bagimsiz, klasik Unix cozumu: denetim terminaline
+# /dev/tty ile dogrudan eris). Bu yuzden [ -t 0 ] yerine /dev/tty'nin
+# acilip acilamadigina bakiliyor — ikisinde de dogru calisan tek yol bu.
+#
+# Terminal yoksa (Ansible/cloud-init/CI/Docker --build gibi otomasyon)
+# ya da kullanici bos gecerse: sessizce eskisi gibi bos bir agent.yml
+# yazip elle doldurmasi icin yonlendirilir — kurulum ASLA bu adimdan
+# basarisiz olmaz.
 set -e
 
 if command -v systemctl >/dev/null 2>&1; then
@@ -31,16 +35,25 @@ HUBURL=""
 ENROLLTOKEN=""
 SITE=""
 
-if [ -t 0 ] && [ -t 1 ]; then
-    echo ""
-    echo "bazNTMS agent kuruldu. Sunucu bilgisini simdi girebilirsiniz"
-    echo "(bos gecip sonra /etc/bazntms/agent.yml'i elle de doldurabilirsiniz):"
-    printf "  Hub adresi (URL): "
-    read -r HUBURL || true
-    printf "  Kayit (enroll) belirteci: "
-    read -r ENROLLTOKEN || true
-    printf "  Site / konum adi: "
-    read -r SITE || true
+# ONEMLI: bare `exec 3<>/dev/tty` basarisiz olursa POSIX kurallarina gore
+# ("redirection error" non-interaktif shell'i DERHAL sonlandirir) `set -e`
+# ve if-kosulu muafiyeti bile devreye girmeden TUM kurulumu (dpkg exit 2)
+# dusuruyordu — Docker'da canli dogrulandi. Once bir ALT KABUKTA (subshell)
+# guvenle test edip, YALNIZCA basariliysa ana kabukta gercek exec'i
+# yapiyoruz — boylece basarisizlik alt kabukla sinirli kalip normal bir
+# "false" komutu gibi if tarafindan yakalaniyor.
+if (: <>/dev/tty) 2>/dev/null; then
+    exec 3<>/dev/tty
+    echo "" >&3
+    echo "bazNTMS agent kuruldu. Sunucu bilgisini simdi girebilirsiniz" >&3
+    echo "(bos gecip sonra /etc/bazntms/agent.yml'i elle de doldurabilirsiniz):" >&3
+    printf "  Hub adresi (URL): " >&3
+    read -r HUBURL <&3 || true
+    printf "  Kayit (enroll) belirteci: " >&3
+    read -r ENROLLTOKEN <&3 || true
+    printf "  Site / konum adi: " >&3
+    read -r SITE <&3 || true
+    exec 3>&-
 fi
 
 # yaml_quote: kullanicinin girdigi serbest metni YAML tek-tirnakli skaler
