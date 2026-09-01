@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/bazntms-agent -config /etc/bazntms/agent.yml
+ExecStart=/usr/local/bin/bazntms-agent -config /etc/bazntms/agent.yml -state /var/lib/bazntms/bazntms-agent.state.json
 Restart=always
 RestartSec=5
 # paket yakalama ve proses envanteri icin yetkiler

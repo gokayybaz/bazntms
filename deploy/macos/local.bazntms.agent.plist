@@ -9,6 +9,8 @@
         <string>/usr/local/bin/bazntms-agent</string>
         <string>-config</string>
         <string>/etc/bazntms/agent.yml</string>
+        <string>-state</string>
+        <string>/var/lib/bazntms/bazntms-agent.state.json</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
