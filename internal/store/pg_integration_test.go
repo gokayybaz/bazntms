@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +23,10 @@ import (
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
-func pgStoreFor(t *testing.T, image string) Store {
+// pgContainerDSN, TAZE (henuz hic Open() ile migrate edilmemis) bir
+// Postgres container'i ayaga kaldirip DSN'sini dondurur — cagiran kendi
+// Open() cagrisini (tek veya coklu/es zamanli) yapar.
+func pgContainerDSN(t *testing.T, image string) string {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("short mod")
@@ -65,8 +69,12 @@ func pgStoreFor(t *testing.T, image string) Store {
 	if err != nil {
 		t.Fatalf("port: %v", err)
 	}
-	dsn := dsnFor(host, port)
+	return dsnFor(host, port)
+}
 
+func pgStoreFor(t *testing.T, image string) Store {
+	t.Helper()
+	dsn := pgContainerDSN(t, image)
 	st, err := Open(dsn)
 	if err != nil {
 		t.Fatalf("store acilamadi: %v", err)
@@ -267,5 +275,43 @@ func TestTimescaleSetup(t *testing.T) {
 	}
 	if got := buckets[0].In * 8; got < 7900 || got > 8100 {
 		t.Fatalf("cagg bps_in hatali: %v", got)
+	}
+}
+
+// TestPostgresConcurrentMigration, docker-compose.scale.yml topolojisinin
+// (hub-controller + N x hub-ingest) TAZE bir veritabanina karsi neredeyse
+// es zamanli basladigi gercek senaryoyu yeniden uretir. Kilit olmadan bu,
+// es zamanli "CREATE TABLE IF NOT EXISTS" DDL'leri arasinda pg_type
+// katalog kaydi icin bir yaris durumuna dusup "duplicate key value
+// violates unique constraint pg_type_typname_nsp_index" hatasi veriyordu
+// — CI'daki scale-smoke-test job'unda (deploy/docker-compose.scale.yml,
+// 3 gercek hub instance'i) canli yakalandi. migratePostgres'teki advisory
+// lock (bkz. pg.go) bunu N goroutine'in TEK bir TAZE container'a karsi
+// Open() cagirmasiyla dogrudan test eder — hepsi hatasiz donmeli.
+func TestPostgresConcurrentMigration(t *testing.T) {
+	dsn := pgContainerDSN(t, "postgres:16-alpine")
+
+	const n = 5
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			st, err := Open(dsn)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			defer st.Close()
+			errs[i] = st.Ping()
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("goroutine %d: es zamanli Open() basarisiz oldu: %v", i, err)
+		}
 	}
 }

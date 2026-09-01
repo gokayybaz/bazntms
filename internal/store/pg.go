@@ -17,13 +17,45 @@ package store
 //   - TimescaleDB yoksa duz PostgreSQL calisir; temizlik Prune ile yapilir
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"strconv"
 )
 
+// migrateLockKey, coklu hub replikasinin (hub-controller + N x hub-ingest,
+// bkz. deploy/docker-compose.scale.yml) ayni TAZE veritabanina karsi ayni
+// anda baslamasi durumunda es zamanli DDL'leri serilestirmek icin
+// kullanilan Postgres advisory lock anahtari (rastgele sabit bir sayi,
+// baska hicbir anlami yok).
+const migrateLockKey = 8823001
+
+// migratePostgres, semayi olusturur. Coklu replika ayni anda TAZE bir
+// veritabanina karsi baslarsa, es zamanli "CREATE TABLE IF NOT EXISTS"
+// DDL'leri arasinda pg_type katalog kaydi icin nadir bir yaris durumu
+// olusabiliyordu (ERROR: duplicate key value violates unique constraint
+// "pg_type_typname_nsp_index") — docker-compose.scale.yml CI duman
+// testinde (gercek 3 hub instance'i ayni TAZE Postgres'e karsi neredeyse
+// es zamanli basladiginda) canli yakalandi. Tum DDL'i TEK bir baglantida
+// (pool'dan degil) bir oturum-duzeyi advisory lock altinda calistirarak
+// coklu replikanin migrasyonu SIRAYLA yapmasi (digeri bitirene kadar
+// bekleyip sonra tablolarin zaten var oldugunu gorup sessizce devam
+// etmesi) saglanir.
 func migratePostgres(db *sql.DB) error {
-	_, err := db.Exec(`
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migrasyon baglantisi alinamadi: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrateLockKey); err != nil {
+		return fmt.Errorf("migrasyon kilidi alinamadi: %w", err)
+	}
+	defer conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrateLockKey)
+
+	_, err = conn.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS samples (
 	ts        BIGINT NOT NULL,
 	device    TEXT   NOT NULL,
