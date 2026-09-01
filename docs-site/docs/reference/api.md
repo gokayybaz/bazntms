@@ -232,6 +232,11 @@ Enrollment: header `X-Enroll-Token: <hub -enroll-token>` zorunlu.
 
 **200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30}`
 
+IP başına deneme sınırlaması vardır (login sayfasıyla aynı politika: 1 dakikada
+5 başarısız denemeden sonra 1 dakika bloklanır) — token tahmin etmeye çalışan
+istekleri engeller. Bloklandığında **429** + `Retry-After: 60` döner; başarılı
+bir enrollment sayacı sıfırlar.
+
 ### `POST /api/v1/agent/telemetry` *(Bearer agent token)*
 
 ```json

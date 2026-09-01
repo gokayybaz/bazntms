@@ -48,6 +48,7 @@ type Server struct {
 	telemetryInterval int
 	agentPCAP         bool
 	vault             *vault.Vault
+	enrollAttempts    *enrollAttemptLimiter
 
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
@@ -83,6 +84,7 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 	s.telemetryInterval = telemetryInterval
 	s.agentPCAP = agentPCAP
 	s.vault = v
+	s.enrollAttempts = newEnrollAttemptLimiter()
 	if s.enrollToken == "" {
 		// otomatik token uret; hub banner'i loglar
 		buf := make([]byte, 12)

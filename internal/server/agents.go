@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -21,6 +23,61 @@ import (
 )
 
 const defaultTelemetryInterval = 30
+
+// enrollAttemptLimiter, /api/v1/agent/hello ucundaki (paylasilan
+// X-Enroll-Token'i tahmin etmeye calisan) IP basina deneme sinirlamasidir —
+// auth.go'daki login rate-limit (AuthManager.attempts) ile ayni desen
+// (attemptLog turu oradan paylasilir) ama enrollment, UI auth'undan (s.auth
+// nil olabilir — sifresiz/dev modu) tamamen bagimsiz calismasi gerektigi
+// icin ayri bir kilitle tutulur. Guvenlige duyarli karar oldugu icin IP,
+// (agentClientIP'nin aksine) dogrudan r.RemoteAddr'dan alinir — bkz.
+// agentClientIP'nin kendi yorumundaki gerekce.
+type enrollAttemptLimiter struct {
+	mu       sync.Mutex
+	attempts map[string]*attemptLog
+}
+
+func newEnrollAttemptLimiter() *enrollAttemptLimiter {
+	return &enrollAttemptLimiter{attempts: map[string]*attemptLog{}}
+}
+
+func (l *enrollAttemptLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	a, ok := l.attempts[ip]
+	if !ok {
+		return true
+	}
+	if time.Now().Before(a.block) {
+		return false
+	}
+	if time.Since(a.reset) > attemptWindow {
+		a.count = 0
+		a.reset = time.Now()
+	}
+	return a.count < maxAttempts
+}
+
+func (l *enrollAttemptLimiter) recordFailure(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	a, ok := l.attempts[ip]
+	if !ok {
+		a = &attemptLog{reset: time.Now()}
+		l.attempts[ip] = a
+	}
+	a.count++
+	if a.count >= maxAttempts {
+		a.block = time.Now().Add(attemptWindow)
+		a.count = 0
+	}
+}
+
+func (l *enrollAttemptLimiter) recordSuccess(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.attempts, ip)
+}
 
 // agentClientIP, agent enrollment/telemetri isteklerinde GORUNTULENECEK
 // (yalnizca bilgi amacli — erisim kontrolu/rate-limit icin KULLANILMAZ)
@@ -91,10 +148,20 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		unauthorized(w, "enrollment kapalı: hub'i -enroll-token ile başlatın")
 		return
 	}
-	if r.Header.Get("X-Enroll-Token") != s.enrollToken {
+	ip := clientIP(r)
+	if !s.enrollAttempts.allow(ip) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]any{"error": "çok fazla başarısız enrollment denemesi, bir dakika bekleyin"})
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Enroll-Token")), []byte(s.enrollToken)) != 1 {
+		s.enrollAttempts.recordFailure(ip)
 		unauthorized(w, "geçersiz enrollment token")
 		return
 	}
+	s.enrollAttempts.recordSuccess(ip)
 	var hello telemetry.AgentHello
 	if err := json.NewDecoder(r.Body).Decode(&hello); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -112,7 +179,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 	buf := make([]byte, 32)
 	rand.Read(buf)
 	agentToken := hex.EncodeToString(buf)
-	ip := agentClientIP(r)
+	displayIP := agentClientIP(r) // XFF guvenilir, yalniz goruntuleme icin — yukaridaki rate-limit ip'siyle karistirilmasin
 
 	id, err := s.store.RegisterAgent(store.Agent{
 		Name:            hello.Name,
@@ -120,13 +187,13 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		TokenHash:       store.TokenHash(agentToken),
 		Version:         hello.Version,
 		ProtocolVersion: hello.ProtocolVersion,
-		RemoteIP:        ip,
+		RemoteIP:        displayIP,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", ip)
+	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", displayIP)
 	writeJSON(w, telemetry.HubReply{
 		Accepted:                 true,
 		AgentID:                  id,
