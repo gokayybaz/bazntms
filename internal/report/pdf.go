@@ -56,7 +56,6 @@ func (d *Data) RenderPDF() ([]byte, error) {
 	p.dnsSection(d)
 	p.protocolSection(d)
 	p.alertSection(d)
-	p.insightSection(d)
 
 	var buf bytes.Buffer
 	if err := p.Output(&buf); err != nil {
@@ -335,23 +334,6 @@ func (p *pdfRenderer) alertSection(d *Data) {
 	for i, a := range d.Alerts {
 		p.ensureSpace(8)
 		p.tableRow(cols, []string{time.Unix(a.Ts, 0).Format("02.01 15:04"), a.Key, trunc(a.Message, 80)}, i%2 == 1)
-	}
-}
-
-func (p *pdfRenderer) insightSection(d *Data) {
-	if len(d.Insights) == 0 {
-		return
-	}
-	p.section("Son AI Analizleri")
-	for _, ins := range d.Insights {
-		p.ensureSpace(20)
-		p.SetFont("go", "B", 8.5)
-		p.SetTextColor(100, 116, 139)
-		p.CellFormat(0, 5, fmt.Sprintf("%s · %s · %d dk", time.Unix(ins.Ts, 0).Format("02.01 15:04"), ins.Model, ins.PeriodMinutes), "", 2, "L", false, 0, "")
-		p.SetFont("go", "", 8.8)
-		p.SetTextColor(30, 41, 59)
-		p.MultiCell(0, 4.4, trunc(ins.Summary, 900), "", "L", false)
-		p.Ln(2)
 	}
 }
 

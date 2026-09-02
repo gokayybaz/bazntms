@@ -331,14 +331,6 @@ CREATE TABLE IF NOT EXISTS alert_config (
 	cfg TEXT    NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS insights (
-	id             BIGSERIAL PRIMARY KEY,
-	ts             BIGINT  NOT NULL,
-	model          TEXT    NOT NULL,
-	period_minutes INTEGER NOT NULL,
-	summary        TEXT    NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS users (
 	id            BIGSERIAL PRIMARY KEY,
 	username      TEXT    NOT NULL UNIQUE,

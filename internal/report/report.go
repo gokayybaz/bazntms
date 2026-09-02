@@ -27,7 +27,6 @@ type Data struct {
 	TopDomains   []store.DNSDelta      `json:"top_domains"`
 	Protocols    []ProtoCount          `json:"protocols"`
 	Alerts       []store.AlertEvent    `json:"alerts"`
-	Insights     []store.Insight       `json:"insights"`
 
 	AlertCounts map[string]int `json:"alert_counts"`
 }
@@ -104,8 +103,5 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 	}
 	d.Alerts = filtered
 
-	if d.Insights, err = st.RecentInsights(3); err != nil {
-		d.Insights = []store.Insight{}
-	}
 	return d, nil
 }

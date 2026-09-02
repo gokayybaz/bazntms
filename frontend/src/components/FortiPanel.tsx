@@ -12,6 +12,7 @@ interface ResourceRow {
   sessions: number
 }
 interface VPNRow {
+  vdom: string
   kind: string
   name: string
   peer: string
@@ -19,9 +20,11 @@ interface VPNRow {
   uptime: number
   rx_bytes: number
   tx_bytes: number
+  ts: number
 }
 interface SDWANRow {
   ts: number
+  vdom: string
   member: string
   health_check: string
   latency_ms: number
@@ -30,6 +33,7 @@ interface SDWANRow {
   state: string
 }
 interface PolicyRow {
+  vdom: string
   policy_id: number
   name: string
   action: string
@@ -52,6 +56,54 @@ function statusColor(status: string) {
   if (status === 'down') return 'text-rose-400'
   if (status === 'connecting') return 'text-amber-400'
   return 'text-slate-500'
+}
+
+function fmtAgo(ts: number) {
+  if (!ts) return '-'
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts)
+  if (s < 60) return `${s} sn önce`
+  if (s < 3600) return `${Math.floor(s / 60)} dk önce`
+  if (s < 86400) return `${Math.floor(s / 3600)} sa önce`
+  return `${Math.floor(s / 86400)} g önce`
+}
+
+// ResourceSparkline — CPU/bellek/disk zaman serisini (0-100%) tek küçük SVG'de
+// üst üste çizer. minutes penceresinin tamamı gösterilir (FortiPanel yalnızca
+// son noktayı Gauge'larda gösteriyordu; trend buradan okunur).
+function ResourceSparkline({ rows }: { rows: ResourceRow[] }) {
+  if (rows.length < 2) return null
+  const W = 520
+  const H = 44
+  const t0 = rows[0].ts
+  const t1 = rows[rows.length - 1].ts
+  const span = Math.max(1, t1 - t0)
+  const x = (ts: number) => ((ts - t0) / span) * W
+  const y = (pct: number) => H - (Math.min(100, Math.max(0, pct)) / 100) * H
+  const path = (pick: (r: ResourceRow) => number) =>
+    rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(r.ts).toFixed(1)},${y(pick(r)).toFixed(1)}`).join(' ')
+  const series: [string, string, (r: ResourceRow) => number][] = [
+    ['cpu', '#22d3ee', (r) => r.cpu_pct],
+    ['bellek', '#f59e0b', (r) => r.mem_pct],
+    ['disk', '#a78bfa', (r) => r.disk_pct],
+  ]
+  return (
+    <div className="min-w-40 flex-1 rounded border border-slate-800 bg-slate-900/60 px-3 py-2">
+      <div className="mb-1 flex items-center gap-2.5 text-[9px] uppercase tracking-wider text-slate-500">
+        <span>son {Math.round(span / 60)} dk trendi</span>
+        {series.map(([label, color]) => (
+          <span key={label} className="flex items-center gap-1">
+            <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: H }}>
+        {series.map(([label, color, pick]) => (
+          <path key={label} d={path(pick)} fill="none" stroke={color} strokeWidth={1.2} strokeOpacity={0.85} />
+        ))}
+      </svg>
+    </div>
+  )
 }
 
 function Gauge({ label, pct }: { label: string; pct: number }) {
@@ -134,6 +186,13 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
         )}
       </div>
 
+      {/* kaynak trendi (zaman serisi — Gauge'lar yalnızca son noktayı gösterir) */}
+      {resources.length >= 2 && (
+        <div className="flex">
+          <ResourceSparkline rows={resources} />
+        </div>
+      )}
+
       {/* vpn */}
       {vpn.length > 0 && (
         <div>
@@ -142,15 +201,17 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
             <table className="w-full text-xs">
               <thead className="bg-slate-900/80">
                 <tr className="text-left text-[10px] uppercase text-slate-500">
-                  <th className="px-2 py-1">Tür</th><th className="px-2 py-1">Ad</th>
+                  <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">Tür</th><th className="px-2 py-1">Ad</th>
                   <th className="px-2 py-1">Peer</th><th className="px-2 py-1">Durum</th>
                   <th className="px-2 py-1">Uptime</th>
                   <th className="px-2 py-1 text-right">↓</th><th className="px-2 py-1 text-right">↑</th>
+                  <th className="px-2 py-1 text-right">Son Görülme</th>
                 </tr>
               </thead>
               <tbody>
                 {vpn.map((v, i) => (
                   <tr key={i} className="border-t border-slate-800/60">
+                    <td className="px-2 py-1 font-mono text-slate-500">{v.vdom || 'root'}</td>
                     <td className="px-2 py-1 font-mono text-slate-400">{v.kind}</td>
                     <td className="px-2 py-1 font-mono text-slate-300">{v.name}</td>
                     <td className="px-2 py-1 font-mono text-slate-500">{v.peer || '-'}</td>
@@ -158,6 +219,7 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
                     <td className="px-2 py-1 font-mono text-slate-500">{fmtUptime(v.uptime)}</td>
                     <td className="px-2 py-1 text-right font-mono text-cyan-300/90">{formatBits(v.rx_bytes * 8)}</td>
                     <td className="px-2 py-1 text-right font-mono text-violet-300/90">{formatBits(v.tx_bytes * 8)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-[10px] text-slate-500">{fmtAgo(v.ts)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -174,7 +236,7 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
             <table className="w-full text-xs">
               <thead className="bg-slate-900/80">
                 <tr className="text-left text-[10px] uppercase text-slate-500">
-                  <th className="px-2 py-1">Health-Check</th><th className="px-2 py-1">Member</th>
+                  <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">Health-Check</th><th className="px-2 py-1">Member</th>
                   <th className="px-2 py-1 text-right">Gecikme</th><th className="px-2 py-1 text-right">Jitter</th>
                   <th className="px-2 py-1 text-right">Kayıp</th><th className="px-2 py-1">Durum</th>
                 </tr>
@@ -182,6 +244,7 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
               <tbody>
                 {[...latestSdwan.values()].map((w, i) => (
                   <tr key={i} className="border-t border-slate-800/60">
+                    <td className="px-2 py-1 font-mono text-slate-500">{w.vdom || 'root'}</td>
                     <td className="px-2 py-1 font-mono text-slate-400">{w.health_check}</td>
                     <td className="px-2 py-1 font-mono text-slate-300">{w.member}</td>
                     <td className="px-2 py-1 text-right font-mono text-slate-300">{w.latency_ms.toFixed(1)} ms</td>
@@ -204,14 +267,15 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
             <table className="w-full text-xs">
               <thead className="bg-slate-900/80">
                 <tr className="text-left text-[10px] uppercase text-slate-500">
-                  <th className="px-2 py-1">ID</th><th className="px-2 py-1">Politika</th>
+                  <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">ID</th><th className="px-2 py-1">Politika</th>
                   <th className="px-2 py-1">Aksiyon</th>
                   <th className="px-2 py-1 text-right">Hit Δ</th><th className="px-2 py-1 text-right">Bayt Δ</th>
                 </tr>
               </thead>
               <tbody>
                 {policies.map((p) => (
-                  <tr key={p.policy_id} className="border-t border-slate-800/60">
+                  <tr key={`${p.vdom}-${p.policy_id}`} className="border-t border-slate-800/60">
+                    <td className="px-2 py-1 font-mono text-slate-500">{p.vdom || 'root'}</td>
                     <td className="px-2 py-1 font-mono text-slate-500">{p.policy_id}</td>
                     <td className="px-2 py-1 font-mono text-slate-300">{p.name}</td>
                     <td className="px-2 py-1">

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -26,7 +25,7 @@ func newTestServerWithEnroll(t *testing.T) *httptest.Server {
 	t.Cleanup(func() { st.Close() })
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts

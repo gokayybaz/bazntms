@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -123,7 +122,7 @@ func TestEnrollTokenExpiredRejected(t *testing.T) {
 
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -23,7 +22,7 @@ func newTestServer(t *testing.T, password string) *httptest.Server {
 	t.Cleanup(func() { st.Close() })
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, password, "", 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, password, "", 30, false, nil, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -48,7 +47,7 @@ func login(t *testing.T, ts *httptest.Server, password string) (*http.Cookie, st
 
 func TestAuthDisabled(t *testing.T) {
 	ts := newTestServer(t, "")
-	resp, err := http.Get(ts.URL + "/api/status")
+	resp, err := http.Get(ts.URL + "/api/alerts")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +61,7 @@ func TestLoginFlow(t *testing.T) {
 	ts := newTestServer(t, "gizli123")
 
 	// sifresiz istek -> 401
-	resp, err := http.Get(ts.URL + "/api/status")
+	resp, err := http.Get(ts.URL + "/api/alerts")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +85,7 @@ func TestLoginFlow(t *testing.T) {
 	}
 
 	// cookie ile erisim
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/status", nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/alerts", nil)
 	req.AddCookie(cookie)
 	resp3, _ := http.DefaultClient.Do(req)
 	resp3.Body.Close()
@@ -95,7 +94,7 @@ func TestLoginFlow(t *testing.T) {
 	}
 
 	// bearer ile erisim
-	req2, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/status", nil)
+	req2, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/alerts", nil)
 	req2.Header.Set("Authorization", "Bearer "+token)
 	resp4, _ := http.DefaultClient.Do(req2)
 	resp4.Body.Close()
@@ -108,7 +107,7 @@ func TestLoginFlow(t *testing.T) {
 	req3.Header.Set("Authorization", "Bearer "+token)
 	resp5, _ := http.DefaultClient.Do(req3)
 	resp5.Body.Close()
-	req4, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/status", nil)
+	req4, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/alerts", nil)
 	req4.Header.Set("Authorization", "Bearer "+token)
 	resp6, _ := http.DefaultClient.Do(req4)
 	resp6.Body.Close()

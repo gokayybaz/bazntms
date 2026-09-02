@@ -144,14 +144,6 @@ const htmlTpl = `<!doctype html>
   </table>
   {{else}}<p class="mut">Bu dönemde uyarı olayı oluşmadı.</p>{{end}}
 
-  {{if .Insights}}
-  <h2>Son AI Analizleri</h2>
-  {{range .Insights}}
-  <p class="mut">{{ts .Ts}} · {{.Model}} · {{.PeriodMinutes}} dk</p>
-  <p style="white-space:pre-wrap; font-size:12.5px; margin-top:0">{{.Summary}}</p>
-  {{end}}
-  {{end}}
-
   <footer>
     <span>bazNTMS · otomatik üretilmiş rapor</span>
     <span>sayfa: yazdırırken tarayıcı başlığını kullanın</span>
@@ -245,7 +237,6 @@ func (d *Data) templateData() map[string]any {
 		"Protocols":    d.Protocols,
 		"Alerts":       d.Alerts,
 		"AlertCounts":  d.AlertCounts,
-		"Insights":     d.Insights,
 		"MaxDailyGB":   maxGB,
 		"ProtoTotal":   protoTotal,
 	}

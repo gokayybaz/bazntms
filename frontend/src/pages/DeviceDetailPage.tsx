@@ -15,8 +15,17 @@ interface Device {
   enabled: boolean
   sys_name: string
   sys_descr: string
+  api_url: string
+  api_verify_tls: boolean
+  vdom: string
+  added_at: number
   last_poll: number
   last_error: string
+}
+
+function relDate(unix: number): string {
+  if (!unix) return '—'
+  return new Date(unix * 1000).toLocaleDateString('tr-TR')
 }
 
 interface IfaceRate {
@@ -27,8 +36,12 @@ interface IfaceRate {
   oper_status: number
   rx_bps: number
   tx_bps: number
+  rx_bytes: number
+  tx_bytes: number
   in_errors: number
   out_errors: number
+  in_discards: number
+  out_discards: number
 }
 
 interface FlowRow {
@@ -227,6 +240,24 @@ export function DeviceDetailPage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Son Poll</p>
           <p className="mt-1.5 font-mono text-sm text-slate-200">{relTime(device.last_poll)}</p>
         </div>
+        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Eklenme</p>
+          <p className="mt-1.5 font-mono text-sm text-slate-200">{relDate(device.added_at)}</p>
+        </div>
+        {device.vendor === 'fortigate' && (
+          <>
+            <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">API URL</p>
+              <p className="mt-1.5 truncate font-mono text-sm text-slate-200" title={device.api_url}>{device.api_url || '—'}</p>
+            </div>
+            <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">VDOM · TLS</p>
+              <p className="mt-1.5 font-mono text-sm text-slate-200">
+                {device.vdom || 'root'} · {device.api_verify_tls ? 'doğrulanıyor' : 'atlanıyor'}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* fortigate derin panel */}
@@ -250,7 +281,11 @@ export function DeviceDetailPage() {
                   <th className="px-3 py-2 text-right font-medium">Hız</th>
                   <th className="px-3 py-2 text-right font-medium">↓</th>
                   <th className="px-3 py-2 text-right font-medium">↑</th>
+                  <th className="px-3 py-2 text-right font-medium">Toplam (↓/↑)</th>
                   <th className="px-3 py-2 text-right font-medium">Hata (in/out)</th>
+                  <th className="px-3 py-2 text-right font-medium" title="ifInDiscards / ifOutDiscards — kuyruk taşması, QoS drop (hatadan farklı)">
+                    Atılan (in/out)
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -270,8 +305,14 @@ export function DeviceDetailPage() {
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-cyan-300/90">{formatBits(i.rx_bps)}</td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-violet-300/90">{formatBits(i.tx_bps)}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-500">
+                    <td className="px-3 py-1.5 text-right font-mono text-[11px] text-slate-500">
+                      {formatBytes(i.rx_bytes)}/{formatBytes(i.tx_bytes)}
+                    </td>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>
                       {i.in_errors}/{i.out_errors}
+                    </td>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>
+                      {i.in_discards}/{i.out_discards}
                     </td>
                   </tr>
                 ))}
@@ -290,6 +331,7 @@ export function DeviceDetailPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-900/95">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-1.5 font-medium">Saat</th>
                   <th className="px-3 py-1.5 font-medium">Akış</th>
                   <th className="px-3 py-1.5 font-medium">Protokol</th>
                   <th className="px-3 py-1.5 text-right font-medium">Paket</th>
@@ -299,6 +341,9 @@ export function DeviceDetailPage() {
               <tbody className="divide-y divide-slate-800/50">
                 {deviceFlows.slice(0, 100).map((f, i) => (
                   <tr key={i} className="hover:bg-slate-800/30">
+                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">
+                      {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
+                    </td>
                     <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
                       {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
                     </td>

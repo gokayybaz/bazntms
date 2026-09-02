@@ -30,6 +30,8 @@ interface IfaceRate {
   tx_bps: number
   in_errors: number
   out_errors: number
+  in_discards: number
+  out_discards: number
 }
 
 export function DevicesCard({ refreshKey }: { refreshKey: number }) {
@@ -128,6 +130,12 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
               {d.sys_descr && (
                 <p className="mt-1 truncate text-[11px] text-slate-600" title={d.sys_descr}>{d.sys_descr}</p>
               )}
+              {d.vendor === 'fortigate' && (d.api_url || d.vdom) && (
+                <p className="mt-1 font-mono text-[10px] text-slate-600">
+                  {d.api_url}
+                  {d.vdom && <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">vdom: {d.vdom}</span>}
+                </p>
+              )}
               {d.last_error && (
                 <p className="mt-1 truncate font-mono text-[11px] text-rose-400/80" title={d.last_error}>⚠ {d.last_error}</p>
               )}
@@ -142,6 +150,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                         <th className="px-2 py-1">Arayüz</th><th className="px-2 py-1">Durum</th>
                         <th className="px-2 py-1 text-right">↓</th><th className="px-2 py-1 text-right">↑</th>
                         <th className="px-2 py-1 text-right">Hata (in/out)</th>
+                        <th className="px-2 py-1 text-right" title="ifInDiscards / ifOutDiscards — kuyruk taşması, QoS drop">Atılan (in/out)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -155,7 +164,8 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                           </td>
                           <td className="px-2 py-1 text-right font-mono text-cyan-300/90">{formatBits(i.rx_bps)}</td>
                           <td className="px-2 py-1 text-right font-mono text-violet-300/90">{formatBits(i.tx_bps)}</td>
-                          <td className="px-2 py-1 text-right font-mono text-slate-500">{i.in_errors}/{i.out_errors}</td>
+                          <td className={`px-2 py-1 text-right font-mono ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>{i.in_errors}/{i.out_errors}</td>
+                          <td className={`px-2 py-1 text-right font-mono ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>{i.in_discards}/{i.out_discards}</td>
                         </tr>
                       ))}
                     </tbody>

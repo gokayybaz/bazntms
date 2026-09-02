@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"log/slog"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -11,10 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/gokayybaz/bazntms/internal/alert"
-	"github.com/gokayybaz/bazntms/internal/capture"
-	"github.com/gokayybaz/bazntms/internal/geoip"
 	"github.com/gokayybaz/bazntms/internal/store"
-	"github.com/gokayybaz/bazntms/internal/sysmon"
 )
 
 var upgrader = websocket.Upgrader{
@@ -29,18 +25,14 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[*websocket.Conn]struct{}
 	tick    *time.Ticker
-	engine  *capture.Engine
 	alerts  *alert.Manager
-	geo     *geoip.Resolver
 }
 
-func NewHub(engine *capture.Engine, alerts *alert.Manager, geo *geoip.Resolver) *Hub {
+func NewHub(alerts *alert.Manager) *Hub {
 	h := &Hub{
 		clients: map[*websocket.Conn]struct{}{},
 		tick:    time.NewTicker(time.Second),
-		engine:  engine,
 		alerts:  alerts,
-		geo:     geo,
 	}
 	go h.broadcastLoop()
 	return h
@@ -79,11 +71,8 @@ func (h *Hub) count() int {
 }
 
 type tickPayload struct {
-	Type        string              `json:"type"`
-	Stats       *capture.Snapshot   `json:"stats"`
-	Connections []sysmon.Connection `json:"connections"`
-	AlertEvents []store.AlertEvent  `json:"alert_events"`
-	Record      capture.RecordInfo  `json:"record"`
+	Type        string             `json:"type"`
+	AlertEvents []store.AlertEvent `json:"alert_events"`
 }
 
 func (h *Hub) broadcastLoop() {
@@ -99,33 +88,9 @@ func (h *Hub) broadcastLoop() {
 		}
 		h.mu.Unlock()
 
-		snap := h.engine.Snapshot()
-		if h.geo != nil && h.geo.Enabled() {
-			for i := range snap.TopEndpoints {
-				info := h.geo.Lookup(snap.TopEndpoints[i].IP)
-				snap.TopEndpoints[i].Country = info.Country
-				snap.TopEndpoints[i].ASN = info.ASN
-			}
-		}
-		cons := sysmon.ListConnections()
-		if h.geo != nil && h.geo.Enabled() {
-			for i := range cons {
-				if cons[i].RemoteAddr == "" {
-					continue
-				}
-				if host, _, err := net.SplitHostPort(cons[i].RemoteAddr); err == nil {
-					info := h.geo.Lookup(host)
-					cons[i].Country = info.Country
-					cons[i].ASN = info.ASN
-				}
-			}
-		}
 		payload := tickPayload{
 			Type:        "tick",
-			Stats:       snap,
-			Connections: cons,
 			AlertEvents: h.alerts.RecentEvents(20),
-			Record:      h.engine.RecordStatus(),
 		}
 		data, err := json.Marshal(payload)
 		if err != nil {

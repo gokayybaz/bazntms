@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -39,7 +38,7 @@ func newUpdateServer(t *testing.T) (*httptest.Server, string, string) {
 
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, "admin-pass-1", "", 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "admin-pass-1", "", 30, false, nil, nil, nil)
 	srv.SetUpdatesDir(dir)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)

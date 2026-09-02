@@ -16,11 +16,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/compliance"
@@ -48,13 +46,6 @@ func main() {
 	captureOn := fl.Bool("capture", true, "hub'in kendi paket yakalamasi (coklu replikada kapatilir)")
 	alertsOn := fl.Bool("alerts", true, "uyari motoru (coklu replikada tek replikada acilir)")
 	pollerOn := fl.Bool("poller", true, "SNMP cihaz poller'i (coklu replikada tek replikada acilir)")
-	llmURL := fl.String("llm-base-url", "", "AI servisi adresi (OpenAI-uyumlu; ex: http://localhost:11434/v1)")
-	llmKey := fl.String("llm-api-key", "", "AI API anahtari (yerel modeller icin gerekmez)")
-	llmModel := fl.String("llm-model", "", "varsayilan model (ex: llama3.2, qwen2.5:7b)")
-	llmMaxTokens := fl.Int("llm-max-tokens", 0, "istek basina token limiti (0=dahili varsayilan)")
-	llmNoThink := fl.Bool("llm-no-think", false, "Qwen3 tarzi modellerde dusunme modunu kapat (/no_think)")
-	recordDir := fl.String("record-dir", "captures", "PCAP kayit dosyalarinin dizini")
-	recordMaxMB := fl.Int("record-max-mb", 100, "PCAP dosyasi basina maksimum boyut (MB)")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
 	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
 	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
@@ -164,7 +155,6 @@ func main() {
 	}
 
 	engine := capture.NewEngine()
-	engine.SetRecordOptions(*recordDir, uint64(*recordMaxMB)<<20)
 	if *captureOn {
 		collector := store.NewCollector(engine, st, *dbPath, time.Duration(*retentionH)*time.Hour)
 		collector.Start()
@@ -196,29 +186,6 @@ func main() {
 		*ipAPILookup,
 	)
 
-	aiCfg := ai.ConfigFromEnv()
-	if *llmURL != "" {
-		aiCfg.BaseURL = strings.TrimRight(*llmURL, "/")
-	}
-	if *llmKey != "" {
-		aiCfg.APIKey = *llmKey
-	}
-	if *llmModel != "" {
-		aiCfg.Model = *llmModel
-	}
-	if *llmMaxTokens > 0 {
-		aiCfg.MaxTokens = *llmMaxTokens
-	}
-	if *llmNoThink {
-		aiCfg.NoThink = true
-	}
-	aiClient := ai.NewClient(aiCfg)
-	if aiCfg.Enabled() {
-		slog.Info("AI aktif", "model", aiCfg.Model, "base_url", aiCfg.BaseURL)
-	} else {
-		slog.Info("AI pasif", "cozum", "-llm-base-url http://localhost:11434/v1 veya LLM_API_KEY")
-	}
-
 	if *agentPCAP {
 		slog.Info("agent PCAP politikasi acik")
 	}
@@ -244,7 +211,7 @@ func main() {
 		}
 		slog.Info("SSO (OIDC) aktif", "issuer", cfg.OIDC.Issuer, "client_id", cfg.OIDC.ClientID)
 	}
-	srv := server.New(static, engine, st, *dbPath, aiClient, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
+	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
 	if autoTok := srv.EnrollToken(); *enrollToken == "" {
 		slog.Info("otomatik enrollment token uretildi", "enroll_token", autoTok)
 	}

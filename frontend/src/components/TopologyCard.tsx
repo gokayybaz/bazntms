@@ -100,7 +100,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
 
     type Edge = { x1: number; y1: number; x2: number; y2: number; kind: string; label: string }
     const discoveredEdges: Edge[] = []
-    const hosts: { x: number; y: number; label: string; kind: string; source: string }[] = []
+    const hosts: { x: number; y: number; label: string; kind: string; source: string; ts: number }[] = []
 
     for (const l of graph.links) {
       if (l.kind === 'subnet') continue // subnet linkleri artik ayri "cozumlenmemis" liste yerine spoke altinda dolayli gosterilir
@@ -128,6 +128,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
           label: l.peer_ip,
           kind: 'arp',
           source: String(l.source_id),
+          ts: l.ts,
         })
       } else {
         const j = hosts.filter((h) => h.source === String(l.source_id)).length
@@ -138,6 +139,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
           label: l.peer_name.split(' ')[0] || l.peer_name,
           kind: l.kind,
           source: String(l.source_id),
+          ts: l.ts,
         })
       }
     }
@@ -273,7 +275,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
             {layout.hosts.map((h, i) => (
               <circle key={i} cx={h.x} cy={h.y} r={2.2} fill={edgeColor(h.kind)} fillOpacity={0.8}>
                 <title>
-                  {h.label} · {h.kind} · {fmtAgo(graph.generated_at)}
+                  {h.label} · {h.kind} · {fmtAgo(h.ts)} önce görüldü
                 </title>
               </circle>
             ))}

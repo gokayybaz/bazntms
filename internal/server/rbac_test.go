@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -27,7 +26,7 @@ func newRBACServer(t *testing.T, password string) *httptest.Server {
 	t.Cleanup(func() { st.Close() })
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", ai.NewClient(ai.Config{}), mgr, nil, password, "", 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, password, "", 30, false, nil, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -98,12 +97,12 @@ func TestRBACLifecycle(t *testing.T) {
 	}
 	bobTok, _ := out["token"].(string)
 
-	// 4) viewer salt-okuma: agents GET ok, capture start 403
+	// 4) viewer salt-okuma: agents GET ok, cihaz ekleme (PermManageDevices) 403
 	if status, _ := getJSON(t, ts, "/api/v1/agents", bobTok); status != http.StatusOK {
 		t.Fatalf("viewer GET agents: %d", status)
 	}
-	if status, _ := postJSON(t, ts, "/api/capture/start", bobTok, map[string]string{"device": "en0"}); status != http.StatusForbidden {
-		t.Fatalf("viewer capture start 403 beklenirdi: %d", status)
+	if status, _ := postJSON(t, ts, "/api/v1/devices", bobTok, map[string]string{"name": "sw1", "host": "10.0.0.1"}); status != http.StatusForbidden {
+		t.Fatalf("viewer cihaz ekleme 403 beklenirdi: %d", status)
 	}
 	if status, _ := getJSON(t, ts, "/api/v1/users", bobTok); status != http.StatusForbidden {
 		t.Fatalf("viewer users 403 beklenirdi: %d", status)
@@ -121,12 +120,12 @@ func TestRBACLifecycle(t *testing.T) {
 		t.Fatalf("token formati: %v", apiTok)
 	}
 
-	// analyst: rapor ok (PermAnalyze) ama capture 403
+	// analyst: rapor ok (PermAnalyze) ama cihaz ekleme (PermManageDevices) 403
 	if status, _ := getJSON(t, ts, "/api/report", apiTok); status != http.StatusOK {
 		t.Fatalf("analyst report: %d", status)
 	}
-	if status, _ := postJSON(t, ts, "/api/capture/start", apiTok, map[string]string{"device": "en0"}); status != http.StatusForbidden {
-		t.Fatalf("analyst capture 403 beklenirdi: %d", status)
+	if status, _ := postJSON(t, ts, "/api/v1/devices", apiTok, map[string]string{"name": "sw1", "host": "10.0.0.1"}); status != http.StatusForbidden {
+		t.Fatalf("analyst cihaz ekleme 403 beklenirdi: %d", status)
 	}
 
 	// 6) audit: giris + kullanici + red olaylari zincirde

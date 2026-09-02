@@ -68,17 +68,6 @@ type HubConfig struct {
 	Auth struct {
 		Password string `koanf:"password"`
 	} `koanf:"auth"`
-	LLM struct {
-		BaseURL   string `koanf:"base_url"`
-		APIKey    string `koanf:"api_key"`
-		Model     string `koanf:"model"`
-		MaxTokens int    `koanf:"max_tokens"`
-		NoThink   bool   `koanf:"no_think"`
-	} `koanf:"llm"`
-	Record struct {
-		Dir   string `koanf:"dir"`
-		MaxMB int    `koanf:"max_mb"`
-	} `koanf:"record"`
 	GeoIP struct {
 		Dir         string `koanf:"dir"`
 		IPAPILookup bool   `koanf:"ip_api_lookup"`
@@ -132,13 +121,6 @@ var hubFlagKeys = map[string]string{
 	"alerts.enabled":           "alerts",
 	"poller.enabled":           "poller",
 	"auth.password":            "auth-password",
-	"llm.base_url":             "llm-base-url",
-	"llm.api_key":              "llm-api-key",
-	"llm.model":                "llm-model",
-	"llm.max_tokens":           "llm-max-tokens",
-	"llm.no_think":             "llm-no-think",
-	"record.dir":               "record-dir",
-	"record.max_mb":            "record-max-mb",
 	"geoip.dir":                "geoip-dir",
 	"geoip.ip_api_lookup":      "ip-api-lookup",
 	"updates.dir":              "updates-dir",

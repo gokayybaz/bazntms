@@ -197,7 +197,10 @@ export function AgentDetailPage() {
         </div>
         <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Sürüm</p>
-          <p className="mt-1.5 truncate font-mono text-sm text-slate-200">{agent.version || '—'}</p>
+          <p className="mt-1.5 truncate font-mono text-sm text-slate-200" title={`protokol v${agent.protocol_version}`}>
+            {agent.version || '—'}
+            <span className="ml-1.5 text-[11px] text-slate-600">pv{agent.protocol_version}</span>
+          </p>
         </div>
         <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Bağlantı</p>
@@ -250,7 +253,7 @@ export function AgentDetailPage() {
                   <span className="text-violet-300/90">↑ {formatBits(r.tx_bps * 8)}</span>
                 </p>
                 <p className="mt-1 font-mono text-[10.5px] text-slate-600">
-                  toplam {formatBytes(r.rx_bytes + r.tx_bytes)} · {Math.round(r.pps)} pps
+                  toplam {formatBytes(r.rx_bytes + r.tx_bytes)} · {formatNum(r.rx_packets + r.tx_packets)} pkt · {Math.round(r.pps)} pps
                 </p>
               </div>
             ))}

@@ -1,28 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { AlertEvent, Connection, RecordInfo, Snapshot } from '../types'
+import type { AlertEvent } from '../types'
 
-const EMPTY: Snapshot = {
-  running: false,
-  total_packets: 0,
-  total_bytes: 0,
-  dropped: 0,
-  bps_in: 0,
-  bps_out: 0,
-  bps_local: 0,
-  pps: 0,
-  protocols: {},
-  top_endpoints: [],
-  top_ports: [],
-  top_domains: [],
-  history: [],
-  local_ip_count: 0,
-}
-
+// useLive, uyarı olay akışını canlı tutar: /ws üzerinden 'tick' mesajları,
+// bağlantı yoksa /api/alerts/events polling'i. WS handshake aynı zamanda
+// oturum denetimidir (401 → onAuthRequired). Hub'ın kendi yerel yakalama
+// snapshot'ı (top talkers / DNS / protokoller) ve bağlantı listesi bu akıştan
+// çıkarıldı — onları gösteren Trafik sayfası kaldırılmıştı (bkz. commit
+// "Trafik sayfasını kaldır"); sunucu da artık tick'te yalnızca alert_events
+// gönderiyor.
 export function useLive(onAuthRequired?: () => void) {
-  const [stats, setStats] = useState<Snapshot>(EMPTY)
-  const [connections, setConnections] = useState<Connection[]>([])
   const [alertEvents, setAlertEvents] = useState<AlertEvent[]>([])
-  const [record, setRecord] = useState<RecordInfo>({ recording: false, packets: 0, bytes: 0 })
   const [connected, setConnected] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -32,27 +19,20 @@ export function useLive(onAuthRequired?: () => void) {
     if (pollRef.current !== null) return
     const poll = async () => {
       try {
-        const res = await fetch('/api/status')
+        const res = await fetch('/api/alerts/events?limit=20')
         if (res.status === 401) {
           onAuthRequired?.()
           return
         }
-        const s = await res.json()
-        const [c, a] = await Promise.all([
-          fetch('/api/connections').then((r) => r.json()),
-          fetch('/api/alerts/events?limit=20').then((r) => r.json()),
-        ])
-        setStats(s)
-        setConnections(Array.isArray(c) ? c : [])
+        const a = await res.json()
         setAlertEvents(Array.isArray(a) ? a : [])
-        fetch('/api/record/status').then((r) => r.json()).then(setRecord).catch(() => {})
         setConnected(false)
       } catch {
         /* yoksay */
       }
     }
     void poll()
-    pollRef.current = window.setInterval(poll, 2000)
+    pollRef.current = window.setInterval(poll, 5000)
   }, [onAuthRequired])
 
   const stopPolling = useCallback(() => {
@@ -72,18 +52,9 @@ export function useLive(onAuthRequired?: () => void) {
     }
     ws.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data) as {
-          type?: string
-          stats?: Snapshot
-          connections?: Connection[]
-          alert_events?: AlertEvent[]
-          record?: RecordInfo
-        }
-        if (msg.type === 'tick' && msg.stats) {
-          setStats(msg.stats)
-          setConnections(msg.connections ?? [])
+        const msg = JSON.parse(ev.data) as { type?: string; alert_events?: AlertEvent[] }
+        if (msg.type === 'tick') {
           setAlertEvents(msg.alert_events ?? [])
-          if (msg.record) setRecord(msg.record)
         }
       } catch {
         /* yoksay */
@@ -126,5 +97,5 @@ export function useLive(onAuthRequired?: () => void) {
     }
   }, [connect, stopPolling])
 
-  return { stats, connections, alertEvents, record, connected, reconnect }
+  return { alertEvents, connected, reconnect }
 }

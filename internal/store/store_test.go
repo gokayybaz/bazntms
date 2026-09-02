@@ -102,7 +102,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDailyTotalsAndHourly(t *testing.T) {
+func TestDailyTotals(t *testing.T) {
 	st := openTest(t)
 	localMid := func(offsetDays int) time.Time {
 		n := time.Now()
@@ -137,39 +137,5 @@ func TestDailyTotalsAndHourly(t *testing.T) {
 	}
 	if daily[1].AvgBpsIn != 20_000_000 {
 		t.Fatalf("bugunun ortalamasi hatali: %+v", daily[1])
-	}
-
-	todayH, err := st.HourlyAverages(localMid(0))
-	if err != nil {
-		t.Fatalf("hourly: %v", err)
-	}
-	if len(todayH) != 24 {
-		t.Fatalf("24 saat beklenirdi: %d", len(todayH))
-	}
-	if todayH[8].BpsIn != 20_000_000 {
-		t.Fatalf("08:00 ortalamasi hatali: %+v", todayH[8])
-	}
-	if todayH[5].BpsIn != 0 {
-		t.Fatalf("bos saat 0 olmali: %+v", todayH[5])
-	}
-
-	yestH, _ := st.HourlyAverages(yest)
-	if yestH[5].BpsIn != 50_000_000 || yestH[17].BpsIn != 10_000_000 {
-		t.Fatalf("dunun saatlik serisi hatali: %+v", yestH[5])
-	}
-}
-
-func TestInsights(t *testing.T) {
-	st := openTest(t)
-	id, err := st.InsertInsight(Insight{Ts: time.Now().Unix(), Model: "test-model", PeriodMinutes: 30, Summary: "merhaba"})
-	if err != nil {
-		t.Fatalf("insight: %v", err)
-	}
-	if id == 0 {
-		t.Fatal("id donmedi")
-	}
-	list, err := st.RecentInsights(5)
-	if err != nil || len(list) != 1 || list[0].Summary != "merhaba" || list[0].Model != "test-model" {
-		t.Fatalf("insight listesi: %v %+v", err, list)
 	}
 }

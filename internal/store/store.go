@@ -67,14 +67,6 @@ type DNSDelta struct {
 	Responses uint64 `json:"responses"`
 }
 
-type Insight struct {
-	ID            int64  `json:"id"`
-	Ts            int64  `json:"ts"`
-	Model         string `json:"model"`
-	PeriodMinutes int    `json:"period_minutes"`
-	Summary       string `json:"summary"`
-}
-
 // Store, hub'in tum kalici veri islemlerinin sozlesmesidir. SQLite ve
 // PostgreSQL/TimescaleDB arka uclarinin ikisi de bu arayuzu saglar.
 type Store interface {
@@ -96,11 +88,6 @@ type Store interface {
 	TopProcessesSince(since time.Time, limit int) ([]ProcessUsage, error)
 	TopDomainsSince(since time.Time, limit int) ([]DNSDelta, error)
 	DailyTotals(days int) ([]DayTotal, error)
-	HourlyAverages(dayStart time.Time) ([]HourAvg, error)
-
-	// AI ozetleri
-	InsertInsight(i Insight) (int64, error)
-	RecentInsights(limit int) ([]Insight, error)
 
 	// uyarilar
 	InsertAlertEvent(e AlertEvent) (int64, error)
@@ -614,14 +601,6 @@ CREATE TABLE IF NOT EXISTS alert_seen (
 CREATE TABLE IF NOT EXISTS alert_config (
 	id  INTEGER PRIMARY KEY CHECK (id = 1),
 	cfg TEXT    NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS insights (
-	id             INTEGER PRIMARY KEY AUTOINCREMENT,
-	ts             INTEGER NOT NULL,
-	model          TEXT    NOT NULL,
-	period_minutes INTEGER NOT NULL,
-	summary        TEXT    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -1210,66 +1189,6 @@ func (s *sqlStore) DailyTotals(days int) ([]DayTotal, error) {
 	}
 	if out == nil {
 		out = []DayTotal{}
-	}
-	return out, rows.Err()
-}
-
-type HourAvg struct {
-	Hour   int     `json:"hour"`
-	BpsIn  float64 `json:"bps_in"`
-	BpsOut float64 `json:"bps_out"`
-}
-
-// HourlyAverages, verilen yerel gunun saatlik ortalama serisi (24 kayit;
-// veri olmayan saatler 0 ile doldurulur).
-func (s *sqlStore) HourlyAverages(dayStart time.Time) ([]HourAvg, error) {
-	_, offset := time.Now().Zone()
-	start := dayStart.Unix()
-	rows, err := s.db.Query(s.q(`SELECT ((ts + ?) % 86400)/3600 AS hour, AVG(bps_in), AVG(bps_out)
-		FROM samples WHERE ts >= ? AND ts < ?
-		GROUP BY hour ORDER BY hour`), offset, start, start+86400)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make([]HourAvg, 24)
-	for i := range out {
-		out[i].Hour = i
-	}
-	for rows.Next() {
-		var h int
-		var in, outBps float64
-		if err := rows.Scan(&h, &in, &outBps); err != nil {
-			return nil, err
-		}
-		if h >= 0 && h < 24 {
-			out[h].BpsIn = in
-			out[h].BpsOut = outBps
-		}
-	}
-	return out, rows.Err()
-}
-
-func (s *sqlStore) InsertInsight(i Insight) (int64, error) {
-	var id int64
-	err := s.db.QueryRow(s.q(`INSERT INTO insights (ts, model, period_minutes, summary) VALUES (?,?,?,?) RETURNING id`),
-		i.Ts, i.Model, i.PeriodMinutes, i.Summary).Scan(&id)
-	return id, err
-}
-
-func (s *sqlStore) RecentInsights(limit int) ([]Insight, error) {
-	rows, err := s.db.Query(s.q(`SELECT id, ts, model, period_minutes, summary FROM insights ORDER BY id DESC LIMIT ?`), limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Insight
-	for rows.Next() {
-		var i Insight
-		if err := rows.Scan(&i.ID, &i.Ts, &i.Model, &i.PeriodMinutes, &i.Summary); err != nil {
-			return nil, err
-		}
-		out = append(out, i)
 	}
 	return out, rows.Err()
 }

@@ -39,7 +39,6 @@ func seededStore(t *testing.T) store.Store {
 		{Ts: now.Unix(), Domain: "api.example.com", Queries: 42, Responses: 40},
 	})
 	_, _ = st.InsertAlertEvent(store.AlertEvent{Ts: now.Unix(), Kind: "bw", Key: "in", Message: "Test uyarisi: hiz zirve"})
-	_, _ = st.InsertInsight(store.Insight{Ts: now.Unix(), Model: "test-model", PeriodMinutes: 60, Summary: "Ozet: trafik normal seyirli."})
 	return st
 }
 

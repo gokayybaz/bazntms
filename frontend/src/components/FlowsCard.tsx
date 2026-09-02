@@ -54,6 +54,7 @@ export function FlowsCard() {
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-slate-900/95">
           <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-3 py-1.5 font-medium">Saat</th>
             <th className="px-3 py-1.5 font-medium">Cihaz</th>
             <th className="px-3 py-1.5 font-medium">Akış</th>
             <th className="px-3 py-1.5 font-medium">Protokol</th>
@@ -64,6 +65,9 @@ export function FlowsCard() {
         <tbody className="divide-y divide-slate-800/50">
           {flows.map((f, i) => (
             <tr key={i} className="hover:bg-slate-800/30">
+              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">
+                {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
+              </td>
               <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{f.device}</td>
               <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
                 {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
