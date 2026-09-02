@@ -12,6 +12,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
 const testEnrollToken = "test-enroll-token"
@@ -29,6 +30,40 @@ func newTestServerWithEnroll(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
+}
+
+// TestTelemetryReplyCarriesPolicy, kayitli agent enrollment'i tekrarlamadigi
+// (hello'yu atladigi) icin hub politikasinin — telemetri araligi + PCAP izni —
+// her telemetri yanitiyla agent'a iletildigini dogrular. Bu olmadan agent
+// restart sonrasi PCAP iznini kaybediyordu (surec trafigi tablosu bosaliyordu).
+func TestTelemetryReplyCarriesPolicy(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "agents.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	engine := capture.NewEngine()
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 45, true, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	_, token := enrollAgent(t, ts, "pcap-agent")
+	resp := sendTelemetry(t, ts, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("telemetri 200 donmeliydi, gelen: %d", resp.StatusCode)
+	}
+	var reply telemetry.TelemetryReply
+	if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
+		t.Fatalf("yanit cozulemedi: %v", err)
+	}
+	if reply.Interval != 45 {
+		t.Errorf("interval=45 beklenirdi, gelen: %d", reply.Interval)
+	}
+	if reply.PCAPEnabled == nil || !*reply.PCAPEnabled {
+		t.Errorf("pcap_enabled=true beklenirdi, gelen: %v", reply.PCAPEnabled)
+	}
 }
 
 func helloReq(t *testing.T, ts *httptest.Server, enrollToken, name string) *http.Response {

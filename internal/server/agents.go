@@ -255,7 +255,7 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Debug("telemetri kuyruga alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces))
-		writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
+		writeJSON(w, s.telemetryReply())
 		return
 	}
 
@@ -282,7 +282,15 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	slog.Debug("telemetri alindi", "agent_id", agent.ID, "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
-	writeJSON(w, map[string]any{"ok": true, "interval": s.telemetryInterval})
+	writeJSON(w, s.telemetryReply())
+}
+
+// telemetryReply, telemetri gonderimine verilen standart yanittir. Agent
+// enrollment'i tekrarlamadigi icin (kayitli agent hello'yu atlar) guncel hub
+// politikasi — interval + PCAP izni — agent'a her gonderimde buradan iletilir.
+func (s *Server) telemetryReply() telemetry.TelemetryReply {
+	pcap := s.agentPCAP
+	return telemetry.TelemetryReply{OK: true, Interval: s.telemetryInterval, PCAPEnabled: &pcap}
 }
 
 // handleProcesses, surec bazli trafik top-listesi (UI auth ile korunur).

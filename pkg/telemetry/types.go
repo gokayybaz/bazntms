@@ -24,6 +24,18 @@ type HubReply struct {
 	PCAPEnabled              bool   `json:"pcap_enabled"`
 }
 
+// TelemetryReply, /api/v1/agent/telemetry yanitidir. Enrollment yalnizca ilk
+// kayitta calistigi icin (kayitli agent hello'yu atlar) hub politikasi —
+// telemetri araligi ve PCAP izni — agent'a her gonderimde bu yanitla
+// tazelenir; agent bir sonraki dongude uygular. PCAPEnabled pointer'dir:
+// nil (alan yok = eski hub) "degistirme" anlamina gelir, boylece agent
+// enroll'dan gelen degeri korur.
+type TelemetryReply struct {
+	OK          bool  `json:"ok"`
+	Interval    int   `json:"interval"`
+	PCAPEnabled *bool `json:"pcap_enabled,omitempty"`
+}
+
 // InterfaceSample, arayuz bazli ham sayac degerleri (rate hub'da hesaplanir).
 type InterfaceSample struct {
 	Name      string `json:"name"`

@@ -165,32 +165,57 @@ func main() {
 		}
 		slog.Info("agent kayitli", "agent_id", st.AgentID)
 
-		// derin toplama: agent istegi + hub politikasi ikisi de acik olmali
+		// derin toplama: agent istegi + hub politikasi ikisi de acik olmali.
+		// Politika hub'da calisma aninda degisir (telemetri cevabindaki
+		// pcap_enabled) ve kayitli agent enrollment'i tekrarlamadigi icin
+		// baslangicta client.PCAPEnabled() bayat olabilir — bu yuzden atif
+		// motoru sabit degil, asagidaki syncAttr ile dongude ac/kapat yonetilir.
 		pcapWant := *pcapFlag || cfg.Collect.PCAP
-		var attrEng *agent.AttrEngine
-		if pcapWant && client.PCAPEnabled() {
-			iface := *pcapIface
-			if iface == "" {
-				iface = cfg.Collect.PCAPInterface
-			}
-			if iface == "" || iface == "auto" {
-				iface = autoIface()
-			}
-			attrEng, err = agent.NewAttrEngine(iface)
-			if err != nil {
-				if hint := pcapErrHint(err); hint != "" {
-					slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err, "cozum", hint)
-				} else {
-					slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", iface, "err", err)
-				}
-				attrEng = nil
-			} else {
-				slog.Info("surec atfi aktif", "iface", iface)
-				defer attrEng.Stop()
-			}
-		} else if pcapWant {
-			slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub'i -agent-pcap ile baslatin")
+		attrIface := *pcapIface
+		if attrIface == "" {
+			attrIface = cfg.Collect.PCAPInterface
 		}
+		if attrIface == "" || attrIface == "auto" {
+			attrIface = autoIface()
+		}
+		var attrEng *agent.AttrEngine
+		attrTried := false // bu politika-acik doneminde NewAttrEngine denendi mi
+		attrOffLogged := false
+		defer func() {
+			if attrEng != nil {
+				attrEng.Stop()
+			}
+		}()
+		syncAttr := func() {
+			allow := pcapWant && client.PCAPEnabled()
+			switch {
+			case allow && attrEng == nil && !attrTried:
+				attrTried = true
+				eng, e := agent.NewAttrEngine(attrIface)
+				if e != nil {
+					if hint := pcapErrHint(e); hint != "" {
+						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", attrIface, "err", e, "cozum", hint)
+					} else {
+						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", attrIface, "err", e)
+					}
+					return
+				}
+				slog.Info("surec atfi aktif", "iface", attrIface)
+				attrEng = eng
+				attrOffLogged = false
+			case !allow && attrEng != nil:
+				slog.Info("surec atfi durduruldu — hub PCAP politikasi kapandi")
+				attrEng.Stop()
+				attrEng = nil
+				attrTried = false
+				attrOffLogged = true // "durduruldu" yeterli; ayrica "devre disi" yazma
+			case !allow && attrEng == nil && pcapWant && !attrOffLogged:
+				slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub'i -agent-pcap ile baslatin")
+				attrOffLogged = true
+				attrTried = false
+			}
+		}
+		syncAttr()
 
 		// ham PCAP kaydi: politika + agent istegi
 		if *recordFlag || cfg.Collect.PCAPRecord {
@@ -280,6 +305,9 @@ func main() {
 				} else {
 					slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
 				}
+				// Send, hub politikasini (interval + pcap_enabled) tazeledi;
+				// atif motorunu yeni duruma gore ac/kapat.
+				syncAttr()
 				timer.Reset(time.Duration(client.Interval()) * time.Second)
 			}
 		}

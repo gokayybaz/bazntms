@@ -277,16 +277,20 @@ func (c *Client) postBatch(st State, ts int64, batch telemetry.TelemetryBatch) e
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+st.Token)
-		var reply struct {
-			OK       bool `json:"ok"`
-			Interval int  `json:"interval"`
-		}
+		var reply telemetry.TelemetryReply
 		if err := c.doJSON(req, &reply); err != nil {
 			return err
 		}
 		if reply.Interval > 0 && reply.Interval != c.opts.IntervalSec {
 			c.opts.IntervalSec = reply.Interval
 			slog.Debug("interval guncellendi", "interval", reply.Interval)
+		}
+		// PCAP politikasi hub'da calisma aninda degisebilir; enrollment
+		// tekrarlanmadigi icin (kayitli agent hello'yu atlar) tek tazeleme
+		// yolu budur. Eski hub alani gondermez (nil) — o zaman dokunma.
+		if reply.PCAPEnabled != nil && *reply.PCAPEnabled != c.opts.PCAPEnabled {
+			c.opts.PCAPEnabled = *reply.PCAPEnabled
+			slog.Debug("PCAP politikasi guncellendi", "pcap_enabled", *reply.PCAPEnabled)
 		}
 		return nil
 	})
