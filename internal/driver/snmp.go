@@ -6,6 +6,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -50,8 +51,15 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 
 	var ifaces []store.DeviceIface
 
+	// sessiz arıza teşhisi: connect() UDP soketi açtığı için her zaman başarılıdır;
+	// asıl "erişilebilir mi" sinyali ilk gerçek isteklerden gelir. sysOK/walkOK
+	// hiç yanıt gelmediğini, pollErr son SNMP hatasını taşır (bkz. Poll sonu).
+	var sysOK bool
+	var pollErr error
+
 	// sistem bilgisi
 	if res, err := conn.Get([]string{oidSysDescr, oidSysName}); err == nil {
+		sysOK = true
 		for _, pdu := range res.Variables {
 			v := pduValueString(pdu)
 			switch pdu.Name {
@@ -61,6 +69,8 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 				snap.SysName = truncate(v, 100)
 			}
 		}
+	} else {
+		pollErr = err
 	}
 
 	// IF-MIB kolonlarini yurut
@@ -94,11 +104,14 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 		{oidIfInErrors, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.InErrors = pduUint(p) }},
 		{oidIfOutErrors, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.OutErrors = pduUint(p) }},
 	}
+	walkOK := 0
 	for _, col := range cols {
 		pdus, err := conn.BulkWalkAll(col.oid)
 		if err != nil {
-			continue // kolon desteklenmiyorsa atla
+			pollErr = err
+			continue // kolon desteklenmiyorsa (ya da yanıt yoksa) atla
 		}
+		walkOK++
 		for _, pdu := range pdus {
 			ifIndex := ifIndexFromOID(pdu.Name, col.oid)
 			if ifIndex < 0 {
@@ -118,6 +131,16 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 	}
 	snap.Ifaces = ifaces
 
+	// Sessiz SNMP arızası: bağlantı kuruldu ama tek bir arayüz bile alınamadı.
+	// Driver tüm OID hatalarını yuttuğu için bunu çağırana hata olarak bildir —
+	// yoksa devpoll "poll tamam" sayıp last_error'ı temizler ve cihaz veri
+	// gelmediği hâlde "online" görünür.
+	if len(ifaces) == 0 {
+		err := snmpNoTelemetryErr(d.Host, walkOK, sysOK, pollErr)
+		snap.LastError = err.Error()
+		return snap, err
+	}
+
 	// topoloji kesfi (Faz 6.1): LLDP/CDP/ARP — best-effort
 	ifMap := map[int64]store.DeviceIface{}
 	for _, i := range ifaces {
@@ -130,6 +153,24 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 	snap.Links = discoverTopology(conn, d, source, ifMap)
 
 	return snap, nil
+}
+
+// snmpNoTelemetryErr, hiç arayüz alınamadığında tanılı hatayı üretir.
+//   - walkOK: hatasız dönen IF-MIB kolon yürüyüşü sayısı
+//   - sysOK:  sysDescr/sysName Get'i yanıt verdi mi
+//   - cause:  görülen son SNMP hatası (nil olabilir)
+//
+// Hiçbir istek yanıtlanmadıysa "yanıt vermiyor" (yanlış community/sürüm, ACL,
+// SNMP kapalı, erişilemiyor); bazı yanıtlar geldiyse IF-MIB'in kapalı/boş
+// olduğu ayrımı yapılır.
+func snmpNoTelemetryErr(host string, walkOK int, sysOK bool, cause error) error {
+	if walkOK == 0 && !sysOK {
+		if cause == nil {
+			cause = errors.New("zaman aşımı / yanıt yok")
+		}
+		return fmt.Errorf("SNMP yanıt vermiyor (%s) — community/sürüm, erişim listesi (ACL) veya SNMP servisini kontrol edin: %w", host, cause)
+	}
+	return fmt.Errorf("SNMP yanıt veriyor ama arayüz tablosu (IF-MIB) boş (%s)", host)
 }
 
 // connect, cihaz SNMP ayarlarina gore baglanti kurar (v2c/v3, sifreli alanlar decrypt).

@@ -58,7 +58,10 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().Unix()
 	for _, d := range devices {
-		online := d.LastPoll > 0 && now-d.LastPoll < int64(3*d.PollSeconds)
+		// online = yakında ve BAŞARIYLA poll edildi. Son poll hata verdiyse
+		// (ör. SNMP sessizce zaman aşımına uğradı, IF-MIB boş döndü) cihaz
+		// çevrimdışı sayılır — yoksa "poll edildi" ile "veri geliyor" karışır.
+		online := d.LastPoll > 0 && now-d.LastPoll < int64(3*d.PollSeconds) && d.LastError == ""
 		graph.Devices = append(graph.Devices, topoDevice{
 			ID: d.ID, Name: d.Name, Host: d.Host, Kind: d.Kind,
 			SysName: d.SysName, Online: online,

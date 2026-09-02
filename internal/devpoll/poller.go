@@ -18,12 +18,32 @@ import (
 type Poller struct {
 	store store.Store
 	vault *vault.Vault
-	stop  chan struct{}
-	done  chan struct{}
+	// override > 0 ise tüm cihazlar için per-device PollSeconds yerine bu aralık
+	// kullanılır (tek tip poll takvimi).
+	override time.Duration
+	stop     chan struct{}
+	done     chan struct{}
 }
 
 func New(st store.Store, v *vault.Vault) *Poller {
 	return &Poller{store: st, vault: v, stop: make(chan struct{}), done: make(chan struct{})}
+}
+
+// SetInterval, tüm cihazlar için tek tip poll aralığı dayatır (0 = per-device).
+// 5 sn'nin altı kabul edilmez.
+func (p *Poller) SetInterval(d time.Duration) {
+	if d > 0 && d < 5*time.Second {
+		d = 5 * time.Second
+	}
+	p.override = d
+}
+
+// interval, bir cihaz için etkin poll aralığını döndürür.
+func (p *Poller) interval(d store.Device) time.Duration {
+	if p.override > 0 {
+		return p.override
+	}
+	return time.Duration(d.PollSeconds) * time.Second
 }
 
 func (p *Poller) Start() { go p.run() }
@@ -31,7 +51,11 @@ func (p *Poller) Stop()  { close(p.stop); <-p.done }
 
 func (p *Poller) run() {
 	defer close(p.done)
-	ticker := time.NewTicker(10 * time.Second) // cihaz poll takvimi denetimi
+	tick := 10 * time.Second // cihaz poll takvimi denetim sıklığı
+	if p.override > 0 && p.override < 2*tick {
+		tick = p.override / 2
+	}
+	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	for {
 		select {
@@ -53,7 +77,7 @@ func (p *Poller) pollAll() {
 		if !d.Enabled {
 			continue
 		}
-		if time.Since(time.Unix(d.LastPoll, 0)) < time.Duration(d.PollSeconds)*time.Second {
+		if time.Since(time.Unix(d.LastPoll, 0)) < p.interval(d) {
 			continue
 		}
 		wg.Add(1)
@@ -71,7 +95,32 @@ func (p *Poller) pollDevice(d store.Device) {
 	defer cancel()
 
 	drv := driver.For(d)
-	snap, err := drv.Poll(ctx, d, p.vault)
+
+	// gosnmp context'i dinlemez; takılan bir poll'un tüm zamanlayıcıyı
+	// dondurmaması için son teslim tarihini burada dayatıyoruz. Aşılırsa
+	// goroutine sızar ama sonucu yok sayılır.
+	type result struct {
+		snap driver.Snapshot
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		snap, err := drv.Poll(ctx, d, p.vault)
+		ch <- result{snap, err}
+	}()
+
+	var snap driver.Snapshot
+	var err error
+	select {
+	case r := <-ch:
+		snap, err = r.snap, r.err
+	case <-ctx.Done():
+		msg := "poll zaman aşımı (2 dk)"
+		p.store.UpdateDevicePoll(d.ID, "", "", msg)
+		slog.Warn("cihaz poll basarisiz", "device", d.Name, "vendor", d.Vendor, "err", msg)
+		return
+	}
+
 	if err != nil {
 		p.store.UpdateDevicePoll(d.ID, snap.SysName, snap.SysDescr, err.Error())
 		slog.Warn("cihaz poll basarisiz", "device", d.Name, "vendor", d.Vendor, "err", err)

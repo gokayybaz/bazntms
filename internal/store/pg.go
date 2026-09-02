@@ -300,12 +300,13 @@ CREATE TABLE IF NOT EXISTS flows (
 CREATE INDEX IF NOT EXISTS idx_flows_ts ON flows(ts);
 
 CREATE TABLE IF NOT EXISTS syslog_events (
-	id       BIGSERIAL NOT NULL,
-	ts       BIGINT    NOT NULL,
-	host     TEXT      NOT NULL DEFAULT '',
-	severity INTEGER   NOT NULL DEFAULT 7,
-	tag      TEXT      NOT NULL DEFAULT '',
-	message  TEXT      NOT NULL DEFAULT '',
+	id        BIGSERIAL NOT NULL,
+	ts        BIGINT    NOT NULL,
+	host      TEXT      NOT NULL DEFAULT '',
+	source_ip TEXT      NOT NULL DEFAULT '',
+	severity  INTEGER   NOT NULL DEFAULT 7,
+	tag       TEXT      NOT NULL DEFAULT '',
+	message   TEXT      NOT NULL DEFAULT '',
 	PRIMARY KEY (id, ts)
 );
 CREATE INDEX IF NOT EXISTS idx_syslog_ts ON syslog_events(ts);

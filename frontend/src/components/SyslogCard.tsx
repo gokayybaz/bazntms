@@ -23,7 +23,9 @@ const SEV_STYLES: Record<number, string> = {
 
 export function SyslogCard() {
   const [events, setEvents] = useState<SyslogEvent[]>([])
-  const [minSev, setMinSev] = useState(0)
+  // varsayılan "info": ağ cihazları çoğunlukla notice/info seviyesinde loglar;
+  // 0 (yalnız emergency) çoğu kurulumda kartı boş gösteriyordu
+  const [minSev, setMinSev] = useState(6)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {

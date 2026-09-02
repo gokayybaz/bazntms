@@ -268,6 +268,10 @@ func openSQLite(path string) (Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
 	}
+	if err := s.ensureSyslogColumns(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
+	}
 	if err := s.seedIsmsSoa(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("SoA seed: %w", err)
@@ -292,6 +296,10 @@ func openPostgres(dsn string) (Store, error) {
 	if err := s.ensureDeviceColumns(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
+	}
+	if err := s.ensureSyslogColumns(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
 	}
 	if err := s.seedIsmsSoa(); err != nil {
 		db.Close()
@@ -573,12 +581,13 @@ CREATE TABLE IF NOT EXISTS flows (
 CREATE INDEX IF NOT EXISTS idx_flows_ts ON flows(ts);
 
 CREATE TABLE IF NOT EXISTS syslog_events (
-	id       INTEGER PRIMARY KEY AUTOINCREMENT,
-	ts       INTEGER NOT NULL,
-	host     TEXT    NOT NULL DEFAULT '',
-	severity INTEGER NOT NULL DEFAULT 7,
-	tag      TEXT    NOT NULL DEFAULT '',
-	message  TEXT    NOT NULL DEFAULT ''
+	id        INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts        INTEGER NOT NULL,
+	host      TEXT    NOT NULL DEFAULT '',
+	source_ip TEXT    NOT NULL DEFAULT '',
+	severity  INTEGER NOT NULL DEFAULT 7,
+	tag       TEXT    NOT NULL DEFAULT '',
+	message   TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_syslog_ts ON syslog_events(ts);
 

@@ -135,48 +135,62 @@ func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr 
 	return err
 }
 
-// ensureDeviceColumns, eski kurulumlardaki devices tablosuna Faz 8 kolonlarini
-// ekler (CREATE TABLE IF NOT EXISTS mevcut tabloyu degistirmedigi icin).
-func (s *sqlStore) ensureDeviceColumns() error {
-	cols := []struct{ name, def string }{
-		{"vendor", "TEXT NOT NULL DEFAULT 'snmp'"},
-		{"api_url", "TEXT NOT NULL DEFAULT ''"},
-		{"api_token_enc", "TEXT NOT NULL DEFAULT ''"},
-		{"api_verify_tls", "INTEGER NOT NULL DEFAULT 1"},
-		{"vdom", "TEXT NOT NULL DEFAULT ''"},
-	}
+// ensureColumns, CREATE TABLE IF NOT EXISTS mevcut tabloyu degistirmedigi icin
+// eski kurulumlara eksik kolonlari ekler. table/name/def derleme zamani
+// sabitleridir (kullanici girdisi degil) — identifier parametrelenemez.
+func (s *sqlStore) ensureColumns(table string, cols [][2]string) error {
 	for _, c := range cols {
+		name, def := c[0], c[1]
 		exists := false
 		if s.pg {
 			var n int
 			err := s.db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns
-				WHERE table_name = 'devices' AND column_name = $1`, c.name).Scan(&n)
+				WHERE table_name = $1 AND column_name = $2`, table, name).Scan(&n)
 			if err == nil {
 				exists = n > 0
 			}
 		} else {
-			rows, err := s.db.Query(`PRAGMA table_info(devices)`)
+			rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
 			if err != nil {
 				return err
 			}
 			for rows.Next() {
 				var cid int
-				var name, ctype string
+				var cname, ctype string
 				var notnull, pk int
 				var dflt sql.NullString
-				if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == c.name {
+				if err := rows.Scan(&cid, &cname, &ctype, &notnull, &dflt, &pk); err == nil && cname == name {
 					exists = true
 				}
 			}
 			rows.Close()
 		}
 		if !exists {
-			if _, err := s.db.Exec(s.q(`ALTER TABLE devices ADD COLUMN ` + c.name + ` ` + c.def)); err != nil {
+			if _, err := s.db.Exec(s.q(`ALTER TABLE ` + table + ` ADD COLUMN ` + name + ` ` + def)); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// ensureDeviceColumns, eski kurulumlardaki devices tablosuna Faz 8 kolonlarini ekler.
+func (s *sqlStore) ensureDeviceColumns() error {
+	return s.ensureColumns("devices", [][2]string{
+		{"vendor", "TEXT NOT NULL DEFAULT 'snmp'"},
+		{"api_url", "TEXT NOT NULL DEFAULT ''"},
+		{"api_token_enc", "TEXT NOT NULL DEFAULT ''"},
+		{"api_verify_tls", "INTEGER NOT NULL DEFAULT 1"},
+		{"vdom", "TEXT NOT NULL DEFAULT ''"},
+	})
+}
+
+// ensureSyslogColumns, syslog_events tablosuna source_ip kolonunu ekler
+// (cihaz eşleştirmesi hostname yerine kaynak IP ile yapılır).
+func (s *sqlStore) ensureSyslogColumns() error {
+	return s.ensureColumns("syslog_events", [][2]string{
+		{"source_ip", "TEXT NOT NULL DEFAULT ''"},
+	})
 }
 
 func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
@@ -311,15 +325,16 @@ func (s *sqlStore) TopFlows(since time.Time, limit int) ([]FlowRow, error) {
 type SyslogEvent struct {
 	ID       int64  `json:"id"`
 	Ts       int64  `json:"ts"`
-	Host     string `json:"host"`
+	Host     string `json:"host"`      // RFC3164 HOSTNAME alanı (cihazın kendi verdiği ad)
+	SourceIP string `json:"source_ip"` // UDP paketinin kaynak IP'si — cihaz eşleştirmesi buradan
 	Severity int    `json:"severity"`
 	Tag      string `json:"tag"`
 	Message  string `json:"message"`
 }
 
 func (s *sqlStore) SaveSyslogEvent(e SyslogEvent) error {
-	_, err := s.db.Exec(s.q(`INSERT INTO syslog_events (ts, host, severity, tag, message) VALUES (?,?,?,?,?)`),
-		e.Ts, e.Host, e.Severity, e.Tag, e.Message)
+	_, err := s.db.Exec(s.q(`INSERT INTO syslog_events (ts, host, source_ip, severity, tag, message) VALUES (?,?,?,?,?,?)`),
+		e.Ts, e.Host, e.SourceIP, e.Severity, e.Tag, e.Message)
 	return err
 }
 
@@ -327,7 +342,7 @@ func (s *sqlStore) RecentSyslog(limit int) ([]SyslogEvent, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.Query(s.q(`SELECT id, ts, host, severity, tag, message FROM syslog_events ORDER BY id DESC LIMIT ?`), limit)
+	rows, err := s.db.Query(s.q(`SELECT id, ts, host, source_ip, severity, tag, message FROM syslog_events ORDER BY id DESC LIMIT ?`), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +350,7 @@ func (s *sqlStore) RecentSyslog(limit int) ([]SyslogEvent, error) {
 	out := []SyslogEvent{}
 	for rows.Next() {
 		var e SyslogEvent
-		if err := rows.Scan(&e.ID, &e.Ts, &e.Host, &e.Severity, &e.Tag, &e.Message); err != nil {
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Host, &e.SourceIP, &e.Severity, &e.Tag, &e.Message); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

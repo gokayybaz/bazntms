@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" // -pprof adresinde DefaultServeMux'a kaydolur
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -46,6 +47,8 @@ func main() {
 	captureOn := fl.Bool("capture", true, "hub'in kendi paket yakalamasi (coklu replikada kapatilir)")
 	alertsOn := fl.Bool("alerts", true, "uyari motoru (coklu replikada tek replikada acilir)")
 	pollerOn := fl.Bool("poller", true, "SNMP cihaz poller'i (coklu replikada tek replikada acilir)")
+	pollInterval := fl.Int("poll-interval", 0, "tum cihazlar icin tek tip poll araligi (sn); 0 = per-device deger. min 5")
+	pprofAddr := fl.String("pprof", "", "net/http/pprof dinleme adresi (ex: 127.0.0.1:6060); bos = kapali")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
 	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
 	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
@@ -57,6 +60,7 @@ func main() {
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
 	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
 	flowPort := fl.String("flow-port", "", "NetFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
+	flowExporter := fl.String("flow-exporter", "", "NetFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
 	complianceOn := fl.Bool("compliance", false, "5651 log imzalama motoru (Faz 9): hash-zincir + Merkle checkpoint + gunluk muhur")
@@ -106,6 +110,7 @@ func main() {
 		"capture", *captureOn,
 		"alerts", *alertsOn,
 		"poller", *pollerOn,
+		"poll_interval", *pollInterval,
 		"retention_hours", *retentionH,
 		"auth", *authPassword != "",
 	)
@@ -246,6 +251,9 @@ func main() {
 
 	// cihaz SNMP poller
 	poller := devpoll.New(st, v)
+	if *pollInterval > 0 {
+		poller.SetInterval(time.Duration(*pollInterval) * time.Second)
+	}
 	if *pollerOn {
 		poller.Start()
 		defer poller.Stop()
@@ -255,7 +263,7 @@ func main() {
 
 	// NetFlow v5 collector — kuyruk aciksa mesajlar JetStream'e gider
 	if *flowPort != "" {
-		flc := &flows.Collector{OnFlows: func(device string, rows []flows.Row) {
+		flc := &flows.Collector{ExporterIP: *flowExporter, OnFlows: func(device string, rows []flows.Row) {
 			srows := make([]store.FlowRow, 0, len(rows))
 			for _, f := range rows {
 				srows = append(srows, store.FlowRow(f))
@@ -273,7 +281,7 @@ func main() {
 		if err := flc.Listen("0.0.0.0:" + *flowPort); err != nil {
 			slog.Error("flow collector dinlenemedi", "port", *flowPort, "err", err)
 		} else {
-			slog.Info("netflow v5 collector dinliyor", "port", *flowPort)
+			slog.Info("netflow v5 collector dinliyor", "port", *flowPort, "exporter_override", *flowExporter)
 			defer flc.Close()
 		}
 	}
@@ -283,7 +291,7 @@ func main() {
 	if *syslogPort != "" {
 		sl := &syslogd.Listener{OnEvent: func(srcIP string, ev syslogd.Event) {
 			se := store.SyslogEvent{
-				Ts: time.Now().Unix(), Host: ev.Host, Severity: ev.Severity,
+				Ts: time.Now().Unix(), Host: ev.Host, SourceIP: srcIP, Severity: ev.Severity,
 				Tag: ev.Tag, Message: ev.Message,
 			}
 			if q != nil {
@@ -309,6 +317,15 @@ func main() {
 			slog.Info("syslog alici dinliyor", "port", *syslogPort)
 			defer sl.Close()
 		}
+	}
+
+	if *pprofAddr != "" {
+		go func() {
+			slog.Info("pprof dinleniyor", "addr", *pprofAddr)
+			if err := http.ListenAndServe(*pprofAddr, nil); err != nil {
+				slog.Warn("pprof sunucu hatasi", "err", err)
+			}
+		}()
 	}
 
 	addr := "0.0.0.0:" + *port

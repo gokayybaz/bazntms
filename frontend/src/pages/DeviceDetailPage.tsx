@@ -60,6 +60,7 @@ interface SyslogEvent {
   id: number
   ts: number
   host: string
+  source_ip: string
   severity: number
   tag: string
   message: string
@@ -131,8 +132,8 @@ export function DeviceDetailPage() {
     }
   }, [id])
 
-  // NetFlow/syslog cihaz-id ile iliskili degil (kaynak IP/host ile eslesir);
-  // burada cihazin host'una gore istemci tarafinda filtrelenir
+  // NetFlow/syslog cihaz-id ile iliskili degil; kaynak IP / host ile eslesir,
+  // burada istemci tarafinda cihazin host'una gore filtrelenir (bkz. deviceFlows/deviceSyslog)
   useEffect(() => {
     let stop = false
     const load = async () => {
@@ -158,8 +159,30 @@ export function DeviceDetailPage() {
     }
   }, [])
 
-  const deviceFlows = useMemo(() => (device ? flows.filter((f) => f.device === device.host) : []), [flows, device])
-  const deviceSyslog = useMemo(() => (device ? syslog.filter((e) => e.host === device.host) : []), [syslog, device])
+  // f.device = NetFlow exporter'ın kaynak IP'si. Bir NAT/proxy arkasındaki hub'da
+  // (ör. Docker Desktop) exporter IP'si yeniden yazılır; o yüzden cihazın host'u
+  // akışın src/dst'sinde geçiyorsa da bu cihaza ait say.
+  const deviceFlows = useMemo(
+    () =>
+      device
+        ? flows.filter((f) => f.device === device.host || f.src === device.host || f.dst === device.host)
+        : [],
+    [flows, device],
+  )
+  // syslog kaydı hostname (cihazın verdiği ad) ile gelir; kaynak IP ya da SNMP
+  // sys_name cihazın host'una eşleşiyorsa da bu cihaza ait say
+  const deviceSyslog = useMemo(
+    () =>
+      device
+        ? syslog.filter(
+            (e) =>
+              e.source_ip === device.host ||
+              e.host === device.host ||
+              (!!device.sys_name && e.host === device.sys_name),
+          )
+        : [],
+    [syslog, device],
+  )
 
   if (notFound) {
     return (

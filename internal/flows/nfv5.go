@@ -14,8 +14,13 @@ const (
 )
 
 type Collector struct {
-	Conn    *net.UDPConn
-	OnFlows func(device string, rows []Row)
+	Conn *net.UDPConn
+	// ExporterIP boş değilse tüm akışlar bu IP'ye atfedilir; paketin kaynak
+	// IP'si yok sayılır. Hub bir NAT/röle arkasındayken (ör. Docker Desktop
+	// UDP iletimi) gerçek exporter IP'si kaybolur — tek exporter'lı kurulumlarda
+	// cihaz eşleştirmesini korumak için kullanılır.
+	ExporterIP string
+	OnFlows    func(device string, rows []Row)
 }
 
 type Row struct {
@@ -49,6 +54,9 @@ func (c *Collector) Listen(addr string) error {
 				return
 			}
 			device := peer.IP.String()
+			if c.ExporterIP != "" {
+				device = c.ExporterIP
+			}
 			rows := ParseV5(buf[:n], device, time.Now())
 			if len(rows) > 0 && c.OnFlows != nil {
 				c.OnFlows(device, rows)
@@ -74,7 +82,7 @@ func ParseV5(payload []byte, device string, receivedAt time.Time) []Row {
 		return nil
 	}
 	count := int(binary.BigEndian.Uint16(payload[2:4]))
-	uptimeSecs := binary.BigEndian.Uint32(payload[4:8])
+	sysUptimeMs := binary.BigEndian.Uint32(payload[4:8]) // cihaz açılışından beri geçen süre (ms)
 	unixSecs := binary.BigEndian.Uint32(payload[8:12])
 
 	base := time.Unix(int64(unixSecs), 0)
@@ -93,18 +101,22 @@ func ParseV5(payload []byte, device string, receivedAt time.Time) []Row {
 		dst := net.IP(rec[4:8]).String()
 		packets := binary.BigEndian.Uint32(rec[16:20])
 		octets := binary.BigEndian.Uint32(rec[20:24])
-		firstUptime := binary.BigEndian.Uint32(rec[24:28])
-		lastUptime := binary.BigEndian.Uint32(rec[28:32])
+		lastMs := binary.BigEndian.Uint32(rec[28:32]) // akışın son paketi: SysUptime anı (ms)
 		srcPort := binary.BigEndian.Uint16(rec[32:34])
 		dstPort := binary.BigEndian.Uint16(rec[34:36])
 		protoNum := rec[38]
 
-		// akis zamani: uptime tabanli, header unix zamanina baglanir
-		ts := base.Add(-time.Duration(uptimeSecs)*time.Second + time.Duration(lastUptime)*time.Millisecond)
-		if ts.After(receivedAt) {
-			ts = receivedAt
+		// akış sonu zamanı = header unix zamanı - (SysUptime - Last). Header'daki
+		// SysUptime ve kayıttaki Last MİLİSANİYE cinsindendir; ikisi de ms olarak
+		// işlenmezse zaman damgası günlerce/aylarca kayar.
+		deltaMs := int64(sysUptimeMs) - int64(lastMs)
+		if deltaMs < 0 {
+			deltaMs = 0
 		}
-		_ = firstUptime
+		ts := base.Add(-time.Duration(deltaMs) * time.Millisecond)
+		if ts.After(receivedAt) || ts.Before(receivedAt.Add(-7*24*time.Hour)) {
+			ts = receivedAt // saçma değer (saat kayması, uptime sıfırlanması) → alım zamanı
+		}
 
 		rows = append(rows, Row{
 			Ts:      ts.Unix(),

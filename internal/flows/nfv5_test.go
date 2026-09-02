@@ -43,6 +43,33 @@ func TestParseV5(t *testing.T) {
 	}
 }
 
+// SysUptime ve Last MİLİSANİYE'dir; ms yerine saniye işlenirse zaman damgası
+// aylarca geçmişe kayardı (gerçek Keenetic paketiyle görülen hata).
+func TestParseV5TimestampIsRecent(t *testing.T) {
+	now := time.Now()
+	hdr := make([]byte, 24)
+	binary.BigEndian.PutUint16(hdr[0:2], 5)
+	binary.BigEndian.PutUint16(hdr[2:4], 1)
+	binary.BigEndian.PutUint32(hdr[4:8], 4652640) // SysUptime ~77 dk (ms)
+	binary.BigEndian.PutUint32(hdr[8:12], uint32(now.Unix()))
+
+	rec := make([]byte, 48)
+	copy(rec[0:4], []byte{100, 85, 163, 202})
+	copy(rec[4:8], []byte{157, 240, 238, 14})
+	binary.BigEndian.PutUint32(rec[24:28], 4609000) // First (ms)
+	binary.BigEndian.PutUint32(rec[28:32], 4609410) // Last (ms) → akış ~43 sn önce bitti
+	rec[38] = 6
+
+	rows := ParseV5(append(hdr, rec...), "10.0.0.1", now)
+	if len(rows) != 1 {
+		t.Fatalf("1 akis: %d", len(rows))
+	}
+	drift := now.Sub(time.Unix(rows[0].Ts, 0))
+	if drift < 0 || drift > 5*time.Minute {
+		t.Fatalf("zaman damgasi ~son birkac dakikada olmali, sapma: %s", drift)
+	}
+}
+
 func TestParseV5RejectsBadInput(t *testing.T) {
 	if rows := ParseV5([]byte{1, 2, 3}, "x", time.Now()); rows != nil {
 		t.Fatal("kisa paket reddedilmeliydi")

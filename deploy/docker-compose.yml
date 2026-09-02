@@ -40,11 +40,15 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.hub
-    command: ["-flow-port", "2055", "-syslog-port", "5514", "-enroll-token", "demo-enroll-token", "-agent-pcap"]
+    command: ["-flow-port", "2055", "-syslog-port", "5514", "-poll-interval", "30", "-enroll-token", "demo-enroll-token", "-agent-pcap"]
     ports:
       - "8080:8080"
       - "2055:2055/udp" # NetFlow v5
       - "5514:5514/udp" # Syslog
+    # /data kalıcı: vault.key burada üretilir. Volume olmadan her rebuild yeni
+    # master key üretir ve DB'deki şifreli cihaz kimlik bilgileri çözülemez olur.
+    volumes:
+      - hubdata:/data
     environment:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
@@ -58,3 +62,4 @@ services:
 
 volumes:
   tsdata:
+  hubdata: # hub /data — vault.key kalıcılığı

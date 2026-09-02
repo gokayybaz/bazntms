@@ -59,14 +59,36 @@ services:
       - "-agent-pcap" # agent'ların surec bazli atif icin pcap yapmasina izin ver (politika)
       - "-flow-port"
       - "2055" # NetFlow v5 (tek alıcı: NATS'e kuyruklar)
+      # NetFlow, mac-udp-relay.sh üzerinden loopback'ten geldiği için paketin
+      # kaynak IP'si 172.21.0.1 (Docker gateway) olur — cihaz eşleştirmesi için
+      # gerçek router IP'sine sabitlenir. Kendi router IP'nizle değiştirin:
+      #   ROUTER_IP=10.0.0.1 docker compose -f deploy/docker-compose.scale.yml up -d
+      - "-flow-exporter"
+      - "${ROUTER_IP:-192.168.1.1}"
+      - "-poll-interval"
+      - "30" # tüm cihazlar için tek tip SNMP poll aralığı (sn)
       - "-syslog-port"
       - "5514"
       - "-enroll-token"
       - "scale-enroll-token"
+    # /data kalıcı: vault.key burada üretilir. Volume olmadan her image rebuild /
+    # container recreate yeni bir master key üretir ve DB'deki AES-GCM ile şifreli
+    # cihaz kimlik bilgileri (community, v3 parola, API token) çözülemez hâle gelir
+    # ("cipher: message authentication failed"). Yalnızca controller'a gerekli —
+    # vault sadece cihaz ekleme (bu servis) ve SNMP poller (bu servis) tarafından
+    # kullanılır; ingest replikaları vault'a dokunmaz.
+    volumes:
+      - ctldata:/data
     ports:
       - "8080:8080"
-      - "2055:2055/udp"
-      - "5514:5514/udp"
+      # NetFlow/syslog: Docker Desktop for Mac, fiziksel LAN arayüzüne başka bir
+      # host'tan (ör. router) gelen UDP'yi published porta İLETMEZ — yalnızca
+      # 127.0.0.1'den geleni iletir. Bu yüzden portlar loopback'e, kaydırılmış
+      # numaralarla bağlanır; ağ cihazları için Mac'te bir UDP röle çalıştırın:
+      #   deploy/scripts/mac-udp-relay.sh
+      # (Linux'ta bu sorun yok: "2055:2055/udp" / "5514:5514/udp" kullanın.)
+      - "127.0.0.1:12055:2055/udp"
+      - "127.0.0.1:15514:5514/udp"
     environment:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
@@ -171,3 +193,4 @@ services:
 
 volumes:
   tsdata:
+  ctldata: # hub-controller /data — vault.key kalıcılığı
