@@ -49,11 +49,19 @@ func (d *Data) RenderPDF() ([]byte, error) {
 	p.setRule()
 	p.Ln(4)
 
+	if d.Empty {
+		p.SetFont("go", "", 9.5)
+		p.SetTextColor(146, 64, 14)
+		p.MultiCell(0, 5, "Bu dönemde filo trafiği kaydı bulunamadı. Agent'ların telemetri gönderdiğini ve/veya bir NetFlow exporter tanımlı olduğunu doğrulayın.", "", "L", false)
+		p.SetTextColor(30, 41, 59)
+		p.Ln(2)
+	}
+
 	p.execSummary(d)
+	p.fleetSection(d)
 	p.dailySection(d)
 	p.endpointsSection(d)
 	p.processesSection(d)
-	p.dnsSection(d)
 	p.protocolSection(d)
 	p.alertSection(d)
 
@@ -114,7 +122,7 @@ func (p *pdfRenderer) execSummary(d *Data) {
 		{"Ort. indirme", bits(d.AvgInBps)},
 		{"Ort. gönderme", bits(d.AvgOutBps)},
 		{"Zirve ↓ / ↑", bits(d.PeakInBps) + " / " + bits(d.PeakOutBps)},
-		{"Örnek sayısı", fmt.Sprint(d.Samples)},
+		{"Kaynak", fmt.Sprintf("%d agent", d.Sources)},
 	}
 	for i, kv := range kpis {
 		p.SetXY(pageW-margin-half, y0+float64(i)*6.5)
@@ -130,17 +138,10 @@ func (p *pdfRenderer) execSummary(d *Data) {
 	p.Ln(1)
 	if len(d.TopEndpoints) > 0 {
 		e := d.TopEndpoints[0]
-		name := e.IP
-		if e.Hostname != "" {
-			name = fmt.Sprintf("%s (%s)", e.Hostname, e.IP)
-		}
-		p.kvLine("En yoğun hedef", fmt.Sprintf("%s — %s ↓ / %s ↑", name, bytesFmt(e.BytesIn), bytesFmt(e.BytesOut)))
+		p.kvLine("En yoğun hedef", fmt.Sprintf("%s — %s ↓ / %s ↑", e.IP, bytesFmt(e.BytesIn), bytesFmt(e.BytesOut)))
 	}
 	if len(d.TopProcesses) > 0 {
-		p.kvLine("En aktif süreç", fmt.Sprintf("%s (%d bağlantı)", d.TopProcesses[0].Process, d.TopProcesses[0].Connections))
-	}
-	if len(d.TopDomains) > 0 {
-		p.kvLine("En çok sorgulanan domain", fmt.Sprintf("%s (%d sorgu)", d.TopDomains[0].Domain, d.TopDomains[0].Queries))
+		p.kvLine("En yoğun süreç", fmt.Sprintf("%s (%s toplam)", d.TopProcesses[0].Process, bytesFmt(d.TopProcesses[0].Total)))
 	}
 	alertText := fmt.Sprint(len(d.Alerts))
 	if len(d.AlertCounts) > 0 {
@@ -232,7 +233,7 @@ func (p *pdfRenderer) dailySection(d *Data) {
 	p.SetY(baseY + chartH + 6)
 
 	cols := []float64{26, 26, 26, 26, 26, 30, 26}
-	p.tableHeader(cols, []string{"Gün", "Ort. ↓", "Ort. ↑", "Zirve ↓", "Zirve ↑", "Toplam", "Örnek"})
+	p.tableHeader(cols, []string{"Gün", "Ort. ↓", "Ort. ↑", "Zirve ↓", "Zirve ↑", "Toplam", "Kapsam"})
 	for i, day := range d.Daily {
 		p.ensureSpace(8)
 		p.tableRow(cols, []string{
@@ -240,7 +241,35 @@ func (p *pdfRenderer) dailySection(d *Data) {
 			bits(day.AvgBpsIn), bits(day.AvgBpsOut),
 			bits(day.PeakBpsIn), bits(day.PeakBpsOut),
 			fmt.Sprintf("%.2f GB", gbs[i]),
-			fmt.Sprint(day.Samples),
+			fmt.Sprintf("%.1f sa", float64(day.Samples)/3600),
+		}, i%2 == 1)
+	}
+}
+
+// fleetSection, agent basina anlik verim + baglanti sayisi tablosu.
+func (p *pdfRenderer) fleetSection(d *Data) {
+	if len(d.Agents) == 0 {
+		return
+	}
+	p.section("Agent Filosu")
+	p.ensureSpace(20)
+	cols := []float64{54, 30, 28, 28, 22, 26}
+	p.tableHeader(cols, []string{"Agent", "Site", "Anlık ↓", "Anlık ↑", "Bağlantı", "Son Görülme"})
+	for i, a := range d.Agents {
+		p.ensureSpace(8)
+		site := a.Site
+		if site == "" {
+			site = "—"
+		}
+		name := trunc(a.Name, 30)
+		if !a.Online {
+			name += " (çevrimdışı)"
+		}
+		p.tableRow(cols, []string{
+			name, site,
+			bits(agentRateSum(a.Rates, true)), bits(agentRateSum(a.Rates, false)),
+			fmt.Sprint(a.Conns),
+			time.Unix(a.LastSeen, 0).Format("02.01 15:04"),
 		}, i%2 == 1)
 	}
 }
@@ -274,27 +303,13 @@ func (p *pdfRenderer) processesSection(d *Data) {
 	if len(d.TopProcesses) == 0 {
 		return
 	}
-	p.section("En Aktif Süreçler")
+	p.section("Süreç Bazlı Trafik")
 	p.ensureSpace(20)
-	cols := []float64{90, 40, 40}
-	p.tableHeader(cols, []string{"Süreç", "Bağlantı", "Olay"})
+	cols := []float64{80, 35, 35, 25}
+	p.tableHeader(cols, []string{"Süreç", "İndirilen", "Gönderilen", "Agent"})
 	for i, pr := range d.TopProcesses {
 		p.ensureSpace(8)
-		p.tableRow(cols, []string{pr.Process, fmt.Sprint(pr.Connections), fmt.Sprint(pr.Events)}, i%2 == 1)
-	}
-}
-
-func (p *pdfRenderer) dnsSection(d *Data) {
-	if len(d.TopDomains) == 0 {
-		return
-	}
-	p.section("DNS Sorguları")
-	p.ensureSpace(20)
-	cols := []float64{90, 35, 35}
-	p.tableHeader(cols, []string{"Domain", "Sorgu", "Yanıt"})
-	for i, dom := range d.TopDomains {
-		p.ensureSpace(8)
-		p.tableRow(cols, []string{trunc(dom.Domain, 48), fmt.Sprint(dom.Queries), fmt.Sprint(dom.Responses)}, i%2 == 1)
+		p.tableRow(cols, []string{trunc(pr.Process, 44), bytesFmt(pr.BytesIn), bytesFmt(pr.BytesOut), fmt.Sprint(pr.AgentCnt)}, i%2 == 1)
 	}
 }
 
@@ -305,7 +320,7 @@ func (p *pdfRenderer) protocolSection(d *Data) {
 	p.section("Protokol Dağılımı")
 	p.ensureSpace(20)
 	cols := []float64{60, 45, 65}
-	p.tableHeader(cols, []string{"Protokol", "Paket", "Pay"})
+	p.tableHeader(cols, []string{"Protokol", "Trafik", "Pay"})
 	total := uint64(0)
 	for _, pr := range d.Protocols {
 		total += pr.Count
@@ -316,7 +331,7 @@ func (p *pdfRenderer) protocolSection(d *Data) {
 		if total > 0 {
 			pct = float64(pr.Count) / float64(total) * 100
 		}
-		p.tableRow(cols, []string{pr.Name, fmt.Sprint(pr.Count), fmt.Sprintf("%%%.1f", pct)}, i%2 == 1)
+		p.tableRow(cols, []string{pr.Name, bytesFmt(pr.Count), fmt.Sprintf("%%%.1f", pct)}, i%2 == 1)
 	}
 }
 

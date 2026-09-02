@@ -56,8 +56,13 @@ const htmlTpl = `<!doctype html>
 <div class="page">
   <header>
     <h1>bazNTMS — Ağ Trafik Raporu</h1>
-    <div class="sub">Dönem: son {{.Days}} gün &middot; Üretim: {{.GeneratedAt.Format "02.01.2006 15:04"}} &middot; bazNTMS</div>
+    <div class="sub">Dönem: son {{.Days}} gün &middot; Üretim: {{.GeneratedAt.Format "02.01.2006 15:04"}} &middot; kaynak: agent filosu + NetFlow</div>
   </header>
+
+  {{if .Empty}}<p class="mut" style="border:1px solid var(--line); background:#fffbeb; padding:10px 12px">
+    Bu dönemde filo trafiği kaydı bulunamadı. Agent'ların telemetri gönderdiğini
+    (Agentlar sayfası) ve/veya bir NetFlow exporter tanımlı olduğunu doğrulayın.
+  </p>{{end}}
 
   <h2>Yönetici Özeti</h2>
   <div class="summary">
@@ -67,11 +72,10 @@ const htmlTpl = `<!doctype html>
     <div class="kpi"><span>Zirve (↓ / ↑)</span><b>{{bits .PeakInBps}} / {{bits .PeakOutBps}}</b></div>
   </div>
   <ul class="klist">
-    <li>Örnek sayısı: {{.Samples}} (yakalama açıkken saniyede bir kayıt)</li>
+    <li>Kaynak: {{.Sources}} agent telemetri gönderiyor</li>
     <li>Uyarı olayları: {{len .Alerts}}{{if .AlertCounts}} — {{range $k, $v := .AlertCounts}}{{$k}}: {{$v}} {{end}}{{end}}</li>
-    {{if .TopEndpoints}}{{with index .TopEndpoints 0}}<li>En yoğun hedef: {{if .Hostname}}{{.Hostname}} ({{.IP}}){{else}}{{.IP}}{{end}} — {{bytes .BytesIn}} ↓ / {{bytes .BytesOut}} ↑</li>{{end}}{{end}}
-    {{if .TopProcesses}}{{with index .TopProcesses 0}}<li>En aktif süreç: {{.Process}} ({{.Connections}} bağlantı)</li>{{end}}{{end}}
-    {{if .TopDomains}}{{with index .TopDomains 0}}<li>En çok sorgulanan domain: {{.Domain}} ({{.Queries}} sorgu)</li>{{end}}{{end}}
+    {{if .TopEndpoints}}{{with index .TopEndpoints 0}}<li>En yoğun hedef: {{.IP}} — {{bytes .BytesIn}} ↓ / {{bytes .BytesOut}} ↑</li>{{end}}{{end}}
+    {{if .TopProcesses}}{{with index .TopProcesses 0}}<li>En yoğun süreç: {{.Process}} ({{bytes .Total}} toplam)</li>{{end}}{{end}}
   </ul>
 
   <h2>Günlük Trafik</h2>
@@ -90,13 +94,31 @@ const htmlTpl = `<!doctype html>
     {{end}}
   </table>
 
-  <h2>En Yoğun Hedefler</h2>
+  <h2>Agent Filosu</h2>
+  {{if .Agents}}
   <table>
-    <tr><th>#</th><th>Hedef</th><th>Ülke / ASN</th><th class="num">İndirme</th><th class="num">Gönderme</th><th class="num">Paket</th></tr>
+    <tr><th>Agent</th><th>Site</th><th class="num">Anlık ↓</th><th class="num">Anlık ↑</th><th class="num">Bağlantı</th><th>Son Görülme</th></tr>
+    {{range .Agents}}
+    <tr>
+      <td>{{.Name}}{{if not .Online}} <span class="mut">(çevrimdışı)</span>{{end}}</td>
+      <td>{{if .Site}}{{.Site}}{{else}}<span class="mut">—</span>{{end}}</td>
+      <td class="num">{{bits (agentRx .Rates)}}</td>
+      <td class="num">{{bits (agentTx .Rates)}}</td>
+      <td class="num">{{.Conns}}</td>
+      <td class="mut">{{ts .LastSeen}}</td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}<p class="mut">Kayıtlı agent yok.</p>{{end}}
+
+  <h2>En Yoğun Hedefler</h2>
+  <p class="mut">NetFlow kayıtlarından (yoksa agent süreç trafiğinden) uzak uç nokta bazında toplam hacim.</p>
+  <table>
+    <tr><th>#</th><th>Uç Nokta</th><th>Ülke / ASN</th><th class="num">Gelen</th><th class="num">Giden</th><th class="num">Paket</th></tr>
     {{range $i, $e := .TopEndpoints}}
     <tr>
       <td>{{$i}}</td>
-      <td>{{if .Hostname}}{{.Hostname}} <span class="mut">({{.IP}})</span>{{else}}{{.IP}}{{end}}</td>
+      <td>{{.IP}}</td>
       <td>{{if .Country}}{{.Country}}{{end}}{{if .ASN}} <span class="mut">{{.ASN}}</span>{{end}}{{if not (or .Country .ASN)}}<span class="mut">—</span>{{end}}</td>
       <td class="num">{{bytes .BytesIn}}</td>
       <td class="num">{{bytes .BytesOut}}</td>
@@ -105,30 +127,23 @@ const htmlTpl = `<!doctype html>
     {{end}}
   </table>
 
-  <h2>En Aktif Süreçler</h2>
+  <h2>Süreç Bazlı Trafik</h2>
   <table>
-    <tr><th>#</th><th>Süreç</th><th class="num">Bağlantı</th><th class="num">Olay</th></tr>
+    <tr><th>#</th><th>Süreç</th><th class="num">İndirilen</th><th class="num">Gönderilen</th><th class="num">Agent</th></tr>
     {{range $i, $p := .TopProcesses}}
-    <tr><td>{{$i}}</td><td>{{.Process}}</td><td class="num">{{.Connections}}</td><td class="num">{{.Events}}</td></tr>
-    {{end}}
-  </table>
-
-  <h2>DNS Sorguları</h2>
-  <table>
-    <tr><th>#</th><th>Domain</th><th class="num">Sorgu</th><th class="num">Yanıt</th></tr>
-    {{range $i, $d := .TopDomains}}
-    <tr><td>{{$i}}</td><td>{{.Domain}}</td><td class="num">{{.Queries}}</td><td class="num">{{.Responses}}</td></tr>
+    <tr><td>{{$i}}</td><td>{{.Process}}</td><td class="num">{{bytes .BytesIn}}</td><td class="num">{{bytes .BytesOut}}</td><td class="num">{{.AgentCnt}}</td></tr>
     {{end}}
   </table>
 
   <h2>Protokol Dağılımı</h2>
+  <p class="mut">NetFlow octet toplamı (proto alanına göre).</p>
   <table>
-    <tr><th>Protokol</th><th class="num">Paket</th><th>Göreli</th></tr>
+    <tr><th>Protokol</th><th class="num">Trafik</th><th>Göreli</th></tr>
     {{$pt := .ProtoTotal}}
     {{range .Protocols}}
     <tr>
       <td>{{.Name}}</td>
-      <td class="num">{{.Count}}</td>
+      <td class="num">{{bytes .Count}}</td>
       <td class="barwrap" style="width:260px"><span class="bar" style="width:{{printf "%.0f" (barPct (toFloat .Count) (toFloat $pt))}}%"></span></td>
     </tr>
     {{end}}
@@ -183,6 +198,8 @@ func (d *Data) RenderHTML() ([]byte, error) {
 		"toFloat":   func(v uint64) float64 { return float64(v) },
 		"dailyGB":   dailyGB,
 		"dailyUpGB": dailyUpGB,
+		"agentRx":   func(r []store.AgentRate) float64 { return agentRateSum(r, true) },
+		"agentTx":   func(r []store.AgentRate) float64 { return agentRateSum(r, false) },
 		"barPct": func(v, max float64) float64 {
 			if max <= 0 {
 				return 0
@@ -209,6 +226,20 @@ func dailyUpGB(dt store.DayTotal) float64 {
 	return (dt.AvgBpsOut / 8) * float64(dt.Samples) / 1e9
 }
 
+// agentRateSum, bir agent'in tum arayuzlerinin anlik hizini toplar (bit/sn).
+// AgentRate.RxBps/TxBps bayt/sn'dir → ×8.
+func agentRateSum(rates []store.AgentRate, rx bool) float64 {
+	var sum float64
+	for _, r := range rates {
+		if rx {
+			sum += r.RxBps
+		} else {
+			sum += r.TxBps
+		}
+	}
+	return sum * 8
+}
+
 // templateData, sablon icindeki turetilmis alanlari hesaplar.
 func (d *Data) templateData() map[string]any {
 	maxGB := 0.0
@@ -224,16 +255,17 @@ func (d *Data) templateData() map[string]any {
 	return map[string]any{
 		"GeneratedAt":  d.GeneratedAt,
 		"Days":         d.Days,
-		"Samples":      d.Samples,
+		"Sources":      d.Sources,
+		"Empty":        d.Empty,
 		"TotalGB":      d.TotalGB,
 		"AvgInBps":     d.AvgInBps,
 		"AvgOutBps":    d.AvgOutBps,
 		"PeakInBps":    d.PeakInBps,
 		"PeakOutBps":   d.PeakOutBps,
 		"Daily":        d.Daily,
+		"Agents":       d.Agents,
 		"TopEndpoints": d.TopEndpoints,
 		"TopProcesses": d.TopProcesses,
-		"TopDomains":   d.TopDomains,
 		"Protocols":    d.Protocols,
 		"Alerts":       d.Alerts,
 		"AlertCounts":  d.AlertCounts,

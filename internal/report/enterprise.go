@@ -19,13 +19,14 @@ type EnterpriseData struct {
 	Days        int       `json:"days"`
 
 	// SLA
-	AgentTotal   int     `json:"agent_total"`
-	AgentOnline  int     `json:"agent_online"`
-	AgentUptime  float64 `json:"agent_uptime_pct"`
-	DeviceTotal  int     `json:"device_total"`
-	DeviceOK     int     `json:"device_ok"`
-	DeviceHealth float64 `json:"device_health_pct"`
-	DropPct      float64 `json:"drop_pct"`
+	AgentTotal    int     `json:"agent_total"`
+	AgentOnline   int     `json:"agent_online"`
+	AgentUptime   float64 `json:"agent_uptime_pct"`
+	DeviceTotal   int     `json:"device_total"`
+	DeviceOK      int     `json:"device_ok"`
+	DeviceHealth  float64 `json:"device_health_pct"`
+	IfaceDiscards uint64  `json:"iface_discards"` // SNMP cihaz arayuz iskarta sayaci artisi (donem)
+	IfaceErrors   uint64  `json:"iface_errors"`   // SNMP cihaz arayuz hata sayaci artisi (donem)
 
 	// kapasite / banding
 	TotalGB   float64 `json:"total_gb"`
@@ -37,9 +38,14 @@ type EnterpriseData struct {
 	PrevGB    float64 `json:"prev_gb"`
 	GrowthPct float64 `json:"growth_pct"`
 
-	TopEndpoints []store.EndpointDelta `json:"top_endpoints"`
-	TopProcesses []store.ProcessUsage  `json:"top_processes"`
-	AlertCounts  map[string]int        `json:"alert_counts"`
+	// DataWindowDays, filo ham tablolarinda gercekte veri bulunan pencere
+	// (retention nedeniyle secilen `Days`'ten kucuk olabilir).
+	DataWindowDays float64 `json:"data_window_days"`
+	Empty          bool    `json:"empty"`
+
+	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
+	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
+	AlertCounts  map[string]int              `json:"alert_counts"`
 }
 
 // BuildEnterprise, son `days` gun icin SLA/kapasite/banding modelini kurar.
@@ -86,41 +92,63 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 		d.DeviceHealth = 100 * float64(d.DeviceOK) / float64(d.DeviceTotal)
 	}
 
-	// SLA: paket dusme orani
-	if dropped, pps, err := st.DropStats(since); err == nil && pps > 0 {
-		d.DropPct = 100 * float64(dropped) / float64(pps)
+	// SLA: SNMP cihaz arayuz iskarta/hata sayaclari (eski `samples.dropped`
+	// karsiligi — coklu-hub'da hicbir hub paket yakalamadigi icin)
+	if disc, errs, err := st.FleetIfaceHealth(since); err == nil {
+		d.IfaceDiscards, d.IfaceErrors = disc, errs
 	}
 
-	// kapasite: donem toplamlari + onceki donem karsilastirma
-	totals, err := st.PeriodTotals(since)
+	// kapasite/banding: filo trafik serisi (agent arayuz telemetrisi).
+	// 60 sn kova: percentile'lar icin yeterli cozunurluk.
+	buckets, err := st.FleetTrafficBuckets(since, 60)
 	if err != nil {
-		return nil, fmt.Errorf("donem ozeti: %w", err)
+		return nil, fmt.Errorf("filo trafik serisi: %w", err)
 	}
-	d.TotalGB = (totals.AvgBpsIn + totals.AvgBpsOut) * float64(totals.Seconds) / 8 / 1e9
-	d.AvgBps = totals.AvgBpsIn + totals.AvgBpsOut
-	d.PeakBps = totals.PeakBpsIn + totals.PeakBpsOut
+	var sumBps, totalBytes float64
+	var t0, t1 int64
+	for i, b := range buckets {
+		tot := (b.In + b.Out) * 8 // bit/sn
+		sumBps += tot
+		if tot > d.PeakBps {
+			d.PeakBps = tot
+		}
+		totalBytes += (b.In + b.Out) * 60
+		if i == 0 {
+			t0 = b.Ts
+		}
+		t1 = b.Ts
+	}
+	if n := float64(len(buckets)); n > 0 {
+		d.AvgBps = sumBps / n
+		d.TotalGB = totalBytes / 1e9
+		d.DataWindowDays = float64(t1-t0) / 86400
+	}
 
-	prevTotals, _ := st.PeriodTotals(since.Add(-time.Duration(days) * 24 * time.Hour))
-	d.PrevGB = (prevTotals.AvgBpsIn + prevTotals.AvgBpsOut) * float64(prevTotals.Seconds) / 8 / 1e9
+	// onceki donem [since-period, since) — buyume karsilastirmasi
+	prevAll, _ := st.FleetTrafficBuckets(since.Add(-time.Duration(days)*24*time.Hour), 60)
+	sinceUnix := since.Unix()
+	var prevBytes float64
+	for _, b := range prevAll {
+		if b.Ts < sinceUnix {
+			prevBytes += (b.In + b.Out) * 60
+		}
+	}
+	d.PrevGB = prevBytes / 1e9
 	if d.PrevGB > 0 {
 		d.GrowthPct = 100 * (d.TotalGB - d.PrevGB) / d.PrevGB
 	}
 
-	// banding: 60 sn kovar uzerinden yuzdelikler (Timescale'de cagg uzerinden)
-	buckets, err := st.TimeseriesBuckets(since)
-	if err != nil {
-		return nil, fmt.Errorf("banding kovalari: %w", err)
-	}
 	pcts := percentiles(buckets, 0.50, 0.95, 0.99)
 	d.P50Bps, d.P95Bps, d.P99Bps = pcts[0], pcts[1], pcts[2]
 
 	// top listeler
-	if d.TopEndpoints, err = st.TopEndpointsSince(since, 10); err != nil {
+	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 10); err != nil {
 		return nil, fmt.Errorf("hedefler: %w", err)
 	}
-	if d.TopProcesses, err = st.TopProcessesSince(since, 10); err != nil {
+	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
+	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0
 	alerts, err := st.RecentAlertEvents(500)
 	if err == nil {
 		cutoff := since.Unix()
@@ -182,54 +210,64 @@ const enterpriseTpl = `<!doctype html>
 <div class="page">
   <header>
     <h1>bazNTMS — Kurumsal Rapor</h1>
-    <div class="sub">SLA · kapasite · banding — son {{.Days}} gün · üretilme {{.GeneratedAt.Format "02.01.2006 15:04"}}</div>
+    <div class="sub">SLA · kapasite · banding — son {{.Days}} gün · üretilme {{.GeneratedAt.Format "02.01.2006 15:04"}}
+      {{if gt .DataWindowDays 0.0}}· veri penceresi ~{{printf "%.1f" .DataWindowDays}} gün{{end}}</div>
   </header>
+
+  {{if .Empty}}<p style="border:1px solid var(--line); background:#fffbeb; padding:10px 12px; font-size:12px; color:var(--muted)">
+    Filoda trafik/telemetri kaydı yok — agent'lar ve/veya SNMP cihazları veri gönderiyor mu kontrol edin.
+  </p>{{end}}
 
   <h2>SLA</h2>
   <div class="kpi">
     <div><span>Agent Uptime</span><b>{{printf "%.1f" .AgentUptime}}% ({{.AgentOnline}}/{{.AgentTotal}})</b></div>
     <div><span>Cihaz Sağlığı</span><b>{{printf "%.1f" .DeviceHealth}}% ({{.DeviceOK}}/{{.DeviceTotal}})</b></div>
-    <div><span>Paket Düşme</span><b>{{printf "%.3f" .DropPct}}%</b></div>
+    <div><span>Arayüz İskarta / Hata</span><b>{{.IfaceDiscards}} / {{.IfaceErrors}}</b></div>
     <div><span>Uyarı Sayısı</span><b>{{totalAlerts .AlertCounts}}</b></div>
   </div>
+  <p style="font-size:10.5px;color:var(--muted)">İskarta/hata: SNMP izlenen cihaz arayüzlerinin dönem içi ifIn/OutDiscards + ifIn/OutErrors sayaç artışı.</p>
 
   <h2>Kapasite ve Banding</h2>
   <div class="kpi">
     <div><span>Toplam Trafik</span><b>{{printf "%.1f" .TotalGB}} GB</b></div>
-    <div><span>Büyüme (önceki dönem)</span><b>{{printf "%+.1f" .GrowthPct}}%</b></div>
-    <div><span>Ortalama Verim</span><b>{{printf "%.1f" .AvgBps}} bps</b></div>
-    <div><span>Zirve Verim</span><b>{{printf "%.1f" .PeakBps}} bps</b></div>
+    <div><span>Büyüme (önceki dönem)</span><b>{{if gt .PrevGB 0.0}}{{printf "%+.1f" .GrowthPct}}%{{else}}—{{end}}</b></div>
+    <div><span>Ortalama Verim</span><b>{{bits .AvgBps}}</b></div>
+    <div><span>Zirve Verim</span><b>{{bits .PeakBps}}</b></div>
   </div>
   <table>
-    <tr><th>Bant</th><th class="num">Toplam Verim (bps)</th><th class="num">Kapasite Planı Notu</th></tr>
-    <tr><td>p50 (tipik)</td><td class="num">{{printf "%.0f" .P50Bps}}</td><td>günlük operasyon profili</td></tr>
-    <tr><td>p95 (zirve profili)</td><td class="num">{{printf "%.0f" .P95Bps}}</td><td>kalıcı kapasite bu bandı karşılamalı</td></tr>
-    <tr><td>p99 (sıçrama)</td><td class="num">{{printf "%.0f" .P99Bps}}</td><td>yedeklilik/burst planlaması</td></tr>
+    <tr><th>Bant</th><th class="num">Toplam Verim</th><th class="num">Kapasite Planı Notu</th></tr>
+    <tr><td>p50 (tipik)</td><td class="num">{{bits .P50Bps}}</td><td>günlük operasyon profili</td></tr>
+    <tr><td>p95 (zirve profili)</td><td class="num">{{bits .P95Bps}}</td><td>kalıcı kapasite bu bandı karşılamalı</td></tr>
+    <tr><td>p99 (sıçrama)</td><td class="num">{{bits .P99Bps}}</td><td>yedeklilik/burst planlaması</td></tr>
   </table>
+  <p style="font-size:10.5px;color:var(--muted)">Verim = tüm agent arayüzlerinin toplam gelen+giden hızı (60 sn kova).</p>
 
   <h2>En Yoğun Uç Noktalar</h2>
   <table>
-    <tr><th>IP</th><th>Hostname</th><th class="num">Gelen (MB)</th><th class="num">Giden (MB)</th></tr>
+    <tr><th>IP</th><th class="num">Gelen (MB)</th><th class="num">Giden (MB)</th></tr>
     {{$missing := true}}
     {{range .TopEndpoints}}{{$missing = false}}
-    <tr><td>{{.IP}}</td><td>{{.Hostname}}</td>
+    <tr><td>{{.IP}}</td>
         <td class="num">{{printf "%.1f" (divf .BytesIn 1048576)}}</td>
         <td class="num">{{printf "%.1f" (divf .BytesOut 1048576)}}</td></tr>
     {{end}}
-    {{if $missing}}<tr><td colspan="4">kayıt yok</td></tr>{{end}}
+    {{if $missing}}<tr><td colspan="3">kayıt yok</td></tr>{{end}}
   </table>
 
-  <h2>En Aktif Süreçler (Agentlar)</h2>
+  <h2>Süreç Bazlı Trafik (Agentlar)</h2>
   <table>
-    <tr><th>Süreç</th><th class="num">Bağlantı</th><th class="num">Olay</th></tr>
+    <tr><th>Süreç</th><th class="num">İndirilen (MB)</th><th class="num">Gönderilen (MB)</th><th class="num">Agent</th></tr>
     {{$missing2 := true}}
     {{range .TopProcesses}}{{$missing2 = false}}
-    <tr><td>{{.Process}}</td><td class="num">{{.Connections}}</td><td class="num">{{.Events}}</td></tr>
+    <tr><td>{{.Process}}</td>
+        <td class="num">{{printf "%.1f" (divf .BytesIn 1048576)}}</td>
+        <td class="num">{{printf "%.1f" (divf .BytesOut 1048576)}}</td>
+        <td class="num">{{.AgentCnt}}</td></tr>
     {{end}}
-    {{if $missing2}}<tr><td colspan="3">kayıt yok</td></tr>{{end}}
+    {{if $missing2}}<tr><td colspan="4">kayıt yok</td></tr>{{end}}
   </table>
 
-  <footer>bazNTMS kurumsal rapor motoru — Faz 6.4</footer>
+  <footer>bazNTMS kurumsal rapor motoru · kaynak: agent filosu + NetFlow + SNMP</footer>
 </div>
 </body>
 </html>`
@@ -255,6 +293,7 @@ func (d *EnterpriseData) RenderEnterpriseHTML() ([]byte, error) {
 			}
 			return n
 		},
+		"bits": bits, // pdf.go'daki paket-duzeyi yardimci (bit/sn formatlayici)
 	}
 	t, err := template.New("enterprise").Funcs(funcs).Parse(enterpriseTpl)
 	if err != nil {

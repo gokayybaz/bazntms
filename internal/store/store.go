@@ -89,6 +89,14 @@ type Store interface {
 	TopDomainsSince(since time.Time, limit int) ([]DNSDelta, error)
 	DailyTotals(days int) ([]DayTotal, error)
 
+	// filo raporlama sorgulari (agent arayuz telemetrisi + NetFlow + SNMP
+	// cihaz sayaclari — hub yerel yakalamasina/`samples` tablosuna bagli
+	// degil; coklu-hub kurulumunda calisan tek rapor kaynagi).
+	FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucket, error)
+	FleetProtocolTotals(since time.Time) (map[string]uint64, error)
+	FleetTopEndpoints(since time.Time, limit int) ([]EndpointDelta, error)
+	FleetIfaceHealth(since time.Time) (discards uint64, errors uint64, err error)
+
 	// uyarilar
 	InsertAlertEvent(e AlertEvent) (int64, error)
 	RecentAlertEvents(limit int) ([]AlertEvent, error)

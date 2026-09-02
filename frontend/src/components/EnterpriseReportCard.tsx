@@ -35,8 +35,9 @@ export function EnterpriseReportCard() {
         </a>
       </div>
       <p className="text-xs text-slate-500">
-        SLA (agent online oranı, cihaz poll sağlığı, paket düşme oranı) + kapasite/banding (p50/p95/p99 verim, dönemsel büyüme) +
-        en yoğun uç noktalar/süreçler + uyarı sayaçları. Tarayıcıdan yazdırılabilir (Ctrl/Cmd+P → PDF).
+        SLA (agent online oranı, cihaz poll sağlığı, SNMP arayüz iskarta/hata) + kapasite/banding (p50/p95/p99 verim, dönemsel
+        büyüme) + en yoğun uç noktalar/süreçler + uyarı sayaçları. Veri penceresi filo ham verisinin saklama süresiyle sınırlıdır.
+        Tarayıcıdan yazdırılabilir (Ctrl/Cmd+P → PDF).
       </p>
     </div>
   )

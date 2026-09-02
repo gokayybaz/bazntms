@@ -41,8 +41,9 @@ export function ReportCard() {
         </a>
       </div>
       <p className="text-xs text-slate-500">
-        Rapor içeriği: yönetici özeti, günlük trafik grafiği, en yoğun hedefler (ülke/ASN), en aktif süreçler, DNS sorguları,
-        protokol dağılımı, uyarı olayları ve son AI analizleri. HTML sürümü tarayıcıdan da yazdırılabilir (Ctrl/Cmd+P → PDF).
+        Kaynak: agent arayüz telemetrisi + NetFlow + agent süreç trafiği (hub'ın yerel yakalaması değil). Rapor içeriği:
+        yönetici özeti, günlük trafik grafiği, agent filosu, en yoğun uç noktalar (ülke/ASN), süreç bazlı trafik, protokol
+        dağılımı ve uyarı olayları. HTML sürümü tarayıcıdan da yazdırılabilir (Ctrl/Cmd+P → PDF).
       </p>
     </div>
   )

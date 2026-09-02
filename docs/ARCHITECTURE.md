@@ -126,7 +126,7 @@ gerektirmeden çalışır.
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
 | `/topoloji` | Ağ topolojisi (SVG, hub+spoke) | `GET /api/v1/topology` |
 | `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
-| `/raporlar` | Yerel yakalama + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
+| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
 
@@ -144,8 +144,19 @@ durdur kontrolleri **yok** — yalnızca agent/cihaz filosundan gelen veriler
 görünür. Yerel yakalamayla ilgili bileşenler (StatCards, ThroughputChart,
 EndpointsTable, ConnectionsTable, DnsCard, AICard, CompareCard, PcapCard
 vb.) bu nedenle kaldırıldı; ilgili REST uçları (`/api/capture/*`,
-`/api/history`, `/api/report` — yerel varyant) backend'de hâlâ durur ve
-CLI/otomasyon veya tek-makine (standalone) kurulumlar için kullanılabilir.
+`/api/history`) backend'de hâlâ durur ve CLI/otomasyon veya tek-makine
+(standalone) kurulumlar için kullanılabilir.
+
+**Rapor motoru (`internal/report`):** trafik + kurumsal raporlar tümüyle
+**filo verisinden** üretilir — `store.Fleet*` sorguları agent arayüz
+telemetrisi (`agent_iface_samples`, kümülatif sayaç → `LAG()` ile delta),
+NetFlow (`flows`), agent süreç trafiği (`process_traffic`) ve SNMP cihaz
+sayaçlarından (`device_iface_samples`) beslenir. Hub yerel yakalamasının
+`samples`/`endpoint_stats`/`dns_queries` tablolarına **bağlı değildir**
+(çoklu-hub kurulumunda tüm hub'lar `-capture=false` çalıştığı için o tablolar
+boştur). Filo ham tablolarında continuous aggregate yok → pratik rapor
+penceresi retention süresiyle (varsayılan 7 gün) sınırlı; 30/90 gün seçilse
+bile sorgu var olan veriyi tarar.
 
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 

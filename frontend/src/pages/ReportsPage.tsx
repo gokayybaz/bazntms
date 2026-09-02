@@ -43,7 +43,7 @@ export function ReportsPage() {
 
       <Card
         title="Ağ Trafiği Raporu"
-        right={<span className="text-xs text-slate-500">hub'ın yerel yakalaması</span>}
+        right={<span className="text-xs text-slate-500">agent filosu · NetFlow · süreç trafiği</span>}
       >
         <ReportCard />
       </Card>
