@@ -165,6 +165,11 @@ go test ./...        # Go testleri
   ```
   (Not: L7 reverse proxy agent mTLS'ini sonlandırır; mTLS için agent'lar hub'a
   doğrudan ya da L4/TCP-passthrough LB ile bağlanmalı.)
+- **Ölçek + mTLS**: `docker compose -f deploy/docker-compose.scale.yml -f
+  deploy/docker-compose.scale-mtls.yml up -d` — hub-ingest replikaları
+  paylaşılan bir CA volume'ü kullanır (bir replikanın verdiği sertifika
+  diğerlerince kabul edilir), nginx `:8443`'te L4 passthrough yapar. Agent
+  API: `https://localhost:8443`.
 - Oturumlar bellekte tutulur; sunucu yeniden başlayınca yeniden giriş gerekir
 - ip-api.com modu uzak IP'leri üçüncü taraf servise gönderir (`-ip-api-lookup=false` ile kapatın)
 

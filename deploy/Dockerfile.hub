@@ -24,7 +24,9 @@ RUN CGO_ENABLED=1 go build -trimpath \
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates libpcap tzdata \
     && addgroup -S bazntms && adduser -S -G bazntms -H bazntms \
-    && mkdir -p /data && chown bazntms:bazntms /data
+    && mkdir -p /data/pki && chown -R bazntms:bazntms /data
+# /data/pki: mTLS CA + sunucu sertifikasi. Onceden olusturulur ki paylasilan
+# named volume (docker-compose.scale-mtls.yml) bazntms sahipligini devralsin.
 COPY --from=build /out/bazntms-hub /usr/local/bin/bazntms-hub
 # Container'da paket yakalama kapalı (-capture=false, compose dosyalarına bkz.)
 # — hub root olmadan çalışır. Yalnızca tek-makine/standalone kurulumda

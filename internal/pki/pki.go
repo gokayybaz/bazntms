@@ -58,7 +58,9 @@ func serialNumber() (*big.Int, error) {
 }
 
 // LoadOrCreateCA, `dir`/ca.crt + ca.key okur; yoksa yeni bir self-signed CA
-// üretir ve 0600/0644 ile yazar.
+// üretir ve 0600/0644 ile yazar. Coklu hub replikasi ayni paylasilan PKI
+// dizinini kullanabildigi icin uretim yarissizdir: ca.key `O_EXCL` ile
+// olusturulur, kaybeden replikalar kazananin yazdigi CA'yi okur (kisa bekleme).
 func LoadOrCreateCA(dir string) (*CA, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -66,24 +68,35 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 	certPath := filepath.Join(dir, "ca.crt")
 	keyPath := filepath.Join(dir, "ca.key")
 
-	if certPEM, err := os.ReadFile(certPath); err == nil {
-		keyPEM, err := os.ReadFile(keyPath)
-		if err != nil {
-			return nil, fmt.Errorf("ca.key okunamadı: %w", err)
-		}
-		cert, key, err := parseCertKey(certPEM, keyPEM)
-		if err != nil {
-			return nil, fmt.Errorf("mevcut CA çözülemedi: %w", err)
-		}
-		return &CA{cert: cert, key: key, certPEM: certPEM, dir: dir}, nil
+	if ca, err := loadCA(certPath, keyPath, dir); err == nil {
+		return ca, nil
 	}
+
+	// yaris kilidi: ca.key'i EXCL ile ac. Basarisiz → baska replika uretiyor.
+	lockF, err := os.OpenFile(keyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			for i := 0; i < 100; i++ {
+				time.Sleep(100 * time.Millisecond)
+				if ca, err := loadCA(certPath, keyPath, dir); err == nil {
+					return ca, nil
+				}
+			}
+			return nil, fmt.Errorf("paylasilan CA 10 sn icinde hazir olmadi")
+		}
+		return nil, err
+	}
+	// bu noktadan sonra hata olursa kilit dosyasini birak (baska replika uretsin)
+	cleanup := func() { lockF.Close(); os.Remove(keyPath) }
 
 	priv, err := newKey()
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
 	serial, err := serialNumber()
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
 	tmpl := &x509.Certificate{
@@ -98,22 +111,44 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, priv.Public(), priv)
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+	if _, err := lockF.Write(keyPEM); err != nil {
+		cleanup()
 		return nil, err
 	}
+	lockF.Close()
+	// ca.crt en son yazilir: bekleyen replikalar bunun varligini bekler
 	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return nil, err
 	}
 	cert, _ := x509.ParseCertificate(der)
 	return &CA{cert: cert, key: priv, certPEM: certPEM, dir: dir}, nil
+}
+
+// loadCA, ca.crt + ca.key diskte varsa CA'yi cozer.
+func loadCA(certPath, keyPath, dir string) (*CA, error) {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, err
+	}
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+	cert, key, err := parseCertKey(certPEM, keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	return &CA{cert: cert, key: key, certPEM: certPEM, dir: dir}, nil
 }
 
 // CertPEM, CA sertifikasının PEM'ini döndürür (agent'lara dağıtmak için).

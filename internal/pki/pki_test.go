@@ -4,9 +4,37 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"sync"
 	"testing"
 	"time"
 )
+
+// TestLoadOrCreateCARace, coklu hub replikasinin ayni paylasilan PKI dizinini
+// es zamanli actigi senaryoyu taklit eder: hepsi AYNI CA sertifikasini almali.
+func TestLoadOrCreateCARace(t *testing.T) {
+	dir := t.TempDir()
+	const n = 12
+	results := make([][]byte, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			ca, err := LoadOrCreateCA(dir)
+			if err != nil {
+				t.Errorf("goroutine %d: %v", i, err)
+				return
+			}
+			results[i] = ca.CertPEM()
+		}(i)
+	}
+	wg.Wait()
+	for i := 1; i < n; i++ {
+		if string(results[i]) != string(results[0]) || len(results[0]) == 0 {
+			t.Fatalf("goroutine %d farkli/bos CA aldi", i)
+		}
+	}
+}
 
 func TestCARoundTrip(t *testing.T) {
 	dir := t.TempDir()

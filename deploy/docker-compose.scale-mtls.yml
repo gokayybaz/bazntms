@@ -1,0 +1,67 @@
+# bazNTMS — ölçek mimarisi + agent↔hub karşılıklı TLS (mTLS) overlay.
+#
+# Kullanım (base + overlay birlikte):
+#   docker compose -f deploy/docker-compose.scale.yml \
+#                  -f deploy/docker-compose.scale-mtls.yml up -d --build
+#
+# Ne değişir:
+#   - hub-ingest replikaları -tls ile HTTPS + istemci sertifikası doğrulaması
+#     yapar; PAYLAŞILAN `pki` volume'ü (ca.crt/ca.key) ile aynı CA'yı kullanır
+#     (LoadOrCreateCA yarışsız: ca.key O_EXCL, kaybedenler bekleyip okur).
+#   - lb (nginx) :8443'te L4 TCP passthrough açar — TLS'i SONLANDIRMAZ, el
+#     sıkışması (istemci sertifikası dahil) hub-ingest'te biter (bkz. lb.conf
+#     stream{} bloğu).
+#   - agent'lar https://lb:8443'e bağlanır; hub CA'sını ilk bağlantıda pinler
+#     (TOFU — enrollment token kimliği sağlar). Sonraki tüm bağlantılar mTLS.
+#
+# hub-controller (panel) düz HTTP'de kalır: ölçek kurulumunda agent telemetrisi
+# ingest havuzuna gider, controller yalnızca dashboard/alarm/poller çalıştırır.
+
+services:
+  hub-ingest:
+    command:
+      - "-capture=false"
+      - "-alerts=false"
+      - "-poller=false"
+      - "-prune=false"
+      - "-agent-pcap"
+      - "-tls"
+      - "-tls-dir"
+      - "/data/pki"
+      - "-tls-hosts"
+      - "lb,localhost,hub-ingest"
+      - "-enroll-token"
+      - "scale-enroll-token"
+    volumes:
+      - pki:/data/pki
+    healthcheck:
+      # -tls açık → healthcheck de HTTPS olmalı (self-signed → sertifika atla)
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://localhost:8080/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  lb:
+    ports:
+      - "8081:8081"
+      - "8443:8443"
+    healthcheck:
+      # mTLS modunda agent trafiği :8443 (L4 passthrough) üzerinden; :8081 L7
+      # HTTP proxy artık HTTPS backend'e düz HTTP taşıyamaz, kullanılmaz.
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8443/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  agent:
+    command:
+      - "-hub-url"
+      - "https://lb:8443"
+      - "-enroll-token"
+      - "scale-enroll-token"
+      - "-site"
+      - "docker-scale"
+      - "-pcap"
+
+volumes:
+  pki: # hub-ingest replikalarının paylaştığı CA + sunucu sertifikası
