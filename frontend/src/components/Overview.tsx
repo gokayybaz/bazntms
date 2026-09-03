@@ -3,6 +3,8 @@ import type { AgentWithRates, AlertEvent } from '../types'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from './Card'
 import { TopologyCard } from './TopologyCard'
+import { TrafficFlowDiagram } from './TrafficFlowDiagram'
+import type { DiagramAgent, TrafficEvent } from './TrafficFlowDiagram'
 
 // --- yerel API tipleri (DevicesCard/FlowsCard/SyslogCard ile ayni sema) ---
 
@@ -51,9 +53,9 @@ interface AgentConnSample {
 type StreamKind = 'flow' | 'syslog' | 'agent'
 
 type StreamItem =
-  | { kind: 'flow'; ts: number; key: string; primary: string; source: string; bytes: number; packets: number }
+  | { kind: 'flow'; ts: number; key: string; primary: string; source: string; bytes: number; packets: number; src: string; dst: string; dport: number; proto: string }
   | { kind: 'syslog'; ts: number; key: string; primary: string; source: string; severity: number }
-  | { kind: 'agent'; ts: number; key: string; primary: string; source: string; pid?: number }
+  | { kind: 'agent'; ts: number; key: string; primary: string; source: string; pid?: number; local: string; remote?: string }
 
 const ALERT_KIND_STYLES: Record<string, string> = {
   bw: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -210,6 +212,10 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         source: f.device,
         bytes: f.octets ?? 0,
         packets: f.packets ?? 0,
+        src: f.src,
+        dst: f.dst,
+        dport: f.dst_port,
+        proto: f.proto,
       })),
       ...syslog.map((e) => ({
         kind: 'syslog' as const,
@@ -229,6 +235,8 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
           primary: `${c.local_addr}${c.remote_addr ? ' → ' + c.remote_addr : ''} ${c.proto}${c.status ? ' · ' + c.status : ''}${c.process ? ' · ' + c.process : ''}`,
           source: a.agentName,
           pid: c.pid,
+          local: c.local_addr,
+          remote: c.remote_addr,
         })),
       ),
     ]
@@ -243,6 +251,42 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
     return c
   }, [stream])
   const visibleStream = streamFilter === 'all' ? stream : stream.filter((it) => it.kind === streamFilter)
+
+  // canlı trafik şeması: sol sütunda filonun HER agent'ı ayrı düğüm
+  const diagramAgents = useMemo<DiagramAgent[]>(
+    () =>
+      [...agents]
+        .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
+        .map((a) => {
+          const busiest = [...(a.rates ?? [])].sort((x, y) => y.rx_bps + y.tx_bps - (x.rx_bps + x.tx_bps))[0]
+          return {
+            name: a.name,
+            online: a.online,
+            site: a.site || undefined,
+            rxBps: busiest?.rx_bps ?? 0,
+            txBps: busiest?.tx_bps ?? 0,
+          }
+        }),
+    [agents],
+  )
+
+  // canlı trafik şeması için olay listesi — akıştaki en yeni 80 satır,
+  // yön sınıflandırması diyagramın içinde (from/to özel/genel IP kontrolü).
+  // Karşı ucu olmayan agent satırları (LISTEN soketleri) şemaya alınmaz —
+  // yön taşımazlar, yalnızca "· dinliyor" gürültüsü olurlar.
+  const diagramEvents = useMemo<TrafficEvent[]>(
+    () =>
+      visibleStream.slice(0, 80).flatMap((it): TrafficEvent[] => {
+        if (it.kind === 'flow') {
+          return [{ key: it.key, kind: 'flow', ts: it.ts, from: it.src, to: `${it.dst}:${it.dport}`, weight: it.bytes }]
+        }
+        if (it.kind === 'agent') {
+          return it.remote ? [{ key: it.key, kind: 'agent', ts: it.ts, agent: it.source, from: it.local, to: it.remote }] : []
+        }
+        return [{ key: it.key, kind: 'syslog', ts: it.ts, from: it.source }]
+      }),
+    [visibleStream],
+  )
 
   const eventRate = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
@@ -334,6 +378,18 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
           <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı</p>
         </div>
       </div>
+
+      {/* canlı trafik şeması — agent filosu ↔ router/güvenlik duvarı ↔ internet */}
+      <Card
+        title="Canlı Trafik Şeması"
+        right={
+          <span className="hidden text-xs text-slate-500 sm:inline">
+            Agent filosu → Router/Güvenlik Duvarı → İnternet · animasyonlu paket akışı
+          </span>
+        }
+      >
+        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} pps={agentTraffic.pps} />
+      </Card>
 
       {/* canlı olay akışı — tam genişlik */}
       <Card

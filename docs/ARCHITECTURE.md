@@ -110,6 +110,19 @@ otomatik dönüş). 401 görülürse App login ekranına düşer; 60 sn'de bir d
 oturum denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
 harici grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
 
+Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG
+bir sahnedir: sol sütunda **agent filosunun HER üyesi ayrı bir istemci düğümü**
+(monitör ikonu + online/offline + en yoğun arayüz hızı), ortada Router/Güvenlik
+Duvarı, sağda İnternet. Her canlı akış/agent/syslog olayı, olayı üreten agent'ın
+düğümünden yön (giden/gelen/yerel/olay) bazlı animasyonlu bir "paket" geçirir;
+NetFlow olayları (agent'sız) doğrudan güvenlik duvarı ↔ internet ekseninde akar.
+viewBox yüksekliği agent sayısıyla büyür, düğüm detayı (tam/kompakt/mini) filo
+kalabalıklaştıkça düşer — tüm agent'lar her zaman görünür. Paketler
+`packetsRef`'te tutulur, tek bir `requestAnimationFrame` döngüsü boştayken
+sessiz kalıp yalnızca hareket varken yeniden çizdirir; yön sınıflandırması
+(`from`/`to` özel-genel IP ekseni) `lib/traffic.ts`'te, `TrafficFlowDiagram.test.tsx`
++ `lib/traffic.test.ts` ile kaplı. `prefers-reduced-motion` altında animasyon durur.
+
 ### Sayfa yapısı (routing)
 
 `App.tsx` bir kabuk: sol sabit `Sidebar` (rota listesi) + üst `Header` (WS
