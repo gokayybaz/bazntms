@@ -39,7 +39,7 @@ func (s *sqlStore) SyncIsmsAssetsFromFleet() (int, error) {
 	}
 	var seeds []seed
 
-	devices, err := s.ListDevices()
+	devices, err := s.ListDevices("")
 	if err != nil {
 		return 0, err
 	}

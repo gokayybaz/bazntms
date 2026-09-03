@@ -89,7 +89,7 @@ func TestFlowsAndSyslog(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("flow kaydi: %v", err)
 	}
-	flows, err := st.TopFlows(time.Now().Add(-time.Hour), 20)
+	flows, err := st.TopFlows(time.Now().Add(-time.Hour), 20, "")
 	if err != nil || len(flows) != 2 {
 		t.Fatalf("akislar: %v %d", err, len(flows))
 	}
@@ -100,7 +100,7 @@ func TestFlowsAndSyslog(t *testing.T) {
 	if err := st.SaveSyslogEvent(SyslogEvent{Ts: now, Host: "rt-01", Severity: 4, Tag: "kernel", Message: "link down"}); err != nil {
 		t.Fatalf("syslog kaydi: %v", err)
 	}
-	events, err := st.RecentSyslog(10)
+	events, err := st.RecentSyslog(10, "")
 	if err != nil || len(events) != 1 || events[0].Severity != 4 {
 		t.Fatalf("syslog: %v %+v", err, events)
 	}

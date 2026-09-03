@@ -21,7 +21,7 @@ func TestFortigateStoreRoundTrip(t *testing.T) {
 	if err != nil || id == 0 {
 		t.Fatalf("cihaz: %v %d", err, id)
 	}
-	devs, _ := st.ListDevices()
+	devs, _ := st.ListDevices("")
 	if len(devs) != 1 || devs[0].Vendor != "fortigate" || devs[0].APIURL != "https://10.9.9.1" ||
 		devs[0].APIVerifyTLS || devs[0].VDOM != "root" {
 		t.Fatalf("vendor alanları: %+v", devs)

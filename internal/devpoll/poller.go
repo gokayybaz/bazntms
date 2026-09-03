@@ -68,7 +68,7 @@ func (p *Poller) run() {
 }
 
 func (p *Poller) pollAll() {
-	devices, err := p.store.ListDevices()
+	devices, err := p.store.ListDevices("")
 	if err != nil {
 		return
 	}

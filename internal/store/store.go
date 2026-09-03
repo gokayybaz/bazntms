@@ -128,16 +128,16 @@ type Store interface {
 
 	// cihazlar, flow, syslog (Faz 3)
 	AddDevice(d Device) (int64, error)
-	ListDevices() ([]Device, error)
+	ListDevices(site string) ([]Device, error)
 	DeviceByID(id int64) (*Device, error)
 	DeleteDevice(id int64) error
 	UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error
 	SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error
 	LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
 	SaveFlows(rows []FlowRow) error
-	TopFlows(since time.Time, limit int) ([]FlowRow, error)
+	TopFlows(since time.Time, limit int, site string) ([]FlowRow, error)
 	SaveSyslogEvent(e SyslogEvent) error
-	RecentSyslog(limit int) ([]SyslogEvent, error)
+	RecentSyslog(limit int, site string) ([]SyslogEvent, error)
 
 	// kullanicilar, token'lar, denetim kaydi (Faz 5)
 	CreateUser(u User) (int64, error)
@@ -453,6 +453,7 @@ CREATE TABLE IF NOT EXISTS devices (
 	name         TEXT    NOT NULL,
 	host         TEXT    NOT NULL,
 	kind         TEXT    NOT NULL DEFAULT 'other',
+	site         TEXT    NOT NULL DEFAULT '',
 	vendor       TEXT    NOT NULL DEFAULT 'snmp',
 	snmp_version INTEGER NOT NULL DEFAULT 2,
 	community    TEXT    NOT NULL DEFAULT '',

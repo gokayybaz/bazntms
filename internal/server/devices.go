@@ -18,6 +18,7 @@ type deviceRequest struct {
 	Name         string `json:"name"`
 	Host         string `json:"host"`
 	Kind         string `json:"kind"`
+	Site         string `json:"site"`   // RBAC site-scope
 	Vendor       string `json:"vendor"` // snmp | fortigate (Faz 8)
 	SNMPVersion  int    `json:"snmp_version"`
 	Community    string `json:"community"`
@@ -33,8 +34,20 @@ type deviceRequest struct {
 	PollSeconds  int    `json:"poll_seconds"`
 }
 
+// deviceInScope, site-sinirli bir kimligin verilen cihaza erisip
+// erisemeyecegini soyler. Kimlik site-sinirsizsa (SiteScope=="") her zaman
+// true. Cihaz bulunamazsa false (handler 404 doner).
+func (s *Server) deviceInScope(r *http.Request, id int64) bool {
+	scope := SiteScope(identityFromCtx(r))
+	if scope == "" {
+		return true
+	}
+	d, err := s.store.DeviceByID(id)
+	return err == nil && d.Site == scope
+}
+
 func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.store.ListDevices()
+	list, err := s.store.ListDevices(SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -113,8 +126,12 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// site-sinirli kimlik yalnizca kendi sitesine cihaz ekleyebilir
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		req.Site = scope
+	}
 	id, err := s.store.AddDevice(store.Device{
-		Name: req.Name, Host: req.Host, Kind: req.Kind, Vendor: req.Vendor,
+		Name: req.Name, Host: req.Host, Kind: req.Kind, Site: req.Site, Vendor: req.Vendor,
 		SNMPVersion: req.SNMPVersion, Community: req.Community,
 		V3User: req.V3User, V3AuthProto: req.V3AuthProto, V3AuthPass: req.V3AuthPass,
 		V3PrivProto: req.V3PrivProto, V3PrivPass: req.V3PrivPass,
@@ -137,6 +154,10 @@ func (s *Server) handleDeviceDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
+		return
+	}
 	if err := s.store.DeleteDevice(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -153,6 +174,10 @@ func (s *Server) handleDeviceIfaces(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
+		return
+	}
 	ifaces, err := s.store.LatestDeviceIfaces(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -167,7 +192,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		minutes = 15
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	flows, err := s.store.TopFlows(time.Now().Add(-time.Duration(minutes)*time.Minute), limit)
+	flows, err := s.store.TopFlows(time.Now().Add(-time.Duration(minutes)*time.Minute), limit, SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -177,7 +202,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSyslogEvents(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	events, err := s.store.RecentSyslog(limit)
+	events, err := s.store.RecentSyslog(limit, SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -27,6 +27,10 @@ func (s *Server) handleDeviceResources(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
+		return
+	}
 	rows, err := s.store.LatestDeviceResources(id, parseMinutes(r, 60))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -42,6 +46,10 @@ func (s *Server) handleDeviceVPN(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
+		return
+	}
 	rows, err := s.store.LatestFortiVPN(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -55,6 +63,10 @@ func (s *Server) handleDeviceSDWAN(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
 		return
 	}
 	rows, err := s.store.RecentFortiSDWANAll(
@@ -78,6 +90,10 @@ func (s *Server) handleDevicePolicies(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

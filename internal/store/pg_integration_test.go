@@ -178,7 +178,7 @@ func TestPostgresStore(t *testing.T) {
 	if err != nil || devID == 0 {
 		t.Fatalf("cihaz: %v %d", err, devID)
 	}
-	devices, err := st.ListDevices()
+	devices, err := st.ListDevices("")
 	if err != nil || len(devices) != 1 || !devices[0].Enabled {
 		t.Fatalf("cihaz listesi: %v %+v", err, devices)
 	}
@@ -199,14 +199,14 @@ func TestPostgresStore(t *testing.T) {
 	if err := st.SaveFlows([]FlowRow{{Ts: now, Device: "rt-1", Src: "1.2.3.4", Dst: "5.6.7.8", SrcPort: 1024, DstPort: 443, Proto: "tcp", Packets: 20, Octets: 9000}}); err != nil {
 		t.Fatalf("flow: %v", err)
 	}
-	fl, err := st.TopFlows(time.Now().Add(-time.Hour), 10)
+	fl, err := st.TopFlows(time.Now().Add(-time.Hour), 10, "")
 	if err != nil || len(fl) != 1 || fl[0].Octets != 9000 {
 		t.Fatalf("flow sorgu: %v %+v", err, fl)
 	}
 	if err := st.SaveSyslogEvent(SyslogEvent{Ts: now, Host: "rt-1", Severity: 4, Tag: "LINK", Message: "up/down"}); err != nil {
 		t.Fatalf("syslog: %v", err)
 	}
-	sy, err := st.RecentSyslog(10)
+	sy, err := st.RecentSyslog(10, "")
 	if err != nil || len(sy) != 1 || sy[0].Host != "rt-1" {
 		t.Fatalf("syslog sorgu: %v %+v", err, sy)
 	}

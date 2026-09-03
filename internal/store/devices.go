@@ -12,6 +12,7 @@ type Device struct {
 	Name         string `json:"name"`
 	Host         string `json:"host"`
 	Kind         string `json:"kind"`                // router | switch | firewall | ap | other
+	Site         string `json:"site"`                // RBAC site-scope + filo organizasyonu (bos = tum siteler)
 	Vendor       string `json:"vendor"`              // snmp (varsayılan) | fortigate (Faz 8)
 	SNMPVersion  int    `json:"snmp_version"`        // 2 (v2c) veya 3 (v3)
 	Community    string `json:"community,omitempty"` // sifreli (v2c)
@@ -69,10 +70,10 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 	}
 	var id int64
 	err := s.db.QueryRow(s.q(`INSERT INTO devices
-		(name, host, kind, vendor, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
+		(name, host, kind, site, vendor, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
 		 api_url, api_token_enc, api_verify_tls, vdom, poll_seconds, enabled, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
-		d.Name, d.Host, d.Kind, d.Vendor, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		d.Name, d.Host, d.Kind, d.Site, d.Vendor, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
 		d.V3PrivProto, d.V3PrivPass, d.APIURL, d.APIToken, btoi(d.APIVerifyTLS), d.VDOM,
 		d.PollSeconds, btoi(d.Enabled), time.Now().Unix()).Scan(&id)
 	if err != nil {
@@ -81,11 +82,20 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 	return id, nil
 }
 
-func (s *sqlStore) ListDevices() ([]Device, error) {
-	rows, err := s.db.Query(s.q(`SELECT id, name, host, kind, vendor, snmp_version, community, v3_user, v3_auth_proto,
+// ListDevices, cihazlari listeler. site bos degilse yalnizca o siteye ait
+// cihazlar doner (RBAC site-scope); bos ise tumu.
+func (s *sqlStore) ListDevices(site string) ([]Device, error) {
+	q := `SELECT id, name, host, kind, site, vendor, snmp_version, community, v3_user, v3_auth_proto,
 		v3_auth_pass, v3_priv_proto, v3_priv_pass, api_url, api_token_enc, api_verify_tls, vdom,
 		poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error
-		FROM devices ORDER BY id`))
+		FROM devices`
+	args := []any{}
+	if site != "" {
+		q += ` WHERE site = ?`
+		args = append(args, site)
+	}
+	q += ` ORDER BY id`
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +103,7 @@ func (s *sqlStore) ListDevices() ([]Device, error) {
 	out := []Device{}
 	for rows.Next() {
 		var d Device
-		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.Vendor, &d.SNMPVersion, &d.Community, &d.V3User,
+		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.Site, &d.Vendor, &d.SNMPVersion, &d.Community, &d.V3User,
 			&d.V3AuthProto, &d.V3AuthPass, &d.V3PrivProto, &d.V3PrivPass, &d.APIURL, &d.APIToken,
 			&d.APIVerifyTLS, &d.VDOM, &d.PollSeconds, &d.Enabled,
 			&d.SysName, &d.SysDescr, &d.AddedAt, &d.LastPoll, &d.LastError); err != nil {
@@ -105,7 +115,7 @@ func (s *sqlStore) ListDevices() ([]Device, error) {
 }
 
 func (s *sqlStore) DeviceByID(id int64) (*Device, error) {
-	list, err := s.ListDevices()
+	list, err := s.ListDevices("")
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +192,7 @@ func (s *sqlStore) ensureDeviceColumns() error {
 		{"api_token_enc", "TEXT NOT NULL DEFAULT ''"},
 		{"api_verify_tls", "INTEGER NOT NULL DEFAULT 1"},
 		{"vdom", "TEXT NOT NULL DEFAULT ''"},
+		{"site", "TEXT NOT NULL DEFAULT ''"},
 	})
 }
 
@@ -299,12 +310,23 @@ func (s *sqlStore) SaveFlows(rows []FlowRow) error {
 	return tx.Commit()
 }
 
-func (s *sqlStore) TopFlows(since time.Time, limit int) ([]FlowRow, error) {
+// TopFlows, donemin en yogun NetFlow kayitlari. site bos degilse yalnizca o
+// siteye kayitli bir cihaz (exporter) tarafindan bildirilenler doner —
+// eslemeyen exporter'lar site-sinirli kullaniciya gorunmez.
+func (s *sqlStore) TopFlows(since time.Time, limit int, site string) ([]FlowRow, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := s.db.Query(s.q(`SELECT ts, device, src, dst, src_port, dst_port, proto, packets, octets
-		FROM flows WHERE ts >= ? ORDER BY octets DESC LIMIT ?`), since.Unix(), limit)
+	q := `SELECT ts, device, src, dst, src_port, dst_port, proto, packets, octets
+		FROM flows WHERE ts >= ?`
+	args := []any{since.Unix()}
+	if site != "" {
+		q += ` AND device IN (SELECT host FROM devices WHERE site = ?)`
+		args = append(args, site)
+	}
+	q += ` ORDER BY octets DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -338,11 +360,21 @@ func (s *sqlStore) SaveSyslogEvent(e SyslogEvent) error {
 	return err
 }
 
-func (s *sqlStore) RecentSyslog(limit int) ([]SyslogEvent, error) {
+// RecentSyslog, son syslog olaylari. site bos degilse yalnizca o siteye
+// kayitli bir cihazin kaynak IP'sinden gelenler doner.
+func (s *sqlStore) RecentSyslog(limit int, site string) ([]SyslogEvent, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.Query(s.q(`SELECT id, ts, host, source_ip, severity, tag, message FROM syslog_events ORDER BY id DESC LIMIT ?`), limit)
+	q := `SELECT id, ts, host, source_ip, severity, tag, message FROM syslog_events`
+	args := []any{}
+	if site != "" {
+		q += ` WHERE source_ip IN (SELECT host FROM devices WHERE site = ?)`
+		args = append(args, site)
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}

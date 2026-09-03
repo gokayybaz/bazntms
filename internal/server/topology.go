@@ -34,7 +34,7 @@ type topologyGraph struct {
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	devices, err := s.store.ListDevices()
+	devices, err := s.store.ListDevices(SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS devices (
 	name         TEXT    NOT NULL,
 	host         TEXT    NOT NULL,
 	kind         TEXT    NOT NULL DEFAULT 'other',
+	site         TEXT    NOT NULL DEFAULT '',
 	vendor       TEXT    NOT NULL DEFAULT 'snmp',
 	snmp_version INTEGER NOT NULL DEFAULT 2,
 	community    TEXT    NOT NULL DEFAULT '',

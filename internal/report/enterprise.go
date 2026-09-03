@@ -76,7 +76,7 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	}
 
 	// SLA: cihaz poll basarisi (son hatasi olmayan + guncel poll)
-	devices, err := st.ListDevices()
+	devices, err := st.ListDevices("")
 	if err != nil {
 		return nil, fmt.Errorf("cihazlar: %w", err)
 	}

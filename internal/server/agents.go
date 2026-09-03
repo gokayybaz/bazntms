@@ -389,6 +389,12 @@ func (s *Server) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, agents)
 }
 
+// agentInScope, site-sinirli kimligin verilen agent'i gorup goremeyecegi.
+func (s *Server) agentInScope(r *http.Request, a *store.Agent) bool {
+	scope := SiteScope(identityFromCtx(r))
+	return scope == "" || (a != nil && a.Site == scope)
+}
+
 func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r.PathValue("id"))
 	if err != nil {
@@ -396,7 +402,7 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agent, err := s.store.AgentByID(id)
-	if err != nil {
+	if err != nil || !s.agentInScope(r, agent) {
 		http.Error(w, "agent bulunamadi", http.StatusNotFound)
 		return
 	}
@@ -425,6 +431,10 @@ func (s *Server) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if a, err := s.store.AgentByID(id); err != nil || !s.agentInScope(r, a) {
+		http.Error(w, "agent bulunamadi", http.StatusNotFound)
 		return
 	}
 	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))

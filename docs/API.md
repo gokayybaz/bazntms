@@ -318,7 +318,11 @@ Roller ve yetkiler:
 ### `GET /api/v1/users` · `POST /api/v1/users`
 
 Kullanıcı listesi ve oluşturma. Oluşturma: `{username, password (≥8), role, site}`.
-`site` doluysa kullanıcı yalnızca o sitenin agent'larını görür.
+`site` doluysa kullanıcı/token yalnızca o siteye ait **agent'ları, cihazları
+(`devices.site`), NetFlow'u (exporter cihazının sitesi), syslog'u (kaynak IP'nin
+cihazının sitesi) ve topolojiyi** görür; başka sitenin `agent`/`device`
+detayına 404 alır. Site-sınırlı bir kullanıcı cihaz eklerken `site` alanı
+otomatik kendi sitesine sabitlenir.
 
 ### `PUT /api/v1/users/{id}` · `DELETE /api/v1/users/{id}`
 
@@ -485,18 +489,22 @@ tablo­ları; HTML olarak üretilir.
 
 ### `GET /api/v1/devices`
 
-Kayıtlı cihazlar: `{id, name, host, kind, snmp_version, poll_seconds, enabled, sys_name, sys_descr, last_poll, last_error}`.
-Kimlik bilgileri yanıt масkedelenir.
+Kayıtlı cihazlar: `{id, name, host, kind, site, snmp_version, poll_seconds, enabled, sys_name, sys_descr, last_poll, last_error}`.
+Kimlik bilgileri yanıtta maskelenir. Site-sınırlı kimlik yalnızca kendi
+sitesinin cihazlarını görür.
 
 ### `POST /api/v1/devices`
 
 ```json
 {
-  "name": "core-sw", "host": "10.0.0.2", "kind": "switch",
+  "name": "core-sw", "host": "10.0.0.2", "kind": "switch", "site": "sube-a",
   "snmp_version": 2, "community": "gizli",
   "poll_seconds": 60
 }
 ```
+
+`site` opsiyoneldir (RBAC scope + filo organizasyonu). Site-sınırlı kimlikte
+otomatik kullanıcının sitesine sabitlenir.
 
 v3 için: `"v3_user"`, `"v3_auth_proto"` (SHA/SHA256/SHA512/MD5), `"v3_auth_pass"`,
 `"v3_priv_proto"` (AES/AES256/DES), `"v3_priv_pass"`. Hassas alanlar AES-256-GCM

@@ -125,12 +125,12 @@ func TestQueueRoundTrip(t *testing.T) {
 	}, "surec trafigi store'a yazilmadi")
 
 	waitFor(t, func() bool {
-		fl, err := st.TopFlows(time.Now().Add(-time.Hour), 10)
+		fl, err := st.TopFlows(time.Now().Add(-time.Hour), 10, "")
 		return err == nil && len(fl) == 1 && fl[0].Octets == 1234
 	}, "flow store'a yazilmadi")
 
 	waitFor(t, func() bool {
-		sy, err := st.RecentSyslog(10)
+		sy, err := st.RecentSyslog(10, "")
 		return err == nil && len(sy) == 1 && sy[0].Message == "deny"
 	}, "syslog store'a yazilmadi")
 }

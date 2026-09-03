@@ -8,6 +8,7 @@ interface Device {
   name: string
   host: string
   kind: string
+  site: string
   vendor: string // snmp | fortigate
   snmp_version: number
   api_url: string
@@ -109,6 +110,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                   {d.name}
                 </Link>
                 <span className="font-mono text-xs text-slate-500">{d.host}</span>
+                {d.site && <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] text-slate-400">{d.site}</span>}
                 {vendorBadge(d)}
                 <span className="ml-auto font-mono text-[10px] text-slate-600">
                   {d.last_poll > 0 ? `son poll: ${new Date(d.last_poll * 1000).toLocaleTimeString('tr-TR')}` : 'hiç poll edilmedi'}
@@ -182,7 +184,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
 
 function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: string) => void }) {
   const [form, setForm] = useState({
-    name: '', host: '', kind: 'router', vendor: 'snmp', snmp_version: 2,
+    name: '', host: '', kind: 'router', site: '', vendor: 'snmp', snmp_version: 2,
     community: '', v3_user: '', v3_auth_proto: 'SHA', v3_auth_pass: '',
     v3_priv_proto: 'AES', v3_priv_pass: '',
     api_url: '', api_token: '', api_verify_tls: true, vdom: 'root',
@@ -222,6 +224,7 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
           <option value="snmp">SNMP</option>
           <option value="fortigate">FortiGate (REST API)</option>
         </select>
+        <input value={form.site} onChange={(e) => set('site', e.target.value)} placeholder="site (RBAC scope — ör. sube-a)" className={inputCls} />
       </div>
 
       {form.vendor === 'fortigate' ? (
