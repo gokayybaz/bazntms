@@ -79,6 +79,9 @@ type Store interface {
 	InsertDNSDeltas(list []DNSDelta) error
 	InsertConnectionEvents(list []ConnectionEvent) error
 	Prune(retention time.Duration) error
+	// ConfigureRetention, TimescaleDB modunda native chunk-drop retention
+	// politikalarini kurar/gunceller (plain PG / SQLite'ta no-op).
+	ConfigureRetention(retention time.Duration) error
 
 	// sorgular
 	TimeseriesBuckets(since time.Time) ([]Bucket, error)

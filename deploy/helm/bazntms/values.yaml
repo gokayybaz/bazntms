@@ -33,6 +33,8 @@ replicaRoles:
     enabled: true
   poller:
     enabled: true
+  prune:
+    enabled: true # veritabani bakimi — N replika ingest'te YALNIZCA controller'da true
 
 # hub.yaml icerigi (koanf -config ile yuklenir)
 config:

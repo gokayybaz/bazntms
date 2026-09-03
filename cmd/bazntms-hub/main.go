@@ -47,6 +47,7 @@ func main() {
 	captureOn := fl.Bool("capture", true, "hub'in kendi paket yakalamasi (coklu replikada kapatilir)")
 	alertsOn := fl.Bool("alerts", true, "uyari motoru (coklu replikada tek replikada acilir)")
 	pollerOn := fl.Bool("poller", true, "SNMP cihaz poller'i (coklu replikada tek replikada acilir)")
+	pruneOn := fl.Bool("prune", true, "veritabani bakimi (eski satirlarin temizligi); coklu replikada YALNIZCA bir hub'da acik olmali")
 	pollInterval := fl.Int("poll-interval", 0, "tum cihazlar icin tek tip poll araligi (sn); 0 = per-device deger. min 5")
 	pprofAddr := fl.String("pprof", "", "net/http/pprof dinleme adresi (ex: 127.0.0.1:6060); bos = kapali")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
@@ -143,6 +144,21 @@ func main() {
 	}
 	defer st.Close()
 
+	retention := time.Duration(*retentionH) * time.Hour
+	// veritabani bakimi: eski satirlarin temizligi + (TS'te) native chunk-drop
+	// retention. Collector'dan bagimsiz (coklu-hub'da -capture=false).
+	if *pruneOn {
+		if err := st.ConfigureRetention(retention); err != nil {
+			slog.Warn("retention politikalari kurulamadi", "err", err)
+		}
+		maint := store.NewMaintainer(st, retention)
+		maint.Start()
+		defer maint.Stop()
+		slog.Info("veritabani bakimi aktif", "retention_saat", *retentionH, "aralik", "15dk")
+	} else {
+		slog.Info("veritabani bakimi bu replikada kapali (-prune=false)")
+	}
+
 	// NATS JetStream kuyrugu (Faz 4.2): ingest → processor ayrismasi
 	var q *queue.Queue
 	if *natsURL != "" {
@@ -161,7 +177,7 @@ func main() {
 
 	engine := capture.NewEngine()
 	if *captureOn {
-		collector := store.NewCollector(engine, st, *dbPath, time.Duration(*retentionH)*time.Hour)
+		collector := store.NewCollector(engine, st, *dbPath)
 		collector.Start()
 		defer collector.Stop()
 	} else {

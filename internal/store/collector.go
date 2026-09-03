@@ -12,14 +12,16 @@ import (
 // Collector, canli yakalama verisini periyodik olarak SQLite'a yazar:
 //   - saniyelik: trafik örnekleri (bps, pps, protokoller)
 //   - dakikalik: uç nokta farkları (delta) + bağlantı olayları
-//   - 10 dakikalik: eski kayitlarin temizligi
+//
+// Eski kayitlarin temizligi (Prune) buradan KALDIRILDI — Collector yalnizca
+// -capture=true iken calisir, oysa temizlik capture'dan bagimsiz gerekli
+// (coklu-hub'da tum hub'lar -capture=false). Artik store.Maintainer yapar.
 type Collector struct {
-	engine    *capture.Engine
-	store     Store
-	dbPath    string
-	retention time.Duration
-	stopCh    chan struct{}
-	doneCh    chan struct{}
+	engine *capture.Engine
+	store  Store
+	dbPath string
+	stopCh chan struct{}
+	doneCh chan struct{}
 
 	mu        sync.Mutex
 	lastCumul map[string]*endpointCumul // key: device|ip
@@ -34,12 +36,11 @@ type dnsCumul struct {
 	Queries, Responses uint64
 }
 
-func NewCollector(engine *capture.Engine, st Store, dbPath string, retention time.Duration) *Collector {
+func NewCollector(engine *capture.Engine, st Store, dbPath string) *Collector {
 	return &Collector{
 		engine:    engine,
 		store:     st,
 		dbPath:    dbPath,
-		retention: retention,
 		stopCh:    make(chan struct{}),
 		doneCh:    make(chan struct{}),
 		lastCumul: map[string]*endpointCumul{},
@@ -61,10 +62,8 @@ func (c *Collector) run() {
 
 	sec := time.NewTicker(time.Second)
 	min := time.NewTicker(time.Minute)
-	prune := time.NewTicker(10 * time.Minute)
 	defer sec.Stop()
 	defer min.Stop()
-	defer prune.Stop()
 
 	for {
 		select {
@@ -74,10 +73,6 @@ func (c *Collector) run() {
 			c.sampleOnce()
 		case <-min.C:
 			c.flushMinute()
-		case <-prune.C:
-			if err := c.store.Prune(c.retention); err != nil {
-				log.Printf("temizlik hatasi: %v", err)
-			}
 		}
 	}
 }

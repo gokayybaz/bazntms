@@ -598,13 +598,14 @@ func setupTimescale(db *sql.DB) bool {
 		schedule_interval => INTERVAL '1 hour')`,
 		"cagg policy samples_1h")
 
-	// retention: ham 7g → 1dk 90g → 1sa 2y
-	tsTry(db, `SELECT add_retention_policy('samples', retain_after => 604800::BIGINT,
-		schedule_interval => INTERVAL '1 hour')`, "retention samples (7g)")
-	tsTry(db, `SELECT add_retention_policy('samples_1m', retain_after => 7776000::BIGINT,
-		schedule_interval => INTERVAL '1 hour')`, "retention samples_1m (90g)")
-	tsTry(db, `SELECT add_retention_policy('samples_1h', retain_after => 63072000::BIGINT,
-		schedule_interval => INTERVAL '1 hour')`, "retention samples_1h (2y)")
+	// downsample cagg'leri icin retention: 1dk kova 90g, 1sa kova 2y.
+	// Param adi `drop_after` (eski `retain_after` TS 2.x'te YOK — sessizce
+	// fail ediyordu). Ham hypertable'larin retention'i store.ConfigureRetention
+	// tarafindan `-retention-hours`'a gore kurulur (acilista, hub main'den).
+	tsTry(db, `SELECT add_retention_policy('samples_1m', drop_after => 7776000::BIGINT,
+		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention samples_1m (90g)")
+	tsTry(db, `SELECT add_retention_policy('samples_1h', drop_after => 63072000::BIGINT,
+		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention samples_1h (2y)")
 
 	slog.Info("timescaledb aktif — hypertable, downsample ve retention politikaları kuruldu")
 	return true

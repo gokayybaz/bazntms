@@ -114,6 +114,7 @@ services:
       - "-capture=false"
       - "-alerts=false"
       - "-poller=false"
+      - "-prune=false" # veritabani bakimi yalnizca hub-controller'da (tek sahip)
       - "-agent-pcap" # agent'lar buraya (lb uzerinden) enroll olur — asil politika burasi
       - "-enroll-token"
       - "scale-enroll-token"

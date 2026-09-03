@@ -65,6 +65,9 @@ type HubConfig struct {
 	Poller struct {
 		Enabled bool `koanf:"enabled"` // SNMP poller; coklu replikada tek replikada acilir
 	} `koanf:"poller"`
+	Prune struct {
+		Enabled bool `koanf:"enabled"` // veritabani bakimi; coklu replikada YALNIZCA bir hub'da acik
+	} `koanf:"prune"`
 	Auth struct {
 		Password string `koanf:"password"`
 	} `koanf:"auth"`
@@ -120,6 +123,7 @@ var hubFlagKeys = map[string]string{
 	"capture.enabled":          "capture",
 	"alerts.enabled":           "alerts",
 	"poller.enabled":           "poller",
+	"prune.enabled":            "prune",
 	"auth.password":            "auth-password",
 	"geoip.dir":                "geoip-dir",
 	"geoip.ip_api_lookup":      "ip-api-lookup",

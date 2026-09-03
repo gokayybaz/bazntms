@@ -17,6 +17,8 @@ data:
       enabled: {{ .Values.replicaRoles.alerts.enabled }}
     poller:
       enabled: {{ .Values.replicaRoles.poller.enabled }}
+    prune:
+      enabled: {{ .Values.replicaRoles.prune.enabled }}
     retention_hours: {{ .Values.config.retention_hours }}
     telemetry_interval: {{ .Values.config.telemetry_interval }}
     log:
