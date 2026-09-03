@@ -281,6 +281,17 @@ eşlemesi; `agent_iface_samples` gibi `ts` filtresiyle):
 Hub `-agent-pcap` politikası + agent'ta `-pcap` ikisi de açık olmalı; ham PCAP
 kaydı için ek olarak agent'ta `-record`.
 
+### `GET /api/v1/l7?minutes=60&agent_id=0&limit=30` *(UI auth)*
+
+Süreç bazlı uygulama görünürlüğü: agent, yakaladığı giden TCP payload'larında
+TLS ClientHello **SNI**'sini ve HTTP istek satırındaki **Host**'u çıkarır ve
+sürece atfeder (`-pcap` gerekir; imza tabanlı DPI değil, yalnızca açıkça
+görünen alan adı). `host`+`kind`+`process` bazlı gruplanır.
+
+```json
+[ { "host": "api.github.com", "kind": "tls", "process": "chrome", "bytes": 4200, "hits": 12, "agent_count": 2 } ]
+```
+
 Agent çalıştırma:
 
 ```bash

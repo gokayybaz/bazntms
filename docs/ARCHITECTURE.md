@@ -196,8 +196,15 @@ bile sorgu var olan veriyi tarar.
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 
 `pkg/proctraffic` + `internal/agent/attr.go`: **nethogs yöntemi** — agent pcap
-ile paket yakalar (yalnızca başlıklar, snaplen 128), 4'lü çifti donemlik
+ile paket yakalar (yalnızca başlıklar, snaplen 600), 4'lü çifti donemlik
 soket-tablosu → PID eşlemesiyle süreçe çevirir ve delta üretir.
+
+**L7 uygulama görünürlüğü** (`internal/agent/l7.go`): aynı yakalama akışında,
+giden TCP payload'ında TLS ClientHello **SNI**'si (`server_name` uzantısı) ve
+HTTP istek satırındaki **Host** başlığı çıkarılıp sürece atfedilir → `l7`
+telemetri alanı → `l7_endpoints` tablosu → `GET /api/v1/l7`. snaplen 128 →
+600'e çıkarıldı (ClientHello 128'i aşar). İmza tabanlı DPI değil — yalnızca
+açıkça görünen alan adı.
 
 | Platform | Soket→PID kaynağı |
 |----------|-------------------|

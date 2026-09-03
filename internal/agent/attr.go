@@ -11,8 +11,14 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
+// attrSnapLen, atif + L7 inspeksiyonu icin yakalama basina alinan bayt.
+// Salt atif icin ~54 bayt yeter; TLS ClientHello SNI uzantisi ve HTTP istek
+// satiri+Host cogu zaman 128'i asar, bu yuzden 600.
+const attrSnapLen = 600
+
 // AttrEngine, yakalanan paketleri sureclere atfeder ve donemlik delta
-// uretir (nethogs yontemi). Agent root/admin olarak calisirken tam
+// uretir (nethogs yontemi). Ayrica TLS SNI + HTTP Host cikararak surec bazli
+// uygulama gorunurlugu (L7) toplar. Agent root/admin olarak calisirken tam
 // kapsamli; izin yoksa atif kismi olur, telemetri aksamaz.
 type AttrEngine struct {
 	mu       sync.Mutex
@@ -21,9 +27,24 @@ type AttrEngine struct {
 	localIPs map[string]struct{}
 	totals   map[attrKey][2]uint64 // [in, out] kumulatif
 	lastSent map[attrKey][2]uint64
+	l7       map[l7Key]*l7Agg // surec × (tls/http) × host kumulatif
+	l7Sent   map[l7Key]uint64
 
 	stopCh chan struct{}
 	doneCh chan struct{}
+}
+
+type l7Key struct {
+	pid      int32
+	process  string
+	kind     string // "tls" | "http"
+	host     string
+	remoteIP string
+}
+
+type l7Agg struct {
+	bytes uint64
+	count uint64
 }
 
 type attrKey struct {
@@ -42,7 +63,7 @@ type portKey struct {
 
 // NewAttrEngine, verilen arayuzde atf yakalamasini baslatir.
 func NewAttrEngine(iface string) (*AttrEngine, error) {
-	handle, err := pcap.OpenLive(iface, 128, false, time.Second)
+	handle, err := pcap.OpenLive(iface, attrSnapLen, false, time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +77,8 @@ func NewAttrEngine(iface string) (*AttrEngine, error) {
 		localIPs: proctraffic.LocalIPs(),
 		totals:   map[attrKey][2]uint64{},
 		lastSent: map[attrKey][2]uint64{},
+		l7:       map[l7Key]*l7Agg{},
+		l7Sent:   map[l7Key]uint64{},
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
 	}
@@ -147,10 +170,12 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 	}
 	var proto string
 	var sport, dport uint16
+	var payload []byte
 	switch t := tl.(type) {
 	case *layers.TCP:
 		proto = "tcp"
 		sport, dport = uint16(t.SrcPort), uint16(t.DstPort)
+		payload = t.Payload
 	case *layers.UDP:
 		proto = "udp"
 		sport, dport = uint16(t.SrcPort), uint16(t.DstPort)
@@ -176,6 +201,24 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 
 	_, srcLocal := e.localIPs[srcIP]
 	_, dstLocal := e.localIPs[dstIP]
+
+	// L7 uygulama gorunurlugu: giden istekte SNI / HTTP Host cikar
+	if srcLocal && len(payload) > 0 {
+		if host, kind := sniffL7(payload); host != "" {
+			k := l7Key{pid: info.PID, process: info.Process, kind: kind, host: host, remoteIP: dstIP}
+			a := e.l7[k]
+			if a == nil {
+				if len(e.l7) < 4000 {
+					a = &l7Agg{}
+					e.l7[k] = a
+				}
+			}
+			if a != nil {
+				a.bytes += length
+				a.count++
+			}
+		}
+	}
 
 	key := attrKey{pid: info.PID, process: info.Process, proto: proto, remoteIP: dstIP, port: dport}
 	if srcLocal { // giden: uzak taraf dst

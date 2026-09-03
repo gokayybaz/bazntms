@@ -5,6 +5,7 @@ import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { ProcessesCard } from '../components/ProcessesCard'
+import { L7Card } from '../components/L7Card'
 
 interface AgentConnSample {
   proto: string
@@ -264,6 +265,11 @@ export function AgentDetailPage() {
       {/* süreç trafiği */}
       <Card title="Süreç Trafiği" right={<span className="text-xs text-slate-500">bu agent</span>}>
         <ProcessesCard agentId={agent.id} />
+      </Card>
+
+      {/* uygulama görünürlüğü (L7) */}
+      <Card title="Uygulama Görünürlüğü" right={<span className="text-xs text-slate-500">L7 · SNI + HTTP Host</span>}>
+        <L7Card agentId={agent.id} />
       </Card>
 
       {/* bağlantılar */}

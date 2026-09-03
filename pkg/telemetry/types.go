@@ -86,12 +86,26 @@ type ProcessTrafficSample struct {
 	BytesOut uint64 `json:"bytes_out"`
 }
 
+// L7Sample, agent'in bir donemde gozlemledigi surec bazli uygulama
+// gorunurlugu: TLS ClientHello SNI'si veya HTTP Host'u. Hub tarafinda
+// l7_endpoints tablosuna yazilir.
+type L7Sample struct {
+	PID      int32  `json:"pid"`
+	Process  string `json:"process"`
+	Kind     string `json:"kind"` // "tls" | "http"
+	Host     string `json:"host"` // alan adi (SNI / Host header)
+	RemoteIP string `json:"remote_ip"`
+	Bytes    uint64 `json:"bytes"`
+	Count    uint64 `json:"count"` // gozlem sayisi (delta)
+}
+
 // TelemetryBatch, agent'in periyodik toplu gonderimi.
 type TelemetryBatch struct {
 	TS             int64                  `json:"ts"`
 	Interfaces     []InterfaceSample      `json:"interfaces"`
 	Connections    []ConnectionSample     `json:"connections"`
 	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`
+	L7             []L7Sample             `json:"l7,omitempty"`
 	Subnets        []string               `json:"subnets,omitempty"` // yerel aglar (CIDR) — topoloji kesfi (Faz 6.1)
 	DroppedPackets uint64                 `json:"dropped_packets,omitempty"`
 }

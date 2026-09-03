@@ -301,6 +301,7 @@ func main() {
 				batch := client.Collect()
 				if attrEng != nil {
 					batch.ProcessTraffic = attrEng.Deltas()
+					batch.L7 = attrEng.L7Deltas()
 				}
 				if err := client.Send(st, batch); err != nil {
 					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)

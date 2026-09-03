@@ -144,6 +144,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/agent/update/manifest", s.agentAuth(http.HandlerFunc(s.handleUpdateManifest)))
 	mux.Handle("GET /api/v1/agent/update/file/{channel}/{name}", s.agentAuth(http.HandlerFunc(s.handleUpdateFile)))
 	mux.HandleFunc("GET /api/v1/processes", s.handleProcesses)
+	mux.HandleFunc("GET /api/v1/l7", s.handleL7)
 
 	// filo yonetimi (UI auth'u ile korunur; silme = netops+)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)

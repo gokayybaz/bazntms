@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS process_traffic (
 CREATE INDEX IF NOT EXISTS idx_pt_ts ON process_traffic(ts);
 CREATE INDEX IF NOT EXISTS idx_pt_proc ON process_traffic(process, ts);
 
+CREATE TABLE IF NOT EXISTS l7_endpoints (
+	ts        BIGINT NOT NULL,
+	agent_id  BIGINT NOT NULL,
+	pid       INTEGER NOT NULL DEFAULT 0,
+	process   TEXT   NOT NULL DEFAULT '',
+	kind      TEXT   NOT NULL DEFAULT '',
+	host      TEXT   NOT NULL DEFAULT '',
+	remote_ip TEXT   NOT NULL DEFAULT '',
+	bytes     BIGINT NOT NULL DEFAULT 0,
+	hits      BIGINT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_l7_ts ON l7_endpoints(ts);
+CREATE INDEX IF NOT EXISTS idx_l7_host ON l7_endpoints(host, ts);
+
 CREATE TABLE IF NOT EXISTS devices (
 	id           BIGSERIAL PRIMARY KEY,
 	name         TEXT    NOT NULL,
@@ -560,6 +574,7 @@ func setupTimescale(db *sql.DB) bool {
 		{"connection_events", 24 * 3600},
 		{"agent_iface_samples", 24 * 3600},
 		{"process_traffic", 24 * 3600},
+		{"l7_endpoints", 24 * 3600},
 		{"device_iface_samples", 24 * 3600},
 		{"flows", 3600},
 		{"syslog_events", 3600},
