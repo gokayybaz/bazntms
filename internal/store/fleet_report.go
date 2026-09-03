@@ -75,9 +75,26 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 
 // FleetProtocolTotals, donemdeki NetFlow kayitlarindan protokol basina toplam
 // bayt (octets) dagilimi. `flows` bossa bos map doner.
+//
+// TimescaleDB modunda `flows_1h` continuous aggregate'inden okur: ham `flows`
+// retention'i (-retention-hours, vars. 7g) doludur ama `flows_1h` protokol/
+// hacim trendini 1 yil tutar → 30/90 gunluk raporlar dogru cikar. `flows_1h`
+// materialized_only=false oldugu icin son (henuz materialize edilmemis) veri
+// de gorunur; `ts` yerine saatlik `bucket` kolonu.
 func (s *sqlStore) FleetProtocolTotals(since time.Time) (map[string]uint64, error) {
-	rows, err := s.db.Query(s.q(`SELECT proto, COALESCE(SUM(octets), 0)
-		FROM flows WHERE ts >= ? AND proto <> '' GROUP BY proto`), since.Unix())
+	raw := `SELECT proto, COALESCE(SUM(octets), 0)
+		FROM flows WHERE ts >= ? AND proto <> '' GROUP BY proto`
+	rows, err := s.db.Query(s.q(raw), since.Unix())
+	if s.ts {
+		// cagg varsa onu tercih et; yoksa (eski TS surumu) ham sorguda kal
+		if r2, e2 := s.db.Query(s.q(`SELECT proto, COALESCE(SUM(octets), 0)
+			FROM flows_1h WHERE bucket >= ? AND proto <> '' GROUP BY proto`), since.Unix()); e2 == nil {
+			if rows != nil {
+				rows.Close()
+			}
+			rows, err = r2, nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

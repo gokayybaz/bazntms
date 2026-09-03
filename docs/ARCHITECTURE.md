@@ -189,9 +189,11 @@ NetFlow (`flows`), agent süreç trafiği (`process_traffic`) ve SNMP cihaz
 sayaçlarından (`device_iface_samples`) beslenir. Hub yerel yakalamasının
 `samples`/`endpoint_stats`/`dns_queries` tablolarına **bağlı değildir**
 (çoklu-hub kurulumunda tüm hub'lar `-capture=false` çalıştığı için o tablolar
-boştur). Filo ham tablolarında continuous aggregate yok → pratik rapor
-penceresi retention süresiyle (varsayılan 7 gün) sınırlı; 30/90 gün seçilse
-bile sorgu var olan veriyi tarar.
+boştur). Protokol/hacim dağılımı (`FleetProtocolTotals`) TimescaleDB modunda
+`flows_1h` continuous aggregate'inden okunur → ham `flows` 7 günde düşse de
+protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer filo
+ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
+metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
 
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 

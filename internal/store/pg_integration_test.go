@@ -255,8 +255,24 @@ func TestTimescaleSetup(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.hypertables`).Scan(&hypertables); err != nil || hypertables < 9 {
 		t.Fatalf("hypertable sayisi: %d (err: %v)", hypertables, err)
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates WHERE view_name IN ('samples_1m','samples_1h')`).Scan(&caggs); err != nil || caggs != 2 {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates WHERE view_name IN ('samples_1m','samples_1h','flows_1h')`).Scan(&caggs); err != nil || caggs != 3 {
 		t.Fatalf("continuous aggregate sayisi: %d (err: %v)", caggs, err)
+	}
+
+	// flows_1h real-time cagg: FleetProtocolTotals ham `flows` yerine buradan
+	// okumalı (retention'dan uzun raporlar için).
+	if err := st.SaveFlows([]FlowRow{
+		{Ts: time.Now().Unix() - 30, Device: "rt", Src: "10.0.0.1", Dst: "8.8.8.8", Proto: "udp", Octets: 5000, Packets: 5},
+		{Ts: time.Now().Unix() - 20, Device: "rt", Src: "10.0.0.1", Dst: "1.1.1.1", Proto: "tcp", Octets: 3000, Packets: 3},
+	}); err != nil {
+		t.Fatalf("flows: %v", err)
+	}
+	pt, err := st.FleetProtocolTotals(time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("FleetProtocolTotals: %v", err)
+	}
+	if pt["UDP"] != 5000 || pt["TCP"] != 3000 {
+		t.Fatalf("flows_1h protokol toplamı hatalı: %+v", pt)
 	}
 
 	// real-time cagg: ham veri aninda gorunmeli
