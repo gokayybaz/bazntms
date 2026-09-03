@@ -1,5 +1,6 @@
-// Package flows, NetFlow v5 toplar. v9/IPFIX ve sFlow ileri fazda
-// goflow2 ile bu pakete eklenecektir.
+// Package flows, ag cihazlarindan UDP ile gelen akis kayitlarini toplar:
+// NetFlow v5 (sabit format), NetFlow v9 ve IPFIX/v10 (sablon tabanli — bkz.
+// template.go / nfv9.go / ipfix.go). sFlow ileri fazda eklenebilir.
 package flows
 
 import (
@@ -21,6 +22,8 @@ type Collector struct {
 	// cihaz eşleştirmesini korumak için kullanılır.
 	ExporterIP string
 	OnFlows    func(device string, rows []Row)
+
+	templates *TemplateCache // v9/IPFIX sablon onbellegi (Listen'de kurulur)
 }
 
 type Row struct {
@@ -46,6 +49,9 @@ func (c *Collector) Listen(addr string) error {
 		return err
 	}
 	c.Conn = conn
+	if c.templates == nil {
+		c.templates = NewTemplateCache()
+	}
 	go func() {
 		buf := make([]byte, 65535)
 		for {
@@ -53,16 +59,33 @@ func (c *Collector) Listen(addr string) error {
 			if err != nil {
 				return
 			}
-			device := peer.IP.String()
+			exporterKey := peer.IP.String()
+			device := exporterKey
 			if c.ExporterIP != "" {
 				device = c.ExporterIP
 			}
-			rows := ParseV5(buf[:n], device, time.Now())
+			rows := c.parse(buf[:n], device, exporterKey, time.Now())
 			if len(rows) > 0 && c.OnFlows != nil {
 				c.OnFlows(device, rows)
 			}
 		}
 	}()
+	return nil
+}
+
+// parse, paket versiyonuna gore uygun cozucuye yonlendirir.
+func (c *Collector) parse(payload []byte, device, exporterKey string, receivedAt time.Time) []Row {
+	if len(payload) < 2 {
+		return nil
+	}
+	switch binary.BigEndian.Uint16(payload[0:2]) {
+	case 5:
+		return ParseV5(payload, device, receivedAt)
+	case 9:
+		return ParseV9(c.templates, payload, device, exporterKey, receivedAt)
+	case 10:
+		return ParseIPFIX(c.templates, payload, device, exporterKey, receivedAt)
+	}
 	return nil
 }
 

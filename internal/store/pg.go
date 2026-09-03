@@ -589,6 +589,18 @@ func setupTimescale(db *sql.DB) bool {
 		FROM samples GROUP BY bucket, device WITH NO DATA`,
 		"continuous aggregate samples_1h")
 
+	// NetFlow/IPFIX akis ozeti: (cihaz, protokol) basina saatlik toplam. Ham
+	// `flows` 7 gunde dusuyor (ConfigureRetention); bu cagg protokol/hacim
+	// trendini 1 yil tutar. src/dst KASITLI grupta degil — yuksek kardinalite
+	// diski sisirir; "en yogun uc noktalar" ham tablonun 7 gunluk penceresinden
+	// gelmeye devam eder.
+	tsTry(db, `CREATE MATERIALIZED VIEW IF NOT EXISTS flows_1h
+		WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+		SELECT time_bucket(3600, ts) AS bucket, device, proto,
+			SUM(octets) AS octets, SUM(packets) AS packets, COUNT(*) AS flows
+		FROM flows GROUP BY bucket, device, proto WITH NO DATA`,
+		"continuous aggregate flows_1h")
+
 	// cagg yenileme politikalari
 	tsTry(db, `SELECT add_continuous_aggregate_policy('samples_1m',
 		start_offset => 7200::BIGINT, end_offset => 60::BIGINT,
@@ -598,6 +610,10 @@ func setupTimescale(db *sql.DB) bool {
 		start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
 		schedule_interval => INTERVAL '1 hour')`,
 		"cagg policy samples_1h")
+	tsTry(db, `SELECT add_continuous_aggregate_policy('flows_1h',
+		start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
+		schedule_interval => INTERVAL '1 hour')`,
+		"cagg policy flows_1h")
 
 	// downsample cagg'leri icin retention: 1dk kova 90g, 1sa kova 2y.
 	// Param adi `drop_after` (eski `retain_after` TS 2.x'te YOK — sessizce
@@ -607,6 +623,8 @@ func setupTimescale(db *sql.DB) bool {
 		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention samples_1m (90g)")
 	tsTry(db, `SELECT add_retention_policy('samples_1h', drop_after => 63072000::BIGINT,
 		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention samples_1h (2y)")
+	tsTry(db, `SELECT add_retention_policy('flows_1h', drop_after => 31536000::BIGINT,
+		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention flows_1h (1y)")
 
 	slog.Info("timescaledb aktif — hypertable, downsample ve retention politikaları kuruldu")
 	return true

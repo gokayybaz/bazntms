@@ -68,7 +68,7 @@ func main() {
 	tlsKey := fl.String("tls-key", "", "operator sunucu ozel anahtari (PEM); -tls-cert ile birlikte")
 	tlsHosts := fl.String("tls-hosts", "", "sunucu sertifikasi SAN'lari (virgulle): hub'in DNS adi/IP'leri — agent'in baglandigi ad buraya girmeli")
 	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
-	flowPort := fl.String("flow-port", "", "NetFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
+	flowPort := fl.String("flow-port", "", "NetFlow v5/v9 + IPFIX UDP dinleme portu (bos = kapali; ex: 2055)")
 	flowExporter := fl.String("flow-exporter", "", "NetFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
@@ -322,7 +322,7 @@ func main() {
 		slog.Info("snmp poller kapali (coklu replika ingest modu)")
 	}
 
-	// NetFlow v5 collector — kuyruk aciksa mesajlar JetStream'e gider
+	// NetFlow v5/v9 + IPFIX collector — kuyruk aciksa mesajlar JetStream'e gider
 	if *flowPort != "" {
 		flc := &flows.Collector{ExporterIP: *flowExporter, OnFlows: func(device string, rows []flows.Row) {
 			srows := make([]store.FlowRow, 0, len(rows))
@@ -342,7 +342,7 @@ func main() {
 		if err := flc.Listen("0.0.0.0:" + *flowPort); err != nil {
 			slog.Error("flow collector dinlenemedi", "port", *flowPort, "err", err)
 		} else {
-			slog.Info("netflow v5 collector dinliyor", "port", *flowPort, "exporter_override", *flowExporter)
+			slog.Info("netflow/ipfix collector dinliyor", "port", *flowPort, "exporter_override", *flowExporter)
 			defer flc.Close()
 		}
 	}
