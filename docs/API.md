@@ -398,6 +398,21 @@ Kenar kaynakları: **LLDP/CDP** (SNMP keşfi), **ARP** (cihaz port uç noktalar�
 **subnet** (agent'ların bildirdiği yerel ağlar — CIDR). Kenarlar dedupe edilir;
 `ts` = son görülme.
 
+### `GET /api/v1/geo?minutes=60` *(UI auth)*
+
+Son `minutes` dakikadaki uzak uç noktalar (NetFlow `flows` + agent süreç
+trafiği) GeoIP ile ülkeye toplanır ve dünya haritasında balon olarak
+gösterilir. `minutes` üst sınırı 7 gün. Sıralama `bytes` azalan.
+
+```json
+[ { "country": "DE", "name": "Almanya", "lat": 51.2, "lon": 10.4, "bytes": 40998410, "sessions": 3 } ]
+```
+
+`sessions` = o ülkeye eşleşen farklı uzak IP sayısı. GeoIP kaynağı yoksa
+(MMDB dosyaları yok **ve** `-ip-api-lookup=false`) boş liste döner. Merkez
+koordinatı `internal/geoip/centroids.go`'daki ~120 ülkelik tablodan gelir;
+listede olmayan ülke haritada çizilmez (API yine de sayar → toplam eksilir).
+
 ---
 
 ## FortiGate REST API (Faz 8, UI auth ile korunur)

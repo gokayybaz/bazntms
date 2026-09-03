@@ -4,6 +4,7 @@ import type { FleetSummary } from '../lib/useLive'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from './Card'
 import { TopologyCard } from './TopologyCard'
+import { GeoMapCard } from './GeoMapCard'
 import { TrafficFlowDiagram } from './TrafficFlowDiagram'
 import type { DiagramAgent, TrafficEvent } from './TrafficFlowDiagram'
 
@@ -548,6 +549,11 @@ export function Overview({
           <TopologyCard refreshKey={refreshKey} />
         </Card>
       </div>
+
+      {/* coğrafi trafik haritası */}
+      <Card title="Coğrafi Trafik" right={<span className="text-xs text-slate-500">GeoIP · uzak uç noktalar</span>}>
+        <GeoMapCard />
+      </Card>
 
       {/* cihazlar */}
       <Card title="Cihazlar" right={<span className="text-xs text-slate-500">SNMP v2c/v3 · FortiGate REST API</span>}>

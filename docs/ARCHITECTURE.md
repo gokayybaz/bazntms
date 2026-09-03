@@ -163,7 +163,7 @@ gerektirmeden çalışır.
 
 | Rota | Sayfa | Veri kaynağı |
 |------|-------|--------------|
-| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i |
+| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) + coğrafi harita (`GET /api/v1/geo`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
 | `/topoloji` | Ağ topolojisi (SVG, hub+spoke) | `GET /api/v1/topology` |
@@ -201,6 +201,15 @@ boştur). Protokol/hacim dağılımı (`FleetProtocolTotals`) TimescaleDB modund
 protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer filo
 ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
 metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
+
+**Coğrafi trafik haritası (`/api/v1/geo` → `Overview` `GeoMapCard`):**
+`store.FleetTopEndpoints` ile çıkarılan uzak uç noktalar `geoip.Resolver`
+üzerinden ülkeye (ISO2) çözümlenir, `internal/geoip/centroids.go`'daki ~120
+ülkelik merkez koordinat tablosuyla eşleştirilir ve equirectangular bir SVG
+dünya haritasında hacme göre boyutlanmış balonlarla gösterilir (harici
+grafik/harita kütüphanesi yok — kıtalar kaba poligon, konvansiyona uygun).
+Sunucu tarafı toplama saf fonksiyon (`aggregateGeo`) olarak test edilir.
+GeoIP kaynağı yoksa uç boş liste döner, kart "veri yok" durumuna düşer.
 
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 
