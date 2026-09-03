@@ -98,8 +98,12 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
 - `auth.middleware`: `/api/*` ve `/ws` oturum denetimi; `/api/login` ve
   `/api/auth/status` muaf; statik dosyalar açık (SPA kabuğu). Sabit zamanlı
   şifre karşılaştırma, IP bazlı deneme sınırı, HttpOnly cookie + Bearer token
-- `Hub`: saniyede bir `tick` yayınlar (Snapshot + GeoIP zenginleştirme +
-  bağlantılar + uyarılar + kayıt durumu); boş odaya üretilmez
+- `Hub`: saniyede bir `tick` yayınlar — **alarm olayları** + **filo özeti**
+  (`store.FleetSummary`: agent online/toplam, son ~90 sn ortalama rx/tx/pps,
+  son 1 dk NetFlow hızı). Filo özeti Hub'da ~3 sn önbelleklenir (N istemci ×
+  1 sn tick DB'yi dövmesin). Boş odaya tick üretilmez; hub yerel yakalama
+  Snapshot'ı tick'ten çıkarıldı (dağıtık modda boş — bkz. "Not: hub'ın kendi
+  yerel yakalaması")
 - Statik servis: `http.FileServerFS` + SPA history fallback
 
 ### Agent ↔ hub mTLS (`internal/pki`)
@@ -127,9 +131,12 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 ## Frontend (`frontend/`)
 
 Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
-birincil, 2 saniyelik REST yoklamasını yedek kaynak yapar (WS koparsa
-otomatik dönüş). 401 görülürse App login ekranına düşer; 60 sn'de bir de
-oturum denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
+birincil, REST yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş).
+WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard'daki canlı stat
+şeridi (aktif agent, filo rx/tx/pps, olay hızı) 1 sn'de güncellenir; WS
+yoksa aynı kartlar sayfanın kendi 5 sn'lik `/api/v1/agents` polling'inden
+beslenir. 401 görülürse App login ekranına düşer; 60 sn'de bir de oturum
+denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
 harici grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
 
 Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG

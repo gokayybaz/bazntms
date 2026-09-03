@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -71,6 +72,57 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+// FleetSummary, canlı gösterge paneli için filo geneli anlık özet: agent
+// sayıları + son ~90 sn'lik ortalama rx/tx/pps + son 1 dk NetFlow hızı.
+// WS tick'inde saniyede bir yayınlanması için TEK sorgudur (Hub tarafında
+// birkaç saniyelik önbellekle çağrılır — bkz. internal/server/hub.go).
+type FleetSummary struct {
+	AgentsTotal  int     `json:"agents_total"`
+	AgentsOnline int     `json:"agents_online"`
+	RxBps        float64 `json:"rx_bps"`
+	TxBps        float64 `json:"tx_bps"`
+	Pps          float64 `json:"pps"`
+	FlowsPerMin  int     `json:"flows_per_min"`
+}
+
+func (s *sqlStore) FleetSummary(onlineWindow time.Duration) (FleetSummary, error) {
+	var fs FleetSummary
+	onlineCut := time.Now().Add(-onlineWindow).Unix()
+	if err := s.db.QueryRow(s.q(`SELECT COUNT(*),
+			COALESCE(SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END), 0)
+		FROM agents`), onlineCut).Scan(&fs.AgentsTotal, &fs.AgentsOnline); err != nil {
+		return fs, err
+	}
+
+	// son 120 sn'deki (agent, arayüz) sayaç deltalarından bit/sn, pkt/sn.
+	// maxIfaceBps tavanı bozuk arayüz sayaçlarını eler (bkz. fleet_baseline.go).
+	winSecs := int64(120)
+	q := `SELECT COALESCE(SUM(rx_d), 0), COALESCE(SUM(tx_d), 0), COALESCE(SUM(pk_d), 0)
+		FROM (
+			SELECT
+				CASE WHEN rx_bytes >= LAG(rx_bytes) OVER w THEN rx_bytes - LAG(rx_bytes) OVER w ELSE 0 END AS rx_d,
+				CASE WHEN tx_bytes >= LAG(tx_bytes) OVER w THEN tx_bytes - LAG(tx_bytes) OVER w ELSE 0 END AS tx_d,
+				CASE WHEN (rx_packets + tx_packets) >= LAG(rx_packets + tx_packets) OVER w
+					THEN (rx_packets + tx_packets) - LAG(rx_packets + tx_packets) OVER w ELSE 0 END AS pk_d,
+				ts - LAG(ts) OVER w AS dt
+			FROM agent_iface_samples WHERE ts >= ?
+			WINDOW w AS (PARTITION BY agent_id, name ORDER BY ts)
+		) d
+		WHERE d.dt > 0 AND d.dt <= 300 AND (d.rx_d + d.tx_d) * 8 <= d.dt * ` + strconv.Itoa(maxIfaceBps)
+	var rx, tx, pk uint64
+	if err := s.db.QueryRow(s.q(q), time.Now().Unix()-winSecs).Scan(&rx, &tx, &pk); err != nil {
+		return fs, err
+	}
+	fs.RxBps = float64(rx) * 8 / float64(winSecs)
+	fs.TxBps = float64(tx) * 8 / float64(winSecs)
+	fs.Pps = float64(pk) / float64(winSecs)
+
+	var flows int
+	_ = s.db.QueryRow(s.q(`SELECT COUNT(*) FROM flows WHERE ts >= ?`), time.Now().Unix()-60).Scan(&flows)
+	fs.FlowsPerMin = flows
+	return fs, nil
 }
 
 // FleetProtocolTotals, donemdeki NetFlow kayitlarindan protokol basina toplam

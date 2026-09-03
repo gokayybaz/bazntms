@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentWithRates, AlertEvent } from '../types'
+import type { FleetSummary } from '../lib/useLive'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from './Card'
 import { TopologyCard } from './TopologyCard'
@@ -78,7 +79,15 @@ function relTime(unix: number): string {
   return `${Math.floor(m / 60)} sa önce`
 }
 
-export function Overview({ refreshKey, alertEvents }: { refreshKey: number; alertEvents: AlertEvent[] }) {
+export function Overview({
+  refreshKey,
+  alertEvents,
+  fleet,
+}: {
+  refreshKey: number
+  alertEvents: AlertEvent[]
+  fleet?: FleetSummary | null
+}) {
   const [agents, setAgents] = useState<AgentWithRates[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [flows, setFlows] = useState<FlowRow[]>([])
@@ -196,7 +205,9 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
   }, [onlineAgentKey])
 
   // --- turetilmis metrikler ---
-  const onlineAgents = agents.filter((a) => a.online).length
+  // fleet (WS tick, 1 sn) varsa canlı; yoksa 5 sn'lik REST polling'inden.
+  const onlineAgents = fleet ? fleet.agents_online : agents.filter((a) => a.online).length
+  const agentsTotal = fleet ? fleet.agents_total : agents.length
   const totalConns = agents.reduce((sum, a) => sum + (a.conns || 0), 0)
   // cihaz icin ayri bir "online" alani yok: son 3 poll araligi icinde hata
   // vermeden yoklanmis olmasi saglikli kabul edilir (kaba tahmin)
@@ -288,11 +299,12 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
     [visibleStream],
   )
 
-  const eventRate = useMemo(() => {
+  const polledEventRate = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
     const recent = [...flows, ...syslog].filter((i) => now - i.ts <= 60).length
     return recent / 60
   }, [flows, syslog])
+  const eventRate = fleet ? fleet.flows_per_min / 60 : polledEventRate
 
   const recentAlerts = [...alertEvents].sort((a, b) => b.ts - a.ts).slice(0, 8)
 
@@ -313,17 +325,24 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
     return { rxBps, txBps, totalBytes: rxBytes + txBytes, pps }
   }, [agents])
 
+  // canlı hız/pps: fleet (WS, bit/sn → bayt/sn) varsa; toplam bayt polling'den
+  const liveRxBps = fleet ? fleet.rx_bps / 8 : agentTraffic.rxBps
+  const liveTxBps = fleet ? fleet.tx_bps / 8 : agentTraffic.txBps
+  const livePps = fleet ? fleet.pps : agentTraffic.pps
+
   return (
     <div className="space-y-4">
       {/* özet stat şeridi */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Agent</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            Aktif Agent {fleet && <span className="ml-1 text-emerald-400" title="WS canlı (1 sn)">●</span>}
+          </p>
           <p className="mt-1.5 font-mono text-2xl font-bold text-slate-100">
             {onlineAgents}
-            <span className="text-sm font-medium text-slate-600"> / {agents.length}</span>
+            <span className="text-sm font-medium text-slate-600"> / {agentsTotal}</span>
           </p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">{agents.length - onlineAgents} offline</p>
+          <p className="mt-0.5 text-[10.5px] text-slate-600">{Math.max(0, agentsTotal - onlineAgents)} offline</p>
         </div>
         <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Cihaz</p>
@@ -359,13 +378,17 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-md border border-l-2 border-slate-800 border-l-cyan-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">İndirilen Hız (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-cyan-300">{formatBits(agentTraffic.rxBps * 8)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı · gelen</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-cyan-300">{formatBits(liveRxBps * 8)}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">
+            filo toplamı · gelen {fleet ? '· canlı' : ''}
+          </p>
         </div>
         <div className="rounded-md border border-l-2 border-slate-800 border-l-violet-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Gönderilen Hız (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-violet-300">{formatBits(agentTraffic.txBps * 8)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı · giden</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-violet-300">{formatBits(liveTxBps * 8)}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">
+            filo toplamı · giden {fleet ? '· canlı' : ''}
+          </p>
         </div>
         <div className="rounded-md border border-l-2 border-slate-800 border-l-emerald-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Toplam Veri (Agent)</p>
@@ -374,8 +397,8 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
         </div>
         <div className="rounded-md border border-l-2 border-slate-800 border-l-amber-500 bg-slate-900/70 p-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Paket Hızı (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-amber-300">{formatNum(Math.round(agentTraffic.pps))} pps</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı</p>
+          <p className="mt-1 font-mono text-2xl font-bold text-amber-300">{formatNum(Math.round(livePps))} pps</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı {fleet ? '· canlı' : ''}</p>
         </div>
       </div>
 
@@ -388,7 +411,7 @@ export function Overview({ refreshKey, alertEvents }: { refreshKey: number; aler
           </span>
         }
       >
-        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} pps={agentTraffic.pps} />
+        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} pps={livePps} />
       </Card>
 
       {/* canlı olay akışı — tam genişlik */}

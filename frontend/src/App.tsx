@@ -23,7 +23,7 @@ import { NotFoundPage } from './pages/NotFoundPage'
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
   const [identity, setIdentity] = useState<{ username: string; role: string } | null>(null)
-  const { alertEvents, connected, reconnect } = useLive(
+  const { alertEvents, fleet, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
   const [historyRefresh, setHistoryRefresh] = useState(0)
@@ -92,7 +92,7 @@ export default function App() {
         <Header connected={connected} onLogout={logout} identity={identity} />
 
         <Routes>
-          <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} />} />
+          <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} fleet={fleet} />} />
           <Route path="/agentlar" element={<AgentsListPage />} />
           <Route path="/agentlar/:id" element={<AgentDetailPage />} />
           <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
