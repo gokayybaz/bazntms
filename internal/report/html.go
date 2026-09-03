@@ -135,6 +135,17 @@ const htmlTpl = `<!doctype html>
     {{end}}
   </table>
 
+  {{if .TopDomains}}
+  <h2>DNS Görünürlüğü</h2>
+  <p class="mut">Agent'ların gözlemlediği (UDP/53) en çok sorulan alan adları, süreç ile.</p>
+  <table>
+    <tr><th>#</th><th>Alan Adı</th><th>Süreç</th><th class="num">Sorgu</th><th class="num">Yanıt</th><th class="num">Agent</th></tr>
+    {{range $i, $x := .TopDomains}}
+    <tr><td>{{$i}}</td><td>{{.Domain}}</td><td>{{.Process}}</td><td class="num">{{.Queries}}</td><td class="num">{{.Responses}}</td><td class="num">{{.AgentCnt}}</td></tr>
+    {{end}}
+  </table>
+  {{end}}
+
   <h2>Protokol Dağılımı</h2>
   <p class="mut">NetFlow octet toplamı (proto alanına göre).</p>
   <table>
@@ -266,6 +277,7 @@ func (d *Data) templateData() map[string]any {
 		"Agents":       d.Agents,
 		"TopEndpoints": d.TopEndpoints,
 		"TopProcesses": d.TopProcesses,
+		"TopDomains":   d.TopDomains,
 		"Protocols":    d.Protocols,
 		"Alerts":       d.Alerts,
 		"AlertCounts":  d.AlertCounts,

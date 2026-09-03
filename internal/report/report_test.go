@@ -58,6 +58,12 @@ func seededStore(t *testing.T) store.Store {
 		t.Fatalf("flows: %v", err)
 	}
 
+	if err := st.SaveAgentDNS(aid, now.Add(-time.Hour).Unix(), []telemetry.DNSSample{
+		{PID: 1, Process: "chrome", Domain: "clients.google.com", Queries: 12, Responses: 12},
+	}); err != nil {
+		t.Fatalf("agent dns: %v", err)
+	}
+
 	if _, err := st.InsertAlertEvent(store.AlertEvent{Ts: now.Unix(), Kind: "bw", Key: "in", Message: "Test uyarisi: hiz zirve"}); err != nil {
 		t.Fatalf("uyari: %v", err)
 	}
@@ -130,7 +136,7 @@ func TestRenderHTML(t *testing.T) {
 		t.Fatalf("html: %v", err)
 	}
 	s := string(html)
-	for _, want := range []string{"Ağ Trafik Raporu", "Yönetici Özeti", "Agent Filosu", "test-agent", "142.250.151.119", "chrome", "Süreç Bazlı Trafik", "Test uyarisi"} {
+	for _, want := range []string{"Ağ Trafik Raporu", "Yönetici Özeti", "Agent Filosu", "test-agent", "142.250.151.119", "chrome", "Süreç Bazlı Trafik", "DNS Görünürlüğü", "clients.google.com", "Test uyarisi"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("HTML'de eksik: %q", want)
 		}

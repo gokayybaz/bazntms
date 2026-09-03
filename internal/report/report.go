@@ -32,6 +32,7 @@ type Data struct {
 	Agents       []store.AgentWithRates      `json:"agents"`
 	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
 	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
+	TopDomains   []store.AgentDNSUsage       `json:"top_domains"` // agent DNS görünürlüğü (fleet)
 	Protocols    []ProtoCount                `json:"protocols"`
 	Alerts       []store.AlertEvent          `json:"alerts"`
 
@@ -90,6 +91,9 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 	}
 	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
+	}
+	if d.TopDomains, err = st.TopAgentDNS(since, 0, 15); err != nil {
+		return nil, fmt.Errorf("dns: %w", err)
 	}
 
 	protos, err := st.FleetProtocolTotals(since)

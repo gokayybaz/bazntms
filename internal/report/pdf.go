@@ -62,6 +62,7 @@ func (d *Data) RenderPDF() ([]byte, error) {
 	p.dailySection(d)
 	p.endpointsSection(d)
 	p.processesSection(d)
+	p.dnsSection(d)
 	p.protocolSection(d)
 	p.alertSection(d)
 
@@ -310,6 +311,21 @@ func (p *pdfRenderer) processesSection(d *Data) {
 	for i, pr := range d.TopProcesses {
 		p.ensureSpace(8)
 		p.tableRow(cols, []string{trunc(pr.Process, 44), bytesFmt(pr.BytesIn), bytesFmt(pr.BytesOut), fmt.Sprint(pr.AgentCnt)}, i%2 == 1)
+	}
+}
+
+func (p *pdfRenderer) dnsSection(d *Data) {
+	if len(d.TopDomains) == 0 {
+		return
+	}
+	p.section("DNS Görünürlüğü")
+	p.ensureSpace(20)
+	cols := []float64{85, 40, 20, 20, 20}
+	p.tableHeader(cols, []string{"Alan Adı", "Süreç", "Sorgu", "Yanıt", "Agent"})
+	for i, x := range d.TopDomains {
+		p.ensureSpace(8)
+		p.tableRow(cols, []string{trunc(x.Domain, 46), trunc(x.Process, 22),
+			fmt.Sprint(x.Queries), fmt.Sprint(x.Responses), fmt.Sprint(x.AgentCnt)}, i%2 == 1)
 	}
 }
 

@@ -99,6 +99,17 @@ type L7Sample struct {
 	Count    uint64 `json:"count"` // gozlem sayisi (delta)
 }
 
+// DNSSample, agent'in bir donemde gozlemledigi surec bazli DNS aktivitesi
+// (sorulan domain + sorgu/yanit sayisi delta). Hub'da agent_dns tablosuna
+// yazilir; fleet raporundaki "DNS görünürlüğü" bölümünü besler.
+type DNSSample struct {
+	PID       int32  `json:"pid"`
+	Process   string `json:"process"`
+	Domain    string `json:"domain"`
+	Queries   uint64 `json:"queries"`
+	Responses uint64 `json:"responses"`
+}
+
 // TelemetryBatch, agent'in periyodik toplu gonderimi.
 type TelemetryBatch struct {
 	TS             int64                  `json:"ts"`
@@ -106,6 +117,7 @@ type TelemetryBatch struct {
 	Connections    []ConnectionSample     `json:"connections"`
 	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`
 	L7             []L7Sample             `json:"l7,omitempty"`
+	DNS            []DNSSample            `json:"dns,omitempty"`
 	Subnets        []string               `json:"subnets,omitempty"` // yerel aglar (CIDR) — topoloji kesfi (Faz 6.1)
 	DroppedPackets uint64                 `json:"dropped_packets,omitempty"`
 }

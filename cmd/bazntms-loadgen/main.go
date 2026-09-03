@@ -84,6 +84,7 @@ var (
 	processNames = []string{"chrome", "slack", "zoom", "firefox", "spotify", "code", "node", "python", "backup", "update"}
 	remoteHosts  = []string{"1.1.1.1", "8.8.8.8", "10.0.20.5", "172.16.4.9", "142.250.74.14", "151.101.1.69", "104.16.132.229"}
 	ifaceNames   = []string{"eth0", "eth1", "en0", "wlan0"}
+	l7Hosts      = []string{"api.github.com", "www.google.com", "slack.com", "zoom.us", "cdn.jsdelivr.net", "s3.amazonaws.com", "login.microsoftonline.com", "update.example.com"}
 )
 
 func main() {
@@ -166,7 +167,7 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 	hello := telemetry.AgentHello{
 		Name: name, Site: site, Version: "loadgen-1.0",
 		ProtocolVersion: 1, OS: runtime.GOOS, Arch: runtime.GOARCH,
-		Capabilities: []string{"interfaces", "connections", "process_traffic"},
+		Capabilities: []string{"interfaces", "connections", "process_traffic", "l7", "dns"},
 	}
 	hb, _ := json.Marshal(hello)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hub+"/api/v1/agent/hello", bytes.NewReader(hb))
@@ -243,6 +244,28 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 					Process: processNames[rng.Intn(len(processNames))],
 					Proto:   "tcp", RemoteIP: remoteHosts[rng.Intn(len(remoteHosts))],
 					Port: uint16(443), BytesIn: in, BytesOut: out,
+				})
+			}
+		}
+		// sentetik L7 (SNI/Host) + DNS — depolama/API/rapor/UI yolunu uctan uca
+		// besler (gercek pcap yakalama parser'lari birim testli).
+		if rng.Intn(2) == 0 {
+			for j := 0; j < 1+rng.Intn(4); j++ {
+				proc := processNames[rng.Intn(len(processNames))]
+				host := l7Hosts[rng.Intn(len(l7Hosts))]
+				pid := int32(1000 + rng.Intn(5000))
+				kind := "tls"
+				if rng.Intn(4) == 0 {
+					kind = "http"
+				}
+				batch.L7 = append(batch.L7, telemetry.L7Sample{
+					PID: pid, Process: proc, Kind: kind, Host: host,
+					RemoteIP: remoteHosts[rng.Intn(len(remoteHosts))],
+					Bytes:    uint64(200 + rng.Intn(4000)), Count: uint64(1 + rng.Intn(6)),
+				})
+				q := uint64(1 + rng.Intn(8))
+				batch.DNS = append(batch.DNS, telemetry.DNSSample{
+					PID: pid, Process: proc, Domain: host, Queries: q, Responses: q,
 				})
 			}
 		}

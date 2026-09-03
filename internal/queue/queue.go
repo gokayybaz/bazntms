@@ -210,6 +210,12 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 				return
 			}
 		}
+		if len(env.Batch.DNS) > 0 {
+			if err := st.SaveAgentDNS(env.AgentID, ts, env.Batch.DNS); err != nil {
+				q.retry(msg, err)
+				return
+			}
+		}
 		if len(env.Batch.Subnets) > 0 {
 			// topoloji kesfi (Faz 6.1): agent'in yerel aglari
 			if err := st.SaveAgentSubnets(env.AgentID, "", env.Batch.Subnets); err != nil {

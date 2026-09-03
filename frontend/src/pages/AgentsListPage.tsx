@@ -5,6 +5,7 @@ import { formatBits, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
 import { ProcessesCard } from '../components/ProcessesCard'
 import { L7Card } from '../components/L7Card'
+import { DnsCard } from '../components/DnsCard'
 
 function relTime(unix: number): string {
   const secs = Math.max(0, Math.floor(Date.now() / 1000) - unix)
@@ -147,6 +148,10 @@ export function AgentsListPage() {
 
       <Card title="Uygulama Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">L7 · SNI + HTTP Host</span>}>
         <L7Card />
+      </Card>
+
+      <Card title="DNS Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">UDP/53 · süreç atıflı</span>}>
+        <DnsCard />
       </Card>
     </div>
   )

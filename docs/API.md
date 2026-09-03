@@ -292,6 +292,16 @@ görünen alan adı). `host`+`kind`+`process` bazlı gruplanır.
 [ { "host": "api.github.com", "kind": "tls", "process": "chrome", "bytes": 4200, "hits": 12, "agent_count": 2 } ]
 ```
 
+### `GET /api/v1/dns?minutes=60&agent_id=0&limit=30` *(UI auth)*
+
+Süreç bazlı DNS görünürlüğü: agent, UDP/53 sorgu/yanıtlarındaki alan adlarını
+(ters arama / `.local` hariç) sürece atfeder (`-pcap` gerekir). Fleet raporundaki
+"DNS Görünürlüğü" bölümünü de bu besler. `domain`+`process` bazlı gruplanır.
+
+```json
+[ { "domain": "www.google.com", "process": "chrome", "queries": 8, "responses": 8, "agent_count": 2 } ]
+```
+
 Agent çalıştırma:
 
 ```bash

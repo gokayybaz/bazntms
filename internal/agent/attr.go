@@ -29,6 +29,8 @@ type AttrEngine struct {
 	lastSent map[attrKey][2]uint64
 	l7       map[l7Key]*l7Agg // surec × (tls/http) × host kumulatif
 	l7Sent   map[l7Key]uint64
+	dns      map[dnsKey]*dnsAgg // surec × domain — sorgu/yanit kumulatif
+	dnsSent  map[dnsKey][2]uint64
 
 	stopCh chan struct{}
 	doneCh chan struct{}
@@ -79,6 +81,8 @@ func NewAttrEngine(iface string) (*AttrEngine, error) {
 		lastSent: map[attrKey][2]uint64{},
 		l7:       map[l7Key]*l7Agg{},
 		l7Sent:   map[l7Key]uint64{},
+		dns:      map[dnsKey]*dnsAgg{},
+		dnsSent:  map[dnsKey][2]uint64{},
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
 	}
@@ -179,6 +183,7 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 	case *layers.UDP:
 		proto = "udp"
 		sport, dport = uint16(t.SrcPort), uint16(t.DstPort)
+		payload = t.Payload
 	default:
 		return
 	}
@@ -202,8 +207,8 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 	_, srcLocal := e.localIPs[srcIP]
 	_, dstLocal := e.localIPs[dstIP]
 
-	// L7 uygulama gorunurlugu: giden istekte SNI / HTTP Host cikar
-	if srcLocal && len(payload) > 0 {
+	// L7 uygulama gorunurlugu: giden TCP istegde SNI / HTTP Host cikar
+	if srcLocal && proto == "tcp" && len(payload) > 0 {
 		if host, kind := sniffL7(payload); host != "" {
 			k := l7Key{pid: info.PID, process: info.Process, kind: kind, host: host, remoteIP: dstIP}
 			a := e.l7[k]
@@ -216,6 +221,28 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 			if a != nil {
 				a.bytes += length
 				a.count++
+			}
+		}
+	}
+
+	// DNS gorunurlugu: UDP/53 sorgu ve yanitlarinda domain adlari
+	if proto == "udp" && (sport == 53 || dport == 53) && len(payload) >= 12 {
+		if names, isResp := parseDNSNames(payload); len(names) > 0 {
+			for _, dom := range names {
+				k := dnsKey{pid: info.PID, process: info.Process, domain: dom}
+				a := e.dns[k]
+				if a == nil {
+					if len(e.dns) >= 4000 {
+						continue
+					}
+					a = &dnsAgg{}
+					e.dns[k] = a
+				}
+				if isResp {
+					a.responses++
+				} else {
+					a.queries++
+				}
 			}
 		}
 	}

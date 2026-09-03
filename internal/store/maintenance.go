@@ -94,7 +94,7 @@ func (s *sqlStore) ConfigureRetention(retention time.Duration) error {
 	// yuksek hacimli hypertable'lar — hepsi ayni pencere (-retention-hours).
 	for _, tbl := range []string{
 		"samples", "endpoint_stats", "connection_events", "dns_queries",
-		"agent_iface_samples", "process_traffic", "l7_endpoints", "flows",
+		"agent_iface_samples", "process_traffic", "l7_endpoints", "agent_dns", "flows",
 		"device_iface_samples", "syslog_events",
 	} {
 		_, _ = s.db.Exec(`SELECT remove_retention_policy('` + tbl + `', if_exists => true)`)

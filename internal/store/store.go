@@ -128,6 +128,8 @@ type Store interface {
 	// L7 uygulama gorunurlugu (SNI + HTTP Host, surec bazli)
 	SaveL7(agentID int64, ts int64, samples []telemetry.L7Sample) error
 	TopL7(since time.Time, agentID int64, limit int) ([]L7Usage, error)
+	SaveAgentDNS(agentID int64, ts int64, samples []telemetry.DNSSample) error
+	TopAgentDNS(since time.Time, agentID int64, limit int) ([]AgentDNSUsage, error)
 
 	// cihazlar, flow, syslog (Faz 3)
 	AddDevice(d Device) (int64, error)
@@ -464,6 +466,18 @@ CREATE TABLE IF NOT EXISTS l7_endpoints (
 );
 CREATE INDEX IF NOT EXISTS idx_l7_ts ON l7_endpoints(ts);
 CREATE INDEX IF NOT EXISTS idx_l7_host ON l7_endpoints(host, ts);
+
+CREATE TABLE IF NOT EXISTS agent_dns (
+	ts        INTEGER NOT NULL,
+	agent_id  INTEGER NOT NULL,
+	pid       INTEGER NOT NULL DEFAULT 0,
+	process   TEXT    NOT NULL DEFAULT '',
+	domain    TEXT    NOT NULL DEFAULT '',
+	queries   INTEGER NOT NULL DEFAULT 0,
+	responses INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_adns_ts ON agent_dns(ts);
+CREATE INDEX IF NOT EXISTS idx_adns_dom ON agent_dns(domain, ts);
 
 CREATE TABLE IF NOT EXISTS devices (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -946,6 +960,7 @@ func (s *sqlStore) Prune(retention time.Duration) error {
 		`DELETE FROM agent_iface_samples WHERE ts < ?`,
 		`DELETE FROM process_traffic WHERE ts < ?`,
 		`DELETE FROM l7_endpoints WHERE ts < ?`,
+		`DELETE FROM agent_dns WHERE ts < ?`,
 		`DELETE FROM flows WHERE ts < ?`,
 		`DELETE FROM device_iface_samples WHERE ts < ?`, // Faz 4.3: eksik olan iki tablo
 		`DELETE FROM syslog_events WHERE ts < ?`,

@@ -208,6 +208,12 @@ telemetri alanı → `l7_endpoints` tablosu → `GET /api/v1/l7`. snaplen 128 �
 600'e çıkarıldı (ClientHello 128'i aşar). İmza tabanlı DPI değil — yalnızca
 açıkça görünen alan adı.
 
+**DNS görünürlüğü** (`internal/agent/dns.go`): yine aynı akışta, UDP/53 sorgu/
+yanıtlarındaki alan adları (ters arama / `.local` / noktasız hariç) sürece
+atfedilir → `dns` telemetri alanı → `agent_dns` tablosu → `GET /api/v1/dns` +
+fleet raporundaki "DNS Görünürlüğü" bölümü (`internal/report`, önceden yalnızca
+hub yerel yakalamasında vardı, çoklu-hub'da boştu).
+
 | Platform | Soket→PID kaynağı |
 |----------|-------------------|
 | Linux    | `/proc/net/*` inode ↔ `/proc/[pid]/fd` (root: tüm süreçler) |

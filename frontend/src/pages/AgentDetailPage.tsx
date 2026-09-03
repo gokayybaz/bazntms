@@ -6,6 +6,7 @@ import { Card } from '../components/Card'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { ProcessesCard } from '../components/ProcessesCard'
 import { L7Card } from '../components/L7Card'
+import { DnsCard } from '../components/DnsCard'
 
 interface AgentConnSample {
   proto: string
@@ -270,6 +271,11 @@ export function AgentDetailPage() {
       {/* uygulama görünürlüğü (L7) */}
       <Card title="Uygulama Görünürlüğü" right={<span className="text-xs text-slate-500">L7 · SNI + HTTP Host</span>}>
         <L7Card agentId={agent.id} />
+      </Card>
+
+      {/* DNS görünürlüğü */}
+      <Card title="DNS Görünürlüğü" right={<span className="text-xs text-slate-500">UDP/53 · süreç atıflı</span>}>
+        <DnsCard agentId={agent.id} />
       </Card>
 
       {/* bağlantılar */}
