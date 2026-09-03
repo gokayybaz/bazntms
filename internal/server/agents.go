@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
@@ -114,9 +115,17 @@ func agentFromCtx(r *http.Request) *store.Agent {
 	return nil
 }
 
-// agentAuth, Bearer agent token'ini dogrular ve kaydi context'e koyar.
+// agentAuth, agent kimligini dogrular ve kaydi context'e koyar. Iki yol:
+//  1. mTLS: TLS katmaninca CA'ya karsi dogrulanmis istemci sertifikasi
+//     (CN = bazntms-agent-<id>). Bearer token'a esdeger; sertifika zaten
+//     kriptografik olarak baglayici oldugu icin ayrica token istenmez.
+//  2. Bearer: Authorization: Bearer <agent_token> (mTLS yoksa tek yol).
 func (s *Server) agentAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if agent := s.agentFromClientCert(r); agent != nil {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), agentCtxKey, agent)))
+			return
+		}
 		const prefix = "Bearer "
 		token := ""
 		if ah := r.Header.Get("Authorization"); len(ah) > len(prefix) && ah[:len(prefix)] == prefix {
@@ -133,6 +142,27 @@ func (s *Server) agentAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), agentCtxKey, agent)))
 	})
+}
+
+// agentFromClientCert, istegin TLS katmaninca dogrulanmis bir agent istemci
+// sertifikasi tasiyip tasimadigina bakar. tls.Config ClientAuth
+// VerifyClientCertIfGiven oldugu icin VerifiedChains yalnizca sertifika hem
+// SUNULMUS hem de CA'ya karsi DOGRULANMISSA doludur — burada ek kripto
+// kontrolu gerekmez, sadece CN→agent cozumu. Silinmis agent'in sertifikasi
+// AgentByID hatasiyla reddedilir (CRL'siz iptal).
+func (s *Server) agentFromClientCert(r *http.Request) *store.Agent {
+	if s.agentCA == nil || r.TLS == nil || len(r.TLS.VerifiedChains) == 0 || len(r.TLS.PeerCertificates) == 0 {
+		return nil
+	}
+	id := pki.AgentIDFromCN(r.TLS.PeerCertificates[0].Subject.CommonName)
+	if id == 0 {
+		return nil
+	}
+	agent, err := s.store.AgentByID(id)
+	if err != nil {
+		return nil
+	}
+	return agent
 }
 
 // validEnrollToken, sunulan X-Enroll-Token'in ya hub'in TEK statik sirri
@@ -218,14 +248,52 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", displayIP)
-	writeJSON(w, telemetry.HubReply{
+	reply := telemetry.HubReply{
 		Accepted:                 true,
 		AgentID:                  id,
 		AgentToken:               agentToken,
 		TelemetryIntervalSeconds: s.telemetryInterval,
 		PCAPEnabled:              s.agentPCAP,
-	})
+	}
+	// mTLS: CSR verilmis ve hub CA'si acıksa istemci sertifikasi imzala
+	if s.agentCA != nil && hello.CSRPEM != "" {
+		certPEM, notAfter, err := s.agentCA.SignAgentCSR([]byte(hello.CSRPEM), id)
+		if err != nil {
+			slog.Warn("agent CSR imzalanamadi — agent Bearer ile devam eder", "agent_id", id, "err", err)
+		} else {
+			reply.ClientCertPEM = string(certPEM)
+			reply.CACertPEM = string(s.agentCA.CertPEM())
+			slog.Info("agent istemci sertifikasi verildi", "agent_id", id, "gecerlilik", notAfter.Format(time.RFC3339))
+		}
+	}
+	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", displayIP, "mtls", reply.ClientCertPEM != "")
+	writeJSON(w, reply)
+}
+
+// handleAgentCertRenew, mevcut Bearer/mTLS kimligiyle suresi dolmak uzere
+// olan istemci sertifikasini yeniler (agentAuth ile korunur).
+func (s *Server) handleAgentCertRenew(w http.ResponseWriter, r *http.Request) {
+	agent := agentFromCtx(r)
+	if agent == nil {
+		unauthorized(w, "agent kimliği yok")
+		return
+	}
+	if s.agentCA == nil {
+		http.Error(w, "mTLS kapalı", http.StatusNotFound)
+		return
+	}
+	var req telemetry.CertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CSRPEM == "" {
+		http.Error(w, "csr_pem gerekli", http.StatusBadRequest)
+		return
+	}
+	certPEM, notAfter, err := s.agentCA.SignAgentCSR([]byte(req.CSRPEM), agent.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	slog.Info("agent istemci sertifikasi yenilendi", "agent_id", agent.ID, "gecerlilik", notAfter.Format(time.RFC3339))
+	writeJSON(w, telemetry.CertReply{ClientCertPEM: string(certPEM), CACertPEM: string(s.agentCA.CertPEM())})
 }
 
 // handleAgentTelemetry, batch veriyi kaydeder ve last_seen gunceller.

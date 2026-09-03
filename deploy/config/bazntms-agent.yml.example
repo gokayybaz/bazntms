@@ -8,6 +8,9 @@ hub:
   # birden fazla hub: virgulle ayirin → failover sirasi (Faz 5.4)
   url: https://hub.example.com
   token: HUBDAN-ALDIGINIZ-ENROLL-TOKEN   # yalnizca ilk kayit icin gerekli
+  # mTLS (hub -tls ile calisiyorsa): hub CA sertifikasini onceden pinleyin.
+  # Bos birakilirsa ilk baglantida guvenilir kabul edilip otomatik pinlenir (TOFU).
+  # ca_file: /etc/bazntms/hub-ca.crt
 
 agent:
   name: sunucu-01      # bos → hostname

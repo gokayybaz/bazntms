@@ -12,6 +12,10 @@ type AgentHello struct {
 	OS              string   `json:"os"`
 	Arch            string   `json:"arch"`
 	Capabilities    []string `json:"capabilities,omitempty"`
+	// CSRPEM doluysa ve hub'da mTLS aciksa hub bunu bir istemci sertifikasina
+	// donusturup HubReply.ClientCertPEM ile geri verir (agent'in bir sonraki
+	// baglantidan itibaren kullandigi karsilikli TLS kimligi).
+	CSRPEM string `json:"csr_pem,omitempty"`
 }
 
 // HubReply, AgentHello yaniti: kabul + agent kimligi + politika.
@@ -22,6 +26,21 @@ type HubReply struct {
 	AgentToken               string `json:"agent_token,omitempty"`
 	TelemetryIntervalSeconds int    `json:"telemetry_interval_seconds"`
 	PCAPEnabled              bool   `json:"pcap_enabled"`
+	// mTLS: hub CA'si acikken CSR gonderilirse doldurulur.
+	ClientCertPEM string `json:"client_cert_pem,omitempty"`
+	CACertPEM     string `json:"ca_cert_pem,omitempty"`
+}
+
+// CertRequest, POST /api/v1/agent/cert govdesi — mevcut Bearer token ile
+// kimliklenip suresi dolmak uzere olan istemci sertifikasini yeniler.
+type CertRequest struct {
+	CSRPEM string `json:"csr_pem"`
+}
+
+// CertReply, CertRequest yaniti.
+type CertReply struct {
+	ClientCertPEM string `json:"client_cert_pem"`
+	CACertPEM     string `json:"ca_cert_pem"`
 }
 
 // TelemetryReply, /api/v1/agent/telemetry yanitidir. Enrollment yalnizca ilk

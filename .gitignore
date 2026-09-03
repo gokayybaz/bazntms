@@ -29,5 +29,11 @@ web/dist/*
 # kimlik kasasi master key (gizli, makineye ozel)
 /vault.key
 
+# mTLS PKI (hub CA + sunucu sertifikasi) + agent istemci sertifikalari
+/pki/
+*.state.json
+*.state.json.*
+bazntms-agent.state.*
+
 # yerel `wix build` calistirmalari icin extension/nuget onbellegi
 .wix/

@@ -13,8 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/sysmon"
 	"github.com/gokayybaz/bazntms/internal/version"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
@@ -32,7 +34,8 @@ type Options struct {
 	StateFile   string
 	IntervalSec int
 	HTTPTimeout time.Duration
-	PCAPEnabled bool // hub politikasi: agent'ta derin toplama/PCAP izinli
+	PCAPEnabled bool   // hub politikasi: agent'ta derin toplama/PCAP izinli
+	HubCAFile   string // -hub-ca: hub CA sertifikasi (PEM); bos ise ilk hello'da TOFU + pin
 }
 
 // State, diskte tutulan kalici agent kimligi (token kaybolursa yeniden enroll gerekir).
@@ -42,9 +45,11 @@ type State struct {
 }
 
 type Client struct {
-	opts   Options
-	http   *http.Client
-	hubIdx int // aktif hub indeksi (failover icin kayar)
+	opts    Options
+	http    *http.Client
+	hubIdx  int  // aktif hub indeksi (failover icin kayar)
+	mtls    bool // istemci sertifikasi yuklu (karsilikli TLS aktif)
+	certEnd time.Time
 }
 
 func New(opts Options) *Client {
@@ -57,7 +62,9 @@ func New(opts Options) *Client {
 	if opts.HubURL != "" && len(opts.HubURLs) == 0 {
 		opts.HubURLs = []string{opts.HubURL}
 	}
-	return &Client{opts: opts, http: &http.Client{Timeout: opts.HTTPTimeout}}
+	c := &Client{opts: opts, http: &http.Client{Timeout: opts.HTTPTimeout}}
+	c.reloadTLS() // diskte sertifika/CA varsa mTLS transport'unu kur
+	return c
 }
 
 // urls, failover havuzunu dondurur; bos ise tek bos URL (hata mesaji icin).
@@ -111,9 +118,11 @@ func (c *Client) saveState(st State) error {
 }
 
 // Enroll, agent'i hub'a kaydeder ve kalici token alir (zaten kayitliysa atlar).
+// https hub'da ayrica bir CSR gonderip istemci sertifikasi (mTLS) alir.
 func (c *Client) Enroll() (State, error) {
 	st := c.LoadState()
 	if st.Token != "" && st.AgentID != 0 {
+		c.renewCertIfNeeded(st) // kayitli agent: hello atlanir ama sertifika yenilenebilir
 		return st, nil
 	}
 	if c.opts.EnrollToken == "" {
@@ -127,8 +136,19 @@ func (c *Client) Enroll() (State, error) {
 		OS:              runtime.GOOS,
 		Arch:            runtime.GOARCH,
 	}
+	// https hub → mTLS icin CSR uret ve hello'ya ekle
+	var newKeyPEM []byte
+	if c.anyHTTPSHub() {
+		if keyPEM, csrPEM, err := pki.GenerateAgentKeyCSR(c.opts.Name); err == nil {
+			hello.CSRPEM = string(csrPEM)
+			newKeyPEM = keyPEM
+		} else {
+			slog.Warn("CSR uretilemedi — Bearer ile devam", "err", err)
+		}
+	}
 	body, _ := json.Marshal(hello)
 
+	boot := c.bootstrapClient()
 	var reply telemetry.HubReply
 	err := c.withFailover(func(baseURL string) error {
 		req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/agent/hello", bytes.NewReader(body))
@@ -137,7 +157,7 @@ func (c *Client) Enroll() (State, error) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Enroll-Token", c.opts.EnrollToken)
-		return c.doJSON(req, &reply)
+		return doJSONWith(boot, req, &reply)
 	})
 	if err != nil {
 		return st, err
@@ -149,12 +169,66 @@ func (c *Client) Enroll() (State, error) {
 	if err := c.saveState(st); err != nil {
 		return st, fmt.Errorf("state kaydi: %w", err)
 	}
-	slog.Info("enrollment tamamlandi", "agent_id", st.AgentID, "interval", reply.TelemetryIntervalSeconds)
+	if reply.ClientCertPEM != "" {
+		c.saveCerts(newKeyPEM, reply.ClientCertPEM, reply.CACertPEM)
+	}
+	slog.Info("enrollment tamamlandi", "agent_id", st.AgentID, "interval", reply.TelemetryIntervalSeconds, "mtls", c.mtls)
 	if reply.TelemetryIntervalSeconds > 0 {
 		c.opts.IntervalSec = reply.TelemetryIntervalSeconds
 	}
 	c.opts.PCAPEnabled = reply.PCAPEnabled
 	return st, nil
+}
+
+// anyHTTPSHub, havuzdaki en az bir hub URL'si https ise true.
+func (c *Client) anyHTTPSHub() bool {
+	for _, u := range c.urls() {
+		if strings.HasPrefix(u, "https://") {
+			return true
+		}
+	}
+	return false
+}
+
+// renewCertIfNeeded, istemci sertifikasi omrunun yarisini gectiyse
+// /api/v1/agent/cert ile yeniler (mevcut sertifika/Bearer ile kimliklenir).
+func (c *Client) renewCertIfNeeded(st State) {
+	if !c.anyHTTPSHub() || (c.mtls && !c.certNeedsRenewal()) {
+		return
+	}
+	// mTLS henuz yoksa (ilk kez https'e gecis) ya da yenileme zamani geldiyse
+	keyPEM, csrPEM, err := pki.GenerateAgentKeyCSR(c.opts.Name)
+	if err != nil {
+		return
+	}
+	reqBody, _ := json.Marshal(telemetry.CertRequest{CSRPEM: string(csrPEM)})
+	var reply telemetry.CertReply
+	err = c.withFailover(func(baseURL string) error {
+		req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/agent/cert", bytes.NewReader(reqBody))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+st.Token)
+		return doJSONWith(c.pickClient(), req, &reply)
+	})
+	if err != nil || reply.ClientCertPEM == "" {
+		if err != nil {
+			slog.Debug("sertifika yenileme atlandi", "err", err)
+		}
+		return
+	}
+	c.saveCerts(keyPEM, reply.ClientCertPEM, reply.CACertPEM)
+	slog.Info("agent istemci sertifikasi yenilendi", "gecerlilik", c.certEnd.Format(time.RFC3339))
+}
+
+// pickClient, mTLS kuruluysa c.http'yi, degilse bootstrap istemcisini dondurur
+// (ilk https gecisinde henuz sertifika yok ama CA pinli olabilir).
+func (c *Client) pickClient() *http.Client {
+	if c.mtls {
+		return c.http
+	}
+	return c.bootstrapClient()
 }
 
 // PCAPEnabled, hub politikasina gore derin toplama/PCAP iznini dondurur.
@@ -297,13 +371,20 @@ func (c *Client) postBatch(st State, ts int64, batch telemetry.TelemetryBatch) e
 }
 
 func (c *Client) doJSON(req *http.Request, out any) error {
-	resp, err := c.http.Do(req)
+	return doJSONWith(c.http, req, out)
+}
+
+func doJSONWith(client *http.Client, req *http.Request, out any) error {
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("hub %s: HTTP %d", req.URL.Path, resp.StatusCode)
+	}
+	if out == nil {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

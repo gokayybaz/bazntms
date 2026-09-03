@@ -211,9 +211,15 @@ Kayıtlı analizler (son 10): `{id, ts, model, period_minutes, summary}`
 
 ## Agent Filosu (Faz 1)
 
-Agent uçları UI oturumundan bağımsızdır: `Bearer <agent_token>` kullanır.
-Agent token'ı enrollment ile verilir ve diskte (`bazntms-agent.state.json`)
-saklanır; hub yalnızca SHA-256 hash'ini tutar.
+Agent uçları UI oturumundan bağımsızdır. İki kimlik yolu:
+
+- **Bearer token** — `Authorization: Bearer <agent_token>`. Token enrollment ile
+  verilir, diskte (`bazntms-agent.state.json`) saklanır; hub yalnızca SHA-256
+  hash'ini tutar.
+- **Karşılıklı TLS (mTLS)** — hub `-tls` ile çalışıyorsa: agent'ın enrollment'ta
+  aldığı istemci sertifikası (`CN=bazntms-agent-<id>`, hub CA'sınca imzalı) TLS
+  el sıkışmasında sunulur ve Bearer'a eşdeğer kimlik sayılır. Silinmiş agent'ın
+  sertifikası reddedilir (CRL yok, `agent_id` çözümü yeterli).
 
 ### `POST /api/v1/agent/hello` *(UI auth muaf)*
 
@@ -221,17 +227,27 @@ Enrollment: header `X-Enroll-Token: <hub -enroll-token VEYA aşağıdaki
 /api/v1/enroll-tokens ile üretilmiş bir token>` zorunlu.
 
 ```json
-{"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64"}
+{"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n…"}
 ```
 
-**200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30}`
+`csr_pem` opsiyoneldir; verilir ve hub `-tls` ile çalışıyorsa yanıt `client_cert_pem`
++ `ca_cert_pem` içerir (mTLS). CSR'daki CN yok sayılır — hub `bazntms-agent-<id>`
+koyar.
+
+**200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30,"pcap_enabled":false,"client_cert_pem":"…","ca_cert_pem":"…"}`
 
 IP başına deneme sınırlaması vardır (login sayfasıyla aynı politika: 1 dakikada
 5 başarısız denemeden sonra 1 dakika bloklanır) — token tahmin etmeye çalışan
 istekleri engeller. Bloklandığında **429** + `Retry-After: 60` döner; başarılı
 bir enrollment sayacı sıfırlar.
 
-### `POST /api/v1/agent/telemetry` *(Bearer agent token)*
+### `POST /api/v1/agent/cert` *(Bearer/mTLS agent kimliği)*
+
+İstemci sertifikasını yeniler (agent ömrünün yarısı geçince çağırır). Gövde:
+`{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n…"}` →
+**200:** `{"client_cert_pem":"…","ca_cert_pem":"…"}`. Hub `-tls` kapalıysa **404**.
+
+### `POST /api/v1/agent/telemetry` *(Bearer agent token veya mTLS)*
 
 ```json
 {

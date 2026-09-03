@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/flows"
 	"github.com/gokayybaz/bazntms/internal/geoip"
 	"github.com/gokayybaz/bazntms/internal/logging"
+	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/queue"
 	"github.com/gokayybaz/bazntms/internal/server"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -59,6 +62,11 @@ func main() {
 	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
+	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
+	tlsDir := fl.String("tls-dir", "pki", "CA + sunucu sertifikasi dizini (ca.crt/ca.key/server.crt/server.key)")
+	tlsCert := fl.String("tls-cert", "", "operator sunucu sertifikasi (PEM); bos = CA'dan otomatik uret")
+	tlsKey := fl.String("tls-key", "", "operator sunucu ozel anahtari (PEM); -tls-cert ile birlikte")
+	tlsHosts := fl.String("tls-hosts", "", "sunucu sertifikasi SAN'lari (virgulle): hub'in DNS adi/IP'leri — agent'in baglandigi ad buraya girmeli")
 	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
 	flowPort := fl.String("flow-port", "", "NetFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
 	flowExporter := fl.String("flow-exporter", "", "NetFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
@@ -236,6 +244,43 @@ func main() {
 	if autoTok := srv.EnrollToken(); *enrollToken == "" {
 		slog.Info("otomatik enrollment token uretildi", "enroll_token", autoTok)
 	}
+
+	// mTLS: CA + sunucu sertifikasi (bkz. asagida ListenAndServeTLS)
+	var tlsConf *tls.Config
+	if *tlsOn {
+		ca, err := pki.LoadOrCreateCA(*tlsDir)
+		if err != nil {
+			slog.Error("mTLS CA acilamadi", "dir", *tlsDir, "err", err)
+			os.Exit(1)
+		}
+		srv.SetAgentCA(ca)
+		var serverCert tls.Certificate
+		if *tlsCert != "" {
+			serverCert, err = tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		} else {
+			hosts := []string{"localhost", "127.0.0.1", "::1"}
+			for _, h := range strings.Split(*tlsHosts, ",") {
+				if h = strings.TrimSpace(h); h != "" {
+					hosts = append(hosts, h)
+				}
+			}
+			if hn, _ := os.Hostname(); hn != "" {
+				hosts = append(hosts, hn)
+			}
+			serverCert, err = ca.ServerTLSCertificate(hosts)
+		}
+		if err != nil {
+			slog.Error("sunucu sertifikasi hazirlanamadi", "err", err)
+			os.Exit(1)
+		}
+		tlsConf = &tls.Config{
+			MinVersion:   tls.VersionTLS12,
+			Certificates: []tls.Certificate{serverCert},
+			ClientAuth:   tls.VerifyClientCertIfGiven, // tarayici sertifikasiz baglanabilir; agent sertifikasi zorunlu dogrulanir
+			ClientCAs:    ca.Pool(),
+		}
+		slog.Info("mTLS aktif", "ca_dir", *tlsDir, "operator_cert", *tlsCert != "")
+	}
 	if *updatesDir != "" {
 		srv.SetUpdatesDir(*updatesDir)
 		slog.Info("agent guncelleme kanali aktif", "dir", *updatesDir)
@@ -345,11 +390,17 @@ func main() {
 	}
 
 	addr := "0.0.0.0:" + *port
-	hs := &http.Server{Addr: addr, Handler: srv.Handler()}
+	hs := &http.Server{Addr: addr, Handler: srv.Handler(), TLSConfig: tlsConf}
 	go func() {
-		slog.Info("http dinleniyor", "addr", addr)
-		if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("http sunucu hatasi", "err", err)
+		scheme := "http"
+		serve := hs.ListenAndServe
+		if tlsConf != nil {
+			scheme = "https (mTLS)"
+			serve = func() error { return hs.ListenAndServeTLS("", "") }
+		}
+		slog.Info(scheme+" dinleniyor", "addr", addr)
+		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("sunucu hatasi", "err", err)
 			stop() // graceful shutdown akisini tetikle ve cik
 			os.Exit(1)
 		}

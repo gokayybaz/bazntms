@@ -85,9 +85,10 @@ type HubConfig struct {
 // telemetri ayarlari genisler).
 type AgentConfig struct {
 	Hub struct {
-		URL   string   `koanf:"url"`  // tek adres veya CSV (a,b) — failover sirasi
-		URLs  []string `koanf:"urls"` // liste biçimi: failover sirasi
-		Token string   `koanf:"token"`
+		URL    string   `koanf:"url"`  // tek adres veya CSV (a,b) — failover sirasi
+		URLs   []string `koanf:"urls"` // liste biçimi: failover sirasi
+		Token  string   `koanf:"token"`
+		CAFile string   `koanf:"ca_file"` // mTLS: hub CA sertifikasi (PEM); bos → TOFU + pin
 	} `koanf:"hub"`
 	Agent struct {
 		Name string `koanf:"name"`

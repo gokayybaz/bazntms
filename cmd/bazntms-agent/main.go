@@ -34,6 +34,7 @@ func main() {
 	site := fl.String("site", "", "site etiketi (config'i override eder)")
 	stateFile := fl.String("state", "bazntms-agent.state.json", "kalici agent kimlik dosyasi")
 	interval := fl.Int("interval", 0, "telemetri araligi sn (config'i override eder)")
+	hubCAFile := fl.String("hub-ca", "", "hub CA sertifikasi (PEM) — mTLS'te sunucuyu dogrulamak icin; bos ise ilk baglantida guvenilir kabul edilip pinlenir (TOFU)")
 	pcapFlag := fl.Bool("pcap", false, "surec bazli trafik atfi icin paket yakalama (config'i override eder; root/admin gerekir)")
 	pcapIface := fl.String("pcap-iface", "", "atif yakalamasi icin arayuz (bos = otomatik)")
 	recordFlag := fl.Bool("record", false, "ham paketleri diske kaydet (hub politikasi da acik olmali)")
@@ -153,6 +154,7 @@ func main() {
 		Site:        *site,
 		StateFile:   *stateFile,
 		IntervalSec: intervalSec,
+		HubCAFile:   firstNonEmpty(*hubCAFile, cfg.Hub.CAFile),
 	})
 
 	// run, agent'in omuz dongusunu yurutur; stop kapaninca temiz cikar.

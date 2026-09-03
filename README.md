@@ -147,13 +147,24 @@ go test ./...        # Go testleri
 
 ## Güvenlik Notları
 
-- HTTPS sunulmaz; internete açacaksanız reverse proxy arkasına alın:
-  ```caddy
-  # Caddy örneği (otomatik TLS)
-  ag.example.com {
-      reverse_proxy 127.0.0.1:8080
-  }
+- **Agent ↔ hub karşılıklı TLS (mTLS)**: `-tls` ile hub kendi CA'sını üretir,
+  ECDSA P-256 sunucu sertifikası imzalar ve enrollment sırasında her agent'a
+  bir istemci sertifikası (`CN=bazntms-agent-<id>`, 90 gün) verir. Agent
+  sonraki bağlantılarda bu sertifikayla kimliklenir (Bearer token'a eşdeğer);
+  ömrünün yarısı geçince kendini yeniler. Tarayıcı aynı porttan sertifikasız
+  bağlanabilir (`VerifyClientCertIfGiven`). Agent hub'ı `-hub-ca <dosya>` ile
+  önceden pinler; verilmezse ilk bağlantıda TOFU + otomatik pin.
   ```
+  hub:   bazntms-hub -tls -tls-hosts hub.example.com
+  agent: bazntms-agent -hub-url https://hub.example.com:8080 -hub-ca ca.crt
+  ```
+- Panel/tarayıcı trafiği için (veya mTLS istemiyorsanız) reverse proxy de
+  kullanılabilir:
+  ```caddy
+  ag.example.com { reverse_proxy 127.0.0.1:8080 }   # Caddy — otomatik TLS
+  ```
+  (Not: L7 reverse proxy agent mTLS'ini sonlandırır; mTLS için agent'lar hub'a
+  doğrudan ya da L4/TCP-passthrough LB ile bağlanmalı.)
 - Oturumlar bellekte tutulur; sunucu yeniden başlayınca yeniden giriş gerekir
 - ip-api.com modu uzak IP'leri üçüncü taraf servise gönderir (`-ip-api-lookup=false` ile kapatın)
 

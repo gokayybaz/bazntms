@@ -18,6 +18,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/geoip"
+	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/vault"
@@ -41,6 +42,7 @@ type Server struct {
 	telemetryInterval int
 	agentPCAP         bool
 	vault             *vault.Vault
+	agentCA           *pki.CA // nil ise mTLS kapali (enroll CSR imzalamaz, client-cert auth yok)
 	enrollAttempts    *enrollAttemptLimiter
 
 	httpRequests *prometheus.CounterVec
@@ -116,6 +118,12 @@ func derefOIDC(o *OIDCOptions) OIDCOptions {
 	return *o
 }
 
+// SetAgentCA, agent↔hub mTLS'i etkinlestirir: enrollment sirasinda agent
+// CSR'lari bu CA ile imzalanir ve /api/v1/agent/* uclarinda dogrulanmis bir
+// istemci sertifikasi Bearer token'a esdeger kimlik sayilir. nil verilirse
+// (varsayilan) mTLS kapali kalir.
+func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -131,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
+	mux.Handle("POST /api/v1/agent/cert", s.agentAuth(http.HandlerFunc(s.handleAgentCertRenew)))
 	mux.Handle("POST /api/v1/agent/telemetry", s.agentAuth(http.HandlerFunc(s.handleAgentTelemetry)))
 	mux.Handle("GET /api/v1/agent/update/manifest", s.agentAuth(http.HandlerFunc(s.handleUpdateManifest)))
 	mux.Handle("GET /api/v1/agent/update/file/{channel}/{name}", s.agentAuth(http.HandlerFunc(s.handleUpdateFile)))

@@ -102,6 +102,28 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
   bağlantılar + uyarılar + kayıt durumu); boş odaya üretilmez
 - Statik servis: `http.FileServerFS` + SPA history fallback
 
+### Agent ↔ hub mTLS (`internal/pki`)
+
+`-tls` ile hub `<tls-dir>/ca.{crt,key}` (yoksa üretir — ECDSA P-256, 10 yıl)
+ve buradan bir sunucu sertifikası (`server.{crt,key}`, SAN'lar `-tls-hosts` +
+`localhost`/IP'ler + hostname, ~13 ay, süre bitince yenilenir) tutar.
+`tls.Config.ClientAuth = VerifyClientCertIfGiven`: tarayıcı sertifikasız
+bağlanır, agent sertifikası **sunulursa** CA'ya karşı doğrulanır.
+
+Enrollment: agent bir ECDSA anahtar + CSR üretir, `hello.csr_pem` ile
+gönderir; hub `CN=bazntms-agent-<id>` (agent'ın iddia edemeyeceği), ClientAuth
+EKU'lu, 90 günlük bir istemci sertifikası imzalayıp CA ile birlikte döner.
+Agent bunları `<state>.{crt,key,ca}` olarak yazar ve sonraki tüm bağlantılarda
+istemci sertifikası + pinlenmiş CA kullanır. `agentAuth` middleware'i
+`r.TLS.VerifiedChains` doluysa CN'den `agent_id` çözer (Bearer'a eşdeğer);
+silinmiş agent `AgentByID` hatasıyla reddedilir (CRL yok). Ömrün yarısı
+geçince agent `POST /api/v1/agent/cert` ile yeniler.
+
+CA pinleme: agent `-hub-ca <dosya>` ile önceden sağlar; yoksa ilk hello
+`InsecureSkipVerify` (TOFU) ile yapılır ve dönen CA pinlenir — enrollment
+token o ilk el sıkışmada kimliği sağlar. L7 reverse proxy mTLS'i sonlandırır;
+mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
+
 ## Frontend (`frontend/`)
 
 Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
