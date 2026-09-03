@@ -10,6 +10,7 @@ import (
 
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
 func newAnomalyManager(t *testing.T, cfg Config) (*Manager, store.Store) {
@@ -20,6 +21,22 @@ func newAnomalyManager(t *testing.T, cfg Config) (*Manager, store.Store) {
 	}
 	t.Cleanup(func() { st.Close() })
 	return NewManager(cfg, st, capture.NewEngine(), 30), st
+}
+
+// seedIfaceRun, tek agent/arayuz icin kumulatif rx sayacli bir ornek dizisi
+// yazar; bir sonraki dizinin devam edebilmesi icin son sayac degerini doner.
+func seedIfaceRun(t *testing.T, st store.Store, agentID, startTs int64, n int, stepSecs int64, startBytes uint64, perStepBytes func(i int) uint64) uint64 {
+	t.Helper()
+	b := startBytes
+	for i := 0; i < n; i++ {
+		if err := st.SaveIfaceSamples(agentID, startTs+int64(i)*stepSecs, []telemetry.InterfaceSample{
+			{Name: "eth0", RxBytes: b, RxPackets: uint64(i)},
+		}); err != nil {
+			t.Fatalf("iface ornek: %v", err)
+		}
+		b += perStepBytes(i)
+	}
+	return b
 }
 
 func TestAnomalyFires(t *testing.T) {
@@ -64,6 +81,37 @@ func TestAnomalyFires(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("anomali uyarisi uretilmedi")
+	}
+}
+
+// TestAnomalyFiresFromFleet, `samples` bos (coklu-hub) iken baseline'in agent
+// arayuz telemetrisinden (`agent_iface_samples`) hesaplandigini ve ani filo
+// verim sicramasinin "anomaly" uyarisi urettigini dogrular.
+func TestAnomalyFiresFromFleet(t *testing.T) {
+	m, st := newAnomalyManager(t, DefaultConfig())
+	now := time.Now()
+
+	// baseline: son 5 gunun ayni saati, ~8 kbit/sn (±dalgalanma). Kumulatif
+	// sayac ts ile MONOTON artmali → en eski gun once yazilir.
+	jitter := func(i int) uint64 { return uint64(55_000 + (i%9)*2_500) } // 55-75 KB / 60 sn
+	var last uint64 = 5_000_000
+	for day := 5; day >= 1; day-- {
+		hs := time.Date(now.Year(), now.Month(), now.Day()-day, now.Hour(), 2, 0, 0, now.Location())
+		last = seedIfaceRun(t, st, 1, hs.Unix(), 50, 60, last, jitter)
+	}
+	// mevcut pencere: son ~5 dk ani yukselis (~800 kbit/sn — baseline'in ~100x)
+	seedIfaceRun(t, st, 1, now.Unix()-300, 12, 30, last, func(int) uint64 { return 3_000_000 })
+
+	m.checkAnomaly(DefaultConfig())
+
+	found := false
+	for _, e := range m.RecentEvents(10) {
+		if e.Kind == "anomaly" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("filo baseline'inden anomali uyarisi uretilmedi")
 	}
 }
 

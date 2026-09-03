@@ -50,8 +50,9 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 			WINDOW w AS (PARTITION BY agent_id, name ORDER BY ts)
 		) d
 		WHERE d.dt > 0 AND d.dt <= ?
+			AND (d.rx_d + d.tx_d) * 8 <= d.dt * ?
 		GROUP BY bucket ORDER BY bucket`
-	rows, err := s.db.Query(s.q(q), bucketSecs, bucketSecs, since.Unix(), maxDt)
+	rows, err := s.db.Query(s.q(q), bucketSecs, bucketSecs, since.Unix(), maxDt, int64(maxIfaceBps))
 	if err != nil {
 		return nil, err
 	}

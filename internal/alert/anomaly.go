@@ -9,6 +9,7 @@ package alert
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -60,25 +61,18 @@ func NormalizeConfig(cfg Config) Config {
 
 // checkAnomaly, periyodik cagirilir: mevcut pencere verimini saatlik
 // baseline ile karsilastirir. Değer kaydi maliyetini dusuk tutmak icin
-// yalnizca baseline guvenilir ve std > 0 iken degerlendirir.
+// yalnizca baseline guvenilir ve std > 0 iken degerlendirir. Baseline once
+// filo telemetrisinden (agent_iface_samples), yetersizse hub yerel
+// yakalamasindan (samples, standalone mod) alinir.
 func (m *Manager) checkAnomaly(cfg Config) {
 	ac := cfg.Anomaly.normalized()
 	if !ac.Enabled {
 		return
 	}
-	stats, err := m.st.HourlyBpsStats()
-	if err != nil {
-		return
-	}
 	curHour := time.Now().Hour() // baseline ((ts+offset)%86400)/3600 = yerel saat
-	var base *store.HourStat
-	for i := range stats {
-		if stats[i].Hour == curHour {
-			base = &stats[i]
-			break
-		}
-	}
-	if base == nil || base.Count < int64(ac.MinSamples) {
+	base, fleet := m.anomalyBaseline(curHour, int64(ac.MinSamples))
+	if base == nil {
+		slog.Debug("anomali baseline isiniyor — yeterli ornek yok", "saat", curHour, "min", ac.MinSamples)
 		return
 	}
 	std := math.Sqrt(math.Max(0, base.MeanSq-base.Mean*base.Mean))
@@ -86,11 +80,23 @@ func (m *Manager) checkAnomaly(cfg Config) {
 		return
 	}
 	window := time.Duration(ac.WindowMin) * time.Minute
-	cur, err := m.st.AvgBpsSince(time.Now().Add(-window))
+	var cur float64
+	var err error
+	if fleet {
+		cur, err = m.st.FleetAvgBpsSince(time.Now().Add(-window))
+	} else {
+		cur, err = m.st.AvgBpsSince(time.Now().Add(-window))
+	}
 	if err != nil {
 		return
 	}
 	z := (cur - base.Mean) / std
+	src := "yerel"
+	if fleet {
+		src = "filo"
+	}
+	slog.Debug("anomali baseline", "kaynak", src, "saat", curHour, "n", base.Count,
+		"ort_bps", int64(base.Mean), "std_bps", int64(std), "son_bps", int64(cur), "z", math.Round(z*10)/10)
 	direction := "yükseliş"
 	if z < 0 {
 		direction = "düşüş"
@@ -100,4 +106,31 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			fmt.Sprintf("Trafiğe alışılmadık sapma (%s): %.0f bps — saatlik ortalama %.0f ± %.0f (z=%.1f, son %d dk)",
 				direction, cur, base.Mean, std, z, ac.WindowMin))
 	}
+}
+
+// anomalyBaseline, mevcut saat kovasinda >= minSamples ornek iceren ilk
+// baseline'i dondurur: once filo (agent telemetrisi), sonra hub yerel
+// yakalamasi (samples). fleet=true ise karsilastirma da FleetAvgBpsSince ile
+// yapilmali. Iki kaynakta da yeterli veri yoksa (base=nil) motor sessiz kalir.
+func (m *Manager) anomalyBaseline(curHour int, minSamples int64) (base *store.HourStat, fleet bool) {
+	if fs, err := m.st.FleetHourlyBpsStats(); err == nil {
+		if b := hourBucket(fs, curHour); b != nil && b.Count >= minSamples {
+			return b, true
+		}
+	}
+	if ss, err := m.st.HourlyBpsStats(); err == nil {
+		if b := hourBucket(ss, curHour); b != nil && b.Count >= minSamples {
+			return b, false
+		}
+	}
+	return nil, false
+}
+
+func hourBucket(stats []store.HourStat, hour int) *store.HourStat {
+	for i := range stats {
+		if stats[i].Hour == hour {
+			return &stats[i]
+		}
+	}
+	return nil
 }

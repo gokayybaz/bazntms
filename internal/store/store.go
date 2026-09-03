@@ -170,6 +170,9 @@ type Store interface {
 	SaveAgentSubnets(agentID int64, name string, subnets []string) error
 	HourlyBpsStats() ([]HourStat, error)
 	AvgBpsSince(since time.Time) (float64, error)
+	// filo (agent telemetrisi) tabanli baseline — coklu-hub'da `samples` bos
+	FleetHourlyBpsStats() ([]HourStat, error)
+	FleetAvgBpsSince(since time.Time) (float64, error)
 	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
 
 	// FortiGate REST toplama (Faz 8)
