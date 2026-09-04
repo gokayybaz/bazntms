@@ -76,26 +76,58 @@ const IconStamp = () => (
   </svg>
 );
 
+const IconLayers = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2 2 7l10 5 10-5-10-5z" />
+    <path d="M2 12l10 5 10-5" />
+    <path d="M2 17l10 5 10-5" />
+  </svg>
+);
+
+const IconFunnel = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 4h18l-7.2 8.4v6.1l-3.6 1.8v-7.9L3 4z" />
+  </svg>
+);
+
+const IconLink = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 12.5l-2.6 2.6a3.5 3.5 0 0 0 5 5L13 17.5" />
+    <path d="M16 11.5l2.6-2.6a3.5 3.5 0 0 0-5-5L11 6.5" />
+    <path d="M9.5 14.5l5-5" />
+  </svg>
+);
+
 const FEATURES = [
   {
     icon: <IconTraffic />,
     title: 'Canlı Trafik İzleme',
-    text: 'Paket bazlı ölçüm, yön tespiti ve protokol dağılımı; en yoğun uç noktalar, DNS görünürlüğü ve GeoIP/ASN zenginleştirme ile saniye saniye görünürlük.',
+    text: 'Paket bazlı ölçüm, yön tespiti ve protokol dağılımı; en yoğun uç noktalar GeoIP/ASN ile zenginleştirilip dünya haritasında hacme göre görselleştirilir.',
+  },
+  {
+    icon: <IconLayers />,
+    title: 'Derin Uygulama Görünürlüğü',
+    text: 'Süreç bazlı TLS ClientHello SNI + HTTP Host çıkarımı ve DNS sorgu/yanıt takibi — imza tabanlı DPI olmadan “hangi süreç, hangi alan adına” sorusunun cevabı.',
   },
   {
     icon: <IconFleet />,
     title: 'Merkezi Agent Filosu',
-    text: 'Enrollment, toplu telemetri ve offline disk kuyruğu ile 5.000 agent’a kadar ölçek. Süreç bazlı trafik atfı ve çoklu-hub failover standart olarak gelir.',
+    text: 'Enrollment, toplu telemetri ve offline disk kuyruğu ile 5.000 agent’a kadar ölçek. Agent↔hub trafiği karşılıklı TLS (mTLS) ile korunur, sertifikalar kendini yeniler.',
+  },
+  {
+    icon: <IconFunnel />,
+    title: 'Çok Protokollü Akış Toplama',
+    text: 'NetFlow v5/v9, IPFIX ve sFlow v5 tek toplayıcıda — şablon önbelleği ve örnekleme oranına göre otomatik ölçekleme, tamamı aynı akış tablosuna yazılır.',
   },
   {
     icon: <IconDevices />,
     title: 'Cihaz Entegrasyonları',
-    text: 'SNMPv3, NetFlow v5 ve syslog alıcısının üzerine FortiGate REST API: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve kaynak/oturum izleme.',
+    text: 'SNMPv3 arayüz/durum takibi ve syslog alıcısının üzerine FortiGate REST API: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve oturum izleme.',
   },
   {
     icon: <IconTopo />,
     title: 'Canlı Ağ Topolojisi',
-    text: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita: hub–cihaz–agent ilişkileri ve port düzeyi komşuluklar tek bakışta.',
+    text: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita: client → hub → cihaz → router → internet zinciri gerçek trafik akışıyla birlikte tek bakışta.',
   },
   {
     icon: <IconScale />,
@@ -104,8 +136,13 @@ const FEATURES = [
   },
   {
     icon: <IconShield />,
-    title: 'Güvenlik ve Denetim',
+    title: 'Güvenlik ve Kimlik',
     text: 'Rol tabanlı erişim (admin/netops/analyst/viewer + site scope), OIDC SSO, entegrasyon token’ları ve hash-zincirli append-only denetim kaydı.',
+  },
+  {
+    icon: <IconLink />,
+    title: 'Tehdit İstihbaratı ve SIEM',
+    text: 'IOC kara listesiyle L7/DNS eşleştirmesi; olaylar CEF, LEEF, JSON veya düz syslog olarak Splunk HEC, ServiceNow, QRadar, ArcSight gibi hedeflere aktarılır.',
   },
   {
     icon: <IconSpark />,
@@ -114,14 +151,26 @@ const FEATURES = [
   },
   {
     icon: <IconRocket />,
-    title: 'Dağıtım ve Operasyon',
-    text: 'Docker/Helm ile k8s dağıtımı; deb/rpm/MSI/pkg installer’lar; ed25519 imza doğrulamalı otomatik agent güncelleme kanalı (stable/beta).',
+    title: 'Dağıtım, API ve Operasyon',
+    text: 'Docker/Helm ile k8s dağıtımı; deb/rpm/MSI/pkg installer’lar; imza doğrulamalı otomatik güncelleme; elle bakımlı OpenAPI 3.1 şeması + gömülü /api/docs gezgini.',
   },
   {
     icon: <IconStamp />,
     title: '5651 Uyumluluk ve ISO 27001',
-    text: 'Loglar Merkle checkpoint + RFC 3161 zaman damgası ile imzalanır, WORM depoda 2 yıl saklanır; delil paketi, offline doğrulama ve ISO kontrol haritası.',
+    text: 'Loglar Merkle checkpoint + RFC 3161 zaman damgası ile imzalanır, WORM depoda 2 yıl saklanır; risk defteri, SoA, iç denetim ve tek tıkla denetçi paketi.',
   },
+];
+
+const NEW_IN = [
+  'Karşılıklı TLS (mTLS)',
+  'NetFlow v9 / IPFIX',
+  'sFlow v5',
+  'L7 uygulama görünürlüğü',
+  'DNS görünürlüğü',
+  'Coğrafi trafik haritası',
+  'SIEM / ITSM connector',
+  'IOC eşleştirme',
+  'OpenAPI 3.1 + /api/docs',
 ];
 
 const STEPS = [
@@ -253,6 +302,164 @@ function Architecture() {
   );
 }
 
+/* --- canlı önizleme: gerçek dashboard'un sahnelenmiş küçük hali --- */
+/* Gerçek veri/IP göstermez — yalnızca ürünün "hissini" taşıyan sentetik bir sahne. */
+
+const PREVIEW_AGENTS = [
+  { y: 168, name: 'agent-ofis-3' },
+  { y: 268, name: 'agent-dc1-07' },
+  { y: 368, name: 'agent-sube-a' },
+];
+
+const PREVIEW_STATS = [
+  { label: 'AKTİF AGENT', value: '124 / 140' },
+  { label: 'PAKET HIZI', value: '3.2K pps' },
+  { label: 'OLAY HIZI', value: '4.8 / sn' },
+  { label: 'AÇIK UYARI', value: '2' },
+];
+
+const PREVIEW_ALERTS = ['yeni süreç · agent-ofis-3 : curl', 'bant genişliği zirvesi · agent-dc1-07', 'IOC eşleşmesi · agent-sube-a'];
+
+const PREVIEW_GEO = [
+  { x: 60, y: 24, r: 9 },
+  { x: 118, y: 44, r: 5 },
+  { x: 200, y: 30, r: 7 },
+  { x: 260, y: 52, r: 4 },
+  { x: 330, y: 20, r: 6 },
+];
+
+function LivePreview() {
+  const HUB = { x: 500, y: 268 };
+  const ROUTER = { x: 760, y: 268 };
+  const NET = { x: 900, y: 268 };
+  return (
+    <svg
+      className={styles.previewSvg}
+      viewBox="0 0 1000 600"
+      role="img"
+      aria-label="bazNTMS gösterge paneli önizlemesi: agent filosu, hub, router ve internet arasında canlı paket akışı, üstte filo istatistikleri"
+    >
+      <defs>
+        <linearGradient id="previewHubGlow" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#164e63" />
+          <stop offset="100%" stopColor="#083344" />
+        </linearGradient>
+      </defs>
+
+      {/* pencere çerçevesi */}
+      <rect x="0.5" y="0.5" width="999" height="599" rx="16" className={styles.previewFrame} />
+
+      {/* üst çubuk */}
+      <g>
+        <circle cx="24" cy="21" r="5" fill="#f87171" />
+        <circle cx="42" cy="21" r="5" fill="#fbbf24" />
+        <circle cx="60" cy="21" r="5" fill="#34d399" />
+        <rect x="100" y="11" width="230" height="20" rx="10" className={styles.previewUrl} />
+        <text x="215" y="25" textAnchor="middle" className={styles.previewUrlText}>
+          bazntms.local · Genel Bakış
+        </text>
+        <circle cx="864" cy="21" r="3.5" className={styles.pulse} />
+        <text x="876" y="25" className={styles.previewLive}>
+          WS: CANLI
+        </text>
+      </g>
+      <line x1="0" y1="42" x2="1000" y2="42" stroke="#1e293b" strokeWidth="1" />
+
+      {/* sol nav şeridi */}
+      <rect x="0" y="42" width="56" height="558" className={styles.previewSidebar} />
+      {[70, 116, 162, 208, 254].map((y, i) => (
+        <rect key={y} x="17" y={y} width="22" height="22" rx="6" className={i === 0 ? styles.previewNavActive : styles.previewNavItem} />
+      ))}
+
+      {/* istatistik şeridi */}
+      {PREVIEW_STATS.map((s, i) => {
+        const x = 78 + i * 216;
+        return (
+          <g key={s.label}>
+            <rect x={x} y="60" width="200" height="58" rx="9" className={styles.node} />
+            <text x={x + 16} y="82" className={styles.groupText}>
+              {s.label}
+            </text>
+            <text x={x + 16} y="106" className={styles.previewStatValue}>
+              {s.value}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* akış sahnesi: agent filosu → hub → router → internet */}
+      <text x="78" y="150" className={styles.groupText}>
+        AGENT FİLOSU
+      </text>
+      <g stroke="#155e75" strokeWidth="1.6" fill="none">
+        {PREVIEW_AGENTS.map((a, i) => (
+          <path
+            key={a.name}
+            d={`M254 ${a.y + 15} C 340 ${a.y + 15}, 360 ${HUB.y}, ${HUB.x - 84} ${HUB.y}`}
+            strokeDasharray="5 7"
+            className={i % 2 === 0 ? styles.flow : styles.flowSlow}
+          />
+        ))}
+        <path d={`M${HUB.x + 84} ${HUB.y} L ${ROUTER.x - 44} ${ROUTER.y}`} strokeDasharray="5 7" className={styles.flow} strokeWidth="2.2" />
+        <path d={`M${ROUTER.x + 44} ${ROUTER.y} L ${NET.x - 40} ${NET.y}`} strokeDasharray="5 7" className={styles.flowSlow} strokeWidth="2.2" />
+      </g>
+
+      {PREVIEW_AGENTS.map((a) => (
+        <g key={a.name}>
+          <rect x="78" y={a.y} width="176" height="46" rx="9" className={styles.node} />
+          <circle cx="102" cy={a.y + 23} r="4" className={styles.dot} />
+          <text x="118" y={a.y + 27} className={styles.nodeText}>
+            {a.name}
+          </text>
+        </g>
+      ))}
+
+      <rect x={HUB.x - 84} y={HUB.y - 55} width="168" height="110" rx="12" className={styles.previewHub} />
+      <circle cx={HUB.x} cy={HUB.y - 22} r="5" className={styles.pulse} />
+      <text x={HUB.x} y={HUB.y + 8} textAnchor="middle" className={styles.hubText}>
+        bazntms-hub
+      </text>
+      <text x={HUB.x} y={HUB.y + 28} textAnchor="middle" className={styles.hubSub}>
+        3 agent · mTLS
+      </text>
+
+      <rect x={ROUTER.x - 44} y={ROUTER.y - 30} width="88" height="60" rx="9" className={styles.node} />
+      <text x={ROUTER.x} y={ROUTER.y - 4} textAnchor="middle" className={styles.nodeSub}>
+        ROUTER
+      </text>
+      <text x={ROUTER.x} y={ROUTER.y + 14} textAnchor="middle" className={styles.previewSmallLabel}>
+        güvenlik duvarı
+      </text>
+
+      <circle cx={NET.x} cy={NET.y} r="34" className={styles.previewNet} />
+      <text x={NET.x} y={NET.y + 4} textAnchor="middle" className={styles.previewSmallLabel}>
+        İNTERNET
+      </text>
+
+      {/* alt paneller: uyarı akışı + coğrafi harita */}
+      <rect x="78" y="470" width="410" height="106" rx="10" className={styles.node} />
+      <text x="94" y="492" className={styles.groupText}>
+        CANLI UYARI AKIŞI
+      </text>
+      {PREVIEW_ALERTS.map((a, i) => (
+        <text key={a} x="94" y={514 + i * 20} className={styles.previewAlertLine}>
+          {a}
+        </text>
+      ))}
+
+      <rect x="512" y="470" width="410" height="106" rx="10" className={styles.node} />
+      <text x="528" y="492" className={styles.groupText}>
+        COĞRAFİ TRAFİK
+      </text>
+      <g transform="translate(536, 500)">
+        {PREVIEW_GEO.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={p.r} className={styles.geoDot} style={{ animationDelay: `${i * 0.3}s` }} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 /* --- kopyala düğmesi --- */
 
 function CopyButton({ code }) {
@@ -339,6 +546,27 @@ export default function Home() {
               <span>MIT Lisansı</span>
               <span>Go + React</span>
               <span>Sizin Altyapınızda</span>
+            </div>
+          </div>
+        </section>
+
+        {/* CANLI ÖNİZLEME */}
+        <section className={styles.previewSection}>
+          <div className={styles.previewWrap} data-reveal>
+            <LivePreview />
+          </div>
+        </section>
+
+        {/* v0.3.0'DA YENİ */}
+        <section className={styles.whatsNew}>
+          <div className={styles.whatsNewInner} data-reveal>
+            <span className={styles.versionPill}>v0.3.0</span>
+            <div className={styles.newBadges}>
+              {NEW_IN.map((n) => (
+                <span key={n} className={styles.badge}>
+                  {n}
+                </span>
+              ))}
             </div>
           </div>
         </section>

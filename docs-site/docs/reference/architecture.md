@@ -82,10 +82,15 @@ bir `sysmon.ListConnections()` ile:
 | `port` | kurulan bağlantının uzak portu şüpheli listede mi |
 | `proc` | `alert_seen` tablosuna karşı yeni süreç; ilk çalıştırmada taban çizgisi sessizce atılır |
 | `target` | ilk kez ≥ X MB trafik gören uzak IP; kalıcı görüldü işareti |
+| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları `-ioc-file` kara listesinde mi (`internal/ioc` — tam + üst alan eşleşmesi, mtime ile hot-reload). İmza tabanlı DPI değil; bir hash-set lookup |
 
 Her olay `kind|key` başına cooldown (varsayılan 10 dk) tabi tutulur; geçenler
 `alert_events`'e yazılır ve `Notifier` ile (masaüstü, Telegram, Discord, Slack,
-generic webhook — hepsi asenkron, hatalar yutulur) dağıtılır.
+generic webhook, Teams, e-posta, imzalı webhook v2 — hepsi asenkron, hatalar
+yutulur) dağıtılır. **SIEM/ITSM bağlayıcı** (`internal/alert/siem.go`): olay
+CEF (ArcSight) / LEEF (QRadar) / JSON'a formatlanıp RFC3164 syslog (UDP/TCP)
+veya HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı) ile iletilir;
+`notifiers.siem` altından yapılandırılır.
 
 ## AI istemcisi (`internal/ai`)
 
@@ -99,23 +104,100 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
 `<think>` bloklarının temizlenmesi, `finish_reason=length` için açıklayıcı hata,
 `/no_think` (Qwen3) ve `-llm-max-tokens` override.
 
+## Akış toplama (`internal/flows`)
+
+Tek bir `Collector` UDP dinleyicisi, gelen datagramı versiyonuna göre ayırır:
+
+| Protokol | Ayırt edici | Çözücü |
+|----------|-------------|--------|
+| NetFlow v5 | ilk 2 bayt = 5 | `ParseV5` (sabit 48 baytlık kayıt) |
+| NetFlow v9 | ilk 2 bayt = 9 | `ParseV9` + `TemplateCache` (exporter×domain×templateID) |
+| IPFIX / v10 | ilk 2 bayt = 10 | `ParseIPFIX` (aynı cache) |
+| sFlow v5 | ilk **4** bayt = 5 | `ParseSFlow` |
+
+Çakışma yok: NetFlow'un ilk 4 baytı uint32 olarak daima ≥ `0x50000`
+(`version<<16 + count`), sFlow'unki tam olarak `5`. Üçü de aynı `-flow-port`'ta karışık
+gelebilir; `-sflow-port` yalnızca ayrı bir bind ister.
+
+sFlow **örnekleme tabanlıdır**: cihaz her N. paketin başlığını kopyalar.
+`ParseSFlow` "flow sample" (format 1/3) içindeki ham paket başlığını elle çözer
+(Ethernet → 802.1Q atla → IPv4 → TCP/UDP; stdlib-only, gopacket yok) ve
+örnekleme oranıyla ölçekler: `Packets = rate`, `Octets = frame_length × rate`.
+Counter sample'lar (arayüz sayaçları) şimdilik atlanır. Çıktı NetFlow ile aynı
+`flows` tablosuna, aynı `FlowRow` şemasıyla yazılır.
+
 ## Sunucu (`internal/server`)
 
 - `ServeMux` (Go 1.22+ metot kalıpları) + `logRequest` middleware
-- `auth.middleware`: `/api/*` ve `/ws` oturum denetimi; `/api/login` ve
-  `/api/auth/status` muaf; statik dosyalar açık (SPA kabuğu). Sabit zamanlı
-  şifre karşılaştırma, IP bazlı deneme sınırı, HttpOnly cookie + Bearer token
-- `Hub`: saniyede bir `tick` yayınlar (Snapshot + GeoIP zenginleştirme +
-  bağlantılar + uyarılar + kayıt durumu); boş odaya üretilmez
+- `auth.middleware`: `/api/*` ve `/ws` oturum denetimi; `/api/login`,
+  `/api/auth/status`, OIDC ve `/api/openapi.{yaml,json}` + `/api/docs` muaf;
+  statik dosyalar açık (SPA kabuğu). Sabit zamanlı şifre karşılaştırma, IP
+  bazlı deneme sınırı, HttpOnly cookie + Bearer token
+- **API sözleşmesi** (`api/openapi.yaml`, `internal/server/openapi.go`): elle
+  bakımlı OpenAPI 3.1 şeması binary'ye gömülür; `/api/openapi.yaml` (ham),
+  `/api/openapi.json` (yaml→json) ve `/api/docs` (tek dosya, CDN'siz gezgin)
+  uçlarında sunulur. `TestOpenAPICoversRouter` şemayı `server.go`'daki gerçek
+  rota kayıtlarına karşı iki yönlü doğrular (drift = kırık test)
+- `Hub`: saniyede bir `tick` yayınlar — **alarm olayları** + **filo özeti**
+  (`store.FleetSummary`: agent online/toplam, son ~90 sn ortalama rx/tx/pps,
+  son 1 dk NetFlow hızı). Filo özeti Hub'da ~3 sn önbelleklenir (N istemci ×
+  1 sn tick DB'yi dövmesin). Boş odaya tick üretilmez; hub yerel yakalama
+  Snapshot'ı tick'ten çıkarıldı (dağıtık modda boş — bkz. "Not: hub'ın kendi
+  yerel yakalaması")
 - Statik servis: `http.FileServerFS` + SPA history fallback
+
+### Agent ↔ hub mTLS (`internal/pki`)
+
+`-tls` ile hub `<tls-dir>/ca.{crt,key}` (yoksa üretir — ECDSA P-256, 10 yıl)
+ve buradan bir sunucu sertifikası (`server.{crt,key}`, SAN'lar `-tls-hosts` +
+`localhost`/IP'ler + hostname, ~13 ay, süre bitince yenilenir) tutar.
+`tls.Config.ClientAuth = VerifyClientCertIfGiven`: tarayıcı sertifikasız
+bağlanır, agent sertifikası **sunulursa** CA'ya karşı doğrulanır.
+
+Enrollment: agent bir ECDSA anahtar + CSR üretir, `hello.csr_pem` ile
+gönderir; hub `CN=bazntms-agent-<id>` (agent'ın iddia edemeyeceği), ClientAuth
+EKU'lu, 90 günlük bir istemci sertifikası imzalayıp CA ile birlikte döner.
+Agent bunları `<state>.{crt,key,ca}` olarak yazar ve sonraki tüm bağlantılarda
+istemci sertifikası + pinlenmiş CA kullanır. `agentAuth` middleware'i
+`r.TLS.VerifiedChains` doluysa CN'den `agent_id` çözer (Bearer'a eşdeğer);
+silinmiş agent `AgentByID` hatasıyla reddedilir (CRL yok). Ömrün yarısı
+geçince agent `POST /api/v1/agent/cert` ile yeniler.
+
+CA pinleme: agent `-hub-ca <dosya>` ile önceden sağlar; yoksa ilk hello
+`InsecureSkipVerify` (TOFU) ile yapılır ve dönen CA pinlenir — enrollment
+token o ilk el sıkışmada kimliği sağlar. L7 reverse proxy mTLS'i sonlandırır;
+mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 
 ## Frontend (`frontend/`)
 
 Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
-birincil, 2 saniyelik REST yoklamasını yedek kaynak yapar (WS koparsa
-otomatik dönüş). 401 görülürse App login ekranına düşer; 60 sn'de bir de
-oturum denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
-harici grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
+birincil, REST yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş).
+WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard stat şeridinde
+**filo rx/tx/pps ve olay hızı** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten).
+**Agent sayısı (aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden**
+gelir — canlı trafik şeması, topoloji ve alttaki filo kartları da aynı listeyi
+kullandığı için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
+(`fleet.agents_online` yalnızca ilk poll gelene kadar geçici kaynak).
+401 görülürse App login ekranına düşer; 60 sn'de bir de oturum denetimi
+yapılır. Grafikler (ThroughputChart, CompareCard, DayBars) harici grafik
+kütüphanesi olmadan, elle yazılmış SVG'dir.
+
+Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG
+bir sahnedir: sol sütunda **yalnızca ÇEVRİMİÇİ agent'lar** ayrı bir istemci
+düğümü (monitör ikonu + en yoğun arayüz hızı), ortada Router/Güvenlik Duvarı,
+sağda İnternet. Kapalı agent'lar hiç çizilmez ve paket üretmez — bileşen tam
+filoyu alır, `online` alanına göre süzer, alt etikette "N çevrimdışı gizli"
+ipucu verir; bayat/bilinmeyen agent olayları (`resolveIdx` → DROP) ve agent
+yokken üretilen ambient paketler de bastırılır. Her canlı akış/agent/syslog
+olayı, olayı üreten agent'ın düğümünden yön (giden/gelen/yerel/olay) bazlı
+animasyonlu bir "paket" geçirir; NetFlow olayları (agent'sız) ve cihaz syslog'u
+doğrudan güvenlik duvarı ↔ internet ekseninde akar. viewBox yüksekliği çevrimiçi
+agent sayısıyla büyür, düğüm detayı (tam/kompakt/mini) filo kalabalıklaştıkça
+düşer. Paketler
+`packetsRef`'te tutulur, tek bir `requestAnimationFrame` döngüsü boştayken
+sessiz kalıp yalnızca hareket varken yeniden çizdirir; yön sınıflandırması
+(`from`/`to` özel-genel IP ekseni) `lib/traffic.ts`'te, `TrafficFlowDiagram.test.tsx`
++ `lib/traffic.test.ts` ile kaplı. `prefers-reduced-motion` altında animasyon durur.
 
 ### Sayfa yapısı (routing)
 
@@ -128,12 +210,12 @@ gerektirmeden çalışır.
 
 | Rota | Sayfa | Veri kaynağı |
 |------|-------|--------------|
-| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i |
+| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) + coğrafi harita (`GET /api/v1/geo`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
-| `/topoloji` | Ağ topolojisi (SVG, hub+spoke) | `GET /api/v1/topology` |
+| `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
 | `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
-| `/raporlar` | Yerel yakalama + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
+| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
 
@@ -151,14 +233,49 @@ durdur kontrolleri **yok** — yalnızca agent/cihaz filosundan gelen veriler
 görünür. Yerel yakalamayla ilgili bileşenler (StatCards, ThroughputChart,
 EndpointsTable, ConnectionsTable, DnsCard, AICard, CompareCard, PcapCard
 vb.) bu nedenle kaldırıldı; ilgili REST uçları (`/api/capture/*`,
-`/api/history`, `/api/report` — yerel varyant) backend'de hâlâ durur ve
-CLI/otomasyon veya tek-makine (standalone) kurulumlar için kullanılabilir.
+`/api/history`) backend'de hâlâ durur ve CLI/otomasyon veya tek-makine
+(standalone) kurulumlar için kullanılabilir.
+
+**Rapor motoru (`internal/report`):** trafik + kurumsal raporlar tümüyle
+**filo verisinden** üretilir — `store.Fleet*` sorguları agent arayüz
+telemetrisi (`agent_iface_samples`, kümülatif sayaç → `LAG()` ile delta),
+NetFlow (`flows`), agent süreç trafiği (`process_traffic`) ve SNMP cihaz
+sayaçlarından (`device_iface_samples`) beslenir. Hub yerel yakalamasının
+`samples`/`endpoint_stats`/`dns_queries` tablolarına **bağlı değildir**
+(çoklu-hub kurulumunda tüm hub'lar `-capture=false` çalıştığı için o tablolar
+boştur). Protokol/hacim dağılımı (`FleetProtocolTotals`) TimescaleDB modunda
+`flows_1h` continuous aggregate'inden okunur → ham `flows` 7 günde düşse de
+protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer filo
+ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
+metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
+
+**Coğrafi trafik haritası (`/api/v1/geo` → `Overview` `GeoMapCard`):**
+`store.FleetTopEndpoints` ile çıkarılan uzak uç noktalar `geoip.Resolver`
+üzerinden ülkeye (ISO2) çözümlenir, `internal/geoip/centroids.go`'daki ~120
+ülkelik merkez koordinat tablosuyla eşleştirilir ve equirectangular bir SVG
+dünya haritasında hacme göre boyutlanmış balonlarla gösterilir (harici
+grafik/harita kütüphanesi yok — kıtalar kaba poligon, konvansiyona uygun).
+Sunucu tarafı toplama saf fonksiyon (`aggregateGeo`) olarak test edilir.
+GeoIP kaynağı yoksa uç boş liste döner, kart "veri yok" durumuna düşer.
 
 ## Süreç Bazlı Trafik Atfı (Faz 2)
 
 `pkg/proctraffic` + `internal/agent/attr.go`: **nethogs yöntemi** — agent pcap
-ile paket yakalar (yalnızca başlıklar, snaplen 128), 4'lü çifti donemlik
+ile paket yakalar (yalnızca başlıklar, snaplen 600), 4'lü çifti donemlik
 soket-tablosu → PID eşlemesiyle süreçe çevirir ve delta üretir.
+
+**L7 uygulama görünürlüğü** (`internal/agent/l7.go`): aynı yakalama akışında,
+giden TCP payload'ında TLS ClientHello **SNI**'si (`server_name` uzantısı) ve
+HTTP istek satırındaki **Host** başlığı çıkarılıp sürece atfedilir → `l7`
+telemetri alanı → `l7_endpoints` tablosu → `GET /api/v1/l7`. snaplen 128 →
+600'e çıkarıldı (ClientHello 128'i aşar). İmza tabanlı DPI değil — yalnızca
+açıkça görünen alan adı.
+
+**DNS görünürlüğü** (`internal/agent/dns.go`): yine aynı akışta, UDP/53 sorgu/
+yanıtlarındaki alan adları (ters arama / `.local` / noktasız hariç) sürece
+atfedilir → `dns` telemetri alanı → `agent_dns` tablosu → `GET /api/v1/dns` +
+fleet raporundaki "DNS Görünürlüğü" bölümü (`internal/report`, önceden yalnızca
+hub yerel yakalamasında vardı, çoklu-hub'da boştu).
 
 | Platform | Soket→PID kaynağı |
 |----------|-------------------|

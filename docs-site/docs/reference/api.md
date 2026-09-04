@@ -16,6 +16,21 @@ uçlar şunlardan birini ister:
 Yetkisiz istek: `401` + `{"error":"oturum gerekli","auth_required":true}`
 Çok fazla hatalı giriş: `429` + `Retry-After: 60`
 
+## Makine-okunur şema (OpenAPI)
+
+Bu dokümanın makine-okunur karşılığı `api/openapi.yaml`'dedir (OpenAPI 3.1) ve
+hub tarafından **kimlik doğrulaması gerektirmeden** sunulur:
+
+| Uç | İçerik |
+|----|--------|
+| `GET /api/openapi.yaml` | Ham şema (YAML) |
+| `GET /api/openapi.json` | Aynı şema JSON'a çevrilmiş — Postman/Insomnia/`editor.swagger.io` |
+| `GET /api/docs` | Tarayıcıda gezilebilir uç listesi (tek dosya, harici CDN yok) |
+
+`internal/server` içindeki `TestOpenAPICoversRouter` sözleşme testi şema ile
+gerçek yönlendiricinin birebir örtüştüğünü doğrular — yeni bir uç eklenip
+şemaya işlenmezse (veya tersi) CI kırılır.
+
 ---
 
 ## Kimlik Doğrulama
@@ -218,9 +233,15 @@ Kayıtlı analizler (son 10): `{id, ts, model, period_minutes, summary}`
 
 ## Agent Filosu (Faz 1)
 
-Agent uçları UI oturumundan bağımsızdır: `Bearer <agent_token>` kullanır.
-Agent token'ı enrollment ile verilir ve diskte (`bazntms-agent.state.json`)
-saklanır; hub yalnızca SHA-256 hash'ini tutar.
+Agent uçları UI oturumundan bağımsızdır. İki kimlik yolu:
+
+- **Bearer token** — `Authorization: Bearer <agent_token>`. Token enrollment ile
+  verilir, diskte (`bazntms-agent.state.json`) saklanır; hub yalnızca SHA-256
+  hash'ini tutar.
+- **Karşılıklı TLS (mTLS)** — hub `-tls` ile çalışıyorsa: agent'ın enrollment'ta
+  aldığı istemci sertifikası (`CN=bazntms-agent-<id>`, hub CA'sınca imzalı) TLS
+  el sıkışmasında sunulur ve Bearer'a eşdeğer kimlik sayılır. Silinmiş agent'ın
+  sertifikası reddedilir (CRL yok, `agent_id` çözümü yeterli).
 
 ### `POST /api/v1/agent/hello` *(UI auth muaf)*
 
@@ -228,17 +249,27 @@ Enrollment: header `X-Enroll-Token: <hub -enroll-token VEYA aşağıdaki
 /api/v1/enroll-tokens ile üretilmiş bir token>` zorunlu.
 
 ```json
-{"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64"}
+{"name":"workstation-01","site":"merkezi-ofis","version":"0.1.0","protocol_version":1,"os":"darwin","arch":"arm64","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n…"}
 ```
 
-**200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30}`
+`csr_pem` opsiyoneldir; verilir ve hub `-tls` ile çalışıyorsa yanıt `client_cert_pem`
++ `ca_cert_pem` içerir (mTLS). CSR'daki CN yok sayılır — hub `bazntms-agent-<id>`
+koyar.
+
+**200:** `{"accepted":true,"agent_id":1,"agent_token":"<hex>","telemetry_interval_seconds":30,"pcap_enabled":false,"client_cert_pem":"…","ca_cert_pem":"…"}`
 
 IP başına deneme sınırlaması vardır (login sayfasıyla aynı politika: 1 dakikada
 5 başarısız denemeden sonra 1 dakika bloklanır) — token tahmin etmeye çalışan
 istekleri engeller. Bloklandığında **429** + `Retry-After: 60` döner; başarılı
 bir enrollment sayacı sıfırlar.
 
-### `POST /api/v1/agent/telemetry` *(Bearer agent token)*
+### `POST /api/v1/agent/cert` *(Bearer/mTLS agent kimliği)*
+
+İstemci sertifikasını yeniler (agent ömrünün yarısı geçince çağırır). Gövde:
+`{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n…"}` →
+**200:** `{"client_cert_pem":"…","ca_cert_pem":"…"}`. Hub `-tls` kapalıysa **404**.
+
+### `POST /api/v1/agent/telemetry` *(Bearer agent token veya mTLS)*
 
 ```json
 {
@@ -271,6 +302,27 @@ eşlemesi; `agent_iface_samples` gibi `ts` filtresiyle):
 
 Hub `-agent-pcap` politikası + agent'ta `-pcap` ikisi de açık olmalı; ham PCAP
 kaydı için ek olarak agent'ta `-record`.
+
+### `GET /api/v1/l7?minutes=60&agent_id=0&limit=30` *(UI auth)*
+
+Süreç bazlı uygulama görünürlüğü: agent, yakaladığı giden TCP payload'larında
+TLS ClientHello **SNI**'sini ve HTTP istek satırındaki **Host**'u çıkarır ve
+sürece atfeder (`-pcap` gerekir; imza tabanlı DPI değil, yalnızca açıkça
+görünen alan adı). `host`+`kind`+`process` bazlı gruplanır.
+
+```json
+[ { "host": "api.github.com", "kind": "tls", "process": "chrome", "bytes": 4200, "hits": 12, "agent_count": 2 } ]
+```
+
+### `GET /api/v1/dns?minutes=60&agent_id=0&limit=30` *(UI auth)*
+
+Süreç bazlı DNS görünürlüğü: agent, UDP/53 sorgu/yanıtlarındaki alan adlarını
+(ters arama / `.local` hariç) sürece atfeder (`-pcap` gerekir). Fleet raporundaki
+"DNS Görünürlüğü" bölümünü de bu besler. `domain`+`process` bazlı gruplanır.
+
+```json
+[ { "domain": "www.google.com", "process": "chrome", "queries": 8, "responses": 8, "agent_count": 2 } ]
+```
 
 Agent çalıştırma:
 
@@ -309,7 +361,11 @@ Roller ve yetkiler:
 ### `GET /api/v1/users` · `POST /api/v1/users`
 
 Kullanıcı listesi ve oluşturma. Oluşturma: `{username, password (≥8), role, site}`.
-`site` doluysa kullanıcı yalnızca o sitenin agent'larını görür.
+`site` doluysa kullanıcı/token yalnızca o siteye ait **agent'ları, cihazları
+(`devices.site`), NetFlow'u (exporter cihazının sitesi), syslog'u (kaynak IP'nin
+cihazının sitesi) ve topolojiyi** görür; başka sitenin `agent`/`device`
+detayına 404 alır. Site-sınırlı bir kullanıcı cihaz eklerken `site` alanı
+otomatik kendi sitesine sabitlenir.
 
 ### `PUT /api/v1/users/{id}` · `DELETE /api/v1/users/{id}`
 
@@ -363,6 +419,21 @@ Canlı ağ haritası modeli: `{generated_at, devices[], agents[], links[]}`.
 Kenar kaynakları: **LLDP/CDP** (SNMP keşfi), **ARP** (cihaz port uç noktaları),
 **subnet** (agent'ların bildirdiği yerel ağlar — CIDR). Kenarlar dedupe edilir;
 `ts` = son görülme.
+
+### `GET /api/v1/geo?minutes=60` *(UI auth)*
+
+Son `minutes` dakikadaki uzak uç noktalar (NetFlow `flows` + agent süreç
+trafiği) GeoIP ile ülkeye toplanır ve dünya haritasında balon olarak
+gösterilir. `minutes` üst sınırı 7 gün. Sıralama `bytes` azalan.
+
+```json
+[ { "country": "DE", "name": "Almanya", "lat": 51.2, "lon": 10.4, "bytes": 40998410, "sessions": 3 } ]
+```
+
+`sessions` = o ülkeye eşleşen farklı uzak IP sayısı. GeoIP kaynağı yoksa
+(MMDB dosyaları yok **ve** `-ip-api-lookup=false`) boş liste döner. Merkez
+koordinatı `internal/geoip/centroids.go`'daki ~120 ülkelik tablodan gelir;
+listede olmayan ülke haritada çizilmez (API yine de sayar → toplam eksilir).
 
 ---
 
@@ -442,6 +513,24 @@ baseline (son 7 gün) ile 5 dakikalık pencere verimi arasındaki z-skoru sapmas
 Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
 `{"anomaly":{"enabled":true,"sensitivity":3.0,"min_samples":120,"window_min":5}}`.
 
+### IOC / tehdit istihbaratı eşleştirmesi (Faz 6.6)
+
+Hub `-ioc-file <yol>` ile başlatılırsa (domain kara listesi — hosts / AdBlock /
+düz metin formatları, `mtime` değişince otomatik yeniden yüklenir), agent'ların
+gözlemlediği **TLS SNI / HTTP Host** (`l7_endpoints`) ve **DNS sorgu**
+(`agent_dns`) alan adları ~30 sn'de bir bu listeye karşı eşleştirilir. Eşleşme
+(üst alan dahil: `x.evil.com`, listede `evil.com` varsa yakalar) →
+`kind:"ioc"` uyarısı:
+
+```json
+{ "kind": "ioc", "key": "42|cdn.evil-c2.example",
+  "message": "IOC eşleşmesi: cdn.evil-c2.example (kural: evil-c2.example) — agent ws-01, süreç powershell, kaynak TLS SNI / HTTP Host" }
+```
+
+`PUT /api/alerts` → `{"ioc":{"enabled":true}}` ile çalışma anında kapatılabilir.
+İmza tabanlı tam DPI değil — düşük maliyetli "bilinen kötü domain'e temas"
+tespiti (bir hash-set lookup).
+
 ### Bildirim kanalları (Faz 6.3)
 
 `PUT /api/alerts` → `notifiers` bölümüne yeni kanallar:
@@ -464,6 +553,39 @@ Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
 
 Webhook v2, gövdeyi `X-BazNTMS-Signature: sha256=<hmac>` ile imzalar.
 
+### SIEM / ITSM push connector (Faz 6.5)
+
+`notifiers.siem` — her uyarı olayını standart bir formatta bir SIEM/ITSM
+sistemine iletir:
+
+```json
+{
+  "notifiers": {
+    "siem": {
+      "enabled": true,
+      "format": "cef",
+      "transport": "syslog-udp",
+      "target": "siem.kurum.local:514",
+      "token": "",
+      "insecure": false
+    }
+  }
+}
+```
+
+| Alan | Değerler | Not |
+|------|----------|-----|
+| `format` | `cef` (ArcSight) · `leef` (QRadar) · `json` · `text` (düz syslog satırı) | boş → `cef` |
+| `transport` | `syslog-udp` · `syslog-tcp` · `http` | boş → `syslog-udp` |
+| `target` | syslog: `host:port` · http: tam URL | — |
+| `token` | http: `Authorization` başlığı olarak yollanır (ör. `Splunk <HEC-token>`) | boş → gönderilmez |
+| `insecure` | http: TLS sunucu doğrulamasını atla | self-signed toplayıcı |
+
+- **CEF**: `CEF:0|bazNTMS|bazNTMS|1.0|<kind>|<etiket>|<severity>|rt=… cat=<kind> cs1Label=key cs1=<key> msg=<mesaj>`
+- **LEEF**: `LEEF:1.0|bazNTMS|bazNTMS|1.0|<kind>|devTime=…⇥sev=…⇥cat=<kind>⇥key=…⇥msg=…`
+- syslog taşımasında satır RFC3164 çerçevesine alınır (`<PRI>` = facility `local0` + önem 0-7).
+- Önem eşlemesi (CEF/LEEF 0-10): `port` 9 · `vpn_down` 8 · `anomaly`/`sdwan_sla_breach` 6 · `bw`/`high_sessions` 5 · `proc`/`target` 4.
+
 ### Kurumsal rapor
 
 `GET /api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,
@@ -476,18 +598,22 @@ tablo­ları; HTML olarak üretilir.
 
 ### `GET /api/v1/devices`
 
-Kayıtlı cihazlar: `{id, name, host, kind, snmp_version, poll_seconds, enabled, sys_name, sys_descr, last_poll, last_error}`.
-Kimlik bilgileri yanıt масkedelenir.
+Kayıtlı cihazlar: `{id, name, host, kind, site, snmp_version, poll_seconds, enabled, sys_name, sys_descr, last_poll, last_error}`.
+Kimlik bilgileri yanıtta maskelenir. Site-sınırlı kimlik yalnızca kendi
+sitesinin cihazlarını görür.
 
 ### `POST /api/v1/devices`
 
 ```json
 {
-  "name": "core-sw", "host": "10.0.0.2", "kind": "switch",
+  "name": "core-sw", "host": "10.0.0.2", "kind": "switch", "site": "sube-a",
   "snmp_version": 2, "community": "gizli",
   "poll_seconds": 60
 }
 ```
+
+`site` opsiyoneldir (RBAC scope + filo organizasyonu). Site-sınırlı kimlikte
+otomatik kullanıcının sitesine sabitlenir.
 
 v3 için: `"v3_user"`, `"v3_auth_proto"` (SHA/SHA256/SHA512/MD5), `"v3_auth_pass"`,
 `"v3_priv_proto"` (AES/AES256/DES), `"v3_priv_pass"`. Hassas alanlar AES-256-GCM
@@ -503,8 +629,12 @@ cihaz kimlikleri kurtarılamaz**).
 
 ### `GET /api/v1/flows?minutes=15&limit=20`
 
-NetFlow v5 akışları: `{ts, device, src, dst, src_port, dst_port, proto, packets, octets}`
-(octets'e göre azalan). Collector: `-flow-port 2055`.
+Akışlar: `{ts, device, src, dst, src_port, dst_port, proto, packets, octets}`
+(octets'e göre azalan). Collector: `-flow-port 2055` — **NetFlow v5/v9, IPFIX
+ve sFlow v5** aynı portta, datagram versiyonundan ayrılır. sFlow "flow sample"
+içindeki ham paket başlığı (Ethernet→IPv4→TCP/UDP) çözülür ve örnekleme
+oranıyla ölçeklenir: `packets` = oran, `octets` = çerçeve boyu × oran
+(istatistiksel tahmin). sFlow'u ayrı bir portta dinlemek için `-sflow-port 6343`.
 
 ### `GET /api/v1/syslog?limit=100`
 

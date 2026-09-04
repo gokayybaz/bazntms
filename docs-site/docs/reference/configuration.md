@@ -14,11 +14,16 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/CONFIGURATI
 | `-port` | `8080` | HTTP sunucu portu (0.0.0.0'a bağlanır) |
 | `-dev` | `false` | Frontend embed'ini atla; Vite dev server ile geliştirme |
 | `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (Faz 4.1: DSN ile PostgreSQL/TimescaleDB modu) |
-| `-retention-hours` | `168` (7 gün) | SQLite/Prune modunda saklama süresi; eski kayıtlar 10 dakikada bir silinir. TimescaleDB modunda retention politikaları devrededir |
+| `-retention-hours` | `168` (7 gün) | Ham zaman-serisi saklama süresi. TimescaleDB modunda native chunk-drop retention politikası, ayrıca 15 dk'da bir `Maintainer` (capture'dan bağımsız) siler |
 | `-nats` | — | NATS JetStream adresi (Faz 4.2). Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
+| `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |
+| `-tls` | `false` | HTTPS + agent karşılıklı TLS (mTLS). Hub kendi CA'sını üretir, agent CSR'larını enrollment'ta imzalar. `-tls-dir`/`-tls-hosts`/`-tls-cert`/`-tls-key` |
+| `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
+| `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
+| `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
 | `-auth-password` | — | Arayüz şifresi. Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` ortam değişkeni de geçerli |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
