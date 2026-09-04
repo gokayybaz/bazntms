@@ -165,21 +165,28 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 
 Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
 birincil, REST yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş).
-WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard'daki canlı stat
-şeridi (aktif agent, filo rx/tx/pps, olay hızı) 1 sn'de güncellenir; WS
-yoksa aynı kartlar sayfanın kendi 5 sn'lik `/api/v1/agents` polling'inden
-beslenir. 401 görülürse App login ekranına düşer; 60 sn'de bir de oturum
-denetimi yapılır. Grafikler (ThroughputChart, CompareCard, DayBars)
-harici grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
+WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard stat şeridinde
+**filo rx/tx/pps ve olay hızı** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten).
+**Agent sayısı (aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden**
+gelir — canlı trafik şeması, topoloji ve alttaki filo kartları da aynı listeyi
+kullandığı için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
+(`fleet.agents_online` yalnızca ilk poll gelene kadar geçici kaynak).
+401 görülürse App login ekranına düşer; 60 sn'de bir de oturum denetimi
+yapılır. Grafikler (ThroughputChart, CompareCard, DayBars) harici grafik
+kütüphanesi olmadan, elle yazılmış SVG'dir.
 
 Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG
-bir sahnedir: sol sütunda **agent filosunun HER üyesi ayrı bir istemci düğümü**
-(monitör ikonu + online/offline + en yoğun arayüz hızı), ortada Router/Güvenlik
-Duvarı, sağda İnternet. Her canlı akış/agent/syslog olayı, olayı üreten agent'ın
-düğümünden yön (giden/gelen/yerel/olay) bazlı animasyonlu bir "paket" geçirir;
-NetFlow olayları (agent'sız) doğrudan güvenlik duvarı ↔ internet ekseninde akar.
-viewBox yüksekliği agent sayısıyla büyür, düğüm detayı (tam/kompakt/mini) filo
-kalabalıklaştıkça düşer — tüm agent'lar her zaman görünür. Paketler
+bir sahnedir: sol sütunda **yalnızca ÇEVRİMİÇİ agent'lar** ayrı bir istemci
+düğümü (monitör ikonu + en yoğun arayüz hızı), ortada Router/Güvenlik Duvarı,
+sağda İnternet. Kapalı agent'lar hiç çizilmez ve paket üretmez — bileşen tam
+filoyu alır, `online` alanına göre süzer, alt etikette "N çevrimdışı gizli"
+ipucu verir; bayat/bilinmeyen agent olayları (`resolveIdx` → DROP) ve agent
+yokken üretilen ambient paketler de bastırılır. Her canlı akış/agent/syslog
+olayı, olayı üreten agent'ın düğümünden yön (giden/gelen/yerel/olay) bazlı
+animasyonlu bir "paket" geçirir; NetFlow olayları (agent'sız) ve cihaz syslog'u
+doğrudan güvenlik duvarı ↔ internet ekseninde akar. viewBox yüksekliği çevrimiçi
+agent sayısıyla büyür, düğüm detayı (tam/kompakt/mini) filo kalabalıklaştıkça
+düşer. Paketler
 `packetsRef`'te tutulur, tek bir `requestAnimationFrame` döngüsü boştayken
 sessiz kalıp yalnızca hareket varken yeniden çizdirir; yön sınıflandırması
 (`from`/`to` özel-genel IP ekseni) `lib/traffic.ts`'te, `TrafficFlowDiagram.test.tsx`
@@ -199,7 +206,7 @@ gerektirmeden çalışır.
 | `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) + coğrafi harita (`GET /api/v1/geo`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
-| `/topoloji` | Ağ topolojisi (SVG, hub+spoke) | `GET /api/v1/topology` |
+| `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
 | `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
 | `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |

@@ -208,9 +208,13 @@ export function Overview({
   }, [onlineAgentKey])
 
   // --- turetilmis metrikler ---
-  // fleet (WS tick, 1 sn) varsa canlı; yoksa 5 sn'lik REST polling'inden.
-  const onlineAgents = fleet ? fleet.agents_online : agents.filter((a) => a.online).length
-  const agentsTotal = fleet ? fleet.agents_total : agents.length
+  // agent sayısı: /api/v1/agents REST listesi TEK kaynak — canlı trafik şeması,
+  // topoloji ve alttaki filo kartları da aynı listeyi kullanır. WS fleet sayacı
+  // ~4 sn daha taze ama AYRI bir örnek olduğu için "43 aktif" derken şema
+  // "4 aktif" gösterebiliyordu (aynı online penceresi, farklı örnekleme anı).
+  // İlk REST poll gelene kadar fleet'e düş. (rx/tx/pps aşağıda hâlâ WS'ten.)
+  const onlineAgents = agents.length > 0 ? agents.filter((a) => a.online).length : (fleet?.agents_online ?? 0)
+  const agentsTotal = agents.length > 0 ? agents.length : (fleet?.agents_total ?? 0)
   const totalConns = agents.reduce((sum, a) => sum + (a.conns || 0), 0)
   // cihaz icin ayri bir "online" alani yok: son 3 poll araligi icinde hata
   // vermeden yoklanmis olmasi saglikli kabul edilir (kaba tahmin)
@@ -266,7 +270,9 @@ export function Overview({
   }, [stream])
   const visibleStream = streamFilter === 'all' ? stream : stream.filter((it) => it.kind === streamFilter)
 
-  // canlı trafik şeması: sol sütunda filonun HER agent'ı ayrı düğüm
+  // canlı trafik şeması: yalnızca ÇEVRİMİÇİ agent'lar düğüm olur (süzme bileşen
+  // içinde) — kapalı agent trafik üretmez. Tüm filo yine de geçilir ki bileşen
+  // "N çevrimdışı gizli" ipucunu gösterebilsin; sıralama online-first.
   const diagramAgents = useMemo<DiagramAgent[]>(
     () =>
       [...agents]
