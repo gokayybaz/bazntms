@@ -96,6 +96,28 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
 `<think>` bloklarının temizlenmesi, `finish_reason=length` için açıklayıcı hata,
 `/no_think` (Qwen3) ve `-llm-max-tokens` override.
 
+## Akış toplama (`internal/flows`)
+
+Tek bir `Collector` UDP dinleyicisi, gelen datagramı versiyonuna göre ayırır:
+
+| Protokol | Ayırt edici | Çözücü |
+|----------|-------------|--------|
+| NetFlow v5 | ilk 2 bayt = 5 | `ParseV5` (sabit 48 baytlık kayıt) |
+| NetFlow v9 | ilk 2 bayt = 9 | `ParseV9` + `TemplateCache` (exporter×domain×templateID) |
+| IPFIX / v10 | ilk 2 bayt = 10 | `ParseIPFIX` (aynı cache) |
+| sFlow v5 | ilk **4** bayt = 5 | `ParseSFlow` |
+
+Çakışma yok: NetFlow'un ilk 4 baytı uint32 olarak daima ≥ `0x50000` (version<<16
++ count), sFlow'unki tam olarak `5`. Üçü de aynı `-flow-port`'ta karışık
+gelebilir; `-sflow-port` yalnızca ayrı bir bind ister.
+
+sFlow **örnekleme tabanlıdır**: cihaz her N. paketin başlığını kopyalar.
+`ParseSFlow` "flow sample" (format 1/3) içindeki ham paket başlığını elle çözer
+(Ethernet → 802.1Q atla → IPv4 → TCP/UDP; stdlib-only, gopacket yok) ve
+örnekleme oranıyla ölçekler: `Packets = rate`, `Octets = frame_length × rate`.
+Counter sample'lar (arayüz sayaçları) şimdilik atlanır. Çıktı NetFlow ile aynı
+`flows` tablosuna, aynı `FlowRow` şemasıyla yazılır.
+
 ## Sunucu (`internal/server`)
 
 - `ServeMux` (Go 1.22+ metot kalıpları) + `logRequest` middleware

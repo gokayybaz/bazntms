@@ -518,7 +518,7 @@ paths:
   /api/v1/flows:
     get:
       tags: [devices]
-      summary: NetFlow v5/v9/IPFIX akışları (octets azalan)
+      summary: NetFlow v5/v9/IPFIX + sFlow v5 akışları (octets azalan)
       parameters:
         - { $ref: "#/components/parameters/minutes" }
         - { $ref: "#/components/parameters/limit" }

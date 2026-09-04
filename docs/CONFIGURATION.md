@@ -14,7 +14,8 @@
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |
 | `-tls` | `false` | HTTPS + agent karşılıklı TLS (mTLS). Hub kendi CA'sını üretir, agent CSR'larını enrollment'ta imzalar. `-tls-dir`/`-tls-hosts`/`-tls-cert`/`-tls-key` |
-| `-flow-port` | — | NetFlow v5/v9 + IPFIX UDP dinleme portu (örn. `2055`). v9/IPFIX şablonları exporter başına önbelleklenir |
+| `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
+| `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-auth-password` | — | Arayüz şifresi. Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` ortam değişkeni de geçerli |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |

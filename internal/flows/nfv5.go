@@ -1,6 +1,7 @@
 // Package flows, ag cihazlarindan UDP ile gelen akis kayitlarini toplar:
 // NetFlow v5 (sabit format), NetFlow v9 ve IPFIX/v10 (sablon tabanli — bkz.
-// template.go / nfv9.go / ipfix.go). sFlow ileri fazda eklenebilir.
+// template.go / nfv9.go / ipfix.go) ve sFlow v5 (ornekleme tabanli — bkz.
+// sflow.go). Ucu de ayni Collector uzerinden, gerekirse ayni portta.
 package flows
 
 import (
@@ -73,10 +74,16 @@ func (c *Collector) Listen(addr string) error {
 	return nil
 }
 
-// parse, paket versiyonuna gore uygun cozucuye yonlendirir.
+// parse, paket versiyonuna gore uygun cozucuye yonlendirir. sFlow v5 ile
+// NetFlow ayni portta karisik gelebilir: sFlow datagrami 4 baytlik version
+// alaniyla baslar (== 5), NetFlow v5/v9/IPFIX 2 baytlik version + count ile
+// (uint32 olarak okununca daima >= 0x50000) — cakisma yok.
 func (c *Collector) parse(payload []byte, device, exporterKey string, receivedAt time.Time) []Row {
-	if len(payload) < 2 {
+	if len(payload) < 4 {
 		return nil
+	}
+	if binary.BigEndian.Uint32(payload[0:4]) == 5 {
+		return ParseSFlow(payload, c.ExporterIP, receivedAt)
 	}
 	switch binary.BigEndian.Uint16(payload[0:2]) {
 	case 5:

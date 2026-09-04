@@ -68,8 +68,9 @@ func main() {
 	tlsKey := fl.String("tls-key", "", "operator sunucu ozel anahtari (PEM); -tls-cert ile birlikte")
 	tlsHosts := fl.String("tls-hosts", "", "sunucu sertifikasi SAN'lari (virgulle): hub'in DNS adi/IP'leri — agent'in baglandigi ad buraya girmeli")
 	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
-	flowPort := fl.String("flow-port", "", "NetFlow v5/v9 + IPFIX UDP dinleme portu (bos = kapali; ex: 2055)")
-	flowExporter := fl.String("flow-exporter", "", "NetFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
+	flowPort := fl.String("flow-port", "", "NetFlow v5/v9 + IPFIX + sFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
+	sflowPort := fl.String("sflow-port", "", "sFlow v5 icin ayri UDP portu (bos = kapali; ex: 6343). -flow-port zaten sFlow'u da kabul eder; bu yalnizca farkli portta dinlemek icin")
+	flowExporter := fl.String("flow-exporter", "", "NetFlow/sFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
 	complianceOn := fl.Bool("compliance", false, "5651 log imzalama motoru (Faz 9): hash-zincir + Merkle checkpoint + gunluk muhur")
@@ -322,29 +323,39 @@ func main() {
 		slog.Info("snmp poller kapali (coklu replika ingest modu)")
 	}
 
-	// NetFlow v5/v9 + IPFIX collector — kuyruk aciksa mesajlar JetStream'e gider
-	if *flowPort != "" {
-		flc := &flows.Collector{ExporterIP: *flowExporter, OnFlows: func(device string, rows []flows.Row) {
-			srows := make([]store.FlowRow, 0, len(rows))
-			for _, f := range rows {
-				srows = append(srows, store.FlowRow(f))
-			}
-			if q != nil {
-				if err := q.PublishFlows(srows); err != nil {
-					slog.Error("akis kuyruguna yayinlama hatasi", "err", err)
-				}
-				return
-			}
-			if err := st.SaveFlows(srows); err != nil {
-				slog.Error("akis kaydi hatasi", "err", err)
-			}
-		}}
-		if err := flc.Listen("0.0.0.0:" + *flowPort); err != nil {
-			slog.Error("flow collector dinlenemedi", "port", *flowPort, "err", err)
-		} else {
-			slog.Info("netflow/ipfix collector dinliyor", "port", *flowPort, "exporter_override", *flowExporter)
-			defer flc.Close()
+	// NetFlow v5/v9 + IPFIX + sFlow v5 collector — kuyruk aciksa JetStream'e gider.
+	// Ayni Collector her uc protokolu de datagram versiyonundan ayirir; -sflow-port
+	// yalnizca sFlow'u farkli bir portta da dinlemek isteyenler icin ikinci bir bind.
+	onFlows := func(device string, rows []flows.Row) {
+		srows := make([]store.FlowRow, 0, len(rows))
+		for _, f := range rows {
+			srows = append(srows, store.FlowRow(f))
 		}
+		if q != nil {
+			if err := q.PublishFlows(srows); err != nil {
+				slog.Error("akis kuyruguna yayinlama hatasi", "err", err)
+			}
+			return
+		}
+		if err := st.SaveFlows(srows); err != nil {
+			slog.Error("akis kaydi hatasi", "err", err)
+		}
+	}
+	startFlowCollector := func(port, label string) {
+		flc := &flows.Collector{ExporterIP: *flowExporter, OnFlows: onFlows}
+		if err := flc.Listen("0.0.0.0:" + port); err != nil {
+			slog.Error("flow collector dinlenemedi", "port", port, "err", err)
+			return
+		}
+		slog.Info(label+" collector dinliyor", "port", port, "exporter_override", *flowExporter)
+		defer flc.Close()
+		<-ctx.Done()
+	}
+	if *flowPort != "" {
+		go startFlowCollector(*flowPort, "netflow/ipfix/sflow")
+	}
+	if *sflowPort != "" && *sflowPort != *flowPort {
+		go startFlowCollector(*sflowPort, "sflow")
 	}
 
 	// Syslog alici — kuyruk aciksa mesajlar JetStream'e gider; uyum loglari

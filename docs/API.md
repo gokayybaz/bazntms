@@ -604,8 +604,12 @@ cihaz kimlikleri kurtarılamaz**).
 
 ### `GET /api/v1/flows?minutes=15&limit=20`
 
-NetFlow v5 akışları: `{ts, device, src, dst, src_port, dst_port, proto, packets, octets}`
-(octets'e göre azalan). Collector: `-flow-port 2055`.
+Akışlar: `{ts, device, src, dst, src_port, dst_port, proto, packets, octets}`
+(octets'e göre azalan). Collector: `-flow-port 2055` — **NetFlow v5/v9, IPFIX
+ve sFlow v5** aynı portta, datagram versiyonundan ayrılır. sFlow "flow sample"
+içindeki ham paket başlığı (Ethernet→IPv4→TCP/UDP) çözülür ve örnekleme
+oranıyla ölçeklenir: `packets` = oran, `octets` = çerçeve boyu × oran
+(istatistiksel tahmin). sFlow'u ayrı bir portta dinlemek için `-sflow-port 6343`.
 
 ### `GET /api/v1/syslog?limit=100`
 
