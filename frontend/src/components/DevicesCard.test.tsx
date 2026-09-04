@@ -62,11 +62,25 @@ describe('DevicesCard', () => {
     await waitFor(() => expect(screen.getByText(/Cihaz yok/)).toBeInTheDocument())
   })
 
-  it('"+ Cihaz Ekle" formu açıp kapatır', async () => {
+  it('"+ Cihaz Ekle" formu açıp kapatır, alanlar gerçek <label> ile eşleşiyor', async () => {
     mockFetch()
     renderCard()
     await waitFor(() => expect(screen.getByText('core-switch')).toBeInTheDocument())
     screen.getByRole('button', { name: '+ Cihaz Ekle' }).click()
-    expect(await screen.findByPlaceholderText('ad * (core-sw)')).toBeInTheDocument()
+    // placeholder değil, gerçek etiket üzerinden bulunabiliyor olmalı (a11y fix)
+    expect(await screen.findByLabelText('Ad *')).toBeInTheDocument()
+    expect(screen.getByLabelText('Host / IP *')).toBeInTheDocument()
+  })
+
+  it('silme iki-aşamalı onay ister — ilk tık onay durumuna geçer, ikinci tık siler', async () => {
+    mockFetch()
+    renderCard()
+    await waitFor(() => expect(screen.getByText('core-switch')).toBeInTheDocument())
+    const del = screen.getByRole('button', { name: /core-switch cihazını sil/ })
+    del.click()
+    const confirmBtn = await screen.findByRole('button', { name: /core-switch silinsin mi/ })
+    expect(confirmBtn).toHaveTextContent('emin misiniz?')
+    confirmBtn.click()
+    await waitFor(() => expect(screen.getByText(/core-switch silindi/)).toBeInTheDocument())
   })
 })

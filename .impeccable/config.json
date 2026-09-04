@@ -29,6 +29,33 @@
         ],
         "createdAt": "2026-09-04T18:38:18.299Z",
         "reason": "Zaman-aralığı segmented control çerçevesi — semantik olarak kart değil, standart buton-grubu deseni (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/DevicesCard.tsx"
+        ],
+        "createdAt": "2026-09-04T19:38:20.195Z",
+        "reason": "Kaydet butonu hover'da text-slate-950/bg-cyan-400'e geçiyor — ölçülen kontrast 11.16:1 (AAA üstü), landing page'in aynı doğrulanmış deseniyle (docs-site btnPrimary:hover, #020617 on #22d3ee) birebir aynı. Dedektör slate-950'yi 'gray' olarak eşleştirip parlak zeminde koyu metnin yüksek kontrast olduğunu hesaba katmıyor — yanlış pozitif."
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "frontend/src/components/DevicesCard.tsx"
+        ],
+        "createdAt": "2026-09-04T19:38:28.682Z",
+        "reason": "Cihaz-satırı div'i taranabilir bir liste-öğesi ayracı, form çerçevesi satır-içi oluşturma paneli — ikisi de kart-içinde-kart değil, standart liste/panel deseni (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "frontend/src/components/DevicesCard.tsx"
+        ],
+        "createdAt": "2026-09-04T19:38:28.719Z",
+        "reason": "Cyan, DESIGN.md'nin sabit-anlam sözleşmesinde birincil marka vurgusu (linkler, aktif nav, CTA) olarak tanımlı — Overview.tsx için zaten aynı gerekçeyle bir ignore-rule var (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
       }
     ]
   }

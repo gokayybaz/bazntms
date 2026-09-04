@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatBits } from '../lib/format'
 import { FortiPanel } from './FortiPanel'
@@ -35,12 +35,23 @@ interface IfaceRate {
   out_discards: number
 }
 
+// silme onayı bekleme süresi (ms) — bu sürede ikinci tık gelmezse "sil"
+// butonu normal durumuna geri döner
+const DELETE_CONFIRM_MS = 4000
+
 export function DevicesCard({ refreshKey }: { refreshKey: number }) {
   const [devices, setDevices] = useState<Device[]>([])
   const [loaded, setLoaded] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
   const [detail, setDetail] = useState<{ id: number; name: string; ifaces: IfaceRate[] } | null>(null)
+  // iki-aşamalı silme: ilk tık bu id'yi "onay bekliyor" durumuna alır,
+  // ikinci tık gerçek silmeyi tetikler — kazara tek-tık/Enter ile kalıcı
+  // cihaz kaybını önler
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deletedNotice, setDeletedNotice] = useState('')
+  const confirmTimer = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -57,10 +68,34 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
     load()
   }, [load, refreshKey])
 
-  const remove = useCallback(async (id: number) => {
-    await fetch(`/api/v1/devices/${id}`, { method: 'DELETE' }).catch(() => {})
-    load()
+  useEffect(() => () => {
+    if (confirmTimer.current) window.clearTimeout(confirmTimer.current)
+  }, [])
+
+  const doRemove = useCallback(async (d: Device) => {
+    setDeletingId(d.id)
+    try {
+      await fetch(`/api/v1/devices/${d.id}`, { method: 'DELETE' })
+      setDeletedNotice(`${d.name} silindi`)
+      window.setTimeout(() => setDeletedNotice(''), 3000)
+    } catch {
+      /* yoksay — load() zaten mevcut durumu yansıtacak */
+    } finally {
+      setDeletingId(null)
+      load()
+    }
   }, [load])
+
+  const handleDeleteClick = (d: Device) => {
+    if (confirmTimer.current) window.clearTimeout(confirmTimer.current)
+    if (confirmDeleteId === d.id) {
+      setConfirmDeleteId(null)
+      void doRemove(d)
+      return
+    }
+    setConfirmDeleteId(d.id)
+    confirmTimer.current = window.setTimeout(() => setConfirmDeleteId(null), DELETE_CONFIRM_MS)
+  }
 
   const showIfaces = useCallback(async (id: number, name: string) => {
     const res = await fetch(`/api/v1/devices/${id}/interfaces`)
@@ -93,13 +128,16 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
         <span className="text-[11px] text-slate-500">
           SNMPv2c/v3 veya FortiGate REST API ile yoklanır · kimlik bilgileri AES-GCM kasada şifreli
         </span>
+        {deletedNotice && (
+          <span className="ml-auto text-[11px] text-emerald-400">✓ {deletedNotice}</span>
+        )}
       </div>
 
       {showForm && <DeviceForm onAdded={() => { setShowForm(false); load() }} onError={setError} />}
       {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{error}</p>}
 
       {loaded && devices.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-600">Cihaz yok — SNMP poller veya FortiGate REST için cihaz ekleyin.</p>
+        <p className="py-6 text-center text-sm text-dim-aa">Cihaz yok — SNMP poller veya FortiGate REST için cihaz ekleyin.</p>
       ) : (
         <div className="space-y-2">
           {devices.map((d) => (
@@ -112,28 +150,36 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                 <span className="font-mono text-xs text-slate-500">{d.host}</span>
                 {d.site && <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] text-slate-400">{d.site}</span>}
                 {vendorBadge(d)}
-                <span className="ml-auto font-mono text-[10px] text-slate-600">
+                <span className="ml-auto font-mono text-[10px] text-dim-aa">
                   {d.last_poll > 0 ? `son poll: ${new Date(d.last_poll * 1000).toLocaleTimeString('tr-TR')}` : 'hiç poll edilmedi'}
                 </span>
                 <button
                   onClick={() => showIfaces(d.id, d.name)}
+                  aria-label={`${d.name} — ${detailLabel(d)}`}
+                  title={`${d.name} — ${detailLabel(d)}`}
                   className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
                 >
                   {detailLabel(d)}
                 </button>
                 <button
-                  onClick={() => remove(d.id)}
-                  title="Cihazı sil"
-                  className="rounded-md border border-rose-500/30 px-2 py-0.5 text-[11px] text-rose-400/80 transition hover:border-rose-500/60 hover:text-rose-300"
+                  onClick={() => handleDeleteClick(d)}
+                  disabled={deletingId === d.id}
+                  aria-label={confirmDeleteId === d.id ? `${d.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${d.name} cihazını sil`}
+                  title={confirmDeleteId === d.id ? `${d.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${d.name} cihazını sil`}
+                  className={`rounded-md border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                    confirmDeleteId === d.id
+                      ? 'border-rose-500 bg-rose-500/20 text-rose-200'
+                      : 'border-rose-500/30 text-rose-400/80 hover:border-rose-500/60 hover:text-rose-300'
+                  }`}
                 >
-                  sil
+                  {deletingId === d.id ? 'siliniyor…' : confirmDeleteId === d.id ? 'emin misiniz?' : 'sil'}
                 </button>
               </div>
               {d.sys_descr && (
-                <p className="mt-1 truncate text-[11px] text-slate-600" title={d.sys_descr}>{d.sys_descr}</p>
+                <p className="mt-1 truncate text-[11px] text-dim-aa" title={d.sys_descr}>{d.sys_descr}</p>
               )}
               {d.vendor === 'fortigate' && (d.api_url || d.vdom) && (
-                <p className="mt-1 font-mono text-[10px] text-slate-600">
+                <p className="mt-1 font-mono text-[10px] text-dim-aa">
                   {d.api_url}
                   {d.vdom && <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">vdom: {d.vdom}</span>}
                 </p>
@@ -145,8 +191,8 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                 <FortiPanel deviceId={d.id} />
               )}
               {detail?.id === d.id && d.vendor !== 'fortigate' && (
-                <div className="mt-2 max-h-64 overflow-y-auto rounded border border-slate-800">
-                  <table className="w-full text-xs">
+                <div className="mt-2 max-h-64 overflow-x-auto overflow-y-auto rounded border border-slate-800">
+                  <table className="w-full min-w-[520px] text-xs">
                     <thead className="bg-slate-900/80">
                       <tr className="text-left text-[10px] uppercase text-slate-500">
                         <th className="px-2 py-1">Arayüz</th><th className="px-2 py-1">Durum</th>
@@ -182,6 +228,18 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
   )
 }
 
+// form alanı sarmalayıcı — her input/select'e görünür, uppercase-tracked bir
+// etiket ekler (DESIGN.md Label rolü); placeholder artık tek kimlik kaynağı
+// değil, yalnızca ipucu taşır
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: string) => void }) {
   const [form, setForm] = useState({
     name: '', host: '', kind: 'router', site: '', vendor: 'snmp', snmp_version: 2,
@@ -190,12 +248,14 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
     api_url: '', api_token: '', api_verify_tls: true, vdom: 'root',
     poll_seconds: 60,
   })
+  const [submitting, setSubmitting] = useState(false)
   const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }))
   const inputCls =
-    'w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
+    'w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm outline-none placeholder:text-dim-aa focus:border-cyan-500/60'
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     try {
       const res = await fetch('/api/v1/devices', {
         method: 'POST',
@@ -209,64 +269,100 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
       onAdded()
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={submit} className="mb-3 space-y-2 rounded-md border border-slate-800 bg-slate-900/60 p-3">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="ad * (core-sw)" className={inputCls} />
-        <input value={form.host} onChange={(e) => set('host', e.target.value)} placeholder="host/ip *" className={inputCls} />
-        <select value={form.kind} onChange={(e) => set('kind', e.target.value)} className={inputCls}>
-          {['router', 'switch', 'firewall', 'ap', 'other'].map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <select value={form.vendor} onChange={(e) => set('vendor', e.target.value)} className={inputCls}>
-          <option value="snmp">SNMP</option>
-          <option value="fortigate">FortiGate (REST API)</option>
-        </select>
-        <input value={form.site} onChange={(e) => set('site', e.target.value)} placeholder="site (RBAC scope — ör. sube-a)" className={inputCls} />
+    <form onSubmit={submit} className="@container mb-3 space-y-2 rounded-md border border-slate-800 bg-slate-900/60 p-3">
+      <div className="grid grid-cols-2 gap-2 @lg:grid-cols-4">
+        <Field label="Ad *">
+          <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="core-sw" className={inputCls} />
+        </Field>
+        <Field label="Host / IP *">
+          <input value={form.host} onChange={(e) => set('host', e.target.value)} placeholder="10.0.0.1" className={inputCls} />
+        </Field>
+        <Field label="Tür">
+          <select value={form.kind} onChange={(e) => set('kind', e.target.value)} className={inputCls}>
+            {['router', 'switch', 'firewall', 'ap', 'other'].map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+        </Field>
+        <Field label="Vendor">
+          <select value={form.vendor} onChange={(e) => set('vendor', e.target.value)} className={inputCls}>
+            <option value="snmp">SNMP</option>
+            <option value="fortigate">FortiGate (REST API)</option>
+          </select>
+        </Field>
+        <Field label="Site (RBAC scope)">
+          <input value={form.site} onChange={(e) => set('site', e.target.value)} placeholder="ör. sube-a" className={inputCls} />
+        </Field>
       </div>
 
       {form.vendor === 'fortigate' ? (
         <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <input value={form.api_url} onChange={(e) => set('api_url', e.target.value)} placeholder="api_url * (https://10.0.0.1)" className={inputCls} />
-            <input value={form.vdom} onChange={(e) => set('vdom', e.target.value)} placeholder="vdom (root veya all)" className={inputCls} />
+          <div className="grid grid-cols-1 gap-2 @lg:grid-cols-2">
+            <Field label="API URL *">
+              <input value={form.api_url} onChange={(e) => set('api_url', e.target.value)} placeholder="https://10.0.0.1" className={inputCls} />
+            </Field>
+            <Field label="VDOM">
+              <input value={form.vdom} onChange={(e) => set('vdom', e.target.value)} placeholder="root veya all" className={inputCls} />
+            </Field>
           </div>
-          <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="REST API token * (kasada şifrelenir; read-only profil önerilir)" className={inputCls} />
+          <Field label="REST API Token *">
+            <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="kasada şifrelenir; read-only profil önerilir" className={inputCls} />
+          </Field>
           <label className="flex items-center gap-2 text-[11px] text-slate-500">
             <input type="checkbox" checked={form.api_verify_tls} onChange={(e) => set('api_verify_tls', e.target.checked)} className="accent-cyan-500" />
             TLS sertifikasını doğrula (self-signed kurulumlarda kapatın)
           </label>
         </div>
-      ) : form.snmp_version === 2 ? (
-        <input type="password" value={form.community} onChange={(e) => set('community', e.target.value)} placeholder="community (kasada şifrelenir)" className={inputCls} />
       ) : (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-          <input value={form.v3_user} onChange={(e) => set('v3_user', e.target.value)} placeholder="v3 kullanıcı" className={inputCls} />
-          <select value={form.v3_auth_proto} onChange={(e) => set('v3_auth_proto', e.target.value)} className={inputCls}>
-            {['SHA', 'SHA256', 'SHA512', 'MD5'].map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <input type="password" value={form.v3_auth_pass} onChange={(e) => set('v3_auth_pass', e.target.value)} placeholder="auth pass" className={inputCls} />
-          <select value={form.v3_priv_proto} onChange={(e) => set('v3_priv_proto', e.target.value)} className={inputCls}>
-            {['AES', 'AES256', 'DES'].map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <input type="password" value={form.v3_priv_pass} onChange={(e) => set('v3_priv_pass', e.target.value)} placeholder="priv pass" className={inputCls} />
-        </div>
-      )}
-      {form.vendor === 'snmp' && (
-        <div className="flex items-center gap-2">
-          <select value={form.snmp_version} onChange={(e) => set('snmp_version', +e.target.value)} className={inputCls + ' max-w-32'}>
-            <option value={2}>SNMP v2c</option>
-            <option value={3}>SNMP v3</option>
-          </select>
-        </div>
+        <>
+          <Field label="SNMP Versiyonu">
+            <select value={form.snmp_version} onChange={(e) => set('snmp_version', +e.target.value)} className={inputCls + ' max-w-32'}>
+              <option value={2}>SNMP v2c</option>
+              <option value={3}>SNMP v3</option>
+            </select>
+          </Field>
+          {form.snmp_version === 2 ? (
+            <Field label="Community *">
+              <input type="password" value={form.community} onChange={(e) => set('community', e.target.value)} placeholder="kasada şifrelenir" className={inputCls} />
+            </Field>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 @lg:grid-cols-5">
+              <Field label="V3 Kullanıcı">
+                <input value={form.v3_user} onChange={(e) => set('v3_user', e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Auth Protokolü">
+                <select value={form.v3_auth_proto} onChange={(e) => set('v3_auth_proto', e.target.value)} className={inputCls}>
+                  {['SHA', 'SHA256', 'SHA512', 'MD5'].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+              <Field label="Auth Şifre">
+                <input type="password" value={form.v3_auth_pass} onChange={(e) => set('v3_auth_pass', e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Priv Protokolü">
+                <select value={form.v3_priv_proto} onChange={(e) => set('v3_priv_proto', e.target.value)} className={inputCls}>
+                  {['AES', 'AES256', 'DES'].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </Field>
+              <Field label="Priv Şifre">
+                <input type="password" value={form.v3_priv_pass} onChange={(e) => set('v3_priv_pass', e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+          )}
+        </>
       )}
       <div className="flex items-center gap-2">
-        <button type="submit" className="rounded-md bg-cyan-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-cyan-500">
-          Kaydet
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-md bg-cyan-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-cyan-400 hover:text-slate-950 disabled:opacity-60"
+        >
+          {submitting ? 'kaydediliyor…' : 'Kaydet'}
         </button>
-        <span className="text-[11px] text-slate-600">poll aralığı: {form.poll_seconds} sn</span>
+        <span className="text-[11px] text-dim-aa">poll aralığı: {form.poll_seconds} sn</span>
       </div>
     </form>
   )
