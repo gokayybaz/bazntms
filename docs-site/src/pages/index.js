@@ -463,22 +463,25 @@ function LivePreview() {
 /* --- kopyala düğmesi --- */
 
 function CopyButton({ code }) {
-  const [done, setDone] = React.useState(false);
+  const [state, setState] = React.useState('idle'); // idle | done | error
   return (
     <button
       type="button"
-      className={styles.copy}
+      className={`${styles.copy} ${state === 'error' ? styles.copyError : ''}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(code);
-          setDone(true);
-          setTimeout(() => setDone(false), 1600);
+          setState('done');
         } catch {
-          /* pano erişimi yoksa sessizce yut */
+          // pano erişimi engellenmiş olabilir (kurumsal tarayıcı politikası) —
+          // kullanıcıya sessizce hiçbir şey olmamış gibi görünmesin
+          setState('error');
+        } finally {
+          setTimeout(() => setState('idle'), 1800);
         }
       }}
     >
-      {done ? '✓ kopyalandı' : 'kopyala'}
+      {state === 'done' ? '✓ kopyalandı' : state === 'error' ? '✗ kopyalanamadı' : 'kopyala'}
     </button>
   );
 }
@@ -555,6 +558,10 @@ export default function Home() {
           <div className={styles.previewWrap} data-reveal>
             <LivePreview />
           </div>
+          <p className={styles.previewCaption}>
+            Temsili görünüm — canlı bir demo değil, sahnelenmiş sentetik veri. Gerçek panel için{' '}
+            <a href={docsUrl}>kurulum dokümanına</a> bakın.
+          </p>
         </section>
 
         {/* v0.3.0'DA YENİ */}
@@ -574,7 +581,11 @@ export default function Home() {
         {/* SAYILAR */}
         <section className={styles.statsBand}>
           <p className={styles.statsCaption} data-reveal>
-            Ölçek mimarisi tasarım hedefleri — <code>bazntms-loadgen</code> ve k6 ile doğrulanır
+            Ölçek mimarisi tasarım hedefleri —{' '}
+            <a href="https://github.com/gokayybaz/bazntms/tree/main/loadtest" target="_blank" rel="noreferrer">
+              <code>bazntms-loadgen</code> ve k6
+            </a>{' '}
+            ile doğrulanır
           </p>
           <div className={styles.stats}>
             {STATS.map((s, i) => (
