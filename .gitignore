@@ -37,3 +37,10 @@ bazntms-agent.state.*
 
 # yerel `wix build` calistirmalari icin extension/nuget onbellegi
 .wix/
+
+# impeccable tasarim skill'inin oturum-bazli calisma zamani onbellegi —
+# makineye/oturuma ozel mutlak yol + session id iceriyor, .impeccable/
+# config.json (paylasilan ignore kurallari) ve critique/ (kalici raporlar)
+# ise kasitli olarak izleniyor
+.impeccable/hook.cache.json
+frontend/.impeccable/

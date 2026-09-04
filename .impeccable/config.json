@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/components/Overview.tsx"
+        ],
+        "createdAt": "2026-09-04T16:39:15.720Z",
+        "reason": "impeccable critique sentezi (bu oturum): DESIGN.md Components→Data/Metric Tile'da dokümante edilmiş kasıtlı renk-anlam vurgusu (border-l-2, rx=cyan/tx=violet/healthy=emerald/warn=amber) — jenerik AI kalıbı değil, gerçek anlam taşıyor"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "frontend/src/components/Overview.tsx"
+        ],
+        "createdAt": "2026-09-04T16:39:15.758Z",
+        "reason": "impeccable critique sentezi (bu oturum): text-violet-300, DESIGN.md'de dokümante edilmiş Tx Violet (gönderilen trafik) — rx-cyan ile eşleştirilmiş, jenerik dekoratif kullanım değil"
+      }
+    ]
+  }
+}
