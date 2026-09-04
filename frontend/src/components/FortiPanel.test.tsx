@@ -38,9 +38,25 @@ describe('FortiPanel', () => {
     await waitFor(() => expect(screen.getByText(/FortiGate verisi henüz yok/)).toBeInTheDocument())
   })
 
-  it('/resources başarısız olunca hata mesajı gösterir', async () => {
+  it('/resources başarısız olunca hata bildirimi gösterir (panel tamamen bir hata satırına dönüşmüyor)', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)))
     render(<FortiPanel deviceId={1} />)
-    await waitFor(() => expect(screen.getByText('veri alınamadı')).toBeInTheDocument())
+    // eskiden: `if (error) return <p>{error}</p>` tüm paneli tek satıra indiriyordu
+    // ve bir sonraki poll başarılı olsa bile hiç temizlenmiyordu (sticky-error).
+    // artık `loaded` ayrı bir durum — panel yapısı (fortigate başlığı) hata
+    // bildirimiyle birlikte render olmaya devam ediyor.
+    await waitFor(() => expect(screen.getByText(/veri alınamadı/)).toBeInTheDocument())
+    expect(screen.getByText(/fortigate rest api/)).toBeInTheDocument()
+  })
+
+  it('kaynak trendi sparkline\'ı erişilebilir isim taşıyor', async () => {
+    const twoPoints = [
+      { ts: Math.floor(Date.now() / 1000) - 60, cpu_pct: 30, mem_pct: 40, disk_pct: 10, sessions: 1000 },
+      { ts: Math.floor(Date.now() / 1000), cpu_pct: 42, mem_pct: 60, disk_pct: 20, sessions: 1500 },
+    ]
+    mockFetch({ resources: twoPoints })
+    render(<FortiPanel deviceId={1} />)
+    const svg = await screen.findByRole('img', { name: /trendi/ })
+    expect(svg).toBeInTheDocument()
   })
 })
