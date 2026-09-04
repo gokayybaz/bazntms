@@ -70,6 +70,9 @@ func (n *Notifier) Deliver(nf Notifiers, ev store.AlertEvent) {
 				log.Printf("e-posta bildirimi: %v", err)
 			}
 		}
+		if nf.SIEM.Enabled {
+			deliverSIEM(nf.SIEM, ev)
+		}
 	}()
 }
 

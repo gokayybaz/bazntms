@@ -59,5 +59,13 @@ export interface AlertConfig {
     slack_url: string
     telegram_token: string
     telegram_chat_id: string
+    siem?: {
+      enabled: boolean
+      format: '' | 'cef' | 'leef' | 'json'
+      transport: '' | 'syslog-udp' | 'syslog-tcp' | 'http'
+      target: string
+      token: string
+      insecure: boolean
+    }
   }
 }

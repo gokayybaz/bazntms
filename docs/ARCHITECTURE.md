@@ -78,7 +78,11 @@ bir `sysmon.ListConnections()` ile:
 
 Her olay `kind|key` başına cooldown (varsayılan 10 dk) tabi tutulur; geçenler
 `alert_events`'e yazılır ve `Notifier` ile (masaüstü, Telegram, Discord, Slack,
-generic webhook — hepsi asenkron, hatalar yutulur) dağıtılır.
+generic webhook, Teams, e-posta, imzalı webhook v2 — hepsi asenkron, hatalar
+yutulur) dağıtılır. **SIEM/ITSM bağlayıcı** (`internal/alert/siem.go`): olay
+CEF (ArcSight) / LEEF (QRadar) / JSON'a formatlanıp RFC3164 syslog (UDP/TCP)
+veya HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı) ile iletilir;
+`notifiers.siem` altından yapılandırılır.
 
 ## AI istemcisi (`internal/ai`)
 

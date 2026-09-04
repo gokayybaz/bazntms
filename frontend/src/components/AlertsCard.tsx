@@ -206,6 +206,41 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           </div>
         </div>
 
+        <div className="rounded-lg border border-slate-800 p-3 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">SIEM / ITSM Bağlayıcı</p>
+          {(() => {
+            const siem = cfg.notifiers.siem ?? { enabled: false, format: '' as const, transport: '' as const, target: '', token: '', insecure: false }
+            const patch = (p: Partial<typeof siem>) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, siem: { ...siem, ...p } } })
+            return (
+              <>
+                <Toggle checked={siem.enabled} onChange={(v) => patch({ enabled: v })} label="Uyarıları SIEM'e ilet (CEF/LEEF/JSON)" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={siem.format} onChange={(e) => patch({ format: e.target.value as typeof siem.format })} className={inputCls}>
+                    <option value="">CEF (ArcSight)</option>
+                    <option value="cef">CEF (ArcSight)</option>
+                    <option value="leef">LEEF (QRadar)</option>
+                    <option value="json">JSON</option>
+                  </select>
+                  <select value={siem.transport} onChange={(e) => patch({ transport: e.target.value as typeof siem.transport })} className={inputCls}>
+                    <option value="">syslog UDP</option>
+                    <option value="syslog-udp">syslog UDP</option>
+                    <option value="syslog-tcp">syslog TCP</option>
+                    <option value="http">HTTP POST</option>
+                  </select>
+                </div>
+                <input value={siem.target} onChange={(e) => patch({ target: e.target.value })} placeholder={siem.transport === 'http' ? 'https://siem.kurum.local/services/collector/raw' : 'siem.kurum.local:514'} className={inputCls} />
+                {siem.transport === 'http' && (
+                  <>
+                    <input value={siem.token} onChange={(e) => patch({ token: e.target.value })} placeholder="Authorization başlığı (ör. Splunk <HEC-token>) — opsiyonel" className={inputCls} />
+                    <Toggle checked={siem.insecure} onChange={(v) => patch({ insecure: v })} label="TLS doğrulamasını atla (self-signed toplayıcı)" />
+                  </>
+                )}
+                <p className="text-[10.5px] text-slate-600">CEF/LEEF önem: port 9 · vpn_down 8 · anomali/sdwan 6 · bant/oturum 5 · süreç/hedef 4. syslog facility local0.</p>
+              </>
+            )
+          })()}
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={save}

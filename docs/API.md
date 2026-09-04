@@ -528,6 +528,39 @@ Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
 
 Webhook v2, gövdeyi `X-BazNTMS-Signature: sha256=<hmac>` ile imzalar.
 
+### SIEM / ITSM push connector (Faz 6.5)
+
+`notifiers.siem` — her uyarı olayını standart bir formatta bir SIEM/ITSM
+sistemine iletir:
+
+```json
+{
+  "notifiers": {
+    "siem": {
+      "enabled": true,
+      "format": "cef",
+      "transport": "syslog-udp",
+      "target": "siem.kurum.local:514",
+      "token": "",
+      "insecure": false
+    }
+  }
+}
+```
+
+| Alan | Değerler | Not |
+|------|----------|-----|
+| `format` | `cef` (ArcSight) · `leef` (QRadar) · `json` | boş → `cef` |
+| `transport` | `syslog-udp` · `syslog-tcp` · `http` | boş → `syslog-udp` |
+| `target` | syslog: `host:port` · http: tam URL | — |
+| `token` | http: `Authorization` başlığı olarak yollanır (ör. `Splunk <HEC-token>`) | boş → gönderilmez |
+| `insecure` | http: TLS sunucu doğrulamasını atla | self-signed toplayıcı |
+
+- **CEF**: `CEF:0|bazNTMS|bazNTMS|1.0|<kind>|<etiket>|<severity>|rt=… cat=<kind> cs1Label=key cs1=<key> msg=<mesaj>`
+- **LEEF**: `LEEF:1.0|bazNTMS|bazNTMS|1.0|<kind>|devTime=…⇥sev=…⇥cat=<kind>⇥key=…⇥msg=…`
+- syslog taşımasında satır RFC3164 çerçevesine alınır (`<PRI>` = facility `local0` + önem 0-7).
+- Önem eşlemesi (CEF/LEEF 0-10): `port` 9 · `vpn_down` 8 · `anomaly`/`sdwan_sla_breach` 6 · `bw`/`high_sessions` 5 · `proc`/`target` 4.
+
 ### Kurumsal rapor
 
 `GET /api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,

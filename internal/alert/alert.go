@@ -68,6 +68,9 @@ type Notifiers struct {
 	EmailPass       string   `json:"email_pass"`
 	WebhookV2URL    string   `json:"webhook_v2_url"` // imzali webhook (HMAC-SHA256)
 	WebhookV2Secret string   `json:"webhook_v2_secret"`
+
+	// Faz 6.5: SIEM/ITSM push connector (CEF/LEEF/JSON → syslog veya HTTP)
+	SIEM SIEMConfig `json:"siem"`
 }
 
 // DefaultConfig, ilk calistirma icin makul ayarlar.
