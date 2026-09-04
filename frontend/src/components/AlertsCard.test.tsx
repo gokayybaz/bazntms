@@ -27,7 +27,7 @@ const CONFIG: AlertConfig = {
 const EVENTS: AlertEvent[] = [{ id: 1, ts: Math.floor(Date.now() / 1000), kind: 'port', key: 'k1', message: 'şüpheli port 4444' }]
 
 function mockFetch(cfg: AlertConfig = CONFIG) {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 200, json: async () => cfg } as Response)))
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 200, ok: true, json: async () => cfg } as Response)))
 }
 
 describe('AlertsCard', () => {
@@ -47,5 +47,18 @@ describe('AlertsCard', () => {
     mockFetch()
     render(<AlertsCard events={[]} />)
     await waitFor(() => expect(screen.getByText('Henüz uyarı yok.')).toBeInTheDocument())
+  })
+
+  it('ayarlar alınamayınca hata mesajı gösterir', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 500, ok: false, json: async () => ({}) } as Response)))
+    render(<AlertsCard events={[]} />)
+    await waitFor(() => expect(screen.getByText(/ayarlar alınamadı/)).toBeInTheDocument())
+  })
+
+  it('soğuma alanı ve SIEM taşıma seçici gerçek <label> ile eşleşiyor', async () => {
+    mockFetch()
+    render(<AlertsCard events={[]} />)
+    await waitFor(() => expect(screen.getByLabelText(/soğuma/)).toBeInTheDocument())
+    expect(screen.getByLabelText('Taşıma')).toBeInTheDocument()
   })
 })
