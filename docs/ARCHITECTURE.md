@@ -75,6 +75,7 @@ bir `sysmon.ListConnections()` ile:
 | `port` | kurulan bağlantının uzak portu şüpheli listede mi |
 | `proc` | `alert_seen` tablosuna karşı yeni süreç; ilk çalıştırmada taban çizgisi sessizce atılır |
 | `target` | ilk kez ≥ X MB trafik gören uzak IP; kalıcı görüldü işareti |
+| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları `-ioc-file` kara listesinde mi (`internal/ioc` — tam + üst alan eşleşmesi, mtime ile hot-reload). İmza tabanlı DPI değil; bir hash-set lookup |
 
 Her olay `kind|key` başına cooldown (varsayılan 10 dk) tabi tutulur; geçenler
 `alert_events`'e yazılır ve `Notifier` ile (masaüstü, Telegram, Discord, Slack,

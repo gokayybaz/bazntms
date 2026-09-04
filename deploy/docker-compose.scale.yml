@@ -69,6 +69,8 @@ services:
       - "30" # tüm cihazlar için tek tip SNMP poll aralığı (sn)
       - "-syslog-port"
       - "5514"
+      - "-ioc-file"
+      - "/etc/bazntms/ioc.txt" # tehdit istihbaratı domain kara listesi (demo)
       - "-enroll-token"
       - "scale-enroll-token"
     # /data kalıcı: vault.key burada üretilir. Volume olmadan her image rebuild /
@@ -79,6 +81,7 @@ services:
     # kullanılır; ingest replikaları vault'a dokunmaz.
     volumes:
       - ctldata:/data
+      - ./ioc-demo.txt:/etc/bazntms/ioc.txt:ro
     ports:
       - "8080:8080"
       # NetFlow/syslog: Docker Desktop for Mac, fiziksel LAN arayüzüne başka bir

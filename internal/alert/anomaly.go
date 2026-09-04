@@ -49,12 +49,15 @@ func (a AnomalyConfig) normalized() AnomalyConfig {
 }
 
 // NormalizeConfig, DB'den okunan eski JSON configlerini yeni alanlarla
-// uyumlu hale getirir (anomali alani yoksa varsayilanla acilir).
+// uyumlu hale getirir (anomali/IOC alani yoksa varsayilanla acilir).
 func NormalizeConfig(cfg Config) Config {
 	if cfg.Anomaly.Sensitivity <= 0 {
 		cfg.Anomaly = DefaultAnomalyConfig()
 	} else {
 		cfg.Anomaly = cfg.Anomaly.normalized()
+	}
+	if cfg.IOC == (IOCConfig{}) { // eski config: "ioc" alani yok → varsayilan (acik)
+		cfg.IOC = DefaultIOCConfig()
 	}
 	return cfg
 }

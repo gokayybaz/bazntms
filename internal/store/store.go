@@ -131,6 +131,8 @@ type Store interface {
 	TopL7(since time.Time, agentID int64, limit int) ([]L7Usage, error)
 	SaveAgentDNS(agentID int64, ts int64, samples []telemetry.DNSSample) error
 	TopAgentDNS(since time.Time, agentID int64, limit int) ([]AgentDNSUsage, error)
+	// RecentAgentDomains, IOC eslestirmesi icin son penceredeki L7+DNS alan adlari
+	RecentAgentDomains(since time.Time) ([]AgentDomainSeen, error)
 
 	// cihazlar, flow, syslog (Faz 3)
 	AddDevice(d Device) (int64, error)

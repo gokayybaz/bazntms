@@ -125,6 +125,8 @@ func leefVal(s string) string {
 // severityCEF, uyarı türünü 0-10 önem skalasına oturtur (CEF ve LEEF ortak).
 func severityCEF(kind string) int {
 	switch kind {
+	case "ioc":
+		return 10 // bilinen kötü domain'e temas
 	case "port":
 		return 9
 	case "vpn_down":

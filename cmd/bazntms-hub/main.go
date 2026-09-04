@@ -29,6 +29,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/devpoll"
 	"github.com/gokayybaz/bazntms/internal/flows"
 	"github.com/gokayybaz/bazntms/internal/geoip"
+	"github.com/gokayybaz/bazntms/internal/ioc"
 	"github.com/gokayybaz/bazntms/internal/logging"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/queue"
@@ -72,6 +73,7 @@ func main() {
 	sflowPort := fl.String("sflow-port", "", "sFlow v5 icin ayri UDP portu (bos = kapali; ex: 6343). -flow-port zaten sFlow'u da kabul eder; bu yalnizca farkli portta dinlemek icin")
 	flowExporter := fl.String("flow-exporter", "", "NetFlow/sFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
+	iocFile := fl.String("ioc-file", "", "Tehdit istihbarati domain kara listesi (IOC) — eslesen L7/DNS trafigi 'ioc' uyarisi uretir. hosts/AdBlock/duz metin formatlari; mtime degisince otomatik yeniden yuklenir")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
 	complianceOn := fl.Bool("compliance", false, "5651 log imzalama motoru (Faz 9): hash-zincir + Merkle checkpoint + gunluk muhur")
 	tsaURL := fl.String("tsa-url", "", "RFC 3161 zaman damgasi servisi (TSA) adresi")
@@ -203,6 +205,15 @@ func main() {
 	alertCfg = alert.NormalizeConfig(alertCfg)
 	alertCfg = alert.NormalizeFortiConfig(alertCfg)
 	alerts := alert.NewManager(alertCfg, st, engine, *telemetryInterval)
+	if *iocFile != "" {
+		if list, err := ioc.Load(*iocFile); err != nil {
+			slog.Error("IOC listesi yuklenemedi", "file", *iocFile, "err", err)
+		} else {
+			slog.Info("IOC listesi yuklendi", "file", *iocFile, "domain", list.Count())
+			alerts.SetIOC(list)
+			go list.Watch(2*time.Minute, ctx.Done())
+		}
+	}
 	if *alertsOn {
 		alerts.Start()
 		defer alerts.Stop()

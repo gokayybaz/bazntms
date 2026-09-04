@@ -1,0 +1,21 @@
+# bazNTMS — örnek IOC (tehdit istihbaratı) domain kara listesi
+#
+# hub `-ioc-file` ile yüklendiğinde, agent'ların gördüğü TLS SNI / HTTP Host /
+# DNS alan adları bu listeye karşı eşleştirilir; eşleşme → kind:"ioc" uyarısı.
+# Üst alan da yakalanır: "x.evil-c2.example" listede "evil-c2.example" varsa eşleşir.
+#
+# Formatlar: düz domain · "0.0.0.0 domain" (hosts) · "||domain^" (AdBlock) · "# yorum"
+# Dosya mtime değişince hub otomatik yeniden yükler (2 dk yoklama).
+#
+# Gerçek kurulumda: URLhaus, abuse.ch, Spamhaus DROP, kurum kendi IOC feed'i vb.
+
+# --- örnek "bilinen kötü" girişleri (RFC 2606 .example — demo amaçlı) ---
+evil-c2.example
+malware-drop.example
+0.0.0.0 phishing-login.example
+||exfil.evil-c2.example^
+
+# Feature'ı çalışırken görmek için: aşağıdaki satırın yorumunu kaldırın —
+# loadgen sentetik filosu bu alan adını üretir, saniyeler içinde IOC uyarısı düşer.
+# (gerçek kurulumda buraya kurumunuzun IOC feed'i / URLhaus / abuse.ch girer)
+#update.example.com

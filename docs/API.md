@@ -506,6 +506,24 @@ baseline (son 7 gün) ile 5 dakikalık pencere verimi arasındaki z-skoru sapmas
 Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
 `{"anomaly":{"enabled":true,"sensitivity":3.0,"min_samples":120,"window_min":5}}`.
 
+### IOC / tehdit istihbaratı eşleştirmesi (Faz 6.6)
+
+Hub `-ioc-file <yol>` ile başlatılırsa (domain kara listesi — hosts / AdBlock /
+düz metin formatları, `mtime` değişince otomatik yeniden yüklenir), agent'ların
+gözlemlediği **TLS SNI / HTTP Host** (`l7_endpoints`) ve **DNS sorgu**
+(`agent_dns`) alan adları ~30 sn'de bir bu listeye karşı eşleştirilir. Eşleşme
+(üst alan dahil: `x.evil.com`, listede `evil.com` varsa yakalar) →
+`kind:"ioc"` uyarısı:
+
+```json
+{ "kind": "ioc", "key": "42|cdn.evil-c2.example",
+  "message": "IOC eşleşmesi: cdn.evil-c2.example (kural: evil-c2.example) — agent ws-01, süreç powershell, kaynak TLS SNI / HTTP Host" }
+```
+
+`PUT /api/alerts` → `{"ioc":{"enabled":true}}` ile çalışma anında kapatılabilir.
+İmza tabanlı tam DPI değil — düşük maliyetli "bilinen kötü domain'e temas"
+tespiti (bir hash-set lookup).
+
 ### Bildirim kanalları (Faz 6.3)
 
 `PUT /api/alerts` → `notifiers` bölümüne yeni kanallar:

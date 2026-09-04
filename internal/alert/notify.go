@@ -217,6 +217,8 @@ func kindLabel(kind string) string {
 		return "Yeni Hedef"
 	case "anomaly":
 		return "Anomali"
+	case "ioc":
+		return "IOC / Tehdit"
 	case "vpn_down":
 		return "VPN Düşüşü"
 	case "sdwan_sla_breach":

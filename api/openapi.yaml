@@ -586,7 +586,7 @@ paths:
                   properties:
                     id: { type: integer }
                     ts: { type: integer }
-                    kind: { type: string, description: "bw · port · proc · target · anomaly · vpn_down · sdwan_sla_breach · high_sessions" }
+                    kind: { type: string, description: "bw · port · proc · target · anomaly · ioc · vpn_down · sdwan_sla_breach · high_sessions" }
                     key: { type: string }
                     message: { type: string }
 

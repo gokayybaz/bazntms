@@ -64,12 +64,14 @@ const ALERT_KIND_STYLES: Record<string, string> = {
   port: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
   proc: 'border-sky-500/30 bg-sky-500/10 text-sky-400',
   target: 'border-violet-500/30 bg-violet-500/10 text-violet-400',
+  ioc: 'border-red-500/40 bg-red-500/15 text-red-300',
 }
 const ALERT_KIND_LABELS: Record<string, string> = {
   bw: 'bant genişliği',
   port: 'şüpheli port',
   proc: 'yeni süreç',
   target: 'yeni hedef',
+  ioc: 'ioc / tehdit',
 }
 
 function relTime(unix: number): string {

@@ -24,6 +24,7 @@ type Config struct {
 	NewTarget TargetConfig     `json:"new_target"`
 	Anomaly   AnomalyConfig    `json:"anomaly"` // Faz 6.2: istatistiksel baseline
 	Forti     FortiAlertConfig `json:"forti"`   // Faz 8.5: vpn/sdwan/oturum eşikleri
+	IOC       IOCConfig        `json:"ioc"`     // Faz 6.6: tehdit istihbaratı domain eşleştirmesi
 
 	Notifiers Notifiers `json:"notifiers"`
 }
@@ -92,6 +93,7 @@ func DefaultConfig() Config {
 		},
 		Anomaly:   DefaultAnomalyConfig(),
 		Forti:     DefaultFortiAlertConfig(),
+		IOC:       DefaultIOCConfig(),
 		Notifiers: Notifiers{Desktop: true},
 	}
 }
@@ -120,6 +122,7 @@ type Manager struct {
 	tickN  int
 
 	notifier *Notifier
+	ioc      IOCMatcher // -ioc-file yüklendiyse; nil ise IOC kontrolü pasif
 }
 
 type agentBwCounter struct{ in, out int }
@@ -198,6 +201,10 @@ func (m *Manager) run() {
 			// FortiGate uyarilari: dakikada bir (Faz 8.5)
 			if m.tickN%60 == 1 {
 				m.checkForti(cfg)
+			}
+			// IOC / tehdit istihbarati domain eslestirmesi: 30 sn'de bir (Faz 6.6)
+			if m.tickN%30 == 1 {
+				m.checkIOC(cfg)
 			}
 		}
 	}
