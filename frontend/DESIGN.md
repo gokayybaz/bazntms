@@ -8,6 +8,7 @@ colors:
   ink-primary: "#e2e8f0"
   ink-secondary: "#94a3b8"
   dim: "#64748b"
+  dim-aa: "#7d8aa0"
   rx-cyan: "#22d3ee"
   tx-violet: "#a78bfa"
   healthy-emerald: "#34d399"
@@ -32,6 +33,11 @@ typography:
     fontSize: "0.65625rem"
     fontWeight: 400
     lineHeight: 1.4
+  micro:
+    fontFamily: "inherit"
+    fontSize: "0.5625rem"
+    fontWeight: 400
+    lineHeight: 1.3
 rounded:
   sm: "2px"
   md: "6px"
@@ -118,6 +124,15 @@ operasyonel anlamı sabitleyen 7 doygun vurgu rengi.
 - **Ink Primary** (`#e2e8f0`, slate-200): birincil okunabilir metin.
 - **Ink Secondary** (`#94a3b8`, slate-400): etiket/ikincil metin.
 - **Dim** (`#64748b`, slate-500/600): açıklama, altyazı, en düşük öncelikli metin.
+  **Bilinen sorun**: `slate-600`/`slate-700` bu zeminlerde WCAG AA'yı (4.5:1)
+  geçmiyor — ölçülen: slate-600 ~2.4:1, slate-700 ~1.8:1 (impeccable
+  critique P0). Legacy — yeni/dokunulan koddan çıkarılıyor.
+- **Dim AA** (`#7d8aa0`, `--color-dim-aa` / `text-dim-aa`): slate-500/600/700'ün
+  AA-uyumlu yerine geçeni — panel zemininde 5.2:1, base zemininde 5.8:1.
+  Docs-site landing page'in `--dim` token'ıyla aynı değer (kasıtlı, iki
+  yüzey arasında akrabalık). `Overview.tsx`'te tüm eski `slate-600`/`700`
+  kullanımı buna taşındı; diğer dosyalar henüz taşınmadı — dosya bir
+  refinement turuna girdiğinde bu migrasyon o turun bir parçası olmalı.
 
 ### Named Rules
 **The Fixed Meaning Rule.** Her vurgu rengi tam olarak bir operasyonel
@@ -147,6 +162,12 @@ hem mono hem sans görülüyorsa bu her zaman veri/açıklama ayrımını yansı
   stat etiketleri — her zaman büyük harf ve geniş harf aralığı.
 - **Caption** (400, ~10.5px, sans, dim renk): stat açıklaması, ikincil bilgi
   ("filo toplamı · gelen · canlı" gibi).
+- **Micro** (400, 9px [8.5-10px aralığı], sans/mono, dim-aa): yalnızca
+  taranabilir, kendi başına birincil anlam taşımayan meta-veri — zaman
+  damgası, pid, birim eki, kısa tür rozeti ("flow"/"agent"/"syslog"). Kod
+  genelinde zaten yoğun kullanılıyordu (impeccable dedektörü tek başına
+  Overview.tsx'te 830+ alt-eşik metin örneği buldu) ama DESIGN.md'de hiç
+  tanımlı değildi — bu satır o boşluğu dolduruyor, kodu bu boyuta indirmiyor.
 - **Body** (400, 13-14px, sans, ink-secondary): kart içi açıklama metni.
 
 ### Named Rules
@@ -154,6 +175,14 @@ hem mono hem sans görülüyorsa bu her zaman veri/açıklama ayrımını yansı
 uppercase tracked **Label** → bold mono **Data** → dim **Caption**. Bu üçlü
 kod genelinde onlarca yerde elle kopyalanmış (merkezi bir bileşen yok) ama
 asla kırılmamış — yeni bir stat eklerken kalıp bozulmaz.
+
+**The Micro Scope Rule.** 11px altı yalnızca *taranabilir* meta-veri için —
+zaman damgası, pid, birim eki, kısa rozet. Bir kullanıcının **okuması**
+gereken herhangi bir metin (boş-durum mesajı, hata/uyarı metni, birincil
+değer) asla Micro'ya düşmez, en az Caption (10.5px) kalır. Micro metin her
+zaman `dim-aa` (veya daha açık) renkte olur — asla `slate-600`/`700`
+(bkz. Colors → Dim AA), çünkü küçük punto + düşük kontrast birlikte AA'yı
+katmerli şekilde ihlal eder.
 
 ## Layout
 
@@ -250,6 +279,11 @@ elemanlarda (ör. lejant kare işaretleri). Kenarlıklar her zaman ince
 - **Do** dar ekranlarda büyük SVG diyagramlarını `overflow-x-auto` +
   `min-width` ile yatay kaydırmaya bırak, metni küçültüp okunamaz hale
   getirme (bkz. TrafficFlowDiagram/TopologyCard, landing page LivePreview).
+- **Do** grid/flex içindeki her kart/hücreye `min-w-0` ekle — yoksa
+  `truncate` etkisiz kalır ve içerik komşu hücreye taşar (bkz. Elevation
+  öncesi bulunan text-overflow bulgusu).
+- **Do** dim/tertiary metinde `text-dim-aa` kullan (`slate-600`/`700`
+  değil) — AA kontrastını (4.5:1+) garanti eden tek dim tonu bu.
 
 ### Don't:
 - **Don't** yeni bir ikon/animasyon/chart kütüphanesi ekleme (lucide-react,

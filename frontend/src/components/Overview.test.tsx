@@ -1,7 +1,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Overview } from './Overview'
 import type { AlertEvent } from '../types'
+
+// Overview artık olay akışındaki agent satırlarını Link/useNavigate ile
+// agent detayına bağlıyor (impeccable critique P3) — Router context'i şart.
+function renderOverview(props: Parameters<typeof Overview>[0]) {
+  return render(
+    <MemoryRouter>
+      <Overview {...props} />
+    </MemoryRouter>,
+  )
+}
 
 const now = Math.floor(Date.now() / 1000)
 
@@ -73,7 +84,7 @@ describe('Overview', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('agent filosu trafiğini (rx/tx/toplam/pps) tüm agent+arayüzler üzerinden doğru toplar', async () => {
-    render(<Overview refreshKey={0} alertEvents={[]} />)
+    renderOverview({ refreshKey: 0, alertEvents: [] })
 
     // rx: 1000+500=1500 B/s ×8 = 12000 bit/s → 12.0 Kbit/s
     await waitFor(() => expect(screen.getByText('12.0 Kbit/s')).toBeInTheDocument())
@@ -86,7 +97,7 @@ describe('Overview', () => {
   })
 
   it('agent ve cihaz listelerini render eder', async () => {
-    render(<Overview refreshKey={0} alertEvents={[]} />)
+    renderOverview({ refreshKey: 0, alertEvents: [] })
     // isimler hem filo/cihaz kartlarinda hem canli akistaki olaylarin
     // kaynagi olarak birden fazla yerde gecebilir — getAllByText kullanilir
     await waitFor(() => expect(screen.getAllByText('agent-a').length).toBeGreaterThan(0))
@@ -95,7 +106,7 @@ describe('Overview', () => {
   })
 
   it('canlı olay akışında flow + syslog + agent bağlantılarını birleştirip en yeniden eskiye sıralar', async () => {
-    render(<Overview refreshKey={0} alertEvents={[]} />)
+    renderOverview({ refreshKey: 0, alertEvents: [] })
 
     // agent baglantilari ikinci bir asenkron zincirle (agents yuklenince
     // tetiklenen ayri bir efekt) geldigi icin en son ortaya cikan — onu
@@ -115,7 +126,7 @@ describe('Overview', () => {
   })
 
   it('canlı akış tür filtresi yalnızca seçili türü gösterir, "tümü" hepsini geri getirir', async () => {
-    render(<Overview refreshKey={0} alertEvents={[]} />)
+    renderOverview({ refreshKey: 0, alertEvents: [] })
     await waitFor(() => expect(screen.getByText('proc-1', { exact: false })).toBeInTheDocument())
 
     // baslangicta uc kaynak da gorunur
@@ -135,7 +146,7 @@ describe('Overview', () => {
   })
 
   it('flow satırında bayt + paket hacmini gösterir (API alanları octets/packets)', async () => {
-    render(<Overview refreshKey={0} alertEvents={[]} />)
+    renderOverview({ refreshKey: 0, alertEvents: [] })
     // 4096 bayt → "4.0 KB", 12 paket → "12 pkt"
     await waitFor(() => expect(screen.getByText(/4\.0 KB/)).toBeInTheDocument())
     expect(screen.getByText(/12 pkt/)).toBeInTheDocument()
@@ -143,7 +154,7 @@ describe('Overview', () => {
 
   it('açık uyarıları listeler', async () => {
     const alerts: AlertEvent[] = [{ id: 1, ts: now, kind: 'port', key: 'k1', message: 'şüpheli port 4444' }]
-    render(<Overview refreshKey={0} alertEvents={alerts} />)
+    renderOverview({ refreshKey: 0, alertEvents: alerts })
     await waitFor(() => expect(screen.getByText('şüpheli port 4444')).toBeInTheDocument())
   })
 })

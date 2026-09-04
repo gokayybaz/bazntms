@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import type { AgentWithRates, AlertEvent } from '../types'
 import type { FleetSummary } from '../lib/useLive'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
@@ -59,12 +60,19 @@ type StreamItem =
   | { kind: 'syslog'; ts: number; key: string; primary: string; source: string; severity: number }
   | { kind: 'agent'; ts: number; key: string; primary: string; source: string; pid?: number; local: string; remote?: string }
 
+// DESIGN.md'nin renk-anlam sözleşmesi dışına çıkılmıştı (impeccable
+// critique P1): ioc sözleşme-dışı bir "red" kullanıyordu (rose zaten
+// "kritik alarm" için ayrılmışken) ve target, violet'i — sözleşmenin asla
+// tek başına birincil vurgu olarak kullanılmamasını söylediği rengi —
+// tek başına taşıyordu. ioc → rose (en kritik uyarı, kritik-alarm rengi);
+// target → amber (bw ile aynı "eşik/davranışsal uyarı" katmanı, yeni renk
+// icat edilmedi).
 const ALERT_KIND_STYLES: Record<string, string> = {
   bw: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
   port: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
   proc: 'border-sky-500/30 bg-sky-500/10 text-sky-400',
-  target: 'border-violet-500/30 bg-violet-500/10 text-violet-400',
-  ioc: 'border-red-500/40 bg-red-500/15 text-red-300',
+  target: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
+  ioc: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
 }
 const ALERT_KIND_LABELS: Record<string, string> = {
   bw: 'bant genişliği',
@@ -91,10 +99,27 @@ export function Overview({
   alertEvents: AlertEvent[]
   fleet?: FleetSummary | null
 }) {
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<AgentWithRates[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [flows, setFlows] = useState<FlowRow[]>([])
   const [syslog, setSyslog] = useState<SyslogEvent[]>([])
+
+  // hangi veri kaynaklarının son yoklaması başarısız oldu — önceden her
+  // fetch hatası sessizce yutuluyordu, hub çökse/oturum düşse operatör
+  // "canlı" görünen ama aslında bayat sayılara güvenebiliyordu (impeccable
+  // critique P0). key → insan-okunur kaynak adı; başarıyla anahtar silinir.
+  const [staleSources, setStaleSources] = useState<Record<string, string>>({})
+  const markSource = (key: string, label: string, ok: boolean) =>
+    setStaleSources((prev) => {
+      if (ok) {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key]
+        return next
+      }
+      return prev[key] === label ? prev : { ...prev, [key]: label }
+    })
 
   useEffect(() => {
     let stop = false
@@ -102,9 +127,13 @@ export function Overview({
       try {
         const res = await fetch('/api/v1/agents')
         if (res.status === 401) return
-        if (!stop) setAgents(await res.json())
+        if (!res.ok) return markSource('agents', 'agent listesi', false)
+        if (!stop) {
+          setAgents(await res.json())
+          markSource('agents', 'agent listesi', true)
+        }
       } catch {
-        /* yoksay */
+        markSource('agents', 'agent listesi', false)
       }
     }
     load()
@@ -121,9 +150,13 @@ export function Overview({
       try {
         const res = await fetch('/api/v1/devices')
         if (res.status === 401) return
-        if (!stop) setDevices(await res.json())
+        if (!res.ok) return markSource('devices', 'cihaz listesi', false)
+        if (!stop) {
+          setDevices(await res.json())
+          markSource('devices', 'cihaz listesi', true)
+        }
       } catch {
-        /* yoksay */
+        markSource('devices', 'cihaz listesi', false)
       }
     }
     load()
@@ -140,9 +173,13 @@ export function Overview({
       try {
         const res = await fetch('/api/v1/flows?minutes=15&limit=20')
         if (res.status === 401) return
-        if (!stop) setFlows(await res.json())
+        if (!res.ok) return markSource('flows', 'akış (NetFlow)', false)
+        if (!stop) {
+          setFlows(await res.json())
+          markSource('flows', 'akış (NetFlow)', true)
+        }
       } catch {
-        /* yoksay */
+        markSource('flows', 'akış (NetFlow)', false)
       }
     }
     load()
@@ -159,9 +196,13 @@ export function Overview({
       try {
         const res = await fetch('/api/v1/syslog?limit=20')
         if (res.status === 401) return
-        if (!stop) setSyslog(await res.json())
+        if (!res.ok) return markSource('syslog', 'syslog', false)
+        if (!stop) {
+          setSyslog(await res.json())
+          markSource('syslog', 'syslog', true)
+        }
       } catch {
-        /* yoksay */
+        markSource('syslog', 'syslog', false)
       }
     }
     load()
@@ -194,9 +235,12 @@ export function Overview({
             return { agentName: data.agent.name, ts: data.agent.last_seen, conns: data.connections ?? [] }
           }),
         )
-        if (!stop) setAgentConns(results.filter((r): r is { agentName: string; ts: number; conns: AgentConnSample[] } => r !== null))
+        if (!stop) {
+          setAgentConns(results.filter((r): r is { agentName: string; ts: number; conns: AgentConnSample[] } => r !== null))
+          markSource('agentConns', 'agent bağlantı envanteri', true)
+        }
       } catch {
-        /* yoksay */
+        markSource('agentConns', 'agent bağlantı envanteri', false)
       }
     }
     load()
@@ -269,6 +313,11 @@ export function Overview({
     return c
   }, [stream])
   const visibleStream = streamFilter === 'all' ? stream : stream.filter((it) => it.kind === streamFilter)
+  // olay akışındaki agent satırlarını agent detay sayfasına bağlamak için —
+  // önceden hiçbir satır tıklanamıyordu (impeccable critique P3, Alex
+  // persona: şüpheli bir IP görüp agent'a geçmek için sidebar'dan manuel
+  // arama gerekiyordu)
+  const agentIdByName = useMemo(() => new Map(agents.map((a) => [a.name, a.id])), [agents])
 
   // canlı trafik şeması: yalnızca ÇEVRİMİÇİ agent'lar düğüm olur (süzme bileşen
   // içinde) — kapalı agent trafik üretmez. Tüm filo yine de geçilir ki bileşen
@@ -339,75 +388,88 @@ export function Overview({
   const liveTxBps = fleet ? fleet.tx_bps / 8 : agentTraffic.txBps
   const livePps = fleet ? fleet.pps : agentTraffic.pps
 
+  const staleList = Object.values(staleSources)
+
   return (
     <div className="space-y-4">
+      {/* bağlantı sorunu şeridi — aşağıdaki panellerin "canlı" görünüp aslında
+          bayat veri gösterme riskini ortadan kaldırır (impeccable critique P0) */}
+      {staleList.length > 0 && (
+        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-[11px] text-rose-300">
+          ⚠ Bağlantı sorunu — {staleList.join(', ')} güncellenemiyor, gösterilen veriler bayat olabilir.
+        </div>
+      )}
+
       {/* özet stat şeridi */}
+      {/* min-w-0: grid öğeleri varsayılan min-width:auto ile büyüyüp truncate'i
+          etkisiz bırakıyordu — dar ekranda değerler komşu karta taşıyordu
+          (impeccable critique P0, DOM kanıtıyla doğrulandı). */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+        <div className="min-w-0 rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400">
             Aktif Agent {fleet && <span className="ml-1 text-emerald-400" title="WS canlı (1 sn)">●</span>}
           </p>
-          <p className="mt-1.5 font-mono text-2xl font-bold text-slate-100">
+          <p className="mt-1.5 truncate font-mono text-2xl font-bold text-slate-100">
             {onlineAgents}
-            <span className="text-sm font-medium text-slate-600"> / {agentsTotal}</span>
+            <span className="text-sm font-medium text-dim-aa"> / {agentsTotal}</span>
           </p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">{Math.max(0, agentsTotal - onlineAgents)} offline</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-dim-aa">{Math.max(0, agentsTotal - onlineAgents)} offline</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Cihaz</p>
-          <p className="mt-1.5 font-mono text-2xl font-bold text-slate-100">
+        <div className="min-w-0 rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Cihaz</p>
+          <p className="mt-1.5 truncate font-mono text-2xl font-bold text-slate-100">
             {healthyDevices}
-            <span className="text-sm font-medium text-slate-600"> / {devices.length}</span>
+            <span className="text-sm font-medium text-dim-aa"> / {devices.length}</span>
           </p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">SNMP + FortiGate</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-dim-aa">SNMP + FortiGate</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Bağlantı</p>
-          <p className="mt-1.5 font-mono text-2xl font-bold text-slate-100">{formatNum(totalConns)}</p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">agent filosu toplamı</p>
+        <div className="min-w-0 rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aktif Bağlantı</p>
+          <p className="mt-1.5 truncate font-mono text-2xl font-bold text-slate-100">{formatNum(totalConns)}</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-dim-aa">agent filosu toplamı</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Olay Hızı</p>
-          <p className="mt-1.5 font-mono text-2xl font-bold text-slate-100">
+        <div className="min-w-0 rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400">Olay Hızı</p>
+          <p className="mt-1.5 truncate font-mono text-2xl font-bold text-slate-100">
             {eventRate.toFixed(1)}
-            <span className="text-sm font-medium text-slate-600">/sn</span>
+            <span className="text-sm font-medium text-dim-aa">/sn</span>
           </p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">netflow + syslog</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-dim-aa">netflow + syslog</p>
         </div>
-        <div className={`rounded-md border bg-slate-900/70 p-3.5 ${recentAlerts.length > 0 ? 'border-rose-500/30' : 'border-slate-800'}`}>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Açık Uyarı</p>
-          <p className={`mt-1.5 font-mono text-2xl font-bold ${alertEvents.length > 0 ? 'text-rose-400' : 'text-slate-100'}`}>
+        <div className={`min-w-0 rounded-md border bg-slate-900/70 p-3.5 ${recentAlerts.length > 0 ? 'border-rose-500/30' : 'border-slate-800'}`}>
+          <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400">Açık Uyarı</p>
+          <p className={`mt-1.5 truncate font-mono text-2xl font-bold ${alertEvents.length > 0 ? 'text-rose-400' : 'text-slate-100'}`}>
             {formatNum(alertEvents.length)}
           </p>
-          <p className="mt-0.5 text-[10.5px] text-slate-600">bu oturumda</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-dim-aa">bu oturumda</p>
         </div>
       </div>
 
       {/* agent filosu trafiği (fleet toplamı) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-md border border-l-2 border-slate-800 border-l-cyan-500 bg-slate-900/70 p-4">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">İndirilen Hız (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-cyan-300">{formatBits(liveRxBps * 8)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">
+        <div className="min-w-0 rounded-md border border-l-2 border-slate-800 border-l-cyan-500 bg-slate-900/70 p-4">
+          <p className="truncate text-[10px] font-medium uppercase tracking-widest text-slate-500">İndirilen Hız (Agent)</p>
+          <p className="mt-1 truncate font-mono text-2xl font-bold text-cyan-300">{formatBits(liveRxBps * 8)}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-dim-aa">
             filo toplamı · gelen {fleet ? '· canlı' : ''}
           </p>
         </div>
-        <div className="rounded-md border border-l-2 border-slate-800 border-l-violet-500 bg-slate-900/70 p-4">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Gönderilen Hız (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-violet-300">{formatBits(liveTxBps * 8)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">
+        <div className="min-w-0 rounded-md border border-l-2 border-slate-800 border-l-violet-500 bg-slate-900/70 p-4">
+          <p className="truncate text-[10px] font-medium uppercase tracking-widest text-slate-500">Gönderilen Hız (Agent)</p>
+          <p className="mt-1 truncate font-mono text-2xl font-bold text-violet-300">{formatBits(liveTxBps * 8)}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-dim-aa">
             filo toplamı · giden {fleet ? '· canlı' : ''}
           </p>
         </div>
-        <div className="rounded-md border border-l-2 border-slate-800 border-l-emerald-500 bg-slate-900/70 p-4">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Toplam Veri (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-emerald-300">{formatBytes(agentTraffic.totalBytes)}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">arayüz sayaçları · kümülatif</p>
+        <div className="min-w-0 rounded-md border border-l-2 border-slate-800 border-l-emerald-500 bg-slate-900/70 p-4">
+          <p className="truncate text-[10px] font-medium uppercase tracking-widest text-slate-500">Toplam Veri (Agent)</p>
+          <p className="mt-1 truncate font-mono text-2xl font-bold text-emerald-300">{formatBytes(agentTraffic.totalBytes)}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-dim-aa">arayüz sayaçları · kümülatif</p>
         </div>
-        <div className="rounded-md border border-l-2 border-slate-800 border-l-amber-500 bg-slate-900/70 p-4">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">Paket Hızı (Agent)</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-amber-300">{formatNum(Math.round(livePps))} pps</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-600">filo toplamı {fleet ? '· canlı' : ''}</p>
+        <div className="min-w-0 rounded-md border border-l-2 border-slate-800 border-l-amber-500 bg-slate-900/70 p-4">
+          <p className="truncate text-[10px] font-medium uppercase tracking-widest text-slate-500">Paket Hızı (Agent)</p>
+          <p className="mt-1 truncate font-mono text-2xl font-bold text-amber-300">{formatNum(Math.round(livePps))} pps</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-dim-aa">filo toplamı {fleet ? '· canlı' : ''}</p>
         </div>
       </div>
 
@@ -437,12 +499,12 @@ export function Overview({
                     key={k}
                     type="button"
                     onClick={() => setStreamFilter(k)}
-                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                    className={`rounded px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 ${
                       active ? 'bg-slate-700 text-slate-100' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
                     {k === 'all' ? 'tümü' : k}
-                    <span className={`ml-1 ${active ? 'opacity-60' : 'text-slate-600'}`}>
+                    <span className={`ml-1 ${active ? 'opacity-60' : 'text-dim-aa'}`}>
                       {k === 'all' ? stream.length : streamCounts[k]}
                     </span>
                   </button>
@@ -453,19 +515,42 @@ export function Overview({
         }
       >
         {visibleStream.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-600">
+          <p className="py-8 text-center text-sm text-dim-aa">
             {stream.length === 0
               ? "Henüz akış yok — online agent bekleyin ya da cihazları NetFlow/Syslog için hub'a yönlendirin."
               : 'Bu türde henüz olay yok.'}
           </p>
         ) : (
           <div className="max-h-[32rem] space-y-0.5 overflow-y-auto">
-            {visibleStream.map((it, i) => (
+            {visibleStream.map((it, i) => {
+              // yalnızca agent kaynaklı satırlar bir detay sayfasına bağlanabiliyor
+              // (flow/syslog için karşılık gelen bir detay rotası yok) — Alex
+              // persona bulgusunun kapsamlı bir sürümü yerine, gerçekten
+              // gidilebilecek tek hedefe odaklanan dar bir düzeltme.
+              const agentId = it.kind === 'agent' ? agentIdByName.get(it.source) : undefined
+              const clickable = agentId !== undefined
+              return (
               <div
                 key={it.key}
-                className={`flex items-baseline gap-2.5 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/40 ${i % 2 === 1 ? 'bg-slate-800/15' : ''}`}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onClick={clickable ? () => navigate(`/agentlar/${agentId}`) : undefined}
+                onKeyDown={
+                  clickable
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/agentlar/${agentId}`)
+                        }
+                      }
+                    : undefined
+                }
+                title={clickable ? `${it.source} agent detayına git` : undefined}
+                className={`flex items-baseline gap-2.5 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/40 ${i % 2 === 1 ? 'bg-slate-800/15' : ''} ${
+                  clickable ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50' : ''
+                }`}
               >
-                <span className="w-16 flex-shrink-0 text-right text-[10px] text-slate-600">{new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+                <span className="w-16 flex-shrink-0 text-right text-[10px] text-dim-aa">{new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}</span>
                 <span className="hidden w-16 flex-shrink-0 text-[10px] text-slate-700 sm:inline">{relTime(it.ts)}</span>
                 {it.kind === 'flow' && (
                   <span className="flex-shrink-0 rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-cyan-300">flow</span>
@@ -493,9 +578,10 @@ export function Overview({
                 {it.kind === 'agent' && it.pid ? (
                   <span className="hidden flex-shrink-0 text-[10px] text-slate-700 md:inline">pid {it.pid}</span>
                 ) : null}
-                <span className="w-28 flex-shrink-0 truncate text-right text-[10px] text-slate-600">{it.source}</span>
+                <span className="w-28 flex-shrink-0 truncate text-right text-[10px] text-dim-aa">{it.source}</span>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </Card>
@@ -503,16 +589,16 @@ export function Overview({
       {/* uyarılar — akışın altında, tam genişlik */}
       <Card title="Uyarılar" right={<span className="text-xs text-slate-500">{formatNum(alertEvents.length)} olay · bu oturum</span>}>
         {recentAlerts.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-600">Henüz uyarı yok.</p>
+          <p className="py-8 text-center text-sm text-dim-aa">Henüz uyarı yok.</p>
         ) : (
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
             {recentAlerts.map((e) => (
-              <div key={e.id} className="rounded-md border border-slate-800 bg-slate-900/50 px-2.5 py-2">
+              <div key={e.id} className="rounded-md border border-slate-800/60 bg-slate-900/50 px-2.5 py-2">
                 <div className="flex items-center gap-2">
                   <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${ALERT_KIND_STYLES[e.kind] ?? 'border-slate-700 bg-slate-800 text-slate-400'}`}>
                     {ALERT_KIND_LABELS[e.kind] ?? e.kind}
                   </span>
-                  <span className="ml-auto font-mono text-[10px] text-slate-600">{relTime(e.ts)}</span>
+                  <span className="ml-auto font-mono text-[10px] text-dim-aa">{relTime(e.ts)}</span>
                 </div>
                 <p className="mt-1 truncate text-xs text-slate-300">{e.message}</p>
               </div>
@@ -525,18 +611,18 @@ export function Overview({
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
         <Card title="Agent Filosu" right={<span className="text-xs text-slate-500">{onlineAgents}/{agents.length} online</span>}>
           {agents.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-600">Henüz agent yok.</p>
+            <p className="py-8 text-center text-sm text-dim-aa">Henüz agent yok.</p>
           ) : (
             <div className="grid gap-2.5 sm:grid-cols-2">
               {agents.slice(0, 6).map((a) => {
                 const busiest = [...(a.rates ?? [])].sort((x, y) => y.rx_bps + y.tx_bps - (x.rx_bps + x.tx_bps))[0]
                 return (
-                  <div key={a.id} className={`rounded-md border border-slate-800 bg-slate-900/50 p-2.5 ${!a.online ? 'opacity-60' : ''}`}>
+                  <div key={a.id} className={`min-w-0 rounded-md border border-slate-800/60 bg-slate-900/50 p-2.5 ${!a.online ? 'opacity-60' : ''}`}>
                     <div className="flex items-center gap-2">
                       <span className={`size-1.5 flex-shrink-0 rounded-full ${a.online ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                       <span className="truncate font-mono text-xs font-semibold text-slate-100">{a.name}</span>
                       {a.site && <span className="flex-shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] text-slate-400">{a.site}</span>}
-                      <span className="ml-auto flex-shrink-0 font-mono text-[9.5px] text-slate-600">{relTime(a.last_seen)}</span>
+                      <span className="ml-auto flex-shrink-0 font-mono text-[9.5px] text-dim-aa">{relTime(a.last_seen)}</span>
                     </div>
                     {busiest && (
                       <p className="mt-1.5 truncate font-mono text-[10.5px]">
@@ -550,7 +636,14 @@ export function Overview({
               })}
             </div>
           )}
-          {agents.length > 6 && <p className="mt-2 text-center text-[10.5px] text-slate-600">+{agents.length - 6} agent daha — tam liste aşağıda</p>}
+          {agents.length > 6 && (
+            <p className="mt-2 text-center text-[10.5px] text-dim-aa">
+              +{agents.length - 6} agent daha —{' '}
+              <Link to="/agentlar" className="text-cyan-400 hover:text-cyan-300">
+                Agent'lar sayfasında tam liste →
+              </Link>
+            </p>
+          )}
         </Card>
 
         <Card title="Ağ Topolojisi" right={<span className="text-xs text-slate-500">LLDP/CDP/ARP</span>}>
@@ -566,11 +659,11 @@ export function Overview({
       {/* cihazlar */}
       <Card title="Cihazlar" right={<span className="text-xs text-slate-500">SNMP v2c/v3 · FortiGate REST API</span>}>
         {devices.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-600">Cihaz yok.</p>
+          <p className="py-6 text-center text-sm text-dim-aa">Cihaz yok.</p>
         ) : (
           <div className="space-y-1.5">
             {devices.map((d) => (
-              <div key={d.id} className="flex flex-wrap items-center gap-2.5 rounded-md border border-slate-800 bg-slate-900/50 px-3 py-2">
+              <div key={d.id} className="flex flex-wrap items-center gap-2.5 rounded-md border border-slate-800/60 bg-slate-900/50 px-3 py-2">
                 <span className={`size-1.5 flex-shrink-0 rounded-full ${d.enabled && !d.last_error ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                 <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[9.5px] uppercase text-slate-400">{d.kind}</span>
                 <span className="font-mono text-xs font-semibold text-slate-100">{d.name}</span>
@@ -580,7 +673,7 @@ export function Overview({
                 ) : (
                   <span className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">snmp v{d.snmp_version === 3 ? '3' : '2c'}</span>
                 )}
-                <span className="ml-auto font-mono text-[10px] text-slate-600">
+                <span className="ml-auto font-mono text-[10px] text-dim-aa">
                   {d.last_poll > 0 ? `son poll: ${new Date(d.last_poll * 1000).toLocaleTimeString('tr-TR')}` : 'hiç poll edilmedi'}
                 </span>
                 {d.last_error && <span className="w-full truncate font-mono text-[10.5px] text-rose-400/80">⚠ {d.last_error}</span>}

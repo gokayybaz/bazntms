@@ -2,6 +2,13 @@
 
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* slate-500/600/700 koyu zeminde WCAG AA'yı (4.5:1) geçmiyordu (impeccable
+     critique P0 — slate-600 ~2.4:1, slate-700 ~1.8:1 ölçüldü). Bu ton hem
+     panel hem base zeminde 5:1+ veriyor; docs-site landing page'in --dim
+     token'ıyla (#7d8aa0) aynı — iki yüzey arasında kasıtlı akrabalık.
+     text-dim-aa: mevcut text-slate-600/700 kullanımlarının AA-uyumlu
+     yerine geçer, dosya-dosya taşınıyor (bkz. DESIGN.md Colors → Dim AA). */
+  --color-dim-aa: #7d8aa0;
 }
 
 html {

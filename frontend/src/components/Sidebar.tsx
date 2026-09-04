@@ -71,8 +71,14 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   return (
-    <aside className="sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60">
-      <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-4">
+    // dar ekranlarda (<640px) yalnızca ikon genişliği — önceden sabit w-56
+    // her viewport'ta aynıydı, 375px'te içerik alanını ~%40'a sıkıştırıp
+    // stat kartlarının çakışmasına neden oluyordu (impeccable critique P0).
+    // Tam hamburger/drawer yerine bilinçli olarak en düşük riskli çözüm:
+    // Sidebar.tsx/App.tsx test kapsamı dışı, yeni etkileşimli state eklemeden
+    // salt CSS ile daralma.
+    <aside className="sticky top-0 flex h-screen w-14 flex-shrink-0 flex-col border-r border-slate-800 bg-slate-950/60 sm:w-56">
+      <div className="flex items-center justify-center gap-3 border-b border-slate-800 px-2 py-4 sm:justify-start sm:px-4">
         <div className="grid size-10 flex-shrink-0 place-items-center rounded-md border border-cyan-500/50 bg-slate-900">
           <svg viewBox="0 0 24 24" className="size-6 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
@@ -83,7 +89,7 @@ export function Sidebar() {
             <path d="M6.2 6.2 10.6 10.6m6.8-4.4-4.4 4.4M6.2 17.8l4.4-4.4m6.8 4.4-4.4-4.4" strokeLinecap="round" />
           </svg>
         </div>
-        <div className="min-w-0">
+        <div className="hidden min-w-0 sm:block">
           <p className="font-mono text-base font-bold leading-tight tracking-tight text-white">bazNTMS</p>
           <p className="text-[8.5px] uppercase leading-[1.35] tracking-[0.1em] text-slate-500">
             Network Traffic
@@ -99,8 +105,9 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            title={item.label}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition ${
+              `flex items-center justify-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition sm:justify-start ${
                 isActive
                   ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
                   : 'border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -108,7 +115,7 @@ export function Sidebar() {
             }
           >
             <span className="size-4.5 flex-shrink-0">{item.icon}</span>
-            {item.label}
+            <span className="hidden sm:inline">{item.label}</span>
           </NavLink>
         ))}
       </nav>
