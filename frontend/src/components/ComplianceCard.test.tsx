@@ -44,4 +44,45 @@ describe('ComplianceCard', () => {
     render(<ComplianceCard refreshKey={0} />)
     await waitFor(() => expect(screen.getByText('durum alınamadı')).toBeInTheDocument())
   })
+
+  it('tarih alanları aria-label ile erişilebilir', async () => {
+    mockFetch()
+    render(<ComplianceCard refreshKey={0} />)
+    await waitFor(() => expect(screen.getByText('motor aktif')).toBeInTheDocument())
+    expect(screen.getByLabelText('Başlangıç tarihi')).toBeInTheDocument()
+    expect(screen.getByLabelText('Bitiş tarihi')).toBeInTheDocument()
+  })
+
+  it('tutanak eklerken ikinci prompt iptal edilince POST atılmaz (eski davranış: sessizce boş bulguyla devam ediyordu)', async () => {
+    mockFetch()
+    render(<ComplianceCard refreshKey={0} />)
+    await waitFor(() => expect(screen.getByText('motor aktif')).toBeInTheDocument())
+    const promptSpy = vi.spyOn(window, 'prompt')
+    promptSpy.mockReturnValueOnce('notlar').mockReturnValueOnce(null)
+    screen.getByRole('button', { name: /log inceleme/ }).click()
+    await waitFor(() => expect(promptSpy).toHaveBeenCalledTimes(2))
+    const postCalls = (window.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(postCalls.length).toBe(0)
+    promptSpy.mockRestore()
+  })
+
+  it('tutanak POST\'u başarısız olunca hata mesajı gösterir', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, opts?: RequestInit) => {
+        if (opts?.method === 'POST') return Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)
+        if (url === '/api/v1/compliance/status') return Promise.resolve({ ok: true, status: 200, json: async () => STATUS } as Response)
+        return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+      }),
+    )
+    render(<ComplianceCard refreshKey={0} />)
+    await waitFor(() => expect(screen.getByText('motor aktif')).toBeInTheDocument())
+    const promptSpy = vi.spyOn(window, 'prompt')
+    promptSpy.mockReturnValueOnce('notlar').mockReturnValueOnce('')
+    screen.getByRole('button', { name: /log inceleme/ }).click()
+    await waitFor(() => expect(screen.getByText(/tutanak kaydedilemedi/)).toBeInTheDocument())
+    promptSpy.mockRestore()
+  })
 })

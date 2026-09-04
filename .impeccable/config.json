@@ -83,6 +83,15 @@
         ],
         "createdAt": "2026-09-04T19:58:45.482Z",
         "reason": "Bölüm-ayracı altyazıları (satır ~150,~192) DESIGN.md'nin Label tipografi rolüyle (uppercase, tracked, 600 ağırlık) tutarlı kısa etiketler, uzun paragraf-gövdesi değil (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "frontend/src/components/ComplianceCard.tsx"
+        ],
+        "createdAt": "2026-09-04T20:28:13.511Z",
+        "reason": "Stat kutuları/delil paketi çubuğu/tutanak satırları taranabilir liste-öğesi deseni — DevicesCard.tsx'te zaten aynı gerekçeyle sustuurulmuş desenin tekrarı (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
       }
     ]
   }
