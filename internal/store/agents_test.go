@@ -101,6 +101,77 @@ func TestListAgentsRateNormal(t *testing.T) {
 	}
 }
 
+// TestDeleteAgentCascade, agent silinince ona bagli TUM zaman-serisi
+// tablolarinin (iface ornekleri + surec trafigi + L7 + DNS) temizlendigini,
+// diger agent'in verisine dokunulmadigini dogrular. Regresyon: eskiden
+// DeleteAgent yalnizca agents/agent_iface_samples/agent_conn_latest siliyordu,
+// process_traffic/l7_endpoints/agent_dns oksuz kaliyordu.
+func TestDeleteAgentCascade(t *testing.T) {
+	st := openTest(t)
+	now := time.Now().Unix()
+
+	victim, err := st.RegisterAgent(Agent{Name: "kurban", Site: "ofis", TokenHash: TokenHash("v")})
+	if err != nil {
+		t.Fatalf("register kurban: %v", err)
+	}
+	keep, err := st.RegisterAgent(Agent{Name: "kalan", Site: "ofis", TokenHash: TokenHash("k")})
+	if err != nil {
+		t.Fatalf("register kalan: %v", err)
+	}
+
+	for _, id := range []int64{victim, keep} {
+		if err := st.SaveIfaceSamples(id, now, []telemetry.InterfaceSample{
+			{Name: "eth0", RxBytes: 1000, TxBytes: 500, RxPackets: 10, TxPackets: 5},
+		}); err != nil {
+			t.Fatalf("iface ornek (agent %d): %v", id, err)
+		}
+		if err := st.SaveProcessTraffic(id, now, []telemetry.ProcessTrafficSample{
+			{PID: 42, Process: "curl", Proto: "tcp", RemoteIP: "1.1.1.1", Port: 443, BytesIn: 900, BytesOut: 100},
+		}); err != nil {
+			t.Fatalf("process_traffic (agent %d): %v", id, err)
+		}
+		if err := st.SaveL7(id, now, []telemetry.L7Sample{
+			{PID: 42, Process: "curl", Kind: "tls", Host: "example.com", RemoteIP: "1.1.1.1", Bytes: 500, Count: 3},
+		}); err != nil {
+			t.Fatalf("l7 (agent %d): %v", id, err)
+		}
+		if err := st.SaveAgentDNS(id, now, []telemetry.DNSSample{
+			{PID: 42, Process: "curl", Domain: "example.com", Queries: 2, Responses: 2},
+		}); err != nil {
+			t.Fatalf("agent_dns (agent %d): %v", id, err)
+		}
+	}
+
+	if err := st.DeleteAgent(victim); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	since := time.Unix(now-60, 0)
+	// kurban: her tabloda 0 satir
+	if pt, _ := st.TopProcessTraffic(since, victim, 10); len(pt) != 0 {
+		t.Errorf("silinen agent'in process_traffic satirlari kaldi: %+v", pt)
+	}
+	if l7, _ := st.TopL7(since, victim, 10); len(l7) != 0 {
+		t.Errorf("silinen agent'in l7_endpoints satirlari kaldi: %+v", l7)
+	}
+	if dns, _ := st.TopAgentDNS(since, victim, 10); len(dns) != 0 {
+		t.Errorf("silinen agent'in agent_dns satirlari kaldi: %+v", dns)
+	}
+	if ag, _ := st.ListAgents(time.Hour, ""); len(ag) != 1 || ag[0].ID != keep {
+		t.Errorf("yalnizca 'kalan' agent durmali: %+v", ag)
+	}
+	// kalan agent: verisi bozulmadi
+	if pt, _ := st.TopProcessTraffic(since, keep, 10); len(pt) != 1 {
+		t.Errorf("kalan agent'in process_traffic'i silinmis: %+v", pt)
+	}
+	if l7, _ := st.TopL7(since, keep, 10); len(l7) != 1 {
+		t.Errorf("kalan agent'in l7'si silinmis: %+v", l7)
+	}
+	if dns, _ := st.TopAgentDNS(since, keep, 10); len(dns) != 1 {
+		t.Errorf("kalan agent'in dns'i silinmis: %+v", dns)
+	}
+}
+
 // TestAgentHistoryCounterReset, AgentHistory'nin de ayni alt tasma korumasina
 // sahip oldugunu dogrular.
 func TestAgentHistoryCounterReset(t *testing.T) {

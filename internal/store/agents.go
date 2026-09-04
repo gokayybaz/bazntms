@@ -322,10 +322,17 @@ func (s *sqlStore) RenameAgent(id int64, name string) error {
 }
 
 func (s *sqlStore) DeleteAgent(id int64) error {
+	// Agent'a bagli TUM zaman-serisi tablolari: biri unutulursa agent silinince
+	// o satirlar oksuz kalir (agent_id artik agents'te yok) ve yalnizca retention
+	// suresi dolunca dusen "hayalet" filo verisi olusturur — l7_endpoints /
+	// agent_dns / process_traffic bu yuzden buraya eklendi.
 	for _, q := range []string{
 		`DELETE FROM agents WHERE id = ?`,
 		`DELETE FROM agent_iface_samples WHERE agent_id = ?`,
 		`DELETE FROM agent_conn_latest WHERE agent_id = ?`,
+		`DELETE FROM process_traffic WHERE agent_id = ?`,
+		`DELETE FROM l7_endpoints WHERE agent_id = ?`,
+		`DELETE FROM agent_dns WHERE agent_id = ?`,
 	} {
 		if _, err := s.db.Exec(s.q(q), id); err != nil {
 			return err
