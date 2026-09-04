@@ -98,68 +98,112 @@ const IconLink = () => (
   </svg>
 );
 
-const FEATURES = [
+/* 12 özellik 4 tematik gruba ayrıldı (impeccable: distill) — her grubun
+   vurgu rengi ürünün kendi dashboard'undaki renk-anlam sözleşmesinden
+   geliyor (impeccable: colorize, kullanıcı kararı): cyan=görünürlük/veri
+   akışı, violet=toplama/entegrasyon (dashboard'da "gönderilen" verinin
+   rengi), rose=güvenlik/uyum (dashboard'da "kritik" alarmın rengi),
+   emerald=ölçek/operasyon (dashboard'da "sağlıklı/online" durumun rengi). */
+const FEATURE_GROUPS = [
   {
-    icon: <IconTraffic />,
-    title: 'Canlı Trafik İzleme',
-    text: 'Paket bazlı ölçüm, yön tespiti ve protokol dağılımı; en yoğun uç noktalar GeoIP/ASN ile zenginleştirilip dünya haritasında hacme göre görselleştirilir.',
+    label: 'Görünürlük',
+    accent: 'cyan',
+    items: [
+      {
+        icon: <IconTraffic />,
+        title: 'Canlı Trafik İzleme',
+        text: 'Paket bazlı ölçüm, yön tespiti ve protokol dağılımı; en yoğun uç noktalar GeoIP/ASN ile zenginleştirilip dünya haritasında hacme göre görselleştirilir.',
+      },
+      {
+        icon: <IconLayers />,
+        title: 'Derin Uygulama Görünürlüğü',
+        text: 'Süreç bazlı TLS ClientHello SNI + HTTP Host çıkarımı ve DNS sorgu/yanıt takibi — imza tabanlı DPI olmadan “hangi süreç, hangi alan adına” sorusunun cevabı.',
+      },
+      {
+        icon: <IconTopo />,
+        title: 'Canlı Ağ Topolojisi',
+        text: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita: client → hub → cihaz → router → internet zinciri gerçek trafik akışıyla birlikte tek bakışta.',
+      },
+    ],
   },
   {
-    icon: <IconLayers />,
-    title: 'Derin Uygulama Görünürlüğü',
-    text: 'Süreç bazlı TLS ClientHello SNI + HTTP Host çıkarımı ve DNS sorgu/yanıt takibi — imza tabanlı DPI olmadan “hangi süreç, hangi alan adına” sorusunun cevabı.',
+    label: 'Toplama & Entegrasyon',
+    accent: 'violet',
+    items: [
+      {
+        icon: <IconFleet />,
+        title: 'Merkezi Agent Filosu',
+        text: 'Enrollment, toplu telemetri ve offline disk kuyruğu ile 5.000 agent’a kadar ölçek. Agent↔hub trafiği karşılıklı TLS (mTLS) ile korunur, sertifikalar kendini yeniler.',
+      },
+      {
+        icon: <IconFunnel />,
+        title: 'Çok Protokollü Akış Toplama',
+        text: 'NetFlow v5/v9, IPFIX ve sFlow v5 tek toplayıcıda — şablon önbelleği ve örnekleme oranına göre otomatik ölçekleme, tamamı aynı akış tablosuna yazılır.',
+      },
+      {
+        icon: <IconDevices />,
+        title: 'Cihaz Entegrasyonları',
+        text: 'SNMPv3 arayüz/durum takibi ve syslog alıcısının üzerine FortiGate REST API: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve oturum izleme.',
+      },
+    ],
   },
   {
-    icon: <IconFleet />,
-    title: 'Merkezi Agent Filosu',
-    text: 'Enrollment, toplu telemetri ve offline disk kuyruğu ile 5.000 agent’a kadar ölçek. Agent↔hub trafiği karşılıklı TLS (mTLS) ile korunur, sertifikalar kendini yeniler.',
+    label: 'Güvenlik & Uyumluluk',
+    accent: 'rose',
+    items: [
+      {
+        icon: <IconShield />,
+        title: 'Güvenlik ve Kimlik',
+        text: 'Rol tabanlı erişim (admin/netops/analyst/viewer + site scope), OIDC SSO, entegrasyon token’ları ve hash-zincirli append-only denetim kaydı.',
+      },
+      {
+        icon: <IconLink />,
+        title: 'Tehdit İstihbaratı ve SIEM',
+        text: 'IOC kara listesiyle L7/DNS eşleştirmesi; olaylar CEF, LEEF, JSON veya düz syslog olarak Splunk HEC, ServiceNow, QRadar, ArcSight gibi hedeflere aktarılır.',
+      },
+      {
+        icon: <IconStamp />,
+        title: '5651 Uyumluluk ve ISO 27001',
+        text: 'Loglar Merkle checkpoint + RFC 3161 zaman damgası ile imzalanır, WORM depoda 2 yıl saklanır; risk defteri, SoA, iç denetim ve tek tıkla denetçi paketi.',
+      },
+    ],
   },
   {
-    icon: <IconFunnel />,
-    title: 'Çok Protokollü Akış Toplama',
-    text: 'NetFlow v5/v9, IPFIX ve sFlow v5 tek toplayıcıda — şablon önbelleği ve örnekleme oranına göre otomatik ölçekleme, tamamı aynı akış tablosuna yazılır.',
-  },
-  {
-    icon: <IconDevices />,
-    title: 'Cihaz Entegrasyonları',
-    text: 'SNMPv3 arayüz/durum takibi ve syslog alıcısının üzerine FortiGate REST API: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve oturum izleme.',
-  },
-  {
-    icon: <IconTopo />,
-    title: 'Canlı Ağ Topolojisi',
-    text: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita: client → hub → cihaz → router → internet zinciri gerçek trafik akışıyla birlikte tek bakışta.',
-  },
-  {
-    icon: <IconScale />,
-    title: 'Ölçek Altyapısı',
-    text: 'PostgreSQL + TimescaleDB üzerinde katmanlı saklama (ham 7 gün, 1 dk 90 gün, 1 sa 2 yıl) ve NATS JetStream ile esnek ingest hattı; k8s/Helm dağıtımı hazır.',
-  },
-  {
-    icon: <IconShield />,
-    title: 'Güvenlik ve Kimlik',
-    text: 'Rol tabanlı erişim (admin/netops/analyst/viewer + site scope), OIDC SSO, entegrasyon token’ları ve hash-zincirli append-only denetim kaydı.',
-  },
-  {
-    icon: <IconLink />,
-    title: 'Tehdit İstihbaratı ve SIEM',
-    text: 'IOC kara listesiyle L7/DNS eşleştirmesi; olaylar CEF, LEEF, JSON veya düz syslog olarak Splunk HEC, ServiceNow, QRadar, ArcSight gibi hedeflere aktarılır.',
-  },
-  {
-    icon: <IconSpark />,
-    title: 'Akıllı Operasyon',
-    text: 'İstatistiksel anomali tespiti (saatlik baseline + z-skoru), SLA/kapasite/banding raporları ve Teams, Slack, SMTP, imzalı webhook bildirim kanalları.',
-  },
-  {
-    icon: <IconRocket />,
-    title: 'Dağıtım, API ve Operasyon',
-    text: 'Docker/Helm ile k8s dağıtımı; deb/rpm/MSI/pkg installer’lar; imza doğrulamalı otomatik güncelleme; elle bakımlı OpenAPI 3.1 şeması + gömülü /api/docs gezgini.',
-  },
-  {
-    icon: <IconStamp />,
-    title: '5651 Uyumluluk ve ISO 27001',
-    text: 'Loglar Merkle checkpoint + RFC 3161 zaman damgası ile imzalanır, WORM depoda 2 yıl saklanır; risk defteri, SoA, iç denetim ve tek tıkla denetçi paketi.',
+    label: 'Ölçek & Operasyon',
+    accent: 'emerald',
+    items: [
+      {
+        icon: <IconScale />,
+        title: 'Ölçek Altyapısı',
+        text: 'PostgreSQL + TimescaleDB üzerinde katmanlı saklama (ham 7 gün, 1 dk 90 gün, 1 sa 2 yıl) ve NATS JetStream ile esnek ingest hattı; k8s/Helm dağıtımı hazır.',
+      },
+      {
+        icon: <IconSpark />,
+        title: 'Akıllı Operasyon',
+        text: 'İstatistiksel anomali tespiti (saatlik baseline + z-skoru), SLA/kapasite/banding raporları ve Teams, Slack, SMTP, imzalı webhook bildirim kanalları.',
+      },
+      {
+        icon: <IconRocket />,
+        title: 'Dağıtım, API ve Operasyon',
+        text: 'Docker/Helm ile k8s dağıtımı; deb/rpm/MSI/pkg installer’lar; imza doğrulamalı otomatik güncelleme; elle bakımlı OpenAPI 3.1 şeması + gömülü /api/docs gezgini.',
+      },
+    ],
   },
 ];
+
+const ACCENT_ICON_CLASS = {
+  cyan: 'featureIconCyan',
+  violet: 'featureIconViolet',
+  rose: 'featureIconRose',
+  emerald: 'featureIconEmerald',
+};
+
+const ACCENT_DOT_COLOR = {
+  cyan: '#22d3ee',
+  violet: '#a78bfa',
+  rose: '#fb7185',
+  emerald: '#34d399',
+};
 
 const NEW_IN = [
   'Karşılıklı TLS (mTLS)',
@@ -173,24 +217,27 @@ const NEW_IN = [
   'OpenAPI 3.1 + /api/docs',
 ];
 
+/* üç birbirini dışlayan kurulum yolu — önceden "1/2/3/4" numaralı sıralı
+   adım gibi etiketlenmişti, oysa "hub derle" + "agent bağla" tek bir yolun
+   (elle kurulum) iki ardışık komutuydu, tek-node demo ve ölçek mimarisi ise
+   onun ALTERNATİFİydi (impeccable: clarify — ilk kez gelen 2. adımı da
+   yapması gereken bir sonraki adım sanabilirdi). Artık harf rozetli (A/B/C)
+   üç bağımsız seçenek. */
 const STEPS = [
   {
     label: 'Tek-node demo',
     code: 'git clone https://github.com/gokayybaz/bazntms\ncd bazntms\ndocker compose -f deploy/docker-compose.yml up --build\n# → http://localhost:8080 · şifre: demo123',
   },
   {
-    label: 'Hub’ı derleyip yapılandırın',
-    code: 'make                       # frontend + hub + agent + ctl\n./bazntmsctl setup         # interaktif sihirbaz → bazntms-hub.yml\n./bazntms-hub -config bazntms-hub.yml',
-  },
-  {
-    label: 'Agent’ları bağlayın',
-    code: './bazntms-agent -hub-url https://hub.example.com \\\n  -enroll-token <hub-loglarındaki-token>\n# deb · rpm · MSI · pkg paketleri release sayfasında',
+    label: 'Elle derleyin ve agent bağlayın',
+    code: 'make                       # frontend + hub + agent + ctl\n./bazntmsctl setup         # interaktif sihirbaz → bazntms-hub.yml\n./bazntms-hub -config bazntms-hub.yml\n\n# agent bağlamak için (deb · rpm · MSI · pkg release sayfasında):\n./bazntms-agent -hub-url https://hub.example.com \\\n  -enroll-token <hub-loglarındaki-token>',
   },
   {
     label: 'Ölçek mimarisi (k8s olmadan)',
     code: 'docker compose -f deploy/docker-compose.scale.yml up --build\n# 2 × ingest replikası + kontrolcü + nginx LB + JetStream\n# --scale hub-ingest=4 → yatay büyüt · dashboard: :8080 · agent API: :8081',
   },
 ];
+const STEP_BADGES = ['A', 'B', 'C'];
 
 const STATS = [
   { value: '1.000', label: 'cihaz · 60 sn poll' },
@@ -518,7 +565,6 @@ export default function Home() {
         {/* HERO */}
         <section className={styles.hero}>
           <div className={styles.heroInner}>
-            <p className={`${styles.kicker} ${styles.fadeUp}`}>kurumsal ağ trafiği izleme platformu</p>
             <h1 className={`${styles.title} ${styles.fadeUp1}`}>
               baz<span>NTMS</span>
             </h1>
@@ -556,7 +602,9 @@ export default function Home() {
         {/* CANLI ÖNİZLEME */}
         <section className={styles.previewSection}>
           <div className={styles.previewWrap} data-reveal>
-            <LivePreview />
+            <div className={styles.svgScroll}>
+              <LivePreview />
+            </div>
           </div>
           <p className={styles.previewCaption}>
             Temsili görünüm — canlı bir demo değil, sahnelenmiş sentetik veri. Gerçek panel için{' '}
@@ -599,31 +647,35 @@ export default function Home() {
 
         {/* YETENEKLER */}
         <section className={styles.section}>
-          <p className={styles.overline} data-reveal>
-            Platform
-          </p>
           <h2 data-reveal>Uçtan uca görünürlük</h2>
-          <div className={styles.grid}>
-            {FEATURES.map((f, i) => (
-              <article key={f.title} className={styles.feature} data-reveal style={{ transitionDelay: `${(i % 3) * 80}ms` }}>
-                <div className={styles.featureIcon}>{f.icon}</div>
-                <h3>{f.title}</h3>
-                <p>{f.text}</p>
-              </article>
+          <div className={styles.featureGroups}>
+            {FEATURE_GROUPS.map((group) => (
+              <div key={group.label}>
+                <div className={styles.featureGroupHead} data-reveal>
+                  <span className={styles.featureGroupDot} style={{ background: ACCENT_DOT_COLOR[group.accent] }} />
+                  <p className={styles.featureGroupLabel}>{group.label}</p>
+                </div>
+                <div className={styles.grid}>
+                  {group.items.map((f, i) => (
+                    <article key={f.title} className={styles.feature} data-reveal style={{ transitionDelay: `${i * 80}ms` }}>
+                      <div className={`${styles.featureIcon} ${styles[ACCENT_ICON_CLASS[group.accent]]}`}>{f.icon}</div>
+                      <h3>{f.title}</h3>
+                      <p>{f.text}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </section>
 
         {/* HIZLI BAŞLANGIÇ — alt alta */}
         <section className={styles.section}>
-          <p className={styles.overline} data-reveal>
-            Hızlı Başlangıç
-          </p>
-          <h2 data-reveal>Dört adımda çalışır durumda</h2>
+          <h2 data-reveal>Üç kurulum yolundan birini seçin</h2>
           <div className={styles.steps}>
             {STEPS.map((s, i) => (
               <div key={s.label} className={styles.step} data-reveal style={{ transitionDelay: `${i * 80}ms` }}>
-                <div className={styles.stepNo}>{i + 1}</div>
+                <div className={styles.stepNo}>{STEP_BADGES[i]}</div>
                 <div className={styles.terminal}>
                   <div className={styles.terminalHead}>
                     <span className={styles.dotRed} />
@@ -645,11 +697,8 @@ export default function Home() {
 
         {/* MİMARİ */}
         <section className={styles.section}>
-          <p className={styles.overline} data-reveal>
-            Mimari
-          </p>
           <h2 data-reveal>Nasıl çalışır?</h2>
-          <div data-reveal>
+          <div className={styles.svgScroll} data-reveal>
             <Architecture />
           </div>
           <p className={styles.hint} data-reveal>
@@ -678,6 +727,7 @@ export default function Home() {
                 API referansı
               </a>
             </div>
+            <p className={styles.bottomRisk}>MIT lisanslı · kendi altyapınızda çalışır · vendor lock-in yok</p>
           </div>
         </section>
       </main>

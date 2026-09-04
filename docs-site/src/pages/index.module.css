@@ -16,9 +16,9 @@
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
-  background:
-    radial-gradient(60% 80% at 50% 0%, rgba(34, 211, 238, 0.09), transparent 70%),
-    radial-gradient(circle, rgba(148, 163, 184, 0.05) 1px, transparent 1px) 0 0 / 24px 24px;
+  /* renkli "spotlight" glow kaldırıldı (impeccable: ai-color-palette +
+     radial-spotlight-glow bulgusu) — yalnızca nötr nokta-ızgara doku kaldı */
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.05) 1px, transparent 1px) 0 0 / 24px 24px;
 }
 
 .heroInner {
@@ -26,15 +26,6 @@
   margin: 0 auto;
   text-align: center;
   padding: 88px 24px 64px;
-}
-
-.kicker {
-  font-family: var(--ifm-font-family-monospace);
-  text-transform: uppercase;
-  letter-spacing: 0.24em;
-  font-size: 11.5px;
-  color: #22d3ee;
-  margin: 0 0 18px;
 }
 
 .title {
@@ -230,14 +221,9 @@
   padding: 68px 24px 8px;
 }
 
-.overline {
-  font-family: var(--ifm-font-family-monospace);
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 10.5px;
-  color: #22d3ee;
-  margin: 0 0 8px;
-}
+/* .overline (bölüm başlıklarının üstündeki "Platform"/"Mimari" gibi eyebrow
+   etiketleri) kaldırıldı — impeccable: kicker-above-heading, craft-floor'da
+   kesin yasak ("tekrarlansa da yasak, silinsin"). H2 kendi başına yeterli. */
 
 .section h2 {
   font-size: 28px;
@@ -250,6 +236,40 @@
 }
 
 /* --- ÖZELLİKLER --- */
+/* 12 kart artık 4 tematik gruba ayrılmış (impeccable: distill — düz 12'li
+   ızgara + üstteki rozet/istatistik bantlarıyla birlikte hiyerarşisiz bir
+   yığın oluşturuyordu). Her grup, ürünün kendi dashboard'unda kullandığı
+   renk-anlam sözleşmesinden bir vurgu rengi taşır (impeccable: colorize —
+   jenerik tek-tip cyan yerine iki yüzey arasında kasıtlı akrabalık). */
+
+.featureGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.featureGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+}
+
+.featureGroupDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.featureGroupLabel {
+  font-family: var(--ifm-font-family-monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0;
+}
 
 .grid {
   display: grid;
@@ -274,17 +294,38 @@
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  border: 1px solid rgba(34, 211, 238, 0.3);
-  background: rgba(34, 211, 238, 0.08);
   display: grid;
   place-items: center;
-  color: #22d3ee;
   margin-bottom: 14px;
 }
 
 .featureIcon svg {
   width: 22px;
   height: 22px;
+}
+
+.featureIconCyan {
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: rgba(34, 211, 238, 0.08);
+  color: #22d3ee;
+}
+
+.featureIconViolet {
+  border: 1px solid rgba(167, 139, 250, 0.32);
+  background: rgba(167, 139, 250, 0.08);
+  color: #a78bfa;
+}
+
+.featureIconRose {
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  background: rgba(251, 113, 133, 0.08);
+  color: #fb7185;
+}
+
+.featureIconEmerald {
+  border: 1px solid rgba(52, 211, 153, 0.32);
+  background: rgba(52, 211, 153, 0.08);
+  color: #34d399;
 }
 
 .feature h3 {
@@ -425,6 +466,7 @@
 
 .archSvg {
   width: 100%;
+  min-width: 640px;
   height: auto;
   display: block;
   border: 1px solid var(--line);
@@ -534,7 +576,15 @@
   border-radius: 18px;
   padding: 3px;
   background: linear-gradient(135deg, rgba(34, 211, 238, 0.35), rgba(34, 211, 238, 0) 40%, rgba(34, 211, 238, 0.18) 100%);
-  box-shadow: 0 30px 70px -30px rgba(8, 47, 73, 0.65);
+  /* renkli glow yerine nötr yükseklik gölgesi (impeccable: dark-glow bulgusu) */
+  box-shadow: 0 30px 70px -30px rgba(2, 6, 23, 0.7);
+}
+
+/* mobilde SVG'ler tek başına küçülüp okunamaz hale gelmesin diye taşıyor —
+   frontend'in TrafficFlowDiagram/TopologyCard'ta kullandığı aynı desen
+   (impeccable: adapt bulgusu, 375px'te SVG metni ~4px'e düşüyordu) */
+.svgScroll {
+  overflow-x: auto;
 }
 
 /* mockup'ın gerçek bir demo sanılmaması için görünür açıklama — impeccable critique bulgusu */
@@ -551,6 +601,7 @@
 
 .previewSvg {
   width: 100%;
+  min-width: 640px;
   height: auto;
   display: block;
   border-radius: 16px;
@@ -731,6 +782,16 @@
   line-height: 1.7;
 }
 
+/* kapanışta hero'nun tekrarı değil, yeni bir güven argümanı — peak-end
+   kuralı (impeccable: delight bulgusu, önceki kapanış hero'yu birebir
+   tekrarlayıp 5651/ISO 27001/mTLS iddialarından sonra sönük bitiyordu) */
+.bottomRisk {
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--dim);
+  font-size: 12.5px;
+  margin: -14px 0 26px;
+}
+
 /* --- SCROLL REVEAL --- */
 
 [data-reveal] {
@@ -767,9 +828,5 @@
 
   .title {
     font-size: 46px;
-  }
-
-  .phases {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
