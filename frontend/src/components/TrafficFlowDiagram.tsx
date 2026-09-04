@@ -27,6 +27,7 @@ export interface TrafficEvent {
 /** şemada gösterilecek agent — Overview'daki AgentWithRates'ten türetilir */
 export interface DiagramAgent {
   name: string
+  /** false olanlar şemadan tamamen çıkarılır — düğüm de yok, paket de almaz */
   online: boolean
   site?: string
   /** en yoğun arayüzün gelen/giden hızı (bayt/sn) — düğüm etiketinde gösterilir */
@@ -42,6 +43,8 @@ const AGENT_X = 152
 const FW_X = 524
 const NET_X = 884
 const NODE_W = 138
+/** resolveIdx dönüşü: -1 = agent'sız eksen (cihaz/firewall), -2 = çevrimdışı/bilinmeyen agent → paket üretme */
+const DROP = -2
 
 /** agent sayısına göre satır yüksekliği — çok kalabalık filoda daralır */
 function rowHeight(count: number): number {
@@ -199,9 +202,9 @@ function AgentNode({
   detail: Detail
   flash: boolean
 }): ReactElement {
-  const col = agent.online ? '#34d399' : '#64748b'
+  const col = '#34d399' // şemada yalnızca çevrimiçi agent bulunur
   const short = agent.name.length > 14 ? agent.name.slice(0, 13) + '…' : agent.name
-  const titleText = `${agent.name}${agent.site ? ` · ${agent.site}` : ''}${agent.online ? '' : ' · offline'}`
+  const titleText = `${agent.name}${agent.site ? ` · ${agent.site}` : ''}`
   // istemci (client) olduğu belli olsun diye her düğümün sağında bir monitör ikonu
   const monitor = (cx: number, s: number): ReactElement => (
     <g transform={`translate(${cx},0) scale(${s})`}>
@@ -216,7 +219,7 @@ function AgentNode({
       <g transform={`translate(${x},${y})`}>
         <title>{titleText}</title>
         {flash && <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-node" />}
-        <circle cx={-NODE_W / 2} r={3} fill={col} className={agent.online ? 'tfd-led' : ''} />
+        <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-led" />
         <text x={-NODE_W / 2 + 9} y={3} fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">
           {short}
         </text>
@@ -236,10 +239,10 @@ function AgentNode({
         height={h}
         rx={4}
         fill="#0d1424"
-        stroke={agent.online ? '#1e5245' : '#334155'}
+        stroke="#1e5245"
         strokeWidth={1.2}
       />
-      <circle cx={-NODE_W / 2 + 9} cy={0} r={2.6} fill={col} className={agent.online ? 'tfd-led' : ''} />
+      <circle cx={-NODE_W / 2 + 9} cy={0} r={2.6} fill={col} className="tfd-led" />
       <text
         x={-NODE_W / 2 + 17}
         y={detail === 'full' ? -2 : 3.2}
@@ -379,14 +382,21 @@ export function TrafficFlowDiagram({
   const [netEnd, setNetEnd] = useState<string | null>(null)
   const flashRef = useRef<Map<number, number>>(new Map()) // agentIdx → son aktivite zamanı
 
-  // agent adı → düğüm indeksi. Bilinmeyen ad kararlı biçimde bir düğüme hash'lenir
-  // (olayın kaybolmaması için) — filo boşsa -1.
+  // yalnızca ÇEVRİMİÇİ agent'lar şemada düğüm olur — kapalı agent trafik üretmez.
+  // Filo listesi Overview'dan online-first sıralı + tam gelir; süzme yine de
+  // burada yapılır ki poll gecikmesinde bayat bir "agent" olayı masum bir
+  // düğüme sıçramasın ("N çevrimdışı gizli" ipucu için tam sayıya ihtiyaç var).
+  const onlineAgents = useMemo(() => agents.filter((a) => a.online), [agents])
+  const offlineCount = agents.length - onlineAgents.length
+
+  // agent adı → düğüm indeksi (yalnızca online). Adı bilinen-ama-kapalı ya da
+  // hiç bilinmeyen agent DROP döndürür → o olay için paket üretilmez.
   const agentIndex = useMemo(() => {
     const m = new Map<string, number>()
-    agents.forEach((a, i) => m.set(a.name, i))
+    onlineAgents.forEach((a, i) => m.set(a.name, i))
     return m
-  }, [agents])
-  const count = agents.length
+  }, [onlineAgents])
+  const count = onlineAgents.length
   const H = sceneHeight(count)
   const midY = H / 2
   const detail = detailFor(count)
@@ -396,8 +406,8 @@ export function TrafficFlowDiagram({
 
   const resolveIdx = (name: string | undefined, hashKey: string): number => {
     if (count === 0) return -1
-    if (name && agentIndex.has(name)) return agentIndex.get(name)!
-    return hashStr(name || hashKey) % count
+    if (name) return agentIndex.has(name) ? agentIndex.get(name)! : DROP
+    return hashStr(hashKey) % count // yalnızca anonim uç (lan hedefi) — online havuzdan
   }
 
   const pathFor = (dir: Dir, idxA: number, idxB: number): Array<[number, number]> => {
@@ -435,6 +445,10 @@ export function TrafficFlowDiagram({
       dir = classifyDir(ev)
       const deviceFlow = ev.kind === 'flow' && !ev.agent
       idxA = deviceFlow ? -1 : resolveIdx(ev.agent, ev.from)
+      if (idxA === DROP) return // çevrimdışı/bilinmeyen agent olayı — şemada gösterilmez
+      // syslog/olay bildirimi bir online agent'a ait değilse firewall ekseninde kalır
+      if (dir === 'log' && !(ev.agent && agentIndex.has(ev.agent))) idxA = -1
+      if (count === 0 && dir === 'lan') dir = 'in'
       if (dir === 'lan') idxB = resolveIdx(undefined, ev.to ?? ev.key)
       const fromH = cleanHost(ev.from)
       const toH = cleanHost(ev.to ?? '')
@@ -452,6 +466,7 @@ export function TrafficFlowDiagram({
       const roll = Math.random()
       dir = roll < 0.42 ? 'out' : roll < 0.85 ? 'in' : 'lan'
       idxA = count > 0 ? Math.floor(Math.random() * count) : -1
+      if (idxA < 0 && dir === 'lan') dir = 'in' // agent yokken yerel ağ paketi anlamsız
       r = 3
     }
     const pts = jitterInterior(pathFor(dir, idxA, idxB))
@@ -487,10 +502,11 @@ export function TrafficFlowDiagram({
     if (seenRef.current.size > 4000) seenRef.current = new Set(events.map((e) => e.key))
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
     fresh
+      .filter((e) => !e.agent || agentIndex.has(e.agent)) // kapalı agent olayları dilime hiç girmesin
       .slice(-12)
       .reverse()
       .forEach((e, i) => spawnRef.current(e, now + Math.min(i, 10) * 180))
-  }, [events, reduced])
+  }, [events, reduced, agentIndex])
 
   // RAF döngüsü — sadece animasyon varken yeniden çizer (boştayken sessiz)
   useEffect(() => {
@@ -524,8 +540,6 @@ export function TrafficFlowDiagram({
     return () => cancelAnimationFrame(raf)
   }, [reduced, pps])
 
-  const onlineCount = useMemo(() => agents.filter((a) => a.online).length, [agents])
-
   // imperatif animasyon: paket listesi ref'te tutulur, RAF döngüsü her karede
   // setFrame ile yeniden çizdirir — konumlar o anki saate göre burada hesaplanır
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -551,7 +565,7 @@ export function TrafficFlowDiagram({
           viewBox={`0 0 ${W} ${H}`}
           className="w-full min-w-[680px]"
           role="img"
-          aria-label="Agent filosu, router/güvenlik duvarı ve internet arasında canlı paket akışı şeması"
+          aria-label="Çevrimiçi agent'lar, router/güvenlik duvarı ve internet arasında canlı paket akışı şeması"
         >
           <defs>
             <radialGradient id="tfd-bg" cx="50%" cy="0%" r="120%">
@@ -578,10 +592,12 @@ export function TrafficFlowDiagram({
             AGENT FİLOSU
           </text>
           <text x={AGENT_X} y={H - 14} textAnchor="middle" fontSize={9} fill="#475569" fontFamily="ui-monospace, monospace">
-            {count === 0 ? 'agent yok' : `${onlineCount}/${count} online`}
+            {count === 0
+              ? 'aktif agent yok'
+              : `${count} aktif${offlineCount > 0 ? ` · ${offlineCount} çevrimdışı gizli` : ''}`}
           </text>
 
-          {/* altyapı bağlantıları: her agent düğümünden güvenlik duvarına */}
+          {/* altyapı bağlantıları: her çevrimiçi agent düğümünden güvenlik duvarına */}
           {count === 0 ? (
             <line
               x1={nodeRight}
@@ -594,7 +610,7 @@ export function TrafficFlowDiagram({
               className={reduced ? '' : 'tfd-dash'}
             />
           ) : (
-            agents.map((_, i) => (
+            onlineAgents.map((_, i) => (
               <line
                 key={i}
                 x1={nodeRight}
@@ -619,7 +635,7 @@ export function TrafficFlowDiagram({
             className={reduced ? '' : 'tfd-dash'}
           />
 
-          {agents.map((a, i) => (
+          {onlineAgents.map((a, i) => (
             <AgentNode
               key={a.name}
               x={AGENT_X}
@@ -631,7 +647,7 @@ export function TrafficFlowDiagram({
           ))}
           {count === 0 && (
             <text x={AGENT_X} y={midY} textAnchor="middle" fontSize={10} fill="#475569" fontFamily="ui-monospace, monospace">
-              online agent bekleniyor
+              aktif agent bekleniyor
             </text>
           )}
           <Firewall y={midY} reduced={reduced} />

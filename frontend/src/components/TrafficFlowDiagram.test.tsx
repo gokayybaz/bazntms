@@ -26,31 +26,33 @@ describe('TrafficFlowDiagram', () => {
     expect(screen.getByText('Gelen · internet → agent')).toBeInTheDocument()
   })
 
-  it('filodaki HER agent için bir düğüm çizer (online + offline)', () => {
+  it('yalnızca ÇEVRİMİÇİ agent için düğüm çizer — kapalı agent şemadan tamamen çıkar', () => {
     render(<TrafficFlowDiagram events={[]} agents={AGENTS} pps={0} />)
     expect(screen.getByText('agent-a')).toBeInTheDocument()
     expect(screen.getByText('agent-b')).toBeInTheDocument()
-    expect(screen.getByText('agent-c')).toBeInTheDocument()
-    // 3 agent, 2 online
-    expect(screen.getByText('2/3 online')).toBeInTheDocument()
+    // agent-c kapalı → hiçbir düğüm/başlık üretmez
+    expect(screen.queryByText('agent-c')).not.toBeInTheDocument()
+    expect(screen.getByText('2 aktif · 1 çevrimdışı gizli')).toBeInTheDocument()
   })
 
-  it('agent sayısı çoğaldıkça hepsi yine de çizilir', () => {
+  it('kalabalık filoda yalnızca çevrimiçi düğümler çizilir', () => {
     const many: DiagramAgent[] = Array.from({ length: 30 }, (_, i) => ({
       name: `edge-prob-${String(i).padStart(2, '0')}`,
       online: i % 4 !== 0,
     }))
     render(<TrafficFlowDiagram events={[]} agents={many} pps={0} />)
-    // her düğüm hem <title> hem görünür <text> üretir — en az biri var
-    expect(screen.getAllByText(/edge-prob-00/).length).toBeGreaterThan(0)
+    // i=0 kapalı → gizli; i=1 ve i=29 çevrimiçi → görünür (her düğüm <title>+<text> üretir)
+    expect(screen.queryAllByText(/edge-prob-00/).length).toBe(0)
+    expect(screen.getAllByText(/edge-prob-01/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/edge-prob-29/).length).toBeGreaterThan(0)
-    expect(screen.getByText('22/30 online')).toBeInTheDocument()
+    // 30 agent, 8 kapalı (i%4===0), 22 aktif
+    expect(screen.getByText('22 aktif · 8 çevrimdışı gizli')).toBeInTheDocument()
   })
 
   it('agent listesi boşken hata vermeden render olur', () => {
     render(<TrafficFlowDiagram events={[]} agents={[]} />)
     expect(screen.getByText('İNTERNET')).toBeInTheDocument()
-    expect(screen.getByText('agent yok')).toBeInTheDocument()
+    expect(screen.getByText('aktif agent yok')).toBeInTheDocument()
   })
 
   it('ilk dolu partiden sonra gelen yeni olay "giden" sayacına işlenir', () => {
@@ -64,5 +66,21 @@ describe('TrafficFlowDiagram', () => {
       />,
     )
     expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('1')
+  })
+
+  it('ilk partiden sonra gelen ÇEVRİMDIŞI agent olayı hiçbir sayaca işlenmez', () => {
+    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} pps={0} />)
+    rerender(
+      <TrafficFlowDiagram
+        events={[
+          // agent-c kapalı → paket de sayaç da yok
+          { key: 'off1', kind: 'agent', ts: now + 1, agent: 'agent-c', from: '10.0.0.3:5000', to: '3.3.3.3:443' },
+          ...EVENTS,
+        ]}
+        agents={AGENTS}
+        pps={0}
+      />,
+    )
+    expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('0')
   })
 })
