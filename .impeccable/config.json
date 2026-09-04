@@ -92,6 +92,15 @@
         ],
         "createdAt": "2026-09-04T20:28:13.511Z",
         "reason": "Stat kutuları/delil paketi çubuğu/tutanak satırları taranabilir liste-öğesi deseni — DevicesCard.tsx'te zaten aynı gerekçeyle sustuurulmuş desenin tekrarı (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/ComplianceCard.tsx"
+        ],
+        "createdAt": "2026-09-04T20:31:44.028Z",
+        "reason": "Satır 228: ternary'nin log dalı (bg-cyan-500/10 text-cyan-300) ve access dalı (bg-slate-800/60 text-slate-300) aynı satırda ama birbirini dışlıyor — dedektör dal-farkındalığı olmadan ikisini birlikte eşleştiriyor (line-42 ile aynı kanıtlı desen, Assessment B tarafından teşhis edildi). Ayrıca text-slate-300/bg-slate-800 zaten nötr-üzerine-nötr, 'renkli zemin üzerinde soluk gri' durumu değil."
       }
     ]
   }
