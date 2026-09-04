@@ -233,6 +233,6 @@ func render(w, h int, path string) {
 }
 
 func main() {
-	render(1280, 640, "marketing/banner-1280x640.png")  // GitHub social preview
+	render(1280, 640, "marketing/banner-1280x640.png")   // GitHub social preview
 	render(1200, 627, "marketing/linkedin-1200x627.png") // LinkedIn link gorseli
 }
