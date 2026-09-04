@@ -9,7 +9,7 @@ import { GeoMapCard } from './GeoMapCard'
 const GEO = [{ country: 'TR', name: 'Türkiye', lat: 39, lon: 35.2, bytes: 123_456_789, sessions: 4 }]
 
 function mockFetch(rows: unknown[] = GEO) {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 200, json: async () => rows } as Response)))
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 200, ok: true, json: async () => rows } as Response)))
 }
 
 describe('GeoMapCard', () => {
@@ -20,7 +20,7 @@ describe('GeoMapCard', () => {
     render(<GeoMapCard />)
     // "TR" hem SVG etiketinde hem alttaki özet şeridinde geçiyor — getAllByText
     await waitFor(() => expect(screen.getAllByText('TR').length).toBeGreaterThan(0))
-    expect(screen.getByRole('img', { name: /dünya haritası/i })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /dünya haritası/i })).toBeInTheDocument()
   })
 
   it('veri boşken "veri yok" durumuna düşer', async () => {
@@ -35,5 +35,18 @@ describe('GeoMapCard', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '1 saat' })).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '6 saat' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '24 saat' })).toBeInTheDocument()
+  })
+
+  it('ülke balonu klavye/ekran-okuyucu için erişilebilir isim taşır', async () => {
+    mockFetch()
+    render(<GeoMapCard />)
+    const bubble = await screen.findByRole('button', { name: /Türkiye \(TR\), .* trafik, .* oturum/ })
+    expect(bubble).toHaveAttribute('tabindex', '0')
+  })
+
+  it('fetch başarısız olunca satır-içi hata bildirimi gösterir', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 500, ok: false, json: async () => [] } as Response)))
+    render(<GeoMapCard />)
+    await waitFor(() => expect(screen.getByText(/veri alınamadı/)).toBeInTheDocument())
   })
 })

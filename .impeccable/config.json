@@ -20,6 +20,15 @@
         ],
         "createdAt": "2026-09-04T16:39:15.758Z",
         "reason": "impeccable critique sentezi (bu oturum): text-violet-300, DESIGN.md'de dokümante edilmiş Tx Violet (gönderilen trafik) — rx-cyan ile eşleştirilmiş, jenerik dekoratif kullanım değil"
+      },
+      {
+        "rule": "nested-cards",
+        "value": "*",
+        "files": [
+          "frontend/src/components/GeoMapCard.tsx"
+        ],
+        "createdAt": "2026-09-04T18:38:18.299Z",
+        "reason": "Zaman-aralığı segmented control çerçevesi — semantik olarak kart değil, standart buton-grubu deseni (impeccable critique 2026-09-04, P3 tartışmalı bulgu, kullanıcı kararı: sustur)"
       }
     ]
   }

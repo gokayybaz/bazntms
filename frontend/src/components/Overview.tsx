@@ -652,7 +652,7 @@ export function Overview({
       </div>
 
       {/* coğrafi trafik haritası */}
-      <Card title="Coğrafi Trafik" right={<span className="text-xs text-slate-500">GeoIP · uzak uç noktalar</span>}>
+      <Card title="Coğrafi Trafik" right={<span className="text-xs text-slate-500">NetFlow + agent · GeoIP ile ülke merkezine</span>}>
         <GeoMapCard />
       </Card>
 
