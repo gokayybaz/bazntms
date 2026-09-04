@@ -44,6 +44,17 @@ export function GeoMapCard() {
   const [minutes, setMinutes] = useState(60)
   const [loaded, setLoaded] = useState(false)
   const [hover, setHover] = useState<GeoCountry | null>(null)
+  // imlecin yaninda yüzen ipucu penceresi için ekran (viewport) koordinati
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null)
+
+  const enter = (r: GeoCountry, e: { clientX: number; clientY: number }) => {
+    setHover(r)
+    setTip({ x: e.clientX, y: e.clientY })
+  }
+  const leave = () => {
+    setHover(null)
+    setTip(null)
+  }
 
   useEffect(() => {
     let stop = false
@@ -121,45 +132,72 @@ export function GeoMapCard() {
               />
             ))}
             {/* trafik balonları */}
-            {rows.map((r) => (
-              <g
-                key={r.country}
-                onMouseEnter={() => setHover(r)}
-                onMouseLeave={() => setHover(null)}
-                style={{ cursor: 'pointer' }}
-              >
-                <circle cx={px(r.lon)} cy={py(r.lat)} r={radius(r.bytes)} fill="#22d3ee" fillOpacity={0.18} />
-                <circle cx={px(r.lon)} cy={py(r.lat)} r={3} fill="#22d3ee" />
-                <text
-                  x={px(r.lon)}
-                  y={py(r.lat) - radius(r.bytes) - 3}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="#94a3b8"
-                  fontFamily="ui-monospace, monospace"
+            {rows.map((r) => {
+              const active = hover?.country === r.country
+              return (
+                <g
+                  key={r.country}
+                  onMouseEnter={(e) => enter(r, e)}
+                  onMouseMove={(e) => tip && setTip({ x: e.clientX, y: e.clientY })}
+                  onMouseLeave={leave}
+                  style={{ cursor: 'pointer' }}
                 >
-                  {r.country}
-                </text>
-              </g>
-            ))}
+                  <circle
+                    cx={px(r.lon)}
+                    cy={py(r.lat)}
+                    r={radius(r.bytes)}
+                    fill="#22d3ee"
+                    fillOpacity={active ? 0.34 : 0.18}
+                    stroke={active ? '#67e8f9' : 'none'}
+                    strokeWidth={1}
+                  />
+                  <circle cx={px(r.lon)} cy={py(r.lat)} r={3} fill="#22d3ee" />
+                  <text
+                    x={px(r.lon)}
+                    y={py(r.lat) - radius(r.bytes) - 3}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fill={active ? '#e2e8f0' : '#94a3b8'}
+                    fontFamily="ui-monospace, monospace"
+                  >
+                    {r.country}
+                  </text>
+                </g>
+              )
+            })}
           </svg>
         </div>
       )}
 
-      {/* hover detayı + top liste */}
+      {/* en yoğun ülkeler — sabit özet şeridi */}
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-        {hover ? (
-          <span className="font-mono text-cyan-300">
-            {hover.name} ({hover.country}) · {formatBytes(hover.bytes)} · {formatNum(hover.sessions)} uç
+        {rows.slice(0, 6).map((r) => (
+          <span
+            key={r.country}
+            className={`font-mono ${hover?.country === r.country ? 'text-cyan-300' : 'text-slate-500'}`}
+          >
+            {r.country} {formatBytes(r.bytes)}
           </span>
-        ) : (
-          rows.slice(0, 6).map((r) => (
-            <span key={r.country} className="font-mono text-slate-500">
-              {r.country} {formatBytes(r.bytes)}
-            </span>
-          ))
-        )}
+        ))}
       </div>
+
+      {/* imlecin yanında yüzen ipucu penceresi */}
+      {hover && tip && (
+        <div
+          className="pointer-events-none fixed z-50 rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-1.5 text-[11px] shadow-lg shadow-black/40"
+          style={{
+            left: tip.x + (tip.x > window.innerWidth - 220 ? -12 : 14),
+            top: tip.y + (tip.y > window.innerHeight - 90 ? -12 : 16),
+            transform: tip.x > window.innerWidth - 220 ? 'translateX(-100%)' : undefined,
+          }}
+        >
+          <div className="font-mono font-semibold text-cyan-300">
+            {hover.name} <span className="text-slate-500">({hover.country})</span>
+          </div>
+          <div className="mt-0.5 text-slate-300">{formatBytes(hover.bytes)} trafik</div>
+          <div className="text-slate-400">{formatNum(hover.sessions)} uç nokta oturumu</div>
+        </div>
+      )}
     </div>
   )
 }
