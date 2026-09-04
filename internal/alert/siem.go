@@ -20,7 +20,7 @@ import (
 // syslog (UDP/TCP) ya da HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı).
 type SIEMConfig struct {
 	Enabled   bool   `json:"enabled"`
-	Format    string `json:"format"`    // cef | leef | json  (boş → cef)
+	Format    string `json:"format"`    // cef | leef | json | text  (boş → cef)
 	Transport string `json:"transport"` // syslog-udp | syslog-tcp | http  (boş → syslog-udp)
 	Target    string `json:"target"`    // syslog: host:port · http: tam URL
 	Token     string `json:"token"`     // http: Authorization başlığı (ör. "Splunk <hec-token>"); boş → gönderilmez
@@ -47,6 +47,9 @@ func deliverSIEM(c SIEMConfig, ev store.AlertEvent) {
 	case "json":
 		b, _ := json.Marshal(siemJSON(ev))
 		payload, ctype = string(b), "application/json"
+	case "text":
+		// düz syslog satırı: yalnızca insan-okunur mesaj (klasik SOC syslog toplama)
+		payload, ctype = fmt.Sprintf("bazNTMS [%s] %s", kindLabel(ev.Kind), ev.Message), "text/plain; charset=utf-8"
 	default: // cef
 		payload, ctype = formatCEF(ev), "text/plain; charset=utf-8"
 	}

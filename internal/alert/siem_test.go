@@ -155,6 +155,32 @@ func TestDeliverSIEMHTTPJSON(t *testing.T) {
 	}
 }
 
+func TestDeliverSIEMTextSyslog(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+
+	deliverSIEM(SIEMConfig{
+		Enabled: true, Format: "text", Transport: "syslog-udp", Target: pc.LocalAddr().String(),
+	}, siemEv)
+
+	buf := make([]byte, 2048)
+	pc.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, _, err := pc.ReadFrom(buf)
+	if err != nil {
+		t.Fatalf("syslog paketi alınamadı: %v", err)
+	}
+	got := string(buf[:n])
+	if strings.Contains(got, "CEF:") || strings.Contains(got, "LEEF:") {
+		t.Errorf("düz metin bekleniyordu, yapılandırılmış format geldi: %q", got)
+	}
+	if !strings.Contains(got, "bazntms: bazNTMS [Şüpheli Port] Şüpheli porta") {
+		t.Errorf("düz metin gövdesi yanlış: %q", got)
+	}
+}
+
 func TestDeliverSIEMDisabled(t *testing.T) {
 	// Enabled=false veya Target boş → hiçbir şey yapmamalı (panik/bağlantı yok)
 	deliverSIEM(SIEMConfig{Enabled: false, Target: "127.0.0.1:1"}, siemEv)

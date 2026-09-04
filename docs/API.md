@@ -550,7 +550,7 @@ sistemine iletir:
 
 | Alan | Değerler | Not |
 |------|----------|-----|
-| `format` | `cef` (ArcSight) · `leef` (QRadar) · `json` | boş → `cef` |
+| `format` | `cef` (ArcSight) · `leef` (QRadar) · `json` · `text` (düz syslog satırı) | boş → `cef` |
 | `transport` | `syslog-udp` · `syslog-tcp` · `http` | boş → `syslog-udp` |
 | `target` | syslog: `host:port` · http: tam URL | — |
 | `token` | http: `Authorization` başlığı olarak yollanır (ör. `Splunk <HEC-token>`) | boş → gönderilmez |

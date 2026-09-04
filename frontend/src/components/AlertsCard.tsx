@@ -220,6 +220,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
                     <option value="cef">CEF (ArcSight)</option>
                     <option value="leef">LEEF (QRadar)</option>
                     <option value="json">JSON</option>
+                    <option value="text">Düz metin (klasik syslog)</option>
                   </select>
                   <select value={siem.transport} onChange={(e) => patch({ transport: e.target.value as typeof siem.transport })} className={inputCls}>
                     <option value="">syslog UDP</option>
