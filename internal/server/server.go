@@ -226,6 +226,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /readyz", s.handleReadyz)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 
+	// API sozlesmesi (auth muaf — kesif/entegrasyon dokumantasyonu)
+	mux.HandleFunc("GET /api/openapi.yaml", s.handleOpenAPIYAML)
+	mux.HandleFunc("GET /api/openapi.json", s.handleOpenAPIJSON)
+	mux.HandleFunc("GET /api/docs", s.handleAPIDocs)
+
 	mux.HandleFunc("GET /ws", s.hub.ServeWS)
 	mux.HandleFunc("/api/", http.NotFound)
 

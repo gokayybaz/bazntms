@@ -9,6 +9,21 @@ uçlar şunlardan birini ister:
 Yetkisiz istek: `401` + `{"error":"oturum gerekli","auth_required":true}`
 Çok fazla hatalı giriş: `429` + `Retry-After: 60`
 
+## Makine-okunur şema (OpenAPI)
+
+Bu dokümanın makine-okunur karşılığı `api/openapi.yaml`'dedir (OpenAPI 3.1) ve
+hub tarafından **kimlik doğrulaması gerektirmeden** sunulur:
+
+| Uç | İçerik |
+|----|--------|
+| `GET /api/openapi.yaml` | Ham şema (YAML) |
+| `GET /api/openapi.json` | Aynı şema JSON'a çevrilmiş — Postman/Insomnia/`editor.swagger.io` |
+| `GET /api/docs` | Tarayıcıda gezilebilir uç listesi (tek dosya, harici CDN yok) |
+
+`internal/server` içindeki `TestOpenAPICoversRouter` sözleşme testi şema ile
+gerçek yönlendiricinin birebir örtüştüğünü doğrular — yeni bir uç eklenip
+şemaya işlenmezse (veya tersi) CI kırılır.
+
 ---
 
 ## Kimlik Doğrulama

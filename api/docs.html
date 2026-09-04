@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bazNTMS API</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0a1120; color: #cbd5e1;
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid #1e293b; }
+  h1 { margin: 0 0 4px; font-size: 18px; color: #f1f5f9; }
+  header p { margin: 0; color: #64748b; font-size: 12px; }
+  header a { color: #38bdf8; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px 24px 60px; }
+  .tag { margin-top: 22px; }
+  .tag > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: #94a3b8; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+  .op { border: 1px solid #1e293b; border-radius: 8px; margin: 8px 0; overflow: hidden; }
+  .op > summary { cursor: pointer; padding: 9px 12px; display: flex; gap: 10px;
+    align-items: center; list-style: none; background: #0e1729; }
+  .op > summary::-webkit-details-marker { display: none; }
+  .m { font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px;
+    font-family: ui-monospace, monospace; min-width: 52px; text-align: center; }
+  .m.get { background: #164e63; color: #a5f3fc; }
+  .m.post { background: #14532d; color: #bbf7d0; }
+  .m.put { background: #713f12; color: #fde68a; }
+  .m.patch { background: #713f12; color: #fde68a; }
+  .m.delete { background: #7f1d1d; color: #fecaca; }
+  .path { font-family: ui-monospace, monospace; color: #e2e8f0; }
+  .sum { color: #94a3b8; margin-left: auto; text-align: right; font-size: 12px; }
+  .body { padding: 10px 12px; border-top: 1px solid #1e293b; font-size: 13px; }
+  .body table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  .body th, .body td { text-align: left; padding: 3px 8px; border-bottom: 1px solid #1e293b;
+    font-family: ui-monospace, monospace; font-size: 12px; vertical-align: top; }
+  .body th { color: #64748b; font-weight: 600; }
+  .err { color: #fca5a5; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>bazNTMS API</h1>
+  <p>OpenAPI 3.1 · ham şema: <a href="openapi.yaml">openapi.yaml</a> · <a href="openapi.json">openapi.json</a>
+     — Postman/Insomnia/editor.swagger.io'ya yükleyebilirsiniz.</p>
+</header>
+<main id="app"><p style="color:#64748b">Yükleniyor…</p></main>
+<script>
+const MORD = { get: 0, post: 1, put: 2, patch: 3, delete: 4 };
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+fetch('openapi.json').then((r) => r.json()).then((spec) => {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const byTag = {};
+  const tagOrder = (spec.tags || []).map((t) => t.name);
+  for (const [path, item] of Object.entries(spec.paths || {})) {
+    for (const [method, op] of Object.entries(item)) {
+      if (!MORD.hasOwnProperty(method)) continue;
+      const tag = (op.tags && op.tags[0]) || 'diğer';
+      (byTag[tag] = byTag[tag] || []).push({ path, method, op });
+    }
+  }
+  const tags = Object.keys(byTag).sort((a, b) => {
+    const ia = tagOrder.indexOf(a), ib = tagOrder.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  for (const tag of tags) {
+    const sec = document.createElement('section');
+    sec.className = 'tag';
+    const meta = (spec.tags || []).find((t) => t.name === tag);
+    sec.innerHTML = '<h2>' + esc(tag) + (meta && meta.description ? ' — <span style="text-transform:none;letter-spacing:0;color:#64748b;font-weight:400">' + esc(meta.description) + '</span>' : '') + '</h2>';
+    byTag[tag].sort((a, b) => a.path.localeCompare(b.path) || MORD[a.method] - MORD[b.method]);
+    for (const { path, method, op } of byTag[tag]) {
+      const d = document.createElement('details');
+      d.className = 'op';
+      let rows = '';
+      for (const p of op.parameters || []) {
+        const pp = p.$ref ? (spec.components.parameters[p.$ref.split('/').pop()] || {}) : p;
+        rows += '<tr><td>' + esc(pp.name) + '</td><td>' + esc(pp.in || '') + '</td><td>' + esc((pp.schema && pp.schema.type) || '') + '</td><td>' + esc(pp.description || '') + '</td></tr>';
+      }
+      const resp = Object.entries(op.responses || {}).map(([code, r]) => code + ' ' + esc(r.description || (r.$ref ? r.$ref.split('/').pop() : ''))).join(' · ');
+      d.innerHTML =
+        '<summary><span class="m ' + method + '">' + method.toUpperCase() + '</span>' +
+        '<span class="path">' + esc(path) + '</span>' +
+        '<span class="sum">' + esc(op.summary || '') + '</span></summary>' +
+        '<div class="body">' +
+        (rows ? '<table><tr><th>parametre</th><th>konum</th><th>tip</th><th>açıklama</th></tr>' + rows + '</table>' : '') +
+        (op.requestBody ? '<p style="margin:8px 0 0;color:#64748b">İstek gövdesi: application/json</p>' : '') +
+        '<p style="margin:8px 0 0;color:#64748b">Yanıtlar: ' + resp + '</p>' +
+        '</div>';
+      sec.appendChild(d);
+    }
+    app.appendChild(sec);
+  }
+}).catch((e) => {
+  document.getElementById('app').innerHTML = '<p class="err">Şema yüklenemedi: ' + esc(e.message) + '</p>';
+});
+</script>
+</body>
+</html>

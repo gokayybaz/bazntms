@@ -1,0 +1,995 @@
+openapi: 3.1.0
+info:
+  title: bazNTMS API
+  version: "1.0"
+  description: >
+    bazNTMS hub HTTP API — agent filosu telemetrisi, cihaz/NetFlow/syslog
+    toplama, uyarılar, RBAC ve 5651/ISO 27001 uyumluluk.
+
+
+    Kimlik doğrulama açıkken (`-auth-password` veya kullanıcı DB'si) korumalı
+    uçlar `nm_session` çerezi **veya** `Authorization: Bearer <token>` ister.
+    Agent uçları (`/api/v1/agent/*`) UI oturumundan bağımsızdır: enrollment ile
+    verilen agent token'ı ya da (hub `-tls` ile çalışıyorsa) doğrulanmış istemci
+    sertifikası kullanır.
+
+
+    Bu doküman elle bakımlıdır; `internal/server` içindeki bir sözleşme testi
+    her yolun gerçek yönlendiricide var olduğunu doğrular. İnsan tarafı ayrıntı
+    ve örnekler için `docs/API.md`.
+  license:
+    name: Kaynak depo
+servers:
+  - url: /
+    description: Hub'ın kendisi (aynı origin)
+
+tags:
+  - name: auth
+    description: Oturum açma, kapatma, SSO
+  - name: agent
+    description: Agent enrollment, sertifika, telemetri, otomatik güncelleme
+  - name: fleet
+    description: Agent filosu okuma uçları (UI auth)
+  - name: devices
+    description: SNMP/FortiGate cihazları, NetFlow, syslog
+  - name: alerts
+    description: Uyarı yapılandırması ve olay akışı
+  - name: reports
+    description: Trafik / kurumsal / uyumluluk raporları
+  - name: rbac
+    description: Kullanıcılar, API token'ları, enrollment token'ları, denetim kaydı
+  - name: compliance
+    description: 5651 delil paketi + inceleme tutanakları
+  - name: isms
+    description: ISO/IEC 27001:2022 ISMS kayıtları (varlık, risk, SoA, politika, denetim…)
+  - name: meta
+    description: Sağlık, hazırlık, metrik, API şeması
+  - name: geo
+    description: Coğrafi trafik dağılımı
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+
+paths:
+  /api/openapi.yaml:
+    get:
+      tags: [meta]
+      summary: Bu OpenAPI şeması (YAML)
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 dokümanı
+          content:
+            application/yaml:
+              schema: { type: string }
+  /api/openapi.json:
+    get:
+      tags: [meta]
+      summary: Bu OpenAPI şeması (JSON)
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 dokümanı
+          content:
+            application/json:
+              schema: { type: object }
+  /api/docs:
+    get:
+      tags: [meta]
+      summary: Tarayıcıda okunur API gezgini (harici bağımlılık yok)
+      security: []
+      responses:
+        "200":
+          description: HTML sayfa
+          content:
+            text/html:
+              schema: { type: string }
+
+  /healthz:
+    get:
+      tags: [meta]
+      summary: Canlılık probu
+      security: []
+      responses:
+        "200": { description: Süreç ayakta }
+  /readyz:
+    get:
+      tags: [meta]
+      summary: Hazırlık probu (DB erişilebilir mi)
+      security: []
+      responses:
+        "200": { description: Hazır }
+        "503": { description: Bağımlılık hazır değil }
+  /metrics:
+    get:
+      tags: [meta]
+      summary: Prometheus metrikleri
+      security: []
+      responses:
+        "200":
+          description: Prometheus text exposition formatı
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /api/login:
+    post:
+      tags: [auth]
+      summary: Oturum aç
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                username: { type: string, description: RBAC kullanıcısı; boşsa legacy admin }
+                password: { type: string }
+      responses:
+        "200":
+          description: "Oturum kuruldu; Set-Cookie: nm_session"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  token: { type: string }
+                  role: { type: string }
+                  username: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/logout:
+    post:
+      tags: [auth]
+      summary: Oturumu kapat (çerez ve/veya Bearer)
+      responses:
+        "200": { description: "{ ok: true }" }
+  /api/auth/status:
+    get:
+      tags: [auth]
+      summary: Kimlik doğrulama gerekli mi / oturum açık mı
+      security: []
+      responses:
+        "200":
+          description: Durum
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  required: { type: boolean }
+                  authenticated: { type: boolean }
+  /api/auth/oidc/login:
+    get:
+      tags: [auth]
+      summary: OIDC/SSO akışını başlat (sağlayıcıya yönlendirir)
+      security: []
+      responses:
+        "302": { description: Sağlayıcıya yönlendirme }
+        "404": { description: OIDC yapılandırılmamış }
+  /api/auth/oidc/callback:
+    get:
+      tags: [auth]
+      summary: OIDC callback — oturumu kurar
+      security: []
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Panele yönlendirme (çerez set edilir) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/agent/hello:
+    post:
+      tags: [agent]
+      summary: Agent enrollment
+      security: []
+      parameters:
+        - name: X-Enroll-Token
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                site: { type: string }
+                version: { type: string }
+                protocol_version: { type: integer }
+                os: { type: string }
+                arch: { type: string }
+                csr_pem: { type: string, description: Opsiyonel; mTLS için istemci CSR'ı }
+      responses:
+        "200":
+          description: Kabul edildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean }
+                  agent_id: { type: integer }
+                  agent_token: { type: string }
+                  telemetry_interval_seconds: { type: integer }
+                  pcap_enabled: { type: boolean }
+                  client_cert_pem: { type: string }
+                  ca_cert_pem: { type: string }
+        "401": { description: Geçersiz/iptal edilmiş enrollment token }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/agent/cert:
+    post:
+      tags: [agent]
+      summary: İstemci sertifikasını yenile
+      security:
+        - bearerAuth: []
+        - mtlsAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csr_pem]
+              properties:
+                csr_pem: { type: string }
+      responses:
+        "200":
+          description: Yeni sertifika
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_cert_pem: { type: string }
+                  ca_cert_pem: { type: string }
+        "404": { description: Hub `-tls` kapalı }
+  /api/v1/agent/telemetry:
+    post:
+      tags: [agent]
+      summary: Telemetri partisi gönder
+      security:
+        - bearerAuth: []
+        - mtlsAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelemetryBatch" }
+      responses:
+        "200":
+          description: Alındı; hub politikası
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  interval: { type: integer }
+                  pcap_enabled: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/agent/update/manifest:
+    get:
+      tags: [agent]
+      summary: Otomatik güncelleme manifesti (kanal + sürüm + sha256)
+      security:
+        - bearerAuth: []
+        - mtlsAuth: []
+      responses:
+        "200": { description: Manifest JSON }
+        "404": { description: Güncelleme deposu yapılandırılmamış }
+  /api/v1/agent/update/file/{channel}/{name}:
+    get:
+      tags: [agent]
+      summary: Güncelleme ikili dosyasını indir
+      security:
+        - bearerAuth: []
+        - mtlsAuth: []
+      parameters:
+        - { name: channel, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: İkili
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { description: Bulunamadı }
+
+  /api/v1/agents:
+    get:
+      tags: [fleet]
+      summary: Agent listesi (oran özetleriyle)
+      parameters:
+        - $ref: "#/components/parameters/minutes"
+      responses:
+        "200":
+          description: Agent dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Agent" }
+  /api/v1/agents/{id}:
+    get:
+      tags: [fleet]
+      summary: Agent detayı + son bağlantı envanteri
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: "{ agent, connections[] }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [fleet]
+      summary: Agent'ı ve telemetrisini sil (yetki:agents)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: Silindi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [fleet]
+      summary: Agent'ı yeniden adlandır / site ata (yetki:agents)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                site: { type: string }
+      responses:
+        "200": { description: Güncellendi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/agents/{id}/history:
+    get:
+      tags: [fleet]
+      summary: Agent throughput geçmişi (bayt/sn + pps)
+      parameters:
+        - { $ref: "#/components/parameters/idPath" }
+        - { $ref: "#/components/parameters/minutes" }
+      responses:
+        "200":
+          description: Kova dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    ts: { type: integer }
+                    in: { type: number }
+                    out: { type: number }
+                    local: { type: number }
+                    pps: { type: integer }
+  /api/v1/processes:
+    get:
+      tags: [fleet]
+      summary: Süreç bazlı trafik atfı (filo geneli / tek agent)
+      parameters:
+        - { $ref: "#/components/parameters/minutes" }
+        - { $ref: "#/components/parameters/agentId" }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200": { description: Süreç kullanım dizisi }
+  /api/v1/l7:
+    get:
+      tags: [fleet]
+      summary: L7 görünürlüğü (SNI / HTTP Host) süreç atıflı
+      parameters:
+        - { $ref: "#/components/parameters/minutes" }
+        - { $ref: "#/components/parameters/agentId" }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200": { description: Endpoint dizisi }
+  /api/v1/dns:
+    get:
+      tags: [fleet]
+      summary: DNS görünürlüğü (UDP/53 sorgu/yanıt) süreç atıflı
+      parameters:
+        - { $ref: "#/components/parameters/minutes" }
+        - { $ref: "#/components/parameters/agentId" }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200":
+          description: Alan adı kullanım dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    domain: { type: string }
+                    process: { type: string }
+                    queries: { type: integer }
+                    responses: { type: integer }
+                    agent_count: { type: integer }
+  /api/v1/geo:
+    get:
+      tags: [geo]
+      summary: Uzak trafiğin ülke bazlı dağılımı (GeoIP + merkez koordinat)
+      parameters:
+        - name: minutes
+          in: query
+          schema: { type: integer, default: 60, maximum: 10080 }
+      responses:
+        "200":
+          description: Ülke dizisi (bytes azalan); GeoIP kaynağı yoksa boş
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    country: { type: string, description: ISO 3166-1 alpha-2 }
+                    name: { type: string }
+                    lat: { type: number }
+                    lon: { type: number }
+                    bytes: { type: integer }
+                    sessions: { type: integer }
+  /api/v1/topology:
+    get:
+      tags: [fleet]
+      summary: Canlı ağ haritası modeli (LLDP/CDP/ARP/subnet)
+      responses:
+        "200": { description: "{ generated_at, devices[], agents[], links[] }" }
+
+  /api/v1/devices:
+    get:
+      tags: [devices]
+      summary: Kayıtlı cihazlar (kimlik bilgileri maskeli)
+      responses:
+        "200":
+          description: Cihaz dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+    post:
+      tags: [devices]
+      summary: Cihaz ekle (SNMP v2c/v3 veya FortiGate REST) — yetki:devices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceCreate" }
+      responses:
+        "200": { description: Eklendi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/devices/{id}:
+    delete:
+      tags: [devices]
+      summary: Cihazı ve örneklerini sil (yetki:devices)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: Silindi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/devices/{id}/interfaces:
+    get:
+      tags: [devices]
+      summary: Cihaz arayüzleri + verim + hata sayaçları
+      parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
+      responses:
+        "200": { description: Arayüz dizisi }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/resources:
+    get:
+      tags: [devices]
+      summary: FortiGate CPU/RAM/disk/oturum zaman serisi
+      parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
+      responses:
+        "200": { description: Kaynak serisi }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/vpn:
+    get:
+      tags: [devices]
+      summary: FortiGate IPsec tünelleri + SSL kullanıcıları
+      parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
+      responses:
+        "200": { description: VPN durumu }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/sdwan:
+    get:
+      tags: [devices]
+      summary: FortiGate SD-WAN health-check (latency/jitter/loss)
+      parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
+      responses:
+        "200": { description: SD-WAN üye metrikleri }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/policies:
+    get:
+      tags: [devices]
+      summary: FortiGate en aktif politika hit'leri (delta)
+      parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
+      responses:
+        "200": { description: Politika hit dizisi }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/flows:
+    get:
+      tags: [devices]
+      summary: NetFlow v5/v9/IPFIX akışları (octets azalan)
+      parameters:
+        - { $ref: "#/components/parameters/minutes" }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200":
+          description: Akış dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Flow" }
+  /api/v1/syslog:
+    get:
+      tags: [devices]
+      summary: RFC3164/5424 syslog olayları
+      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      responses:
+        "200":
+          description: Olay dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    ts: { type: integer }
+                    host: { type: string }
+                    severity: { type: integer, minimum: 0, maximum: 7 }
+                    tag: { type: string }
+                    message: { type: string }
+
+  /api/alerts:
+    get:
+      tags: [alerts]
+      summary: Uyarı yapılandırması
+      responses:
+        "200": { description: Uyarı config nesnesi }
+    put:
+      tags: [alerts]
+      summary: Uyarı yapılandırmasını kaydet + anında uygula (yetki:admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Kaydedildi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/alerts/events:
+    get:
+      tags: [alerts]
+      summary: Son uyarı olayları
+      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      responses:
+        "200":
+          description: Olay dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    ts: { type: integer }
+                    kind: { type: string, description: "bw · port · proc · target · anomaly · vpn_down · sdwan_sla_breach · high_sessions" }
+                    key: { type: string }
+                    message: { type: string }
+
+  /api/report:
+    get:
+      tags: [reports]
+      summary: Trafik / kurumsal / uyumluluk raporu (HTML veya PDF) — yetki:analyze
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [traffic, enterprise, compliance] } }
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 7 } }
+        - { name: format, in: query, schema: { type: string, enum: [html, pdf], default: html } }
+      responses:
+        "200":
+          description: Rapor
+          content:
+            text/html: { schema: { type: string } }
+            application/pdf: { schema: { type: string, format: binary } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/users:
+    get:
+      tags: [rbac]
+      summary: Kullanıcı listesi (yetki:admin)
+      responses:
+        "200": { description: Kullanıcı dizisi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [rbac]
+      summary: Kullanıcı oluştur (yetki:admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username: { type: string }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [admin, netops, analyst, viewer] }
+                site: { type: string }
+      responses:
+        "200": { description: Oluşturuldu }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/users/{id}:
+    put:
+      tags: [rbac]
+      summary: Kullanıcı güncelle (rol/site/enabled/şifre) — yetki:admin
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string }
+                site: { type: string }
+                enabled: { type: boolean }
+                password: { type: string }
+      responses:
+        "200": { description: Güncellendi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [rbac]
+      summary: Kullanıcı sil (yetki:admin; kendini silemez)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: Silindi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/tokens:
+    get:
+      tags: [rbac]
+      summary: Entegrasyon API token'ları (yetki:admin)
+      responses:
+        "200": { description: Token meta dizisi (düz token dönmez) }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [rbac]
+      summary: API token oluştur — düz token yalnızca bir kez döner (yetki:admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name: { type: string }
+                role: { type: string }
+                site: { type: string }
+      responses:
+        "200":
+          description: "{ token: bnt_... }"
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/tokens/{id}:
+    delete:
+      tags: [rbac]
+      summary: API token'ı iptal et (yetki:admin)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: İptal edildi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/enroll-tokens:
+    get:
+      tags: [rbac]
+      summary: DB tabanlı enrollment token'ları (yetki:admin)
+      responses:
+        "200": { description: Enrollment token meta dizisi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [rbac]
+      summary: Enrollment token oluştur — düz token yalnızca bir kez döner (yetki:admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                site: { type: string }
+                expires_in_days: { type: integer }
+      responses:
+        "200": { description: "{ ok, id, token: ent_... }" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/enroll-tokens/{id}:
+    delete:
+      tags: [rbac]
+      summary: Enrollment token'ı iptal et (yetki:admin)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: İptal edildi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/audit:
+    get:
+      tags: [rbac]
+      summary: Append-only denetim kaydı (SHA-256 zinciri) — yetki:admin
+      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      responses:
+        "200": { description: Denetim kaydı dizisi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/audit/verify:
+    get:
+      tags: [rbac]
+      summary: Denetim zinciri bütünlüğü doğrula (yetki:admin)
+      responses:
+        "200":
+          description: "{ ok, broken_at, checked }"
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/compliance/status:
+    get:
+      tags: [compliance]
+      summary: 5651 motoru durumu (yetki:view)
+      responses:
+        "200": { description: "{ config, records, last_record_ts, last_hourly?, last_daily? }" }
+  /api/v1/compliance/evidence:
+    get:
+      tags: [compliance]
+      summary: Delil paketi — hash zinciri + Merkle checkpoint + günlük mühür (yetki:admin)
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: mask, in: query, schema: { type: boolean }, description: PII maskeleme }
+      responses:
+        "200": { description: Delil paketi JSON }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/compliance/reviews:
+    get:
+      tags: [compliance]
+      summary: İnceleme tutanakları (yetki:admin)
+      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      responses:
+        "200": { description: Tutanak dizisi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [compliance]
+      summary: İnceleme tutanağı ekle (yetki:admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string, enum: [log, access] }
+                period: { type: string }
+                notes: { type: string }
+                finding: { type: string }
+      responses:
+        "200": { description: Eklendi }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/isms/summary:
+    get: { tags: [isms], summary: ISMS panosu özeti, responses: { "200": { description: Özet } } }
+  /api/v1/isms/assets:
+    get: { tags: [isms], summary: Varlık envanteri, responses: { "200": { description: Varlık dizisi } } }
+  /api/v1/isms/assets/sync:
+    post: { tags: [isms], summary: Varlıkları filo/cihaz kayıtlarından türet (yetki:admin), responses: { "200": { description: Senkronlandı }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/assets/{id}:
+    put: { tags: [isms], summary: Varlık güncelle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+    delete: { tags: [isms], summary: Varlık sil (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Silindi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/risks:
+    get: { tags: [isms], summary: Risk kütüğü, responses: { "200": { description: Risk dizisi } } }
+    post: { tags: [isms], summary: Risk ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/risks/{id}:
+    put: { tags: [isms], summary: Risk güncelle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+    delete: { tags: [isms], summary: Risk sil (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Silindi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/soa:
+    get: { tags: [isms], summary: Uygulanabilirlik Bildirimi (Annex A kontrolleri), responses: { "200": { description: SoA satır dizisi } } }
+  /api/v1/isms/soa/{control}:
+    put: { tags: [isms], summary: SoA kontrol satırını güncelle (yetki:admin), parameters: [ { name: control, in: path, required: true, schema: { type: string } } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/policies:
+    get: { tags: [isms], summary: Politika listesi, responses: { "200": { description: Politika dizisi } } }
+    post: { tags: [isms], summary: Politika ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/policies/{id}:
+    put: { tags: [isms], summary: Politika güncelle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/policies/{id}/transition:
+    post: { tags: [isms], summary: Politika durum geçişi (taslak→onay→yürürlük) — yetki:admin, parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Geçiş yapıldı }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/policies/{id}/versions:
+    get: { tags: [isms], summary: Politika sürüm geçmişi, parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Sürüm dizisi } } }
+    post: { tags: [isms], summary: Politika sürümü ekle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/audits:
+    get: { tags: [isms], summary: Denetim planı/kayıtları, responses: { "200": { description: Denetim dizisi } } }
+    post: { tags: [isms], summary: Denetim ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/audits/{id}:
+    put: { tags: [isms], summary: Denetim güncelle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/audits/{id}/findings:
+    get: { tags: [isms], summary: Denetim bulguları, parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Bulgu dizisi } } }
+    post: { tags: [isms], summary: Bulgu ekle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/findings/{id}:
+    put: { tags: [isms], summary: Bulgu güncelle / kapat (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/mgmt-reviews:
+    get: { tags: [isms], summary: Yönetim gözden geçirme tutanakları, responses: { "200": { description: Tutanak dizisi } } }
+    post: { tags: [isms], summary: Yönetim gözden geçirmesi ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/suppliers:
+    get: { tags: [isms], summary: Tedarikçi kayıtları, responses: { "200": { description: Tedarikçi dizisi } } }
+    post: { tags: [isms], summary: Tedarikçi ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/suppliers/{id}:
+    put: { tags: [isms], summary: Tedarikçi güncelle (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Güncellendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+    delete: { tags: [isms], summary: Tedarikçi sil (yetki:admin), parameters: [ { $ref: "#/components/parameters/idPath" } ], responses: { "200": { description: Silindi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/continuity:
+    get: { tags: [isms], summary: İş sürekliliği / BCP kayıtları, responses: { "200": { description: Süreklilik dizisi } } }
+    post: { tags: [isms], summary: Süreklilik kaydı ekle (yetki:admin), responses: { "200": { description: Eklendi }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/v1/isms/auditor-package:
+    get: { tags: [isms], summary: Denetçiye sunulabilir ISMS paketi (yetki:admin), responses: { "200": { description: Paket }, "403": { $ref: "#/components/responses/Forbidden" } } }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: nm_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Login token'ı (`token`) veya entegrasyon API token'ı (`bnt_...`) ya da agent token'ı
+    mtlsAuth:
+      type: mutualTLS
+      description: Hub `-tls` ile çalışırken agent istemci sertifikası
+  parameters:
+    minutes:
+      name: minutes
+      in: query
+      schema: { type: integer, default: 60 }
+      description: Geriye dönük pencere (dakika)
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50 }
+    agentId:
+      name: agent_id
+      in: query
+      schema: { type: integer, default: 0 }
+      description: 0 = filo geneli
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+  responses:
+    Unauthorized:
+      description: Oturum gerekli
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              auth_required: { type: boolean }
+    Forbidden:
+      description: Yetki yetersiz (RBAC) veya site kapsamı dışında
+    NotFound:
+      description: Bulunamadı (veya site kapsamı dışında)
+    RateLimited:
+      description: Çok fazla başarısız deneme
+      headers:
+        Retry-After:
+          schema: { type: integer }
+  schemas:
+    TelemetryBatch:
+      type: object
+      properties:
+        ts: { type: integer }
+        interfaces:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              rx_bytes: { type: integer }
+              tx_bytes: { type: integer }
+              rx_packets: { type: integer }
+              tx_packets: { type: integer }
+        connections:
+          type: array
+          items:
+            type: object
+            properties:
+              proto: { type: string }
+              local_addr: { type: string }
+              remote_addr: { type: string }
+              status: { type: string }
+              pid: { type: integer }
+              process: { type: string }
+        process_traffic:
+          type: array
+          items: { type: object }
+        l7:
+          type: array
+          items: { type: object }
+        dns:
+          type: array
+          items: { type: object }
+        flows:
+          type: array
+          items: { type: object }
+    Agent:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        site: { type: string }
+        online: { type: boolean }
+        last_seen: { type: integer }
+        version: { type: string }
+        remote_ip: { type: string }
+        conns: { type: integer }
+        rates:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              rx_bps: { type: number }
+              tx_bps: { type: number }
+              pps: { type: number }
+    Device:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        host: { type: string }
+        kind: { type: string }
+        site: { type: string }
+        snmp_version: { type: integer }
+        poll_seconds: { type: integer }
+        enabled: { type: boolean }
+        sys_name: { type: string }
+        sys_descr: { type: string }
+        last_poll: { type: integer }
+        last_error: { type: string }
+    DeviceCreate:
+      type: object
+      required: [name, host, kind]
+      properties:
+        name: { type: string }
+        host: { type: string }
+        kind: { type: string, enum: [switch, router, firewall, ap, server, other] }
+        site: { type: string }
+        vendor: { type: string, description: "boş = jenerik SNMP; 'fortigate' = FortiOS REST" }
+        snmp_version: { type: integer, enum: [2, 3] }
+        community: { type: string }
+        v3_user: { type: string }
+        v3_auth_proto: { type: string }
+        v3_auth_pass: { type: string }
+        v3_priv_proto: { type: string }
+        v3_priv_pass: { type: string }
+        api_url: { type: string }
+        api_token: { type: string }
+        api_verify_tls: { type: boolean }
+        vdom: { type: string }
+        poll_seconds: { type: integer }
+    Flow:
+      type: object
+      properties:
+        ts: { type: integer }
+        device: { type: string }
+        src: { type: string }
+        dst: { type: string }
+        src_port: { type: integer }
+        dst_port: { type: integer }
+        proto: { type: string }
+        packets: { type: integer }
+        octets: { type: integer }

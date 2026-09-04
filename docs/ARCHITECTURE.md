@@ -95,9 +95,15 @@ Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
 ## Sunucu (`internal/server`)
 
 - `ServeMux` (Go 1.22+ metot kalıpları) + `logRequest` middleware
-- `auth.middleware`: `/api/*` ve `/ws` oturum denetimi; `/api/login` ve
-  `/api/auth/status` muaf; statik dosyalar açık (SPA kabuğu). Sabit zamanlı
-  şifre karşılaştırma, IP bazlı deneme sınırı, HttpOnly cookie + Bearer token
+- `auth.middleware`: `/api/*` ve `/ws` oturum denetimi; `/api/login`,
+  `/api/auth/status`, OIDC ve `/api/openapi.{yaml,json}` + `/api/docs` muaf;
+  statik dosyalar açık (SPA kabuğu). Sabit zamanlı şifre karşılaştırma, IP
+  bazlı deneme sınırı, HttpOnly cookie + Bearer token
+- **API sözleşmesi** (`api/openapi.yaml`, `internal/server/openapi.go`): elle
+  bakımlı OpenAPI 3.1 şeması binary'ye gömülür; `/api/openapi.yaml` (ham),
+  `/api/openapi.json` (yaml→json) ve `/api/docs` (tek dosya, CDN'siz gezgin)
+  uçlarında sunulur. `TestOpenAPICoversRouter` şemayı `server.go`'daki gerçek
+  rota kayıtlarına karşı iki yönlü doğrular (drift = kırık test)
 - `Hub`: saniyede bir `tick` yayınlar — **alarm olayları** + **filo özeti**
   (`store.FleetSummary`: agent online/toplam, son ~90 sn ortalama rx/tx/pps,
   son 1 dk NetFlow hızı). Filo özeti Hub'da ~3 sn önbelleklenir (N istemci ×

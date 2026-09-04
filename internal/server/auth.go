@@ -287,6 +287,7 @@ func (a *AuthManager) middleware(next http.Handler) http.Handler {
 		path := r.URL.Path
 		// agent uclari UI auth'undan muaf: kendi Bearer agent auth'unu kullanir
 		if path == "/api/login" || path == "/api/auth/status" ||
+			path == "/api/openapi.yaml" || path == "/api/openapi.json" || path == "/api/docs" ||
 			strings.HasPrefix(path, "/api/auth/oidc/") ||
 			strings.HasPrefix(path, "/api/v1/agent/") || !requiresAuth(path) {
 			next.ServeHTTP(w, r)
