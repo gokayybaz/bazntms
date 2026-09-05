@@ -151,7 +151,6 @@ func VerifyBundle(b *EvidenceBundle, pub ed25519.PublicKey) Report {
 	}
 
 	// 3) checkpoint zinciri + günlük kök + TSA + imza
-	var dailyRoots [][]byte
 	prevRoot := ""
 	for _, cp := range b.Checkpoints {
 		if cp.Kind != "hourly" {
@@ -174,7 +173,6 @@ func VerifyBundle(b *EvidenceBundle, pub ed25519.PublicKey) Report {
 			rep.DailyOK = false
 			rep.Notes = append(rep.Notes, "günlük kök saatlik köklerle uyuşmuyor")
 		}
-		dailyRoots = append(dailyRoots, root)
 		if cp.TSAStatus == "ok" && len(cp.TSAToken) > 0 {
 			// TSA token'ı mesaj özetini (sha256(kök)) messageImprint olarak taşır
 			if !TokenContainsHash(cp.TSAToken, sha256Sum(root)) {

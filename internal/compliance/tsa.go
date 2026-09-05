@@ -55,16 +55,8 @@ type asn1TimeStampReq struct {
 	CertReq        bool  `asn1:"optional"`
 }
 
-// asn1TimeStampResp (RFC 3161 §2.4.2): SEQUENCE { status, token OPTIONAL }
-type asn1TimeStampResp struct {
-	Status asn1PKIStatusInfo
-	Token  asn1.RawValue `asn1:"optional"`
-}
-
-type asn1PKIStatusInfo struct {
-	Status int
-	// statusString/failInfo yok sayılır
-}
+// TimeStampResp ayrıştırması ParseTimestampReply içinde yerel anonim
+// struct'larla yapılır (bazı TSA'lar token'ı explicit etiketsiz verir).
 
 // Timestamp, hash'in (32 bayt, SHA-256) zaman damgasını ister.
 // Dönüş: ham TimeStampToken (DER, CMS), TSA süresi (varsa unix), hata.

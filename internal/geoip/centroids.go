@@ -31,7 +31,7 @@ var countryCentroids = map[string]Centroid{
 	"JO": {30.6, 36.2, "Ürdün"}, "LB": {33.9, 35.9, "Lübnan"}, "EG": {26.8, 30.8, "Mısır"},
 	"MA": {31.8, -7.1, "Fas"}, "DZ": {28.0, 1.7, "Cezayir"}, "TN": {33.9, 9.6, "Tunus"},
 	"LY": {26.3, 17.2, "Libya"}, "NG": {9.1, 8.7, "Nijerya"}, "ZA": {-30.6, 22.9, "Güney Afrika"},
-	"KE": {-0.0, 37.9, "Kenya"}, "ET": {9.1, 40.5, "Etiyopya"}, "GH": {7.9, -1.0, "Gana"},
+	"KE": {0.0, 37.9, "Kenya"}, "ET": {9.1, 40.5, "Etiyopya"}, "GH": {7.9, -1.0, "Gana"},
 	"CI": {7.5, -5.5, "Fildişi Sahili"}, "SN": {14.5, -14.5, "Senegal"}, "TZ": {-6.4, 34.9, "Tanzanya"},
 	"UG": {1.4, 32.3, "Uganda"}, "AO": {-11.2, 17.9, "Angola"},
 	"IN": {20.6, 79.0, "Hindistan"}, "PK": {30.4, 69.3, "Pakistan"}, "BD": {23.7, 90.4, "Bangladeş"},

@@ -1230,9 +1230,10 @@ func (s *sqlStore) DailyTotals(days int) ([]DayTotal, error) {
 		days = 7
 	}
 	_, offset := time.Now().Zone()
+	cutoff := time.Now().AddDate(0, 0, -days).Unix()
 	rows, err := s.db.Query(s.q(`SELECT (ts + ?)/86400*86400 AS day,
 			AVG(bps_in), AVG(bps_out), MAX(bps_in), MAX(bps_out), COUNT(*)
-		FROM samples GROUP BY day ORDER BY day`), offset)
+		FROM samples WHERE ts >= ? GROUP BY day ORDER BY day`), offset, cutoff)
 	if err != nil {
 		return nil, err
 	}

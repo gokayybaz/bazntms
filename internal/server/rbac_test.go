@@ -128,13 +128,13 @@ func TestRBACLifecycle(t *testing.T) {
 		t.Fatalf("analyst cihaz ekleme 403 beklenirdi: %d", status)
 	}
 
-	// 6) audit: giris + kullanici + red olaylari zincirde
-	status, out = getJSON(t, ts, "/api/v1/audit?limit=100", adminTok)
+	// 6) audit: giris + kullanici + red olaylari zincirde.
+	// audit listesi handleAuditList'ten dizi doner (getJSON map'e parse
+	// edemez); icerik asagida /api/v1/audit/verify ile dogrulanir.
+	status, _ = getJSON(t, ts, "/api/v1/audit?limit=100", adminTok)
 	if status != http.StatusOK {
 		t.Fatalf("audit: %d", status)
 	}
-	events, _ := out["__raw"] // handleAuditList dogrudan dizi dondurur; asagida verify ile test edilir
-	_ = events
 
 	status, out = getJSON(t, ts, "/api/v1/audit/verify", adminTok)
 	if status != http.StatusOK || out["ok"] != true {

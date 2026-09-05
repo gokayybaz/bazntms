@@ -11,7 +11,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -30,9 +29,6 @@ func pgContainerDSN(t *testing.T, image string) string {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("short mod")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("windows CI'da docker yok")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()

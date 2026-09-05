@@ -37,15 +37,6 @@ func ismsBad(w http.ResponseWriter, msg string) {
 	http.Error(w, msg, http.StatusBadRequest)
 }
 
-func ismsLevel(w http.ResponseWriter, s string) int {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 || n > 5 {
-		ismsBad(w, "seviye 1-5 aralığında olmalı")
-		return 0
-	}
-	return n
-}
-
 func ismsPathID(r *http.Request) int64 {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	return id

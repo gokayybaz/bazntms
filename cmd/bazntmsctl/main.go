@@ -193,24 +193,24 @@ func cmdSetup(args []string) error {
 
 	var b strings.Builder
 	b.WriteString("# bazNTMS hub yapılandırması — bazntmsctl setup üretimi\n")
-	b.WriteString(fmt.Sprintf("port: %s\n", port))
+	fmt.Fprintf(&b, "port: %s\n", port)
 	b.WriteString("database:\n")
-	b.WriteString(fmt.Sprintf("  path: %s\n", dbPath))
+	fmt.Fprintf(&b, "  path: %s\n", dbPath)
 	if password != "" {
 		b.WriteString("auth:\n")
-		b.WriteString(fmt.Sprintf("  password: %q\n", password))
+		fmt.Fprintf(&b, "  password: %q\n", password)
 	}
 	if nats != "" {
 		b.WriteString("nats:\n")
-		b.WriteString(fmt.Sprintf("  url: %s\n", nats))
+		fmt.Fprintf(&b, "  url: %s\n", nats)
 	}
 	if enroll != "" {
 		b.WriteString("# enrollment token'i flag ile de gecilebilir: -enroll-token\n")
-		b.WriteString(fmt.Sprintf("enroll_token: %q\n", enroll))
+		fmt.Fprintf(&b, "enroll_token: %q\n", enroll)
 	}
 	if updatesDir != "" {
 		b.WriteString("updates:\n")
-		b.WriteString(fmt.Sprintf("  dir: %s\n", updatesDir))
+		fmt.Fprintf(&b, "  dir: %s\n", updatesDir)
 	}
 	b.WriteString("log:\n  level: info\n  format: json\n")
 

@@ -126,13 +126,6 @@ func spacedText(c *canvas, text string, x, y int, size float64, spacing int, col
 	}
 }
 
-func centerText(c *canvas, text string, cx, y int, size float64, bold bool, col color.Color) {
-	d := textDrawer(c, size, bold, col)
-	w := d.MeasureString(text).Ceil()
-	d.Dot = fixed.P(cx-w/2, y)
-	d.DrawString(text)
-}
-
 func render(w, h int, path string) {
 	c := &canvas{img: image.NewRGBA(image.Rect(0, 0, w, h)), w: w, h: h}
 	c.rect(0, 0, w, h, colBg)

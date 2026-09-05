@@ -9,7 +9,6 @@ package queue
 import (
 	"context"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -23,9 +22,6 @@ func natsQueueFor(t *testing.T) (*Queue, store.Store) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("short mod")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("windows CI'da docker yok")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

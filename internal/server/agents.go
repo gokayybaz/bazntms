@@ -547,11 +547,8 @@ func (s *Server) handleAgentRename(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "name": name})
 }
 
-// version1, desteklenen en yuksek agent protokol surumu.
+// maxProtocolVersion, desteklenen en yuksek agent protokol surumu.
 const maxProtocolVersion = 1
-
-// version1 geriye uyumluluk icin korunuyor.
-const version1 = maxProtocolVersion
 
 func parseID(s string) (int64, error) {
 	var id int64
