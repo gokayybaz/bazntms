@@ -28,3 +28,55 @@
   --ifm-footer-background-color: #020617;
   --ifm-card-background-color: #0f172a;
 }
+
+/* Landing page tek yönlü koyudur (depo kökündeki DESIGN.md → Do's and
+   Don'ts: "açık tema dalı açma"). Dokümanlar açık temayı desteklemeye
+   devam eder; yalnızca pages-plugin rotasında (= landing) açık tema
+   seçiliyken navbar/footer koyu kalır, yoksa beyaz navbar koyu sayfanın
+   üstünde duruyordu. */
+html.plugin-pages[data-theme='light'] {
+  --ifm-background-color: #020617;
+  --ifm-navbar-background-color: #020617;
+  --ifm-navbar-link-color: #9ba8b9;
+  --ifm-navbar-link-hover-color: #22d3ee;
+  --ifm-footer-background-color: #020617;
+  --ifm-footer-color: #9ba8b9;
+  --ifm-footer-link-color: #9ba8b9;
+  --ifm-footer-title-color: #e8edf4;
+  --ifm-heading-color: #e8edf4;
+  --ifm-font-color-base: #e8edf4;
+}
+
+html.plugin-pages[data-theme='light'] .navbar {
+  border-bottom: 1px solid #1e293b;
+}
+
+html.plugin-pages[data-theme='light'] .navbar__title,
+html.plugin-pages[data-theme='light'] .navbar__toggle {
+  color: #e8edf4;
+}
+
+/* Aynı kural, Docusaurus'un iç sınıfına bağlı olmayan biçimi: landing
+   kökü sayfadaysa navbar/footer koyu kalır. Ayrı kural olarak duruyor —
+   :has() desteklenmeyen tarayıcıda yalnızca bu blok düşer, üstteki değil. */
+html:has(.landing-root) {
+  --ifm-background-color: #020617;
+  --ifm-navbar-background-color: #020617;
+  --ifm-navbar-link-color: #9ba8b9;
+  --ifm-navbar-link-hover-color: #22d3ee;
+  --ifm-footer-background-color: #020617;
+  --ifm-footer-color: #9ba8b9;
+  --ifm-footer-link-color: #9ba8b9;
+  --ifm-footer-title-color: #e8edf4;
+  --ifm-heading-color: #e8edf4;
+  --ifm-font-color-base: #e8edf4;
+}
+
+html:has(.landing-root) .navbar {
+  border-bottom: 1px solid #1e293b;
+}
+
+html:has(.landing-root) .navbar__title,
+html:has(.landing-root) .navbar__toggle {
+  color: #e8edf4;
+}
