@@ -764,7 +764,7 @@ export default function Home() {
       title="Ağ Trafiği İzleme Platformu"
       description="Hub + agent + cihaz entegrasyonları: canlı trafik izleme, TimescaleDB + NATS ölçek altyapısı, RBAC/SSO, imza doğrulamalı agent güncellemesi."
     >
-      <main className={styles.page}>
+      <main className={`${styles.page} landing-root`}>
         {/* HERO — koyu vitrin, bento ızgara */}
         <section className={styles.hero}>
           <div className={styles.shell}>

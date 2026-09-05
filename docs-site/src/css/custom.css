@@ -132,3 +132,51 @@ html[data-theme='dark'] .menu__link--active {
   background-color: rgba(34, 211, 238, 0.16);
   color: #67e8f9;
 }
+
+/* Navbar içeriği, bulunduğu sayfanın sütun genişliğine hizalanır.
+   Landing 1248px'lik ortalanmış bir kapsayıcı kullanıyor; navbar ise
+   tam genişlikte 16px padding'le duruyordu, yani logo başlıktan ~97px
+   solda kalıyordu. Dokümanlarda düzen tam genişlik (kenar çubuğu x=0),
+   orada navbar olduğu gibi kalmalı — bu yüzden kural landing rotasına
+   kapsanıyor. */
+html:has(.landing-root) .navbar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+html:has(.landing-root) .navbar__inner {
+  max-width: 1248px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+@media (max-width: 720px) {
+  html:has(.landing-root) .navbar__inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Aynı hizalama, :has() olmadan. Docusaurus üretim çıktısında landing
+   rotasının <html>'ine plugin-pages sınıfını basıyor (doküman
+   sayfalarında yok). Ayrı kural olarak duruyor: :has() desteklemeyen
+   tarayıcıda yalnızca üstteki blok düşer, bu geçerli kalır. */
+html.plugin-pages .navbar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+html.plugin-pages .navbar__inner {
+  max-width: 1248px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+@media (max-width: 720px) {
+  html.plugin-pages .navbar__inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
