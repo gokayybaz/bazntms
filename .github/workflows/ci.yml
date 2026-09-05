@@ -95,6 +95,61 @@ jobs:
         with:
           version: v2.12.2
 
+  db-upgrade-test:
+    # Faz 13 S13.4: bir onceki release'in semasiyla olusturulan bir DB'yi
+    # HEAD binary'si hatasiz yukseltiyor mu? Onceki tag'i bir git worktree'ye
+    # cikar, ESKI kod ile semayi kur (SQLite + Postgres/TimescaleDB), sonra
+    # HEAD kodu ile ac + migrasyon + Ping. Migrasyon runner'i (internal/store/
+    # migrate.go) veya bir migrasyon dosyasi mevcut kurulumlari kirarsa burada
+    # yakalanir.
+    name: DB upgrade test (onceki release -> HEAD)
+    runs-on: ubuntu-latest
+    services:
+      timescale:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: bazntms
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: bazntms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bazntms"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Onceki release ile eski semali DB uret
+        env:
+          PGDSN: postgres://bazntms:test@localhost:5432/bazntms?sslmode=disable
+        run: |
+          set -euo pipefail
+          PREV=$(git describe --tags --abbrev=0 HEAD)
+          echo "onceki release: $PREV"
+          git worktree add --detach /tmp/bazntms-prev "$PREV"
+          mkdir -p /tmp/bazntms-prev/tools/dbcheck
+          cp tools/dbcheck/main.go /tmp/bazntms-prev/tools/dbcheck/main.go
+          cd /tmp/bazntms-prev
+          go run ./tools/dbcheck -db /tmp/legacy.db
+          go run ./tools/dbcheck -db "$PGDSN"
+
+      - name: HEAD binary'si eski DB'yi yukseltiyor mu (SQLite + Postgres)
+        env:
+          PGDSN: postgres://bazntms:test@localhost:5432/bazntms?sslmode=disable
+        run: |
+          set -euo pipefail
+          go run ./tools/dbcheck -db /tmp/legacy.db -ping
+          go run ./tools/dbcheck -db "$PGDSN" -ping
+
   installer-smoke-test:
     # 2026-09-01'de bulunan 2 gercek hatanin (RPM %post stdin'i asla
     # terminale bagli gostermiyor; /dev/tty duzeltmesinin ilk hali
