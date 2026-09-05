@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -363,11 +364,28 @@ func (s *sqlStore) RenameAgent(id int64, name string) error {
 	return err
 }
 
+// DeleteAgent, agent'i ve ona bagli TUM satirlari siler (S13.7 — tam cascade).
+// Bir tablo unutulursa agent silindikten sonra o satirlar oksuz kalir
+// (agent_id artik agents'te yok) ve retention suresi dolana dek "hayalet" filo
+// verisi uretir.
 func (s *sqlStore) DeleteAgent(id int64) error {
-	// Agent'a bagli TUM zaman-serisi tablolari: biri unutulursa agent silinince
-	// o satirlar oksuz kalir (agent_id artik agents'te yok) ve yalnizca retention
-	// suresi dolunca dusen "hayalet" filo verisi olusturur — l7_endpoints /
-	// agent_dns / process_traffic bu yuzden buraya eklendi.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// agent-adi bazli alert_seen anahtarlari (alert.checkAgentNewProc:
+	// kind = "agent-proc:"+name). Ad, agent silindikten sonra bir baskasina
+	// verilirse eski "gorulmus surec" tabani miras alinip yeni surecler icin
+	// alarm kacirilmasin.
+	var name string
+	if err := tx.QueryRow(s.q(`SELECT name FROM agents WHERE id = ?`), id).Scan(&name); err == nil && name != "" {
+		if _, err := tx.Exec(s.q(`DELETE FROM alert_seen WHERE kind = ?`), "agent-proc:"+name); err != nil {
+			return err
+		}
+	}
+
 	for _, q := range []string{
 		`DELETE FROM agents WHERE id = ?`,
 		`DELETE FROM agent_iface_samples WHERE agent_id = ?`,
@@ -376,9 +394,59 @@ func (s *sqlStore) DeleteAgent(id int64) error {
 		`DELETE FROM l7_endpoints WHERE agent_id = ?`,
 		`DELETE FROM agent_dns WHERE agent_id = ?`,
 	} {
-		if _, err := s.db.Exec(s.q(q), id); err != nil {
+		if _, err := tx.Exec(s.q(q), id); err != nil {
 			return err
 		}
 	}
-	return nil
+	// topoloji: agent'in bildirdigi yerel aglar (subnet) + olasi agent↔agent
+	// kenarlari — hem kaynak hem peer tarafi.
+	if _, err := tx.Exec(s.q(`DELETE FROM topology_links
+		WHERE (source_type = 'agent' AND source_id = ?) OR (peer_type = 'agent' AND peer_id = ?)`), id, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// PruneOfflineAgents, offlineFor suresinden uzun sure gorulmemis agent'lari
+// tam cascade ile siler (S13.7 — "N gundur offline" otomatik arsivleme).
+// Donen deger silinen agent sayisidir. offlineFor <= 0 → no-op.
+func (s *sqlStore) PruneOfflineAgents(offlineFor time.Duration) (int, error) {
+	if offlineFor <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().Add(-offlineFor).Unix()
+	rows, err := s.db.Query(s.q(`SELECT id, name, last_seen FROM agents WHERE last_seen < ?`), cutoff)
+	if err != nil {
+		return 0, err
+	}
+	type victim struct {
+		id       int64
+		name     string
+		lastSeen int64
+	}
+	var victims []victim
+	for rows.Next() {
+		var v victim
+		if err := rows.Scan(&v.id, &v.name, &v.lastSeen); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		victims = append(victims, v)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	n := 0
+	for _, v := range victims {
+		if err := s.DeleteAgent(v.id); err != nil {
+			return n, err
+		}
+		slog.Info("uzun sure cevrimdisi agent arsivlendi",
+			"agent_id", v.id, "name", v.name,
+			"son_gorulme", time.Unix(v.lastSeen, 0).Format(time.RFC3339))
+		n++
+	}
+	return n, nil
 }

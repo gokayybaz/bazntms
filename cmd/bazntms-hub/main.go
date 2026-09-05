@@ -48,6 +48,7 @@ func main() {
 	dev := fl.Bool("dev", false, "frontend embed'i atla (vite dev server ile gelistirme)")
 	dbPath := fl.String("db", "bazntms.db", "SQLite dosyasi veya postgres:// DSN")
 	retentionH := fl.Int("retention-hours", 24*7, "veritabani saklama suresi (saat, SQLite/Prune modu)")
+	agentArchiveDays := fl.Int("agent-archive-days", 30, "bu kadar gun cevrimdisi kalan agent'lar tam cascade ile silinir (0 = kapali)")
 	natsURL := fl.String("nats", "", "NATS JetStream adresi (bos = kuyruk kapali, dogrudan yazim; ex: nats://localhost:4222)")
 	captureOn := fl.Bool("capture", true, "hub'in kendi paket yakalamasi (coklu replikada kapatilir)")
 	alertsOn := fl.Bool("alerts", true, "uyari motoru (coklu replikada tek replikada acilir)")
@@ -163,10 +164,12 @@ func main() {
 		if err := st.ConfigureRetention(retention); err != nil {
 			slog.Warn("retention politikalari kurulamadi", "err", err)
 		}
-		maint := store.NewMaintainer(st, retention)
+		archiveAfter := time.Duration(*agentArchiveDays) * 24 * time.Hour
+		maint := store.NewMaintainer(st, retention, archiveAfter)
 		maint.Start()
 		defer maint.Stop()
-		slog.Info("veritabani bakimi aktif", "retention_saat", *retentionH, "aralik", "15dk")
+		slog.Info("veritabani bakimi aktif", "retention_saat", *retentionH,
+			"agent_arsiv_gun", *agentArchiveDays, "aralik", "15dk")
 	} else {
 		slog.Info("veritabani bakimi bu replikada kapali (-prune=false)")
 	}

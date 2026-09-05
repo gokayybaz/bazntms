@@ -41,7 +41,7 @@ func TestMaintainerPrunes(t *testing.T) {
 		t.Fatalf("topo fresh: %v", err)
 	}
 
-	NewMaintainer(st, 7*24*time.Hour).once()
+	NewMaintainer(st, 7*24*time.Hour, 0).once()
 
 	sql := st.(*sqlStore).db
 	count := func(tbl string) int {
@@ -64,6 +64,43 @@ func TestMaintainerPrunes(t *testing.T) {
 	}
 	if len(links) != 1 || links[0].PeerName != "sw3" {
 		t.Fatalf("topoloji: yalniz guncel kenar (sw3) kalmaliydi, gelen: %+v", links)
+	}
+}
+
+// TestMaintainerArchivesOfflineAgents, S13.7: agentArchiveAfter > 0 iken
+// Maintainer.once()'in uzun sure cevrimdisi agent'lari tam cascade ile
+// sildigini, guncel agent'a dokunmadigini dogrular.
+func TestMaintainerArchivesOfflineAgents(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "arch.db"))
+	if err != nil {
+		t.Fatalf("acilamadi: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	sq := st.(*sqlStore)
+	now := time.Now().Unix()
+
+	dead, _ := st.RegisterAgent(Agent{Name: "eski", TokenHash: "hd"})
+	live, _ := st.RegisterAgent(Agent{Name: "canli", TokenHash: "hl"})
+	// dead'i 40 gün önce görülmüş yap + ona bağlı veri ekle
+	if _, err := sq.db.Exec(`UPDATE agents SET last_seen = ? WHERE id = ?`, now-40*86400, dead); err != nil {
+		t.Fatalf("eskit: %v", err)
+	}
+	if err := st.SaveL7(dead, now-40*86400, []telemetry.L7Sample{{Process: "curl", Kind: "tls", Host: "x.com", Bytes: 1, Count: 1}}); err != nil {
+		t.Fatalf("l7: %v", err)
+	}
+
+	NewMaintainer(st, 7*24*time.Hour, 30*24*time.Hour).once()
+
+	if a, _ := st.AgentByID(dead); a != nil {
+		t.Fatal("40 gündür çevrimdışı agent silinmeliydi")
+	}
+	if a, _ := st.AgentByID(live); a == nil {
+		t.Fatal("güncel agent silinmemeliydi")
+	}
+	var n int
+	sq.db.QueryRow(`SELECT COUNT(*) FROM l7_endpoints WHERE agent_id = ?`, dead).Scan(&n)
+	if n != 0 {
+		t.Fatalf("silinen agent'ın l7 satırları kaldı: %d", n)
 	}
 }
 

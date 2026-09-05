@@ -33,6 +33,7 @@ type HubConfig struct {
 		Path string `koanf:"path"` // SQLite dosya yolu veya postgres:// DSN (Faz 4.1)
 	} `koanf:"database"`
 	RetentionHours    int `koanf:"retention_hours"`
+	AgentArchiveDays  int `koanf:"agent_archive_days"` // bu kadar gün çevrimdışı agent'lar silinir (0 = kapalı)
 	TelemetryInterval int `koanf:"telemetry_interval"`
 	NATS              struct {
 		URL string `koanf:"url"` // bos = kuyruk kapali (dogrudan store yazimi)
@@ -119,6 +120,7 @@ var hubFlagKeys = map[string]string{
 	"dev":                      "dev",
 	"database.path":            "db",
 	"retention_hours":          "retention-hours",
+	"agent_archive_days":       "agent-archive-days",
 	"telemetry_interval":       "telemetry-interval",
 	"nats.url":                 "nats",
 	"capture.enabled":          "capture",

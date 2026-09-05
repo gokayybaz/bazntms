@@ -8,6 +8,7 @@
 | `-dev` | `false` | Frontend embed'ini atla; Vite dev server ile geliştirme |
 | `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (DSN verilirse PostgreSQL/TimescaleDB modu) |
 | `-retention-hours` | `168` (7 gün) | Ham zaman-serisi saklama süresi. TimescaleDB modunda native chunk-drop retention politikası, ayrıca 15 dk'da bir `Maintainer` (capture'dan bağımsız) siler |
+| `-agent-archive-days` | `30` | Bu kadar gün çevrimdışı kalan agent'lar `Maintainer` tarafından tam cascade ile silinir (kayıt + iface/conn/process/L7/DNS/subnet/`alert_seen`). `0` = kapalı. Makine kimliği (`machine_id`) sayesinde geri dönen bir makine temiz bir kayıt olarak yeniden enroll olur |
 | `-nats` | — | NATS JetStream adresi. Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |

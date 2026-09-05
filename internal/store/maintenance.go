@@ -22,25 +22,30 @@ type Maintainer struct {
 	st            Store
 	retention     time.Duration
 	topoRetention time.Duration
-	interval      time.Duration
-	stopCh        chan struct{}
-	doneCh        chan struct{}
+	// agentArchiveAfter, bu süreden uzun çevrimdışı agent'lar tam cascade ile
+	// silinir (S13.7). 0 → kapalı.
+	agentArchiveAfter time.Duration
+	interval          time.Duration
+	stopCh            chan struct{}
+	doneCh            chan struct{}
 }
 
 // NewMaintainer, verilen ham-veri saklama suresiyle bir bakim dongusu kurar.
 // Topoloji kenarlari icin sabit 7 gun kullanilir (UI 24 saatlik pencere
-// gosterir; 7 gun rahat bir tampon).
-func NewMaintainer(st Store, retention time.Duration) *Maintainer {
+// gosterir; 7 gun rahat bir tampon). agentArchiveAfter 0 ise offline-agent
+// arsivleme kapalidir.
+func NewMaintainer(st Store, retention, agentArchiveAfter time.Duration) *Maintainer {
 	if retention <= 0 {
 		retention = 7 * 24 * time.Hour
 	}
 	return &Maintainer{
-		st:            st,
-		retention:     retention,
-		topoRetention: 7 * 24 * time.Hour,
-		interval:      15 * time.Minute,
-		stopCh:        make(chan struct{}),
-		doneCh:        make(chan struct{}),
+		st:                st,
+		retention:         retention,
+		topoRetention:     7 * 24 * time.Hour,
+		agentArchiveAfter: agentArchiveAfter,
+		interval:          15 * time.Minute,
+		stopCh:            make(chan struct{}),
+		doneCh:            make(chan struct{}),
 	}
 }
 
@@ -73,6 +78,14 @@ func (m *Maintainer) once() {
 	}
 	if err := m.st.PruneTopology(m.topoRetention); err != nil {
 		slog.Warn("bakim: topoloji prune hatasi", "err", err)
+	}
+	if m.agentArchiveAfter > 0 {
+		if n, err := m.st.PruneOfflineAgents(m.agentArchiveAfter); err != nil {
+			slog.Warn("bakim: offline-agent arsivleme hatasi", "err", err)
+		} else if n > 0 {
+			slog.Info("bakim: uzun sure cevrimdisi agent'lar arsivlendi", "adet", n,
+				"esik_gun", int(m.agentArchiveAfter.Hours())/24)
+		}
 	}
 	slog.Debug("bakim tamamlandi", "sure", time.Since(start), "retention_saat", int(m.retention.Hours()))
 }

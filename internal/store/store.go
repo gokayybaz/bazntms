@@ -124,6 +124,9 @@ type Store interface {
 	AgentHistory(agentID int64, since time.Time) ([]Bucket, error)
 	AgentByID(id int64) (*Agent, error)
 	DeleteAgent(id int64) error
+	// PruneOfflineAgents, offlineFor'dan uzun süredir görülmeyen agent'ları tam
+	// cascade ile siler (S13.7); silinen sayısını döndürür. offlineFor <= 0 → no-op.
+	PruneOfflineAgents(offlineFor time.Duration) (int, error)
 	RenameAgent(id int64, name string) error
 
 	// surec trafigi (Faz 2)

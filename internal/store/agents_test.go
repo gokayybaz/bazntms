@@ -218,10 +218,20 @@ func TestDeleteAgentCascade(t *testing.T) {
 	}
 
 	for _, id := range []int64{victim, keep} {
+		name := "kurban"
+		if id == keep {
+			name = "kalan"
+		}
 		if err := st.SaveIfaceSamples(id, now, []telemetry.InterfaceSample{
 			{Name: "eth0", RxBytes: 1000, TxBytes: 500, RxPackets: 10, TxPackets: 5},
 		}); err != nil {
 			t.Fatalf("iface ornek (agent %d): %v", id, err)
+		}
+		if err := st.SaveAgentSubnets(id, name, []string{"10.0.0.0/24"}); err != nil {
+			t.Fatalf("subnet (agent %d): %v", id, err)
+		}
+		if err := st.MarkAlertSeen("agent-proc:"+name, "sshd"); err != nil {
+			t.Fatalf("alert_seen (agent %d): %v", id, err)
 		}
 		if err := st.SaveProcessTraffic(id, now, []telemetry.ProcessTrafficSample{
 			{PID: 42, Process: "curl", Proto: "tcp", RemoteIP: "1.1.1.1", Port: 443, BytesIn: 900, BytesOut: 100},
@@ -267,6 +277,24 @@ func TestDeleteAgentCascade(t *testing.T) {
 	}
 	if dns, _ := st.TopAgentDNS(since, keep, 10, ""); len(dns) != 1 {
 		t.Errorf("kalan agent'in dns'i silinmis: %+v", dns)
+	}
+
+	// S13.7: topology_links (subnet) + alert_seen (agent-proc:<ad>) da cascade
+	sq := st.(*sqlStore)
+	var topo, seen int
+	sq.db.QueryRow(`SELECT COUNT(*) FROM topology_links WHERE source_type='agent' AND source_id=?`, victim).Scan(&topo)
+	if topo != 0 {
+		t.Errorf("silinen agent'in topoloji kenarlari kaldi: %d", topo)
+	}
+	if n, _ := st.CountAlertSeen("agent-proc:kurban"); n != 0 {
+		t.Errorf("silinen agent'in alert_seen anahtarlari kaldi: %d", n)
+	}
+	sq.db.QueryRow(`SELECT COUNT(*) FROM topology_links WHERE source_type='agent' AND source_id=?`, keep).Scan(&seen)
+	if seen != 1 {
+		t.Errorf("kalan agent'in topoloji kenari silinmis: %d", seen)
+	}
+	if n, _ := st.CountAlertSeen("agent-proc:kalan"); n != 1 {
+		t.Errorf("kalan agent'in alert_seen anahtari silinmis: %d", n)
 	}
 }
 
