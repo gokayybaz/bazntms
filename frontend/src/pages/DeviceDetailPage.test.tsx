@@ -72,4 +72,45 @@ describe('DeviceDetailPage', () => {
     expect(screen.getByText(/Bu cihazdan akış yok/)).toBeInTheDocument()
     expect(screen.getByText(/Bu cihazdan syslog olayı yok/)).toBeInTheDocument()
   })
+
+  it('hiç poll edilmemiş cihaz "sorunlu" değil "ilk poll bekleniyor" gösterir', async () => {
+    mockFetch([{ ...DEVICE, last_poll: 0 }])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('ilk poll bekleniyor')).toBeInTheDocument())
+    expect(screen.queryByText('sorunlu')).not.toBeInTheDocument()
+  })
+
+  it('devre dışı bırakılmış cihaz "sorunlu" gösterir', async () => {
+    mockFetch([{ ...DEVICE, enabled: false }])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('sorunlu')).toBeInTheDocument())
+  })
+
+  it('401 gelince oturum bildirimi gösterir', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 401, json: async () => ({}) } as Response)))
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Oturum sona ermiş olabilir/)).toBeInTheDocument())
+  })
+
+  it('syslog önem-seviyesi rozeti severity\'e göre renklendiriliyor (paylaşılan SEV_STYLES)', async () => {
+    const now = Math.floor(Date.now() / 1000)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/v1/devices') return Promise.resolve({ status: 200, json: async () => [DEVICE] } as Response)
+        if (url.endsWith('/interfaces')) return Promise.resolve({ status: 200, json: async () => [] } as Response)
+        if (url.startsWith('/api/v1/flows')) return Promise.resolve({ status: 200, json: async () => [] } as Response)
+        if (url.startsWith('/api/v1/syslog')) {
+          return Promise.resolve({
+            status: 200,
+            json: async () => [{ id: 1, ts: now, host: '10.0.0.1', source_ip: '10.0.0.1', severity: 0, tag: 'kernel', message: 'acil durum' }],
+          } as Response)
+        }
+        return Promise.resolve({ status: 404, json: async () => ({}) } as Response)
+      }),
+    )
+    renderPage()
+    const badge = await screen.findByText('emergency')
+    expect(badge.className).toContain('rose')
+  })
 })

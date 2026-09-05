@@ -260,9 +260,12 @@ export function Overview({
   const onlineAgents = agents.length > 0 ? agents.filter((a) => a.online).length : (fleet?.agents_online ?? 0)
   const agentsTotal = agents.length > 0 ? agents.length : (fleet?.agents_total ?? 0)
   const totalConns = agents.reduce((sum, a) => sum + (a.conns || 0), 0)
-  // cihaz icin ayri bir "online" alani yok: son 3 poll araligi icinde hata
-  // vermeden yoklanmis olmasi saglikli kabul edilir (kaba tahmin)
-  const healthyDevices = devices.filter((d) => d.enabled && d.last_poll > 0 && !d.last_error).length
+  // cihaz icin ayri bir "online" alani yok: hata vermeden calisiyor olmasi
+  // saglikli kabul edilir. last_poll>0 sarti eskiden buradaydi ama yeni
+  // eklenmis, ilk poll'unu henuz almamis bir cihazi da "sagliksiz" sayiyordu
+  // (impeccable critique 2026-09-05, DeviceDetailPage.tsx'teki ayni hatanin
+  // eslenigi) — kaldirildi, enabled+hatasiz olmasi yeterli
+  const healthyDevices = devices.filter((d) => d.enabled && !d.last_error).length
 
   const stream = useMemo<StreamItem[]>(() => {
     const items: StreamItem[] = [

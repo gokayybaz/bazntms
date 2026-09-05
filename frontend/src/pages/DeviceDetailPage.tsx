@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
+import { SEV_NAMES, SEV_STYLES } from '../lib/syslogSeverity'
 import { Card } from '../components/Card'
 import { FortiPanel } from '../components/FortiPanel'
 
@@ -66,8 +67,6 @@ interface SyslogEvent {
   message: string
 }
 
-const SEV_NAMES = ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug']
-
 function relTime(unix: number): string {
   if (!unix) return 'hiç poll edilmedi'
   const secs = Math.max(0, Math.floor(Date.now() / 1000) - unix)
@@ -85,6 +84,10 @@ export function DeviceDetailPage() {
   const [syslog, setSyslog] = useState<SyslogEvent[]>([])
   const [loaded, setLoaded] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  // 3 fetch effect'i de 401'i sessizce yutuyordu — sayfa donmuş bir oturumla
+  // sonsuza kadar son bilinen "sağlıklı" durumu göstermeye devam ediyordu.
+  // Artık en az bir istek 401 dönerse görünür bir banner tetikleniyor.
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -92,7 +95,10 @@ export function DeviceDetailPage() {
     const load = async () => {
       try {
         const res = await fetch('/api/v1/devices')
-        if (res.status === 401) return
+        if (res.status === 401) {
+          if (!stop) setSessionExpired(true)
+          return
+        }
         const list: Device[] = await res.json()
         const found = list.find((d) => String(d.id) === id)
         if (!stop) {
@@ -118,7 +124,10 @@ export function DeviceDetailPage() {
     const load = async () => {
       try {
         const res = await fetch(`/api/v1/devices/${id}/interfaces`)
-        if (res.status === 401) return
+        if (res.status === 401) {
+          if (!stop) setSessionExpired(true)
+          return
+        }
         if (!stop) setIfaces(await res.json())
       } catch {
         /* yoksay */
@@ -142,7 +151,10 @@ export function DeviceDetailPage() {
           fetch('/api/v1/flows?minutes=15&limit=200'),
           fetch('/api/v1/syslog?limit=200'),
         ])
-        if (fr.status === 401 || sr.status === 401) return
+        if (fr.status === 401 || sr.status === 401) {
+          if (!stop) setSessionExpired(true)
+          return
+        }
         if (!stop) {
           setFlows(await fr.json())
           setSyslog(await sr.json())
@@ -184,10 +196,20 @@ export function DeviceDetailPage() {
     [syslog, device],
   )
 
+  // 401, sayfa hiç "loaded" durumuna geçemeden (ilk fetch turu) da
+  // gelebilir — bu yüzden bildirim, aşağıdaki üç dönüş yolunun (notFound /
+  // yükleniyor / ana içerik) hepsinde ayrı ayrı, en üstte gösteriliyor
+  const sessionBanner = sessionExpired && (
+    <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+      ⚠ Oturum sona ermiş olabilir — veriler güncellenmiyor. Sayfayı yenileyip tekrar giriş yapın.
+    </p>
+  )
+
   if (notFound) {
     return (
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-        <p className="py-16 text-center text-sm text-slate-600">
+        {sessionBanner}
+        <p className="py-16 text-center text-sm text-dim-aa">
           Cihaz bulunamadı. <Link to="/cihazlar" className="text-cyan-400 hover:underline">Cihaz listesine dön</Link>
         </p>
       </div>
@@ -197,32 +219,40 @@ export function DeviceDetailPage() {
   if (!loaded || !device) {
     return (
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-        <p className="py-16 text-center text-sm text-slate-600">Yükleniyor…</p>
+        {sessionBanner}
+        <p className="py-16 text-center text-sm text-dim-aa">Yükleniyor…</p>
       </div>
     )
   }
 
-  const healthy = device.enabled && device.last_poll > 0 && !device.last_error
+  // eskiden last_poll===0 (hiç poll edilmemiş, yeni eklenmiş) "sorunlu" ile
+  // aynı gri rozete düşüyordu — üç ayrı durum artık ayrıştırılıyor: gerçekten
+  // sorunlu (kapalı veya son hata var) / ilk poll'u bekliyor / sağlıklı
+  const healthStatus: 'healthy' | 'pending' | 'problem' =
+    !device.enabled || device.last_error ? 'problem' : device.last_poll === 0 ? 'pending' : 'healthy'
+  const HEALTH_META = {
+    healthy: { badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400', dot: 'bg-emerald-400', label: 'sağlıklı' },
+    pending: { badge: 'border-amber-500/30 bg-amber-500/10 text-amber-400', dot: 'bg-amber-400', label: 'ilk poll bekleniyor' },
+    problem: { badge: 'border-rose-500/30 bg-rose-500/10 text-rose-400', dot: 'bg-rose-400', label: 'sorunlu' },
+  } as const
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
       <div className="flex items-center gap-2">
-        <Link to="/cihazlar" className="text-xs text-slate-500 hover:text-cyan-400">
+        <Link to="/cihazlar" className="text-xs text-dim-aa hover:text-cyan-400">
           ← Cihazlar
         </Link>
       </div>
 
+      {sessionBanner}
+
       {/* başlık */}
       <div className="flex flex-wrap items-center gap-3">
         <span
-          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
-            healthy
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-slate-600 bg-slate-800 text-slate-500'
-          }`}
+          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${HEALTH_META[healthStatus].badge}`}
         >
-          <span className={`size-1.5 rounded-full ${healthy ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-          {healthy ? 'sağlıklı' : 'sorunlu'}
+          <span className={`size-1.5 rounded-full ${HEALTH_META[healthStatus].dot}`} />
+          {HEALTH_META[healthStatus].label}
         </span>
         <h1 className="font-mono text-xl font-bold text-slate-100">{device.name}</h1>
         <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-xs uppercase text-slate-400">{device.kind}</span>
@@ -231,7 +261,7 @@ export function DeviceDetailPage() {
             fortigate rest api
           </span>
         ) : (
-          <span className="rounded border border-slate-700 px-2 py-0.5 font-mono text-xs uppercase text-slate-500">
+          <span className="rounded border border-slate-700 px-2 py-0.5 font-mono text-xs uppercase text-dim-aa">
             snmp v{device.snmp_version === 3 ? '3' : '2c'}
           </span>
         )}
@@ -285,28 +315,28 @@ export function DeviceDetailPage() {
 
       {/* fortigate derin panel */}
       {device.vendor === 'fortigate' && (
-        <Card title="FortiGate Detayı" right={<span className="text-xs text-slate-500">REST API · canlı</span>}>
+        <Card title="FortiGate Detayı" right={<span className="text-xs text-dim-aa">REST API · canlı</span>}>
           <FortiPanel deviceId={device.id} />
         </Card>
       )}
 
       {/* arayüzler */}
-      <Card title="Arayüzler" right={<span className="text-xs text-slate-500">{ifaces.length} arayüz</span>}>
+      <Card title="Arayüzler" right={<span className="text-xs text-dim-aa">{ifaces.length} arayüz</span>}>
         {ifaces.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-600">Henüz arayüz verisi yok.</p>
+          <p className="py-6 text-center text-sm text-dim-aa">Henüz arayüz verisi yok.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-800/60">
             <table className="w-full text-sm">
               <thead className="bg-slate-900/95">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2 font-medium">Arayüz</th>
-                  <th className="px-3 py-2 font-medium">Durum</th>
-                  <th className="px-3 py-2 text-right font-medium">Hız</th>
-                  <th className="px-3 py-2 text-right font-medium">↓</th>
-                  <th className="px-3 py-2 text-right font-medium">↑</th>
-                  <th className="px-3 py-2 text-right font-medium">Toplam (↓/↑)</th>
-                  <th className="px-3 py-2 text-right font-medium">Hata (in/out)</th>
-                  <th className="px-3 py-2 text-right font-medium" title="ifInDiscards / ifOutDiscards — kuyruk taşması, QoS drop (hatadan farklı)">
+                <tr className="text-left text-[11px] uppercase tracking-wider text-dim-aa">
+                  <th scope="col" className="px-3 py-2 font-medium">Arayüz</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Durum</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Hız</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">↓</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">↑</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Toplam (↓/↑)</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Hata (in/out)</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium" title="ifInDiscards / ifOutDiscards — kuyruk taşması, QoS drop (hatadan farklı)">
                     Atılan (in/out)
                   </th>
                 </tr>
@@ -316,25 +346,25 @@ export function DeviceDetailPage() {
                   <tr key={i.if_index} className="hover:bg-slate-800/30">
                     <td className="px-3 py-1.5">
                       <span className="font-mono text-slate-300">{i.name || `if${i.if_index}`}</span>
-                      {i.alias && <span className="ml-2 text-[11px] text-slate-600">{i.alias}</span>}
+                      {i.alias && <span className="ml-2 text-[11px] text-dim-aa">{i.alias}</span>}
                     </td>
                     <td className="px-3 py-1.5">
-                      <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-dim-aa'}`}>
                         {i.oper_status === 1 ? 'up' : 'down'}
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-500">
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-dim-aa">
                       {i.speed > 0 ? formatBits(i.speed) : '—'}
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-cyan-300/90">{formatBits(i.rx_bps)}</td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-violet-300/90">{formatBits(i.tx_bps)}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-[11px] text-slate-500">
+                    <td className="px-3 py-1.5 text-right font-mono text-[11px] text-dim-aa">
                       {formatBytes(i.rx_bytes)}/{formatBytes(i.tx_bytes)}
                     </td>
-                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-dim-aa'}`}>
                       {i.in_errors}/{i.out_errors}
                     </td>
-                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-dim-aa'}`}>
                       {i.in_discards}/{i.out_discards}
                     </td>
                   </tr>
@@ -346,55 +376,62 @@ export function DeviceDetailPage() {
       </Card>
 
       {/* netflow */}
-      <Card title="NetFlow v5 Akışları" right={<span className="text-xs text-slate-500">son 15 dk · bu cihaz · {formatNum(deviceFlows.length)}</span>}>
+      <Card title="NetFlow v5 Akışları" right={<span className="text-xs text-dim-aa">son 15 dk · bu cihaz · {formatNum(deviceFlows.length)}</span>}>
         {deviceFlows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-600">Bu cihazdan akış yok.</p>
+          <p className="py-6 text-center text-sm text-dim-aa">Bu cihazdan akış yok.</p>
         ) : (
-          <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800/60">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-900/95">
-                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-1.5 font-medium">Saat</th>
-                  <th className="px-3 py-1.5 font-medium">Akış</th>
-                  <th className="px-3 py-1.5 font-medium">Protokol</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Paket</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Octet</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {deviceFlows.slice(0, 100).map((f, i) => (
-                  <tr key={i} className="hover:bg-slate-800/30">
-                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">
-                      {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
-                      {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{f.proto}</span>
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-400">{f.packets}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-emerald-300/90">{formatBytes(f.octets)}</td>
+          <>
+            {deviceFlows.length > 100 && (
+              <p className="mb-1.5 text-[10px] text-amber-400">
+                ilk 100 / {formatNum(deviceFlows.length)} akış gösteriliyor
+              </p>
+            )}
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800/60">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-900/95">
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-dim-aa">
+                    <th scope="col" className="px-3 py-1.5 font-medium">Saat</th>
+                    <th scope="col" className="px-3 py-1.5 font-medium">Akış</th>
+                    <th scope="col" className="px-3 py-1.5 font-medium">Protokol</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">Paket</th>
+                    <th scope="col" className="px-3 py-1.5 text-right font-medium">Octet</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {deviceFlows.slice(0, 100).map((f, i) => (
+                    <tr key={i} className="hover:bg-slate-800/30">
+                      <td className="px-3 py-1.5 font-mono text-[11px] text-dim-aa">
+                        {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
+                      </td>
+                      <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
+                        {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{f.proto}</span>
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-400">{f.packets}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-emerald-300/90">{formatBytes(f.octets)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
       {/* syslog */}
-      <Card title="Syslog Olayları" right={<span className="text-xs text-slate-500">bu cihaz · {formatNum(deviceSyslog.length)}</span>}>
+      <Card title="Syslog Olayları" right={<span className="text-xs text-dim-aa">bu cihaz · {formatNum(deviceSyslog.length)}</span>}>
         {deviceSyslog.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-600">Bu cihazdan syslog olayı yok.</p>
+          <p className="py-6 text-center text-sm text-dim-aa">Bu cihazdan syslog olayı yok.</p>
         ) : (
           <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
             {deviceSyslog.map((e) => (
               <li key={e.id} className="flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/30">
-                <span className="text-slate-600">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
-                <span className="rounded px-1 text-[10px] text-slate-400 ring-1 ring-slate-700">{SEV_NAMES[e.severity]}</span>
+                <span className="text-dim-aa">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+                <span className={`rounded px-1 text-[10px] ring-1 ${SEV_STYLES[e.severity]}`}>{SEV_NAMES[e.severity]}</span>
                 <span className="truncate text-slate-300">
-                  {e.tag && <span className="text-slate-500">{e.tag}: </span>}
+                  {e.tag && <span className="text-dim-aa">{e.tag}: </span>}
                   {e.message}
                 </span>
               </li>
