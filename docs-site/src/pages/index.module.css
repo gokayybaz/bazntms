@@ -1,28 +1,33 @@
 /* Landing page — Strapi'nin (strapi.io) tasarım dili uygulandı.
    Ölçülen değerler: kapsayıcı 1248px, okuma sütunu ~700px, tip ölçeği
-   43/33/21/17/15, yarıçap 8px kontrol / 16px kart, hairline #e9e9ff.
+   43/33/21/17/15, yarıçap 8px kontrol / 16px kart. Strapi'nin indigosu
+   yerine projenin kendi cyan'ı (DESIGN.md → birincil marka vurgusu).
    Ritim koyu→açık→koyu: vitrin bölümleri (#030712) bazNTMS'in NOC
    kimliğini ve anlam renklerini taşır, içerik bölümleri Strapi'nin
-   indigo tipografisiyle açık zeminde okunur. */
+   cyan tipografisiyle açık zeminde okunur. */
 
 .page {
-  --indigo: #4945ff;
-  --indigo-dark: #3732cc;
-  --indigo-100: #f0f0ff;
-  --ink: #292875;
-  --ink-strong: #1b1a5c;
-  --ink-soft: #666687;
+  /* Vurgu cyan (DESIGN.md: birincil marka rengi). #22d3ee beyaz üstünde
+     1.8:1 veriyor — metin/CTA olamaz; açık yüzeylerde cyan-700 kullanılır,
+     parlak ton koyu yüzeylere ayrılır. Nötrler cyana doğru kaydırıldı. */
+  --accent: #0e7490;
+  --accent-dark: #0b5a70;
+  --accent-100: #e6f7fb;
+  --on-accent: #ffffff;
+  --ink: #164e63;
+  --ink-strong: #083344;
+  --ink-soft: #4a6f80;
   --paper: #ffffff;
-  --paper-tint: #f6f6ff;
-  --line: #e9e9ff;
-  --line-strong: #dcdce4;
+  --paper-tint: #f1fafc;
+  --line: #dceef4;
+  --line-strong: #c5e2eb;
 
   /* koyu vitrin — her iki temada da koyu kalır */
   --night: #030712;
-  --night-raise: #0b1020;
-  --night-line: #23233f;
-  --night-ink: #f2f2ff;
-  --night-soft: #9a9ac0;
+  --night-raise: #08131c;
+  --night-line: #17323f;
+  --night-ink: #eefafd;
+  --night-soft: #8fabb6;
 
   /* ürünün anlam sözleşmesi (DESIGN.md) — yalnızca veri yüzeylerinde */
   --rx: #22d3ee;
@@ -43,14 +48,16 @@
 :global([data-theme='dark']) .page {
   --paper: #030712;
   --paper-tint: #0b1020;
-  --line: #23233f;
-  --line-strong: #2d2d4f;
-  --ink: #d8d8f0;
-  --ink-strong: #f2f2ff;
-  --ink-soft: #9a9ac0;
-  --indigo: #8a87ff;
-  --indigo-dark: #6b68ff;
-  --indigo-100: rgba(73, 69, 255, 0.14);
+  --line: #17323f;
+  --line-strong: #22485a;
+  --ink: #d3e6ec;
+  --ink-strong: #eefafd;
+  --ink-soft: #8fabb6;
+  --accent: #22d3ee;
+  --accent-dark: #67e8f9;
+  --accent-100: rgba(34, 211, 238, 0.14);
+  /* parlak cyan zeminde beyaz metin okunmaz — koyu mürekkep (8.9:1) */
+  --on-accent: #04252e;
 }
 
 .shell {
@@ -67,7 +74,7 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--indigo);
+  color: var(--accent);
 }
 
 .h2 {
@@ -112,12 +119,12 @@
 }
 
 .btnPrimary {
-  background: var(--indigo);
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .btnPrimary:hover {
-  background: var(--indigo-dark);
-  color: #ffffff;
+  background: var(--accent-dark);
+  color: var(--on-accent);
   text-decoration: none;
 }
 
@@ -137,9 +144,9 @@
   color: var(--ink);
 }
 .btnGhost:hover {
-  border-color: var(--indigo);
-  color: var(--indigo);
-  background: var(--indigo-100);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-100);
   text-decoration: none;
 }
 
@@ -157,10 +164,25 @@
   padding: 72px 0 0;
 }
 
-/* #4945ff koyu zeminde 3.43:1 veriyordu (AA fail) — Strapi de koyu
-   yüzeylerde indigonun açık tonunu kullanıyor */
+/* koyu vitrin yüzeyleri her iki temada da koyu kalır: buradaki vurgu
+   her zaman parlak cyan (#030712 üstünde 11.1:1) */
 .hero .eyebrow {
-  color: #a5a3ff;
+  color: #22d3ee;
+}
+
+/* Birincil CTA koyu zeminde cyan-700 ile sönük kalıyordu — parlak ton +
+   koyu mürekkep (8.9:1) hem okunur hem birincil eylem gibi duruyor. */
+.hero .btnPrimary,
+.showcase .btnPrimary,
+.bottom .btnPrimary {
+  background: #22d3ee;
+  color: #04252e;
+}
+.hero .btnPrimary:hover,
+.showcase .btnPrimary:hover,
+.bottom .btnPrimary:hover {
+  background: #67e8f9;
+  color: #04252e;
 }
 
 /* bento: hairline hücreler, 16px yarıçaplı çerçeve */
@@ -189,7 +211,7 @@
 }
 .title em {
   font-style: normal;
-  color: #a5a3ff;
+  color: #22d3ee;
 }
 
 .heroSub {
@@ -438,7 +460,7 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: var(--indigo);
+  color: var(--accent);
 }
 
 .item {
@@ -488,7 +510,7 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: var(--indigo);
+  color: var(--accent);
   margin-bottom: 8px;
 }
 
@@ -529,7 +551,7 @@
   padding: 1px 5px;
   border-radius: 5px;
   border: 1px solid var(--line);
-  background: var(--indigo-100);
+  background: var(--accent-100);
   color: var(--ink);
 }
 
@@ -541,7 +563,7 @@
 }
 .showcase .h2 { color: #ffffff; }
 .showcase .lede { color: var(--night-soft); }
-.showcase .eyebrow { color: #a5a3ff; }
+.showcase .eyebrow { color: #22d3ee; }
 
 /* ---------- mimari ---------- */
 
@@ -553,11 +575,11 @@
   min-width: 760px;
 }
 .archNode { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
-.archHub { fill: var(--indigo-100); stroke: var(--indigo); stroke-width: 1.2; }
+.archHub { fill: var(--accent-100); stroke: var(--accent); stroke-width: 1.2; }
 .archFlow path { fill: none; stroke: var(--line-strong); stroke-width: 1.2; stroke-dasharray: 4 7; }
 .archText { fill: var(--ink-strong); font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; }
 .archSub { fill: var(--ink-soft); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
-.archHubText { fill: var(--indigo); font-family: 'Poppins', sans-serif; font-size: 15px; font-weight: 600; }
+.archHubText { fill: var(--accent); font-family: 'Poppins', sans-serif; font-size: 15px; font-weight: 600; }
 .archGroup, .archLabel { fill: var(--ink-soft); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; }
 .archDotRx { fill: var(--rx); }
 .archDotTx { fill: var(--tx); }
@@ -586,8 +608,8 @@
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: var(--indigo);
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 13px;
   font-weight: 600;
   display: inline-flex;
@@ -629,7 +651,7 @@
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
-.copy:hover { color: var(--indigo); border-color: var(--indigo); }
+.copy:hover { color: var(--accent); border-color: var(--accent); }
 .copyError { color: var(--critical); border-color: var(--critical); }
 
 .hint {
@@ -638,14 +660,14 @@
   line-height: 1.6;
   color: var(--ink-soft);
 }
-.hint a { color: var(--indigo); text-decoration: underline; text-underline-offset: 3px; }
+.hint a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .hint code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.92em;
   padding: 1px 5px;
   border-radius: 5px;
   border: 1px solid var(--line);
-  background: var(--indigo-100);
+  background: var(--accent-100);
 }
 
 /* ---------- v0.3.0 rozetleri ---------- */
@@ -655,7 +677,7 @@
   padding: 7px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--indigo-100);
+  background: var(--accent-100);
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);

@@ -1,44 +1,46 @@
 /* bazNTMS docs-site teması — Strapi'nin tasarım dili uygulandı.
    Ölçülen kaynak değerler (strapi.io + docs.strapi.io):
-   indigo #4945ff, gövde metni #292875, ikincil #666687,
-   alternatif zemin #f6f6ff, hairline #e9e9ff, koyu vitrin #030712.
+   yapı/tipografi/ölçek Strapi'den; vurgu rengi projenin kendi cyan'ı
+   (DESIGN.md → birincil marka vurgusu). #22d3ee beyaz üstünde 1.8:1
+   verdiği için açık yüzeylerde cyan-700 (#0e7490, 5.4:1) kullanılır,
+   parlak ton koyu temaya ayrılır. Koyu vitrin #030712.
    Karakteristik: hiçbir yerde saf siyah metin ya da saf beyaz panel yok —
-   nötrler indigoya doğru kaydırılmış. Marketing Poppins, docs Inter,
+   nötrler cyana doğru kaydırılmış. Marketing Poppins, docs Inter,
    kod JetBrains Mono (Strapi de aynı ayrımı yapıyor). */
 
 :root {
-  --strapi-indigo: #4945ff;
-  --strapi-indigo-dark: #3732cc;
-  --strapi-indigo-100: #f0f0ff;
-  --strapi-ink: #292875;
-  --strapi-ink-soft: #666687;
-  --strapi-paper-tint: #f6f6ff;
-  --strapi-line: #e9e9ff;
-  --strapi-line-strong: #dcdce4;
-  --strapi-night: #030712;
+  --brand-accent: #0e7490;
+  --brand-accent-dark: #0b5a70;
+  --brand-accent-100: #e6f7fb;
+  --brand-ink: #164e63;
+  --brand-ink-soft: #4a6f80;
+  --brand-paper-tint: #f1fafc;
+  --brand-line: #dceef4;
+  --brand-line-strong: #c5e2eb;
+  --brand-night: #030712;
 
-  --ifm-color-primary: #4945ff;
-  --ifm-color-primary-dark: #3732cc;
-  --ifm-color-primary-darker: #2f2bb3;
-  --ifm-color-primary-darkest: #24218c;
-  --ifm-color-primary-light: #6b68ff;
-  --ifm-color-primary-lighter: #8a87ff;
-  --ifm-color-primary-lightest: #b3b1ff;
+  --ifm-color-primary: #0e7490;
+  --ifm-color-primary-dark: #0b5a70;
+  --ifm-color-primary-darker: #0a4f61;
+  --ifm-color-primary-darkest: #083f4e;
+  --ifm-color-primary-light: #128aab;
+  --ifm-color-primary-lighter: #159fc4;
+  --ifm-color-primary-lightest: #22d3ee;
 
   --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ifm-heading-font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --ifm-code-font-size: 92%;
 
-  --ifm-font-color-base: #292875;
-  --ifm-heading-color: #1b1a5c;
+  --ifm-font-color-base: #164e63;
+  --ifm-heading-color: #083344;
   --ifm-background-color: #ffffff;
-  --ifm-background-surface-color: #f6f6ff;
+  --ifm-background-surface-color: #f1fafc;
   --ifm-navbar-background-color: #ffffff;
   --ifm-footer-background-color: #030712;
-  --ifm-toc-border-color: #e9e9ff;
-  --ifm-hr-border-color: #e9e9ff;
-  --ifm-blockquote-color: #666687;
+  --ifm-toc-border-color: #dceef4;
+  --ifm-hr-border-color: #dceef4;
+  --ifm-blockquote-color: #4a6f80;
 
   /* Strapi'nin yarıçap ölçeği: 8px kontroller, 16px kartlar */
   --ifm-button-border-radius: 8px;
@@ -73,60 +75,60 @@ pre code {
 /* yalnızca doküman içeriğindeki SATIR İÇİ kod — kod bloklarının
    (pre > code) kendi sözdizimi teması ezilmesin */
 .markdown :not(pre) > code {
-  border: 1px solid var(--strapi-line);
-  background-color: var(--strapi-indigo-100);
-  color: var(--strapi-ink);
+  border: 1px solid var(--brand-line);
+  background-color: var(--brand-accent-100);
+  color: var(--brand-ink);
 }
 
 .navbar {
-  border-bottom: 1px solid var(--strapi-line);
+  border-bottom: 1px solid var(--brand-line);
   box-shadow: none;
 }
 
 .menu__link--active {
-  background-color: var(--strapi-indigo-100);
-  color: var(--strapi-indigo);
+  background-color: var(--brand-accent-100);
+  color: var(--brand-accent);
   font-weight: 600;
 }
 
 .table-of-contents {
-  border-left-color: var(--strapi-line);
+  border-left-color: var(--brand-line);
 }
 
 /* ---------- koyu tema ---------- */
 
-[data-theme='dark'] {
-  --ifm-color-primary: #8a87ff;
-  --ifm-color-primary-dark: #6b68ff;
-  --ifm-color-primary-darker: #4945ff;
-  --ifm-color-primary-darkest: #3732cc;
-  --ifm-color-primary-light: #a5a3ff;
-  --ifm-color-primary-lighter: #c0bfff;
-  --ifm-color-primary-lightest: #dcdbff;
+html[data-theme='dark'] {
+  --ifm-color-primary: #22d3ee;
+  --ifm-color-primary-dark: #0ec3e0;
+  --ifm-color-primary-darker: #0eaecb;
+  --ifm-color-primary-darkest: #0e8fa8;
+  --ifm-color-primary-light: #48dcf2;
+  --ifm-color-primary-lighter: #67e8f9;
+  --ifm-color-primary-lightest: #a5f0fb;
 
   --ifm-background-color: #030712;
-  --ifm-background-surface-color: #0b1020;
-  --ifm-font-color-base: #d8d8f0;
-  --ifm-heading-color: #f2f2ff;
+  --ifm-background-surface-color: #08131c;
+  --ifm-font-color-base: #d3e6ec;
+  --ifm-heading-color: #eefafd;
   --ifm-navbar-background-color: #030712;
   --ifm-footer-background-color: #030712;
-  --ifm-card-background-color: #0b1020;
-  --ifm-toc-border-color: #23233f;
-  --ifm-hr-border-color: #23233f;
-  --ifm-blockquote-color: #9a9ac0;
+  --ifm-card-background-color: #08131c;
+  --ifm-toc-border-color: #17323f;
+  --ifm-hr-border-color: #17323f;
+  --ifm-blockquote-color: #8fabb6;
 }
 
-[data-theme='dark'] .markdown :not(pre) > code {
-  border-color: #23233f;
-  background-color: rgba(73, 69, 255, 0.12);
-  color: #c0bfff;
+html[data-theme='dark'] .markdown :not(pre) > code {
+  border-color: #17323f;
+  background-color: rgba(34, 211, 238, 0.12);
+  color: #a5f0fb;
 }
 
-[data-theme='dark'] .navbar {
-  border-bottom: 1px solid #23233f;
+html[data-theme='dark'] .navbar {
+  border-bottom: 1px solid #17323f;
 }
 
-[data-theme='dark'] .menu__link--active {
-  background-color: rgba(73, 69, 255, 0.16);
-  color: #a5a3ff;
+html[data-theme='dark'] .menu__link--active {
+  background-color: rgba(34, 211, 238, 0.16);
+  color: #67e8f9;
 }
