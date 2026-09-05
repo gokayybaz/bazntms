@@ -132,3 +132,57 @@ func TestEnrollTokenExpiredRejected(t *testing.T) {
 		t.Fatalf("suresi dolmus token icin 401 beklenirdi: %d", resp.StatusCode)
 	}
 }
+
+// TestEnrollTokenSiteBinding (A3 / S12.7): site-kapsamli DB token ile enroll
+// olan agent, kendi -site beyanindan bagimsiz olarak token'in site'ina yazilir.
+// Statik token'da agent'in beyani gecerli kalir.
+func TestEnrollTokenSiteBinding(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "sitebind.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	const scopedTok = "ent_scoped_site_value"
+	if _, err := st.CreateEnrollToken(store.EnrollToken{
+		Name: "ofis-a-filosu", TokenHash: TokenHashString(scopedTok), Site: "ofis-a",
+	}); err != nil {
+		t.Fatalf("token olusturma: %v", err)
+	}
+
+	engine := capture.NewEngine()
+	srv := New(nil, engine, st, "test.db",
+		alert.NewManager(alert.DefaultConfig(), st, engine, 30),
+		nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	// helloReq gövdesi "site":"test" gönderir — token'ın site'ı bunu ezmeli
+	resp := helloReq(t, ts, scopedTok, "scoped-agent")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("scoped token enroll: %d", resp.StatusCode)
+	}
+
+	// statik token → agent beyanı (hello.Site="test") geçerli
+	resp2 := helloReq(t, ts, testEnrollToken, "static-agent")
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("static token enroll: %d", resp2.StatusCode)
+	}
+
+	agents, err := st.ListAgents(time.Hour, "")
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	got := map[string]string{}
+	for _, a := range agents {
+		got[a.Name] = a.Site
+	}
+	if got["scoped-agent"] != "ofis-a" {
+		t.Fatalf("site-kapsamlı token agent'ı token site'ına bağlamalı: %q (beklenen ofis-a)", got["scoped-agent"])
+	}
+	if got["static-agent"] != "test" {
+		t.Fatalf("statik token agent beyanını korumalı: %q (beklenen test)", got["static-agent"])
+	}
+}

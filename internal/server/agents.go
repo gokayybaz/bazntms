@@ -165,29 +165,28 @@ func (s *Server) agentFromClientCert(r *http.Request) *store.Agent {
 	return agent
 }
 
-// validEnrollToken, sunulan X-Enroll-Token'in ya hub'in TEK statik sirri
-// (-enroll-token) ya da DB'de saklanan, iptal edilmemis ve suresi
-// gecmemis bir enroll_tokens kaydiyla eslesip eslesmedigini kontrol eder.
-// Statik sir icin sabit-zamanli karsilastirma kullanilir (subtle);
-// DB token'lari zaten hash uzerinden aranir (AgentByTokenHash/
-// APITokenByHash'teki mevcut desenle ayni — hash arama, dogrudan sir
-// karsilastirmasi degil, bu yuzden ayrica sabit-zamanli olmasi gerekmez).
-func (s *Server) validEnrollToken(presented string) bool {
+// resolveEnrollToken, sunulan X-Enroll-Token'i dogrular ve token'a BAGLI
+// site'i dondurur (ok=false ise gecersiz/iptal/suresi dolmus). Kaynaklar:
+//   - hub'in TEK statik sirri (-enroll-token): sabit-zamanli karsilastirma;
+//     site "" — agent kendi hello.Site beyanini kullanir (bootstrap yolu)
+//   - DB enroll_tokens kaydi: hash arama; site doluysa o site BAGLAYICIDIR
+//     (A3 — agent istedigi site'i beyan edip filo icinde konum secemez)
+func (s *Server) resolveEnrollToken(presented string) (site string, ok bool) {
 	if presented == "" {
-		return false
+		return "", false
 	}
 	if subtle.ConstantTimeCompare([]byte(presented), []byte(s.enrollToken)) == 1 {
-		return true
+		return "", true
 	}
 	t, err := s.store.EnrollTokenByHash(store.TokenHash(presented))
 	if err != nil || t.Revoked {
-		return false
+		return "", false
 	}
 	if t.ExpiresAt > 0 && time.Now().Unix() > t.ExpiresAt {
-		return false
+		return "", false
 	}
 	go func() { _ = s.store.TouchEnrollToken(t.ID) }() // best-effort, akisi bloklamaz
-	return true
+	return t.Site, true
 }
 
 func unauthorized(w http.ResponseWriter, msg string) {
@@ -211,7 +210,8 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"error": "çok fazla başarısız enrollment denemesi, bir dakika bekleyin"})
 		return
 	}
-	if !s.validEnrollToken(r.Header.Get("X-Enroll-Token")) {
+	tokenSite, ok := s.resolveEnrollToken(r.Header.Get("X-Enroll-Token"))
+	if !ok {
 		s.enrollAttempts.recordFailure(ip)
 		unauthorized(w, "geçersiz enrollment token")
 		return
@@ -236,9 +236,16 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 	agentToken := hex.EncodeToString(buf)
 	displayIP := agentClientIP(r) // XFF guvenilir, yalniz goruntuleme icin — yukaridaki rate-limit ip'siyle karistirilmasin
 
+	// A3: site-kapsamli token'da site sunucu tarafinda baglayicidir; statik
+	// veya site'siz token'da agent'in beyani (hello.Site) gecerlidir.
+	site := hello.Site
+	if tokenSite != "" {
+		site = tokenSite
+	}
+
 	id, err := s.store.RegisterAgent(store.Agent{
 		Name:            hello.Name,
-		Site:            hello.Site,
+		Site:            site,
 		TokenHash:       store.TokenHash(agentToken),
 		Version:         hello.Version,
 		ProtocolVersion: hello.ProtocolVersion,
@@ -266,7 +273,8 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 			slog.Info("agent istemci sertifikasi verildi", "agent_id", id, "gecerlilik", notAfter.Format(time.RFC3339))
 		}
 	}
-	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name, "site", hello.Site, "ip", displayIP, "mtls", reply.ClientCertPEM != "")
+	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name,
+		"site", site, "site_token_bagli", tokenSite != "", "ip", displayIP, "mtls", reply.ClientCertPEM != "")
 	writeJSON(w, reply)
 }
 
