@@ -93,6 +93,13 @@ func (a *AuthManager) LegacyLoginDisabled() bool {
 	return exists
 }
 
+// LegacyPasswordSet, -auth-password (veya AUTH_PASSWORD) ile bir legacy
+// sifre yapilandirilmis mi. "Son admin" korumasi bunu bir kurtarma yolu
+// (break-glass) olarak sayar (B6).
+func (a *AuthManager) LegacyPasswordSet() bool {
+	return a != nil && a.password != ""
+}
+
 func newSessionToken() string {
 	buf := make([]byte, 32)
 	rand.Read(buf)

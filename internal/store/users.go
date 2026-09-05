@@ -56,14 +56,22 @@ func (s *sqlStore) UserByID(id int64) (*User, error) {
 	return &u, nil
 }
 
+// CountAdmins, etkin (enabled) admin rollu kullanici sayisini dondurur.
+// "Son admin" korumasi (kullanici silme/rol dusurme/pasiflestirme) bunu
+// kullanir.
+func (s *sqlStore) CountAdmins() (int, error) {
+	var n int
+	err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND enabled = 1`)).Scan(&n)
+	return n, err
+}
+
 // AdminUserExists, etkin (enabled) en az bir admin rollu kullanici olup
 // olmadigini dondurur. Legacy tek-sifre girisi bu durumda devre disi
 // birakilir (B6) — etkin admin yoksa legacy sifre "break-glass" olarak
 // calismaya devam eder.
 func (s *sqlStore) AdminUserExists() (bool, error) {
-	var n int
-	err := s.db.QueryRow(s.q(`SELECT EXISTS(SELECT 1 FROM users WHERE role = 'admin' AND enabled = 1)`)).Scan(&n)
-	return n == 1, err
+	n, err := s.CountAdmins()
+	return n > 0, err
 }
 
 func (s *sqlStore) ListUsers() ([]User, error) {

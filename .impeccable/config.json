@@ -119,6 +119,15 @@
         ],
         "createdAt": "2026-09-05T18:26:15.867Z",
         "reason": "existing project convention: identical active-tab style to ComplianceSubNav.tsx (cyan-300 on cyan-500/15 light tint); keeping admin sub-nav consistent with compliance sub-nav"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/UsersCard.tsx"
+        ],
+        "createdAt": "2026-09-05T18:37:09.061Z",
+        "reason": "repo-wide muted-badge convention: bg-slate-500/10 text-slate-400 ring-slate-500/20 (verbatim in AlertsCard.tsx:109, alertKinds fallback); paired here with the identical emerald 'etkin' badge which the hook accepts"
       }
     ]
   }

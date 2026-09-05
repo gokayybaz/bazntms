@@ -153,6 +153,7 @@ type Store interface {
 	UserByID(id int64) (*User, error)
 	ListUsers() ([]User, error)
 	AdminUserExists() (bool, error)
+	CountAdmins() (int, error)
 	UpdateUser(u User) error
 	UpdateUserPassword(id int64, passwordHash string) error
 	TouchUserLogin(id int64) error

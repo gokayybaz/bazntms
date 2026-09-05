@@ -96,12 +96,20 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// son admin kilidi: admin rolunu/superuser'i etkisizlestirme korumasi
+	// kendi hesabını devre dışı bırakma koruması
 	if u.Role == string(RoleAdmin) && id == s.currentAdminID(r) {
 		if req.Enabled != nil && !*req.Enabled {
 			http.Error(w, "kendi hesabınızı devre dışı bırakamazsınız", http.StatusBadRequest)
 			return
 		}
+	}
+	// son admin koruması: tek etkin yöneticiyi rol düşürme / pasifleştirme
+	// (legacy şifre veya OIDC yedeği yoksa)
+	demoting := req.Role != nil && *req.Role != string(RoleAdmin)
+	disabling := req.Enabled != nil && !*req.Enabled
+	if (demoting || disabling) && s.lastAdminBlocked(u) {
+		http.Error(w, "sistemin en az bir etkin yöneticisi olmalı", http.StatusBadRequest)
+		return
 	}
 	if req.Role != nil {
 		if !Role(*req.Role).Valid() {
@@ -154,12 +162,30 @@ func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kullanıcı bulunamadı", http.StatusNotFound)
 		return
 	}
+	if s.lastAdminBlocked(u) {
+		http.Error(w, "sistemdeki son etkin yöneticiyi silemezsiniz", http.StatusBadRequest)
+		return
+	}
 	if err := s.store.DeleteUser(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	s.audit(r, identityFromCtx(r), "user.delete", "user:"+u.Username, "")
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// lastAdminBlocked, hedef kullanıcı sistemdeki tek etkin admin ise VE bir
+// yedek erişim yolu (legacy şifre / OIDC) yoksa true — bu durumda son
+// admin'i kaldıran işlem reddedilir (UI'dan kilitlenme koruması).
+func (s *Server) lastAdminBlocked(u *store.User) bool {
+	if u.Role != string(RoleAdmin) || !u.Enabled {
+		return false
+	}
+	if s.auth.LegacyPasswordSet() || s.oidc.Enabled() {
+		return false // break-glass yolu var
+	}
+	n, err := s.store.CountAdmins()
+	return err == nil && n <= 1
 }
 
 // currentAdminID, isteği yapan kullanıcının users tablosundaki ID'sini

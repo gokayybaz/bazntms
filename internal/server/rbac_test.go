@@ -209,11 +209,52 @@ func TestLegacyLoginDisabledWhenAdminExists(t *testing.T) {
 		t.Fatalf("yeni admin girişi: %d", code)
 	}
 
-	// 5) admin kullanıcısını pasifleştir → legacy tekrar çalışır (break-glass)
+	// 5) admin kullanıcısını pasifleştir → legacy tekrar çalışır (break-glass).
+	// legacy şifre yedeği olduğu için "son admin" koruması burada devrede DEĞİL.
 	if code, o := putJSON(t, ts, "/api/v1/users/"+strconv.FormatInt(admID, 10), legacyTok, map[string]any{"enabled": false}); code != http.StatusOK {
 		t.Fatalf("admin pasifleştirme: %d %v", code, o)
 	}
 	if code, _ := postJSON(t, ts, "/api/login", "", map[string]string{"password": "legacy-pw-1"}); code != http.StatusOK {
 		t.Fatalf("etkin admin kalmayınca legacy geri dönmeli: %d", code)
+	}
+}
+
+// TestLastAdminGuard (S12.2): legacy şifre / OIDC yedeği yokken sistemdeki
+// tek etkin admin'i silme / rol düşürme / pasifleştirme reddedilir.
+func TestLastAdminGuard(t *testing.T) {
+	ts := newRBACServer(t, "") // legacy şifre yok → auth kapalı, /api/v1/users açık
+
+	mk := func(name, role string) int64 {
+		code, o := postJSON(t, ts, "/api/v1/users", "", map[string]any{
+			"username": name, "password": name + "-pass-12", "role": role,
+		})
+		if code != http.StatusOK {
+			t.Fatalf("%s oluşturma: %d %v", name, code, o)
+		}
+		return int64(o["id"].(float64))
+	}
+	del := func(id int64) int {
+		resp := apiReq(t, http.MethodDelete, ts.URL+"/api/v1/users/"+strconv.FormatInt(id, 10), nil)
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	a1 := mk("adm1", "admin")
+
+	// tek admin: silme / rol düşürme / pasifleştirme → 400
+	if code := del(a1); code != http.StatusBadRequest {
+		t.Fatalf("son admin silme: %d beklendi 400", code)
+	}
+	if code, o := putJSON(t, ts, "/api/v1/users/"+strconv.FormatInt(a1, 10), "", map[string]any{"role": "viewer"}); code != http.StatusBadRequest {
+		t.Fatalf("son admin rol düşürme: %d %v beklendi 400", code, o)
+	}
+	if code, _ := putJSON(t, ts, "/api/v1/users/"+strconv.FormatInt(a1, 10), "", map[string]any{"enabled": false}); code != http.StatusBadRequest {
+		t.Fatalf("son admin pasifleştirme: %d beklendi 400", code)
+	}
+
+	// ikinci admin eklenince ilki kaldırılabilir
+	mk("adm2", "admin")
+	if code := del(a1); code != http.StatusOK {
+		t.Fatalf("ikinci admin varken silme: %d beklendi 200", code)
 	}
 }
