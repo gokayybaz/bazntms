@@ -18,48 +18,59 @@ type darwinProvider struct {
 
 func newPlatformProvider() Provider { return &darwinProvider{} }
 
-// Snapshot, `lsof -i -n -P -F pcnt` ciktisini ayrıştırır. Root çalışmıyorsa
+// Snapshot, `lsof -i -n -P -F pcnPf` ciktisini ayrıştırır. Root çalışmıyorsa
 // yalnızca kendi süreçleri görünür (agent root olarak çalışır).
+//
+// Alan kodlari onemli: buyuk 'P' protokol adidir (TCP/UDP); kucuk 't' dosya
+// TURUdur (IPv4/IPv6) — protokol degil. 't' kullanildiginda Key.Proto "ipv4"
+// olur ve pcap tarafinin urettigi "tcp"/"udp" ile hicbir zaman eslesmez;
+// macOS'ta surec atfi, L7 ve DNS gorunurlugu sessizce bos kalir.
 func (p *darwinProvider) Snapshot() map[Key]ProcInfo {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if time.Since(p.last) < 5*time.Second && p.cached != nil {
 		return p.cached
 	}
+	cmd := exec.Command("lsof", "-i", "-n", "-P", "-w", "-F", "pcnPf")
+	outBytes, err := cmd.Output()
+	if err != nil && len(outBytes) == 0 {
+		// lsof bazen erisilemeyen fd'ler icin nonzero doner; cikti varsa kullanilir
+		p.cached = map[Key]ProcInfo{}
+		p.last = time.Now()
+		return p.cached
+	}
+
+	p.cached = parseLsof(outBytes)
+	p.last = time.Now()
+	return p.cached
+}
+
+// parseLsof, `lsof -F pcnPf` alan ciktisini baglanti -> surec haritasina cevirir.
+func parseLsof(outBytes []byte) map[Key]ProcInfo {
 	out := map[Key]ProcInfo{}
 
-	cmd := exec.Command("lsof", "-i", "-n", "-P", "-w", "-F", "pcnt")
-	outBytes, err := cmd.Output()
-	if err != nil {
-		// lsof bazen erisilemeyen fd'ler icin nonzero doner; cikti yine kullanilir
-		if len(outBytes) == 0 {
-			p.cached = out
-			p.last = time.Now()
-			return out
-		}
-	}
-
 	var pid int32
-	var proc, typ, name string
+	var proc, proto, name string
 	flush := func() {
-		if pid > 0 && typ != "" && name != "" && strings.Contains(name, "->") {
-			parts := strings.SplitN(name, "->", 2)
-			local, remote := parts[0], parts[1]
-			proto := strings.ToLower(typ) // TCP/UDP -> tcp/udp
-			lp, lIP := splitAddr(local)
-			rp, rIP := splitAddr(remote)
-			if lp == 0 || rp == 0 || rIP == "" {
-				return
-			}
-			a := Key{Proto: proto, LocalIP: lIP, LocalPort: lp, RemoteIP: rIP, RemotePort: rp}
-			b := Key{Proto: proto, LocalIP: rIP, LocalPort: rp, RemoteIP: lIP, RemotePort: lp}
-			info := ProcInfo{PID: pid, Process: proc}
-			out[a] = info
-			out[b] = info
+		defer func() { proto, name = "", "" }()
+		// yalnizca baglantili soketler atfedilebilir ("yerel->uzak")
+		if pid <= 0 || proto == "" || !strings.Contains(name, "->") {
+			return
 		}
-		typ, name = "", ""
+		local, remote, _ := strings.Cut(name, "->")
+		lp, lIP := splitAddr(local)
+		rp, rIP := splitAddr(remote)
+		if lp == 0 || rp == 0 || rIP == "" {
+			return
+		}
+		a := Key{Proto: proto, LocalIP: lIP, LocalPort: lp, RemoteIP: rIP, RemotePort: rp}
+		b := Key{Proto: proto, LocalIP: rIP, LocalPort: rp, RemoteIP: lIP, RemotePort: lp}
+		info := ProcInfo{PID: pid, Process: proc}
+		out[a] = info
+		out[b] = info
 	}
 
+	// lsof alan sirasi: p/c (surec seti), ardindan her dosya icin f/P/n.
 	for _, line := range strings.Split(string(outBytes), "\n") {
 		if len(line) < 2 {
 			continue
@@ -73,8 +84,10 @@ func (p *darwinProvider) Snapshot() map[Key]ProcInfo {
 			proc = ""
 		case 'c':
 			proc = val
-		case 't':
-			typ = val
+		case 'f': // yeni dosya seti — onceki dosyanin artiklarini bosalt
+			flush()
+		case 'P':
+			proto = strings.ToLower(val) // TCP/UDP -> tcp/udp
 		case 'n':
 			name = val
 			flush()
@@ -82,8 +95,6 @@ func (p *darwinProvider) Snapshot() map[Key]ProcInfo {
 	}
 	flush()
 
-	p.cached = out
-	p.last = time.Now()
 	return out
 }
 

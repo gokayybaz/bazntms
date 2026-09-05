@@ -3,7 +3,7 @@
 // surece donusturulur. Platform saglayicilari:
 //
 //	linux  : /proc/net/* + /proc/[pid]/fd (soket inode)
-//	darwin : lsof -F pcnt (root tum surecleri gorur)
+//	darwin : lsof -F pcnPf (root tum surecleri gorur; protokol buyuk P alani)
 //	windows: netstat -ano (pid) + gopsutil surec adi
 //
 // Not: eBPF (Linux) ve ETW (Windows) ile saglayici daha hassas surumleri
