@@ -53,10 +53,28 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
 
+      - name: Format check (gofmt)
+        if: runner.os == 'Linux'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Bu dosyalar gofmt'lenmemis (gofmt -w ile duzeltin):"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: Vet
         run: go vet ./...
 
-      - name: Test
+      # -race yalnizca linux job'unda: cgo/C toolchain gerektirir, calisma
+      # suresini ~3x artirir; veri yarisi platformdan bagimsiz oldugu icin
+      # tek platformda kosmak yeterli.
+      - name: Test (linux, race dedektoru)
+        if: runner.os == 'Linux'
+        run: go test ./... -race -count=1
+
+      - name: Test (macos)
+        if: runner.os == 'macOS'
         run: go test ./... -count=1
 
   installer-smoke-test:

@@ -30,7 +30,9 @@ run: all
 	sudo ./$(BINARY) -port $(PORT)
 
 test:
-	go vet ./... && gofmt -l . && cd frontend && npx tsc -b --noEmit
+	go vet ./...
+	@test -z "$$(gofmt -l .)" || { echo "gofmt gerekli:"; gofmt -l .; exit 1; }
+	cd frontend && npx tsc -b --noEmit
 
 clean:
 	rm -f $(BINARY) bazntms-agent bazntmsctl $(BINARY).exe
