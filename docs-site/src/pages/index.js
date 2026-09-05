@@ -119,11 +119,95 @@ const NEW_IN = [
   'OpenAPI 3.1 + /api/docs',
 ];
 
+/* Sayaç animasyonu için hedef sayı + son ek ayrı tutuluyor; "<1 sn"
+   sayılabilir olmadığından statik geçiyor. */
 const STATS = [
-  { value: '1.000', label: 'cihaz · 60 sn poll' },
-  { value: '5.000', label: 'agent · 30 sn batch' },
-  { value: '50K', label: 'flow/sn sürekli' },
-  { value: '<1 sn', label: 'panel sorgusu p95' },
+  { to: 1000, suffix: '', label: 'cihaz · 60 sn poll' },
+  { to: 5000, suffix: '', label: 'agent · 30 sn batch' },
+  { to: 50, suffix: 'K', label: 'flow/sn sürekli' },
+  { static: '<1 sn', label: 'panel sorgusu p95' },
+];
+
+/* Sunucuda ve JS kapalıyken son değer basılır (SSR/hidrasyon güvenli);
+   istemcide monte olunca sıfırdan sayılır. prefers-reduced-motion'da
+   animasyon yok. */
+function StatCard({ stat, index }) {
+  const [value, setValue] = React.useState(stat.to ?? 0);
+
+  React.useEffect(() => {
+    if (stat.to == null) return undefined;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // sekme arka plandaysa rAF hiç çalışmaz — animasyonu atla, değeri bas
+    if (reduce || document.visibilityState === 'hidden') {
+      setValue(stat.to);
+      return undefined;
+    }
+    let raf = 0;
+    const dur = 900;
+    const delay = index * 90;
+    const t0 = performance.now() + delay;
+    setValue(0);
+    const tick = (now) => {
+      const p = Math.min(1, Math.max(0, (now - t0) / dur));
+      setValue(Math.round(stat.to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    // Emniyet: rAF duraklatılırsa sayaç 0'da donup "0 cihaz" gösteriyordu.
+    // Zamanlayıcı arka planda kısılsa da çalışır, son değeri garanti eder.
+    const guard = setTimeout(() => {
+      cancelAnimationFrame(raf);
+      setValue(stat.to);
+    }, delay + dur + 400);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(guard);
+    };
+  }, [stat.to, index]);
+
+  return (
+    <div className={styles.cell} style={{ animationDelay: `${index * 90}ms` }}>
+      <span className={styles.cellValue}>
+        {stat.static ?? value.toLocaleString('tr-TR') + stat.suffix}
+      </span>
+      <span className={styles.cellLabel}>{stat.label}</span>
+    </div>
+  );
+}
+
+/* Ölçek: aynı binary'nin iki yapılandırması. Sütun sırası bir ilerlemeyi
+   anlatıyor (tek düğüm → filo), tabloyu taşıyan bilgi bu. */
+const SCALE_ROWS = [
+  {
+    key: 'Depo',
+    single: 'SQLite dosyası',
+    scaled: 'PostgreSQL + TimescaleDB (pgx)',
+  },
+  {
+    key: 'Kuyruk',
+    single: 'Doğrudan yazım',
+    scaled: 'NATS JetStream — ingest / processor ayrışması',
+  },
+  {
+    key: 'Saklama',
+    single: 'Otomatik temizlik',
+    scaled: 'Hypertable + continuous aggregate: ham 7g → 1dk 90g → 1sa 2y',
+  },
+  {
+    key: 'Dağıtım',
+    single: 'Tek binary · docker-compose',
+    scaled: 'Helm chart — N × ingest + kontrolcü + yük dengeleyici',
+  },
+  {
+    key: 'Taşıma',
+    single: 'HTTP',
+    scaled: 'Opsiyonel mTLS — dahili CA, ECDSA P-256',
+  },
+  {
+    key: 'Güncelleme',
+    single: 'Elle',
+    scaled: 'stable / beta kanalı — SHA-256 + ed25519 doğrulamalı atomik değişim',
+  },
 ];
 
 /* üç birbirini dışlayan kurulum yolu (sıralı adım değil) — harf rozetli */
@@ -631,14 +715,8 @@ export default function Home() {
               </div>
 
               <div className={styles.heroAside}>
-                <div className={styles.asideTop}>
-                  Ölçek mimarisi tasarım hedefleri — <code>bazntms-loadgen</code> ve k6 ile doğrulanır
-                </div>
-                {STATS.map((s) => (
-                  <div key={s.label} className={styles.cell}>
-                    <span className={styles.cellValue}>{s.value}</span>
-                    <span className={styles.cellLabel}>{s.label}</span>
-                  </div>
+                {STATS.map((s, i) => (
+                  <StatCard key={s.label} stat={s} index={i} />
                 ))}
               </div>
             </div>
@@ -756,6 +834,52 @@ export default function Home() {
             </div>
             <p className={styles.hint}>
               Ayrıntılar için <a href={upgradeUrl}>operasyon dokümanlarına</a> göz atın.
+            </p>
+          </div>
+        </section>
+
+        {/* ÖLÇEK */}
+        <section className={styles.section} id="olcek">
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>Ölçek</span>
+              <h2 className={styles.h2}>Tek makineden filoya, aynı binary</h2>
+              <p className={styles.lede}>
+                Büyürken platform değiştirmiyorsunuz. Depo seçimi tek bayrakla
+                değişir: <code>-db</code> bir dosya yolu alırsa SQLite,{' '}
+                <code>postgres://</code> DSN alırsa PostgreSQL/TimescaleDB. Uygulama
+                kodu ve arayüz aynı kalır.
+              </p>
+            </div>
+
+            <div className={styles.scale}>
+              <div className={styles.scaleHead}>
+                <span />
+                <span className={styles.scaleColSingle}>Tek düğüm</span>
+                <span className={styles.scaleColScaled}>Ölçek</span>
+              </div>
+              {SCALE_ROWS.map((r) => (
+                <div key={r.key} className={styles.scaleRow}>
+                  <span className={styles.scaleKey}>{r.key}</span>
+                  <span className={styles.scaleSingle}>
+                    <i className={styles.scaleMini}>Tek düğüm</i>
+                    {r.single}
+                  </span>
+                  <span className={styles.scaleScaled}>
+                    <i className={styles.scaleMini}>Ölçek</i>
+                    {r.scaled}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className={styles.hint}>
+              Ölçek mimarisi tasarım hedefleri{' '}
+              <a href="https://github.com/gokayybaz/bazntms/tree/main/loadtest" target="_blank" rel="noreferrer">
+                <code>bazntms-loadgen</code> ve k6
+              </a>{' '}
+              ile doğrulanır; k8s olmadan denemek için{' '}
+              <code>deploy/docker-compose.scale.yml</code>.
             </p>
           </div>
         </section>

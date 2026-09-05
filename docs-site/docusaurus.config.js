@@ -13,6 +13,7 @@ const config = {
   tagline: 'Ağ trafiği izleme — hub + agent + cihaz entegrasyonları',
   url: 'https://gokayybaz.github.io',
   baseUrl: '/bazntms/',
+  favicon: 'img/bazntms.svg',
   trailingSlash: false,
   onBrokenLinks: 'warn',
   organizationName: 'gokayybaz',
