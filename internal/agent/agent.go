@@ -409,3 +409,15 @@ func (c *Client) BaseURL() string {
 	pool := c.urls()
 	return pool[c.hubIdx%len(pool)]
 }
+
+// UpdateHTTPClient, guncelleme indirmeleri icin agent'in enrollment sonrasi
+// transport'unu (pinli CA + varsa mTLS istemci sertifikasi) UZUN timeout ile
+// dondurur — agent'in kendi kisa telemetri timeout'u buyuk binary indirmesini
+// keserdi. Bkz. docs/decisions/0001-agent-update-auth.md.
+func (c *Client) UpdateHTTPClient() *http.Client {
+	var tr http.RoundTripper
+	if c.http != nil {
+		tr = c.http.Transport
+	}
+	return &http.Client{Transport: tr, Timeout: 10 * time.Minute}
+}

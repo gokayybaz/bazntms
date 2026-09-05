@@ -17,15 +17,32 @@ type Client struct {
 	HubURL    string
 	Channel   string
 	PublicKey string // hex ed25519 (bos ise yalnizca sha256 dogrulanir)
+	Token     string // agent token → Authorization: Bearer (bos ise gonderilmez)
 	HTTP      *http.Client
 }
 
-func NewClient(hubURL, channel, publicKey string) *Client {
+// NewClient, guncelleme istemcisini kurar. token: agent'in enrollment
+// token'i (uclar agentAuth arkasinda — bos gecilirse gercek hub 401 doner;
+// yalnizca auth'suz test/mock hub icin bos birakilir). httpClient: agent'in
+// enrollment sonrasi transport'u (pinli CA + varsa mTLS istemci sertifikasi);
+// nil ise 10 dk timeout'lu duz client kullanilir. Bkz. docs/decisions/0001.
+func NewClient(hubURL, channel, publicKey, token string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 10 * time.Minute}
+	}
 	return &Client{
 		HubURL:    hubURL,
 		Channel:   channel,
 		PublicKey: publicKey,
-		HTTP:      &http.Client{Timeout: 10 * time.Minute},
+		Token:     token,
+		HTTP:      httpClient,
+	}
+}
+
+// auth, istek varsa Bearer token ekler.
+func (c *Client) auth(req *http.Request) {
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
 }
 
@@ -36,6 +53,7 @@ func (c *Client) Check(currentVersion string) (*Manifest, *ManifestFile, error) 
 	if err != nil {
 		return nil, nil, err
 	}
+	c.auth(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, nil, err
@@ -89,7 +107,12 @@ func (c *Client) ApplyTo(currentVersion, exePath string) (bool, error) {
 		return false, nil
 	}
 	url := fmt.Sprintf("%s/api/v1/agent/update/file/%s/%s", c.HubURL, manifest.Channel, mf.Name)
-	resp, err := c.HTTP.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false, err
+	}
+	c.auth(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return false, err
 	}

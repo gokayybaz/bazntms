@@ -97,15 +97,26 @@ func TestApplyFlow(t *testing.T) {
 		t.Fatalf("imza: %v", err)
 	}
 
-	// hub taklidi: manifest + dosya sunumu
+	// hub taklidi: manifest + dosya sunumu; her iki uc de Bearer token ister
+	// (gercek hub agentAuth arkasinda — B2).
+	const agentTok = "test-agent-token"
+	requireToken := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer "+agentTok {
+				http.Error(w, "agent token gerekli", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
+		}
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/agent/update/manifest", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/agent/update/manifest", requireToken(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"channel":"stable","version":"v9.9.9","files":[{"name":%q,"os":%q,"arch":%q,"version":"v9.9.9","sha256":%q,"size":%d,"signature":%q}]}`,
 			exeName, runtime.GOOS, runtime.GOARCH, sum, size, sig)
-	})
-	mux.HandleFunc("/api/v1/agent/update/file/stable/", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/v1/agent/update/file/stable/", requireToken(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, exe)
-	})
+	}))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -115,8 +126,13 @@ func TestApplyFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// token'siz istemci → 401 (Check hata döner)
+	if _, _, err := NewClient(srv.URL, "stable", pubHex, "", nil).Check("v1.0.0"); err == nil {
+		t.Fatal("token'siz istemci hata vermeliydi")
+	}
+
 	// tam akis: Check (yeni surum var) → indir → dogrula → degistir
-	client := NewClient(srv.URL, "stable", pubHex)
+	client := NewClient(srv.URL, "stable", pubHex, agentTok, nil)
 	applied, err := client.ApplyTo("v1.0.0", current)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
@@ -137,7 +153,7 @@ func TestApplyFlow(t *testing.T) {
 
 	// yanlis public key ile reddedilmeli
 	otherPub, _, _ := ed25519.GenerateKey(rand.Reader)
-	badClient := NewClient(srv.URL, "stable", hex.EncodeToString(otherPub))
+	badClient := NewClient(srv.URL, "stable", hex.EncodeToString(otherPub), agentTok, nil)
 	if _, err := badClient.ApplyTo("v1.0.0", current); err == nil {
 		t.Fatal("yanlis imza kabul edildi")
 	}

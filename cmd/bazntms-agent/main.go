@@ -285,7 +285,7 @@ func main() {
 				"interval_hours", *updateInterval, "imza", *updateKey != "")
 			go func() {
 				for range updateTicker.C {
-					upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey)
+					upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey, st.Token, client.UpdateHTTPClient())
 					applied, err := upd.Apply(version.Version)
 					if err != nil {
 						slog.Warn("guncelleme kontrolu basarisiz", "err", err)
