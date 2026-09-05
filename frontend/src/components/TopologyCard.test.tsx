@@ -62,4 +62,35 @@ describe('TopologyCard', () => {
     render(<TopologyCard refreshKey={2} />)
     await waitFor(() => expect(screen.getByText(/Topoloji boş/)).toBeInTheDocument())
   })
+
+  it('agent-kaynaklı subnet bağlantıları artık görselleştiriliyor (eskiden sessizce eleniyordu)', async () => {
+    mockFetch({
+      ...BASE,
+      links: [
+        {
+          // gerçek backend'de subnet-türü bağlantılarda peer_name her zaman
+          // boş, gerçek bilgi peer_ip'de CIDR olarak gelir (canlı doğrulandı)
+          id: 1, ts: Math.floor(Date.now() / 1000), kind: 'subnet', source_type: 'agent', source_id: 10,
+          source_name: 'agent-a', local_port: '', peer_type: 'host', peer_id: 0,
+          peer_name: '', peer_ip: '192.168.1.0/24',
+        },
+      ],
+    })
+    render(<TopologyCard refreshKey={3} />)
+    await waitFor(() => expect(screen.getByText('agent-a')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /192\.168\.1\.0\/24 \(subnet\)/ })).toBeInTheDocument()
+  })
+
+  it('orta sütunda cihaz yokken "KEŞFEDİLEN CİHAZ (0)" başlığı gösterir (sessizce kaybolmuyor)', async () => {
+    mockFetch({ ...BASE, devices: [BASE.devices[1]] }) // yalnızca firewall → Router yuvasına gider, orta sütun boş kalır
+    render(<TopologyCard refreshKey={4} />)
+    await waitFor(() => expect(screen.getByText('KEŞFEDİLEN CİHAZ (0)')).toBeInTheDocument())
+  })
+
+  it('router düğümü klavye/ekran-okuyucu ile erişilebilir isim taşıyor', async () => {
+    mockFetch()
+    render(<TopologyCard refreshKey={6} />)
+    const router = await screen.findByRole('button', { name: /Router: edge-fw/ })
+    expect(router).toHaveAttribute('tabindex', '0')
+  })
 })

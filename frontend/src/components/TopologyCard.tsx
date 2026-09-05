@@ -101,9 +101,13 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
     agents.forEach((a, i) => agentPos.set(a.id, { x: CLIENT_X, y: colTop(agents.length) + i * ROW_H }))
     midDevices.forEach((d, i) => devPos.set(d.id, { x: DEV_X, y: colTop(midDevices.length) + i * ROW_H }))
 
-    // cihaz düğümü (orta sütun veya router yuvası) konumu
-    const posOf = (id: number): { x: number; y: number } | undefined =>
-      routerDev && id === routerDev.id ? ROUTER : devPos.get(id)
+    // düğüm konumu — kaynak/eş bir agent (client sütunu) ya da cihaz (orta
+    // sütun/router yuvası) olabilir. Eskiden yalnızca 'device' kaynaklı
+    // bağlantılar çözülüyordu; canlı backend'in ürettiği 10 bağlantının
+    // tamamı 'agent' kaynaklı (subnet keşfi) olduğundan hepsi sessizce
+    // atlanıyordu (impeccable critique 2026-09-05, P0)
+    const posOf = (type: string, id: number): { x: number; y: number } | undefined =>
+      type === 'agent' ? agentPos.get(id) : routerDev && id === routerDev.id ? ROUTER : devPos.get(id)
 
     // kenar çözümleme: peer adı/ip → cihaz düğümü
     const peer_ip_of = (peer: string) => {
@@ -123,16 +127,14 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
     const hosts: { x: number; y: number; label: string; kind: string; source: string; ts: number }[] = []
 
     for (const l of graph.links) {
-      if (l.kind === 'subnet') continue // subnet linkleri spoke altında dolaylı gösterilir
-      if (l.source_type !== 'device') continue
-      const src = posOf(l.source_id)
+      const src = posOf(l.source_type, l.source_id)
       if (!src) continue
       // peer bir cihaz mı?
       let dst: { x: number; y: number } | undefined
       let dstId = -1
       for (const d of graph.devices) {
         if (nameMatch(l.peer_name, d) || (l.peer_ip && l.peer_ip === d.host)) {
-          dst = posOf(d.id)
+          dst = posOf('device', d.id)
           dstId = d.id
           break
         }
@@ -145,7 +147,10 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
         hosts.push({
           x: src.x - (38 + (j % 3) * 12),
           y: src.y - 12 + Math.floor(j / 3) * 10,
-          label: l.kind === 'arp' ? l.peer_ip : l.peer_name.split(' ')[0] || l.peer_name,
+          // subnet-türü bağlantılarda peer_name her zaman boş — gerçek bilgi
+          // peer_ip'de bir CIDR olarak geliyor (ör. "192.168.1.0/24"); canlı
+          // veriyle doğrulandı (impeccable critique 2026-09-05 P0 takibi)
+          label: l.kind === 'arp' || l.kind === 'subnet' ? l.peer_ip : l.peer_name.split(' ')[0] || l.peer_name,
           kind: l.kind === 'arp' ? 'arp' : l.kind,
           source: String(l.source_id),
           ts: l.ts,
@@ -163,39 +168,45 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
     return <p className="text-xs text-rose-400">{error}</p>
   }
   if (!graph || !layout) {
-    return <p className="text-xs text-slate-500">yükleniyor…</p>
+    return <p className="text-xs text-dim-aa">yükleniyor…</p>
   }
 
+  // subnet eskiden violet kullanıyordu — DESIGN.md'de violet her zaman
+  // cyan ile eşleşmesi gereken tx-trafik rengi, burada keşif-yöntemi
+  // kategorisi (eşik/trafik anlamıyla ilgisiz) için tek başına kullanılıyordu
+  // — nötr bir slate tonuna taşındı, ARP'tan (kendi nötr tonu) ayrışsın diye
+  // farklı bir açıklık kullanılıyor
   const edgeColor = (kind: string) =>
-    kind === 'lldp' ? '#34d399' : kind === 'cdp' ? '#38bdf8' : kind === 'subnet' ? '#a78bfa' : '#475569'
+    kind === 'lldp' ? '#34d399' : kind === 'cdp' ? '#38bdf8' : kind === 'subnet' ? '#94a3b8' : '#475569'
 
   const { H, HUB, ROUTER, NET, storage, routerDev, hiddenAgents } = layout
 
   return (
     <div>
       {graph.devices.length === 0 && graph.agents.length === 0 ? (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-dim-aa">
           Topoloji boş — cihaz ekleyin (SNMP LLDP/CDP/ARP keşfi) veya agent kurun; yerel ağlar otomatik haritaya işlenir.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[720px]">
-            {/* bölge başlıkları */}
-            <g className="fill-slate-600" fontSize={8} fontFamily="monospace" letterSpacing={0.5}>
+        <div className="relative">
+          <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[720px]" role="group" aria-label="Ağ topolojisi haritası">
+            {/* bölge başlıkları — dekoratif, ekran okuyucudan gizli */}
+            <g aria-hidden="true" className="fill-dim-aa" fontSize={8.5} fontFamily="monospace" letterSpacing={0.5}>
               <text x={CLIENT_X} y={16} textAnchor="middle">CLIENT (AGENT)</text>
-              {layout.midDevices.length > 0 && (
-                <text x={DEV_X} y={16} textAnchor="middle">KEŞFEDİLEN CİHAZ</text>
-              )}
+              <text x={DEV_X} y={16} textAnchor="middle">
+                KEŞFEDİLEN CİHAZ{layout.midDevices.length === 0 ? ' (0)' : ''}
+              </text>
               <text x={NET_X} y={16} textAnchor="middle">İNTERNET</text>
               {hiddenAgents > 0 && (
-                <text x={CLIENT_X} y={26} textAnchor="middle" className="fill-slate-700">
+                <text x={CLIENT_X} y={26} textAnchor="middle">
                   +{hiddenAgents} çevrimdışı gizli
                 </text>
               )}
             </g>
 
-            {/* spoke hatları: hub → client'lar (sol), hub → cihazlar (sağ) */}
-            <g stroke="#1e293b" strokeWidth={1.3}>
+            {/* spoke hatları: hub → client'lar (sol), hub → cihazlar (sağ) — dekoratif */}
+            <g aria-hidden="true" stroke="#1e293b" strokeWidth={1.3}>
               {layout.agents.map((a) => {
                 const p = layout.agentPos.get(a.id)!
                 return <line key={`sa${a.id}`} x1={HUB.x} y1={HUB.y} x2={p.x} y2={p.y} />
@@ -212,83 +223,103 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
               <line x1={HUB.x} y1={HUB.y} x2={storage.x} y2={storage.y} strokeDasharray="3 4" />
             </g>
 
-            {/* omurga: hub — router — internet (veri yolu) */}
-            <g stroke="#0e7490" strokeWidth={2}>
+            {/* omurga: hub — router — internet (veri yolu) — dekoratif */}
+            <g aria-hidden="true" stroke="#0e7490" strokeWidth={2}>
               <line x1={HUB.x} y1={HUB.y} x2={ROUTER.x} y2={ROUTER.y} />
               <line x1={ROUTER.x} y1={ROUTER.y} x2={NET.x} y2={NET.y} />
             </g>
 
-            {/* keşif ile bulunan zengin bağlantılar (LLDP/CDP) — spoke'un üstüne */}
+            {/* keşif ile bulunan zengin bağlantılar (LLDP/CDP/subnet) — spoke'un
+                üstüne; uçlarındaki düğümler zaten kendi erişilebilir adını
+                taşıyor, çizginin kendisi dekoratif */}
             {layout.discoveredEdges.map((e, i) => (
-              <g key={i}>
+              <g key={i} aria-hidden="true">
                 <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={edgeColor(e.kind)} strokeWidth={1.6} strokeOpacity={0.7} />
                 {e.label && (
-                  <text x={(e.x1 + e.x2) / 2} y={(e.y1 + e.y2) / 2 - 4} textAnchor="middle" className="fill-slate-500" fontSize={8}>
+                  <text x={(e.x1 + e.x2) / 2} y={(e.y1 + e.y2) / 2 - 4} textAnchor="middle" className="fill-dim-aa" fontSize={8.5}>
                     {e.label}
                   </text>
                 )}
               </g>
             ))}
 
-            {/* hub */}
-            <circle cx={HUB.x} cy={HUB.y} r={22} className="fill-slate-900 stroke-cyan-500" strokeWidth={1.5} />
-            <text x={HUB.x} y={HUB.y + 3.5} textAnchor="middle" className="fill-cyan-400" fontSize={9} fontFamily="monospace">
-              HUB
-            </text>
-
-            {/* router — gerçek cihaz varsa adı/durumu, yoksa sabit düğüm */}
-            <rect
-              x={ROUTER.x - 27}
-              y={ROUTER.y - 16}
-              width={54}
-              height={32}
-              rx={5}
-              className={
-                routerDev
-                  ? routerDev.online
-                    ? 'fill-slate-900 stroke-emerald-500'
-                    : 'fill-slate-900 stroke-slate-600'
-                  : 'fill-slate-900 stroke-slate-700'
-              }
-              strokeWidth={1.4}
-            />
-            <text x={ROUTER.x} y={ROUTER.y - 3} textAnchor="middle" className="fill-slate-300" fontSize={8} fontFamily="monospace">
-              ROUTER
-            </text>
-            <text x={ROUTER.x} y={ROUTER.y + 8} textAnchor="middle" className="fill-slate-500" fontSize={7} fontFamily="monospace">
-              {routerDev ? trunc(routerDev.name, 10) : 'sabit'}
-            </text>
-            {routerDev && (
-              <text x={ROUTER.x} y={ROUTER.y + 28} textAnchor="middle" className="fill-slate-600" fontSize={7.5}>
-                {routerDev.kind} · {routerDev.online ? 'online' : 'offline'}
+            {/* hub — sabit düğüm, değişken veri taşımıyor, dekoratif */}
+            <g aria-hidden="true">
+              <circle cx={HUB.x} cy={HUB.y} r={22} className="fill-slate-900 stroke-cyan-500" strokeWidth={1.5} />
+              <text x={HUB.x} y={HUB.y + 3.5} textAnchor="middle" className="fill-cyan-400" fontSize={9} fontFamily="monospace">
+                HUB
               </text>
-            )}
+            </g>
 
-            {/* internet */}
-            <circle cx={NET.x} cy={NET.y} r={20} className="fill-slate-900 stroke-sky-500/60" strokeWidth={1.4} />
-            <text x={NET.x} y={NET.y + 3} textAnchor="middle" className="fill-sky-400" fontSize={8} fontFamily="monospace">
-              NET
-            </text>
-            <text x={NET.x} y={NET.y + 32} textAnchor="middle" className="fill-slate-500" fontSize={7.5}>
-              internet
-            </text>
+            {/* router — gerçek cihaz varsa adı/durumu, yoksa sabit düğüm; tek
+                gerçek durum bilgisi taşıyan düğüm olduğundan klavye/ekran
+                okuyucuyla erişilebilir */}
+            <g
+              role="button"
+              tabIndex={0}
+              aria-label={
+                routerDev
+                  ? `Router: ${routerDev.name} (${routerDev.kind}, ${routerDev.online ? 'online' : 'offline'})`
+                  : 'Router — sabit düğüm, henüz eşleşen bir cihaz yok'
+              }
+            >
+              <rect
+                x={ROUTER.x - 27}
+                y={ROUTER.y - 16}
+                width={54}
+                height={32}
+                rx={5}
+                className={
+                  routerDev
+                    ? routerDev.online
+                      ? 'fill-slate-900 stroke-emerald-500'
+                      : 'fill-slate-900 stroke-slate-600'
+                    : 'fill-slate-900 stroke-slate-700'
+                }
+                strokeWidth={1.4}
+              />
+              <text x={ROUTER.x} y={ROUTER.y - 3} textAnchor="middle" className="fill-slate-300" fontSize={8.5} fontFamily="monospace">
+                ROUTER
+              </text>
+              <text x={ROUTER.x} y={ROUTER.y + 8} textAnchor="middle" className="fill-dim-aa" fontSize={8.5} fontFamily="monospace">
+                {routerDev ? trunc(routerDev.name, 10) : 'sabit'}
+              </text>
+              {routerDev && (
+                <text x={ROUTER.x} y={ROUTER.y + 28} textAnchor="middle" className="fill-dim-aa" fontSize={8.5}>
+                  {routerDev.kind} · {routerDev.online ? 'online' : 'offline'}
+                </text>
+              )}
+            </g>
 
-            {/* depo düğümü */}
-            <rect x={storage.x - 54} y={storage.y - 12} width={108} height={24} rx={5} className="fill-slate-900 stroke-slate-700" strokeWidth={1.2} />
-            <text x={storage.x} y={storage.y + 3.5} textAnchor="middle" className="fill-slate-400" fontSize={8.5} fontFamily="monospace">
-              depolama
-            </text>
+            {/* internet — sabit düğüm, dekoratif */}
+            <g aria-hidden="true">
+              <circle cx={NET.x} cy={NET.y} r={20} className="fill-slate-900 stroke-sky-500/60" strokeWidth={1.4} />
+              <text x={NET.x} y={NET.y + 3} textAnchor="middle" className="fill-sky-400" fontSize={8.5} fontFamily="monospace">
+                NET
+              </text>
+              <text x={NET.x} y={NET.y + 32} textAnchor="middle" className="fill-dim-aa" fontSize={8.5}>
+                internet
+              </text>
+            </g>
+
+            {/* depo düğümü — sabit, dekoratif */}
+            <g aria-hidden="true">
+              <rect x={storage.x - 54} y={storage.y - 12} width={108} height={24} rx={5} className="fill-slate-900 stroke-slate-700" strokeWidth={1.2} />
+              <text x={storage.x} y={storage.y + 3.5} textAnchor="middle" className="fill-slate-400" fontSize={8.5} fontFamily="monospace">
+                depolama
+              </text>
+            </g>
 
             {/* client'lar (agent) — sol, etiket solda; hepsi çevrimiçi */}
             {layout.agents.map((a) => {
               const p = layout.agentPos.get(a.id)!
               return (
-                <g key={`a${a.id}`}>
+                <g key={`a${a.id}`} role="button" tabIndex={0} aria-label={`Agent: ${a.name} (${a.site || 'client'})`}>
                   <circle cx={p.x} cy={p.y} r={7} className="fill-cyan-400" />
                   <text x={p.x - 13} y={p.y + 1} textAnchor="end" className="fill-slate-300" fontSize={9.5} fontFamily="monospace">
                     {trunc(a.name, 18)}
                   </text>
-                  <text x={p.x - 13} y={p.y + 12} textAnchor="end" className="fill-slate-600" fontSize={8}>
+                  <text x={p.x - 13} y={p.y + 12} textAnchor="end" className="fill-dim-aa" fontSize={8.5}>
                     {a.site || 'client'}
                   </text>
                 </g>
@@ -299,43 +330,56 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
             {layout.midDevices.map((d) => {
               const p = layout.devPos.get(d.id)!
               return (
-                <g key={`d${d.id}`}>
+                <g
+                  key={`d${d.id}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Cihaz: ${d.name} (${d.kind}, ${d.host}, ${d.online ? 'online' : 'offline'})`}
+                >
                   <circle cx={p.x} cy={p.y} r={7} className={d.online ? 'fill-emerald-500/80' : 'fill-slate-600'} />
                   <text x={p.x + 14} y={p.y + 1} textAnchor="start" className="fill-slate-300" fontSize={9.5} fontFamily="monospace">
                     {trunc(d.name, 18)}
                   </text>
-                  <text x={p.x + 14} y={p.y + 12.5} textAnchor="start" className="fill-slate-600" fontSize={8}>
+                  <text x={p.x + 14} y={p.y + 12.5} textAnchor="start" className="fill-dim-aa" fontSize={8.5}>
                     {d.kind} · {d.host}
                   </text>
                 </g>
               )
             })}
 
-            {/* çözümlenmemiş komşular (ARP/LLDP uçları) */}
+            {/* çözümlenmemiş komşular (ARP/LLDP/subnet uçları) — fare için
+                <title> tooltip, klavye/ekran okuyucu için aria-label eşdeğeri */}
             {layout.hosts.map((h, i) => (
-              <circle key={i} cx={h.x} cy={h.y} r={2.2} fill={edgeColor(h.kind)} fillOpacity={0.8}>
-                <title>
-                  {h.label} · {h.kind} · {fmtAgo(h.ts)} önce görüldü
-                </title>
-              </circle>
+              <g key={i} role="button" tabIndex={0} aria-label={`${h.label} (${h.kind}), ${fmtAgo(h.ts)} önce görüldü`}>
+                <circle cx={h.x} cy={h.y} r={2.2} fill={edgeColor(h.kind)} fillOpacity={0.8}>
+                  <title>
+                    {h.label} · {h.kind} · {fmtAgo(h.ts)} önce görüldü
+                  </title>
+                </circle>
+              </g>
             ))}
 
-            {/* gösterge */}
-            <g transform={`translate(16, ${H - 12})`}>
+            {/* gösterge — dekoratif */}
+            <g aria-hidden="true" transform={`translate(16, ${H - 12})`}>
               <circle cx={0} cy={-3} r={3.4} fill="#34d399" />
-              <text x={8} y={0} className="fill-slate-500" fontSize={8.5}>LLDP</text>
+              <text x={8} y={0} className="fill-dim-aa" fontSize={8.5}>LLDP</text>
               <circle cx={48} cy={-3} r={3.4} fill="#38bdf8" />
-              <text x={56} y={0} className="fill-slate-500" fontSize={8.5}>CDP</text>
-              <circle cx={96} cy={-3} r={3.4} fill="#a78bfa" />
-              <text x={104} y={0} className="fill-slate-500" fontSize={8.5}>subnet</text>
+              <text x={56} y={0} className="fill-dim-aa" fontSize={8.5}>CDP</text>
+              <circle cx={96} cy={-3} r={3.4} fill="#94a3b8" />
+              <text x={104} y={0} className="fill-dim-aa" fontSize={8.5}>subnet</text>
               <circle cx={156} cy={-3} r={3.4} fill="#475569" />
-              <text x={164} y={0} className="fill-slate-500" fontSize={8.5}>ARP ucu</text>
+              <text x={164} y={0} className="fill-dim-aa" fontSize={8.5}>ARP ucu</text>
               <line x1={220} y1={-3} x2={236} y2={-3} stroke="#1e293b" strokeWidth={1.3} />
-              <text x={240} y={0} className="fill-slate-600" fontSize={8.5}>hub bağlantısı</text>
+              <text x={240} y={0} className="fill-dim-aa" fontSize={8.5}>hub bağlantısı</text>
               <line x1={318} y1={-3} x2={334} y2={-3} stroke="#0e7490" strokeWidth={2} />
-              <text x={338} y={0} className="fill-slate-600" fontSize={8.5}>omurga (hub▸router▸net)</text>
+              <text x={338} y={0} className="fill-dim-aa" fontSize={8.5}>omurga (hub▸router▸net)</text>
             </g>
           </svg>
+          </div>
+          {/* dar ekranlarda içeriğin sağda kesildiğini işaret eden sabit
+              kaydırma ipucu — DESIGN.md'nin "Do" kuralı yatay kaydırmayı
+              öngörüyor ama hiçbir görsel ipucu yoktu */}
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-[linear-gradient(to_right,transparent,rgba(2,6,23,0.85))]" />
         </div>
       )}
     </div>
