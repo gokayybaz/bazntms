@@ -137,6 +137,7 @@ func (c *Client) Enroll() (State, error) {
 		ProtocolVersion: version.ProtocolVersion,
 		OS:              runtime.GOOS,
 		Arch:            runtime.GOARCH,
+		MachineID:       machineID(),
 	}
 	// https hub → mTLS icin CSR uret ve hello'ya ekle
 	var newKeyPEM []byte

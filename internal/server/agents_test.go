@@ -213,6 +213,55 @@ func apiReq(t *testing.T, method, url string, body any) *http.Response {
 	return resp
 }
 
+// TestAgentHelloThreadsMachineID, C3 (Faz 13): handleAgentHello, hello.MachineID
+// alanini RegisterOrReuseAgent'e gecirir. Cevrimici bir eslesme yeni satir
+// acar (cevrimdisi -> yeniden kullanim yolu store birim testinde:
+// store.TestRegisterOrReuseAgent). Burada machine_id'nin store'a "srv-01"
+// satirinda yazildigini ve ikinci hello'nun (agent hala cevrimici) yeni satir
+// actigini dogruluyoruz.
+func TestAgentHelloThreadsMachineID(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "reuse.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	engine := capture.NewEngine()
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	hello := func(machineID string) int64 {
+		t.Helper()
+		body, _ := json.Marshal(telemetry.AgentHello{Name: "srv-01", Site: "dc1", MachineID: machineID, ProtocolVersion: 1})
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/agent/hello", bytes.NewReader(body))
+		req.Header.Set("X-Enroll-Token", testEnrollToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("hello: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("hello durumu: %d", resp.StatusCode)
+		}
+		var out struct {
+			AgentID int64 `json:"agent_id"`
+		}
+		json.NewDecoder(resp.Body).Decode(&out)
+		return out.AgentID
+	}
+
+	id1 := hello("mach-xyz")
+	id2 := hello("mach-xyz") // agent hala cevrimici → yeni satir
+	if id1 == id2 {
+		t.Fatalf("cevrimici eslesmede yeni satir bekleniyordu: id1=%d id2=%d", id1, id2)
+	}
+	agents, _ := st.ListAgents(0, "")
+	if len(agents) != 2 {
+		t.Fatalf("iki agent satiri bekleniyordu, %d var", len(agents))
+	}
+}
+
 // TestAgentTelemetryRequiresToken, Bearer agent token'i olmadan/gecersizken
 // telemetri ucunun 401 dondurdugunu dogrular.
 func TestAgentTelemetryRequiresToken(t *testing.T) {

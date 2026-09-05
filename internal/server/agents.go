@@ -243,14 +243,19 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		site = tokenSite
 	}
 
-	id, err := s.store.RegisterAgent(store.Agent{
+	// C3 (Faz 13): kararlı makine kimliği ile eşleşen çevrimdışı kaydı yeniden
+	// kullan (state dosyası kaybında `agents` şişmesin). "Çevrimdışı" penceresi
+	// sistemin geri kalanıyla aynı: 2*telemetryInterval.
+	offlineBefore := time.Now().Add(-2 * time.Duration(s.telemetryInterval) * time.Second).Unix()
+	id, reused, err := s.store.RegisterOrReuseAgent(store.Agent{
 		Name:            hello.Name,
 		Site:            site,
 		TokenHash:       store.TokenHash(agentToken),
 		Version:         hello.Version,
 		ProtocolVersion: hello.ProtocolVersion,
 		RemoteIP:        displayIP,
-	})
+		MachineID:       hello.MachineID,
+	}, offlineBefore)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -274,7 +279,8 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name,
-		"site", site, "site_token_bagli", tokenSite != "", "ip", displayIP, "mtls", reply.ClientCertPEM != "")
+		"site", site, "site_token_bagli", tokenSite != "", "ip", displayIP,
+		"mtls", reply.ClientCertPEM != "", "kayit_yeniden_kullanildi", reused)
 	writeJSON(w, reply)
 }
 

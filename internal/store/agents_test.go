@@ -101,6 +101,74 @@ func TestListAgentsRateNormal(t *testing.T) {
 	}
 }
 
+// TestRegisterOrReuseAgent, C3: state dosyasi kaybinda ayni makinenin yeniden
+// enroll'unun YENI satir degil, mevcut CEVRIMDISI satiri guncellemesini dogrular.
+func TestRegisterOrReuseAgent(t *testing.T) {
+	st := openTest(t)
+	now := time.Now().Unix()
+	sq := st.(*sqlStore)
+	eskit := func(id, secondsAgo int64) {
+		t.Helper()
+		if _, err := sq.db.Exec(sq.q(`UPDATE agents SET last_seen = ? WHERE id = ?`), now-secondsAgo, id); err != nil {
+			t.Fatalf("eskit: %v", err)
+		}
+	}
+
+	// çevrimiçi eşleşme → yeni satır
+	id1, reused, err := st.RegisterOrReuseAgent(Agent{
+		Name: "laptop", Site: "ofis", TokenHash: TokenHash("tok1"), MachineID: "mid-A",
+	}, now-120)
+	if err != nil || reused {
+		t.Fatalf("ilk enroll: id=%d reused=%v err=%v", id1, reused, err)
+	}
+	id2, reused, err := st.RegisterOrReuseAgent(Agent{
+		Name: "laptop", Site: "ofis", TokenHash: TokenHash("tok2"), MachineID: "mid-A",
+	}, now-120)
+	if err != nil || reused || id2 == id1 {
+		t.Fatalf("çevrimiçi eşleşmede yeni satır bekleniyordu: id=%d reused=%v", id2, reused)
+	}
+
+	// her ikisini de eskit (id2 daha taze) → yeniden enroll en taze eşleşeni (id2) güncellemeli
+	eskit(id1, 7200)
+	eskit(id2, 3600)
+	id3, reused, err := st.RegisterOrReuseAgent(Agent{
+		Name: "laptop-yeni-ad", Site: "ofis", TokenHash: TokenHash("tok3"),
+		Version: "0.2.0", ProtocolVersion: 1, RemoteIP: "10.0.0.9", MachineID: "mid-A",
+	}, now-120)
+	if err != nil {
+		t.Fatalf("yeniden enroll: %v", err)
+	}
+	if !reused || id3 != id2 {
+		t.Fatalf("çevrimdışı kayıt yeniden kullanılmalıydı: id3=%d id2=%d reused=%v", id3, id2, reused)
+	}
+	a, err := st.AgentByTokenHash(TokenHash("tok3"))
+	if err != nil {
+		t.Fatalf("yeni token ile bulunamadı: %v", err)
+	}
+	if a.ID != id2 || a.Name != "laptop-yeni-ad" || a.Version != "0.2.0" || a.RemoteIP != "10.0.0.9" {
+		t.Fatalf("satır güncellenmedi: %+v", a)
+	}
+	if _, err := st.AgentByTokenHash(TokenHash("tok2")); err == nil {
+		t.Fatal("eski token hâlâ çalışıyor")
+	}
+
+	// farklı site → aynı machine_id yeniden kullanılmaz
+	eskit(id3, 3600)
+	id4, reused, _ := st.RegisterOrReuseAgent(Agent{
+		Name: "laptop", Site: "dc1", TokenHash: TokenHash("tok4"), MachineID: "mid-A",
+	}, now-120)
+	if reused || id4 == id3 {
+		t.Fatalf("farklı site: yeni satır bekleniyordu (id4=%d)", id4)
+	}
+
+	// machine_id boş → her zaman yeni satır
+	idX, r1, _ := st.RegisterOrReuseAgent(Agent{Name: "x", TokenHash: TokenHash("x"), Site: "ofis"}, now)
+	idY, r2, _ := st.RegisterOrReuseAgent(Agent{Name: "x", TokenHash: TokenHash("y"), Site: "ofis"}, now)
+	if r1 || r2 || idX == idY {
+		t.Fatalf("machine_id boş: ayrı satırlar bekleniyordu (idX=%d idY=%d)", idX, idY)
+	}
+}
+
 // TestTouchAgentVersionGuard, TouchAgent'in dolu surum/protokol degerini
 // yazdigini, bos "" / 0 gelince mevcut degeri KORUDUGUNU dogrular (surum
 // tasimayan eski agent hub'daki bilgiyi silmemeli).

@@ -2,6 +2,7 @@ package store
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"sort"
 	"time"
@@ -21,6 +22,9 @@ type Agent struct {
 	Version         string `json:"version"`
 	ProtocolVersion int    `json:"protocol_version"`
 	RemoteIP        string `json:"remote_ip"`
+	// MachineID, agent'ın kararlı makine kimliği hash'i (C3, Faz 13). Boş
+	// olabilir (eski agent / kimlik alınamadı) — o zaman her hello yeni satır.
+	MachineID string `json:"-"`
 }
 
 func TokenHash(token string) string {
@@ -31,13 +35,44 @@ func TokenHash(token string) string {
 func (s *sqlStore) RegisterAgent(a Agent) (int64, error) {
 	now := time.Now().Unix()
 	var id int64
-	err := s.db.QueryRow(s.q(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip)
-		VALUES (?,?,?,?,?,?,?,?) RETURNING id`),
-		a.Name, a.Site, a.TokenHash, now, now, a.Version, a.ProtocolVersion, a.RemoteIP).Scan(&id)
+	err := s.db.QueryRow(s.q(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, machine_id)
+		VALUES (?,?,?,?,?,?,?,?,?) RETURNING id`),
+		a.Name, a.Site, a.TokenHash, now, now, a.Version, a.ProtocolVersion, a.RemoteIP, a.MachineID).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
 	return id, nil
+}
+
+// RegisterOrReuseAgent, C3 (Faz 13): a.MachineID doluysa ve aynı machine_id +
+// site'lı ÇEVRİMDIŞI (last_seen < offlineBefore) bir agent varsa, o satırı yeni
+// token/isim/sürümle günceller ve id'sini döndürür (reused=true) — state
+// dosyası kaybında `agents` tablosu şişmesin. Aksi halde yeni satır açar.
+// machine_id "" veya eşleşen kayıt çevrimiçi ise her zaman yeni satır.
+func (s *sqlStore) RegisterOrReuseAgent(a Agent, offlineBefore int64) (id int64, reused bool, err error) {
+	if a.MachineID != "" {
+		var existing int64
+		var lastSeen int64
+		e := s.db.QueryRow(s.q(`SELECT id, last_seen FROM agents
+			WHERE machine_id = ? AND site = ? ORDER BY last_seen DESC LIMIT 1`),
+			a.MachineID, a.Site).Scan(&existing, &lastSeen)
+		if e == nil && lastSeen < offlineBefore {
+			now := time.Now().Unix()
+			if _, e := s.db.Exec(s.q(`UPDATE agents SET
+					name = ?, token_hash = ?, version = ?, protocol_version = ?,
+					remote_ip = ?, last_seen = ?
+				WHERE id = ?`),
+				a.Name, a.TokenHash, a.Version, a.ProtocolVersion, a.RemoteIP, now, existing); e != nil {
+				return 0, false, e
+			}
+			return existing, true, nil
+		}
+		if e != nil && e != sql.ErrNoRows {
+			return 0, false, e
+		}
+	}
+	id, err = s.RegisterAgent(a)
+	return id, false, err
 }
 
 func (s *sqlStore) AgentByTokenHash(hash string) (*Agent, error) {

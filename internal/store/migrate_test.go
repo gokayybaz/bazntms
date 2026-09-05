@@ -48,8 +48,8 @@ func TestMigrateFreshDB(t *testing.T) {
 	defer st.Close()
 	db := st.(*sqlStore).db
 
-	if got := migVersions(t, db); len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Fatalf("beklenen [1 2], alınan %v", got)
+	if got := migVersions(t, db); len(got) < 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Fatalf("beklenen [1 2 3 ...], alınan %v", got)
 	}
 	for _, tbl := range []string{"agents", "devices", "users", "isms_soa", "schema_migrations"} {
 		if !tableExists(t, db, tbl) {
@@ -72,8 +72,11 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatalf("ikinci Open: %v", err)
 	}
 	defer st2.Close()
-	if got := migVersions(t, st2.(*sqlStore).db); len(got) != 2 {
-		t.Fatalf("ikinci açılışta sürüm listesi değişti: %v", got)
+
+	migs, _ := loadMigrations("sqlite")
+	got := migVersions(t, st2.(*sqlStore).db)
+	if len(got) != len(migs) {
+		t.Fatalf("ikinci açılışta sürüm sayısı gömülü set ile uyuşmuyor: %v (beklenen %d)", got, len(migs))
 	}
 }
 
@@ -171,7 +174,7 @@ func TestMigrate0002LegacyColumns(t *testing.T) {
 			t.Fatalf("%s.%s eklenmedi", tc.table, tc.col)
 		}
 	}
-	if got := migVersions(t, db); len(got) != 2 || got[1] != 2 {
+	if got := migVersions(t, db); len(got) < 2 || got[1] != 2 {
 		t.Fatalf("0002 uygulanmadı: %v", got)
 	}
 

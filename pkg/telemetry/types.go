@@ -12,6 +12,10 @@ type AgentHello struct {
 	OS              string   `json:"os"`
 	Arch            string   `json:"arch"`
 	Capabilities    []string `json:"capabilities,omitempty"`
+	// MachineID, kararli makine kimligi hash'i (C3, Faz 13): state dosyasi
+	// kaybolursa hub eslesen cevrimdisi kaydi yeniden kullanir, yeni satir
+	// acmaz. Bos olabilir (kimlik alinamadi) — o zaman her hello yeni satir.
+	MachineID string `json:"machine_id,omitempty"`
 	// CSRPEM doluysa ve hub'da mTLS aciksa hub bunu bir istemci sertifikasina
 	// donusturup HubReply.ClientCertPEM ile geri verir (agent'in bir sonraki
 	// baglantidan itibaren kullandigi karsilikli TLS kimligi).

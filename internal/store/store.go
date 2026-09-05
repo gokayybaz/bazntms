@@ -112,6 +112,9 @@ type Store interface {
 
 	// agent filosu (Faz 1)
 	RegisterAgent(a Agent) (int64, error)
+	// RegisterOrReuseAgent, machine_id ile eşleşen çevrimdışı kaydı yeniden
+	// kullanır (C3, Faz 13) — state dosyası kaybında filo listesi şişmesin.
+	RegisterOrReuseAgent(a Agent, offlineBefore int64) (id int64, reused bool, err error)
 	AgentByTokenHash(hash string) (*Agent, error)
 	TouchAgent(id int64, version string, protoVersion int, remoteIP string) error
 	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
