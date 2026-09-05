@@ -1,12 +1,16 @@
-import { AdminPageShell, Placeholder } from '../../components/AdminPageShell'
+import { AdminPageShell } from '../../components/AdminPageShell'
+import { Card } from '../../components/Card'
+import { EnrollWizard } from '../../components/EnrollWizard'
 
 export function EnrollAdminPage() {
   return (
     <AdminPageShell
       title="Agent Ekle"
-      hint="Enrollment token seç/üret → işletim sistemi → kopyalanabilir kurulum komutu."
+      hint="Enrollment token üret → işletim sistemi → hedef makinede çalıştırılacak kurulum komutu. Token yalnızca üretilirken bir kez görünür."
     >
-      <Placeholder note="Agent Ekle sihirbazı yakında (S12.4) — /api/v1/enroll-tokens." />
+      <Card title="Yeni Agent Sihirbazı">
+        <EnrollWizard />
+      </Card>
     </AdminPageShell>
   )
 }

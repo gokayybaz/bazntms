@@ -137,6 +137,15 @@
         ],
         "createdAt": "2026-09-05T18:44:38.649Z",
         "reason": "primary-button convention (identical to UsersCard 'Ekle'): text-slate-950 is near-black (#020617), deliberately paired with bright hover bg-cyan-400 for high contrast — not washed-out gray"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/EnrollWizard.tsx"
+        ],
+        "createdAt": "2026-09-05T18:55:36.972Z",
+        "reason": "two established repo conventions: L146 primary button (near-black text-slate-950 on bright hover bg-cyan-400), L164 active-tab (cyan-300 on cyan-500/15 light tint — identical to ComplianceSubNav/AdminPageShell)"
       }
     ]
   }
