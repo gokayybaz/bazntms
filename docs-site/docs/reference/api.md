@@ -231,7 +231,7 @@ Kayıtlı analizler (son 10): `{id, ts, model, period_minutes, summary}`
 
 ---
 
-## Agent Filosu (Faz 1)
+## Agent Filosu
 
 Agent uçları UI oturumundan bağımsızdır. İki kimlik yolu:
 
@@ -293,7 +293,7 @@ bir enrollment sayacı sıfırlar.
 
 ### `GET /api/v1/processes?minutes=60&agent_id=0&limit=20` *(UI auth)*
 
-Süreç bazlı trafik top-listesi (Faz 2, nethogs yöntemi: agent'ta pcap + soket→PID
+Süreç bazlı trafik top-listesi (nethogs yöntemi: agent'ta pcap + soket→PID
 eşlemesi; `agent_iface_samples` gibi `ts` filtresiyle):
 
 ```json
@@ -339,7 +339,7 @@ en fazla 100 batch) ve bağlantı geri gelince otomatik bosaltilir.
 
 ---
 
-## RBAC, Kullanıcılar, Token'lar ve Denetim (Faz 5, admin yetkisi gerekir)
+## RBAC, Kullanıcılar, Token'lar ve Denetim (admin yetkisi gerekir)
 
 Giriş yolları:
 - **Legacy**: `POST /api/login {"password":"..."}` → admin kimliği (geriye uyumlu)
@@ -411,7 +411,7 @@ SSO akışı (config'te `oidc.issuer` tanımlıysa aktif). Grup→rol eşlemesi
 
 ---
 
-## İleri Analiz (Faz 6, UI auth ile korunur)
+## İleri Analiz (UI auth ile korunur)
 
 ### `GET /api/v1/topology`
 
@@ -437,7 +437,7 @@ listede olmayan ülke haritada çizilmez (API yine de sayar → toplam eksilir).
 
 ---
 
-## FortiGate REST API (Faz 8, UI auth ile korunur)
+## FortiGate REST API (UI auth ile korunur)
 
 Cihaz `vendor: "fortigate"` ile eklendiğinde poller SNMP yerine FortiOS
 REST API'yi kullanır. Cihaz ekleme isteğine ek alanlar:
@@ -468,13 +468,13 @@ Cihaz veri uçları (`?minutes=` pencere parametreli):
 | `GET /api/v1/devices/{id}/sdwan` | SD-WAN health-check: member bazlı latency/jitter/loss |
 | `GET /api/v1/devices/{id}/policies` | Penceredeki en aktif politika hit'leri (delta) |
 
-Yeni uyarı tipleri (Faz 8.5): `vpn_down`, `sdwan_sla_breach`,
+FortiGate uyarı tipleri: `vpn_down`, `sdwan_sla_breach`,
 `high_sessions` — `PUT /api/alerts` ile `forti` bölümünden yönetilir:
 `{"forti":{"vpn_down":true,"sdwan_latency_ms":200,"sdwan_jitter_ms":50,"sdwan_loss_pct":5,"max_sessions":20000}}`.
 
 ---
 
-## 5651 Uyumluluk (Faz 9, imzalama `-compliance` ile açılır)
+## 5651 Uyumluluk (imzalama `-compliance` ile açılır)
 
 ### `GET /api/v1/compliance/status` *(view)*
 
@@ -506,14 +506,14 @@ denetçiye sunulabilir uyum raporu.
 ---
 
 
-### Uyarı tipleri (Faz 6.2 anomali)
+### Uyarı tipleri (anomali)
 
 `GET /api/alerts/events` içinde `kind:"anomaly"`: saat-of-day istatistiksel
 baseline (son 7 gün) ile 5 dakikalık pencere verimi arasındaki z-skoru sapması.
 Eşik/duyarlılık `PUT /api/alerts` ile `anomaly` bölümünden yönetilir:
 `{"anomaly":{"enabled":true,"sensitivity":3.0,"min_samples":120,"window_min":5}}`.
 
-### IOC / tehdit istihbaratı eşleştirmesi (Faz 6.6)
+### IOC / tehdit istihbaratı eşleştirmesi
 
 Hub `-ioc-file <yol>` ile başlatılırsa (domain kara listesi — hosts / AdBlock /
 düz metin formatları, `mtime` değişince otomatik yeniden yüklenir), agent'ların
@@ -531,7 +531,7 @@ gözlemlediği **TLS SNI / HTTP Host** (`l7_endpoints`) ve **DNS sorgu**
 İmza tabanlı tam DPI değil — düşük maliyetli "bilinen kötü domain'e temas"
 tespiti (bir hash-set lookup).
 
-### Bildirim kanalları (Faz 6.3)
+### Bildirim kanalları
 
 `PUT /api/alerts` → `notifiers` bölümüne yeni kanallar:
 
@@ -553,7 +553,7 @@ tespiti (bir hash-set lookup).
 
 Webhook v2, gövdeyi `X-BazNTMS-Signature: sha256=<hmac>` ile imzalar.
 
-### SIEM / ITSM push connector (Faz 6.5)
+### SIEM / ITSM push connector
 
 `notifiers.siem` — her uyarı olayını standart bir formatta bir SIEM/ITSM
 sistemine iletir:
@@ -594,7 +594,7 @@ tablo­ları; HTML olarak üretilir.
 
 ---
 
-## Cihazlar, NetFlow ve Syslog (Faz 3, UI auth ile korunur)
+## Cihazlar, NetFlow ve Syslog (UI auth ile korunur)
 
 ### `GET /api/v1/devices`
 

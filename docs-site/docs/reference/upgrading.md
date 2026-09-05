@@ -5,7 +5,7 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/UPGRADE-RUN
 ---
 
 > Kaynak: [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md) — bu sayfa her build'de otomatik senkronize edilir.
-# Upgrade Runbook — Güncelleme ve Sürüm Atlama (Faz 7)
+# Upgrade Runbook — Güncelleme ve Sürüm Atlama
 
 ## Sürüm Matrisi
 

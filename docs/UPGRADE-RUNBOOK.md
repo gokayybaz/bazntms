@@ -1,4 +1,4 @@
-# Upgrade Runbook — Güncelleme ve Sürüm Atlama (Faz 7)
+# Upgrade Runbook — Güncelleme ve Sürüm Atlama
 
 ## Sürüm Matrisi
 

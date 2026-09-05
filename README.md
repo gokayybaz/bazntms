@@ -40,19 +40,19 @@ tek dosya, kurulum gerektirmez.
 - **SQLite (dev modu)** veya **PostgreSQL/TimescaleDB (ölçek modu)**: saniyelik örnekler, dakikalık uç nokta/DNS/bağlantı kayıtları, otomatik temizlik; TimescaleDB'de hypertable + continuous aggregate + retention (ham 7g → 1dk 90g → 1sa 2y)
 - **PCAP kayıt**: yakalama anında ham paketleri Wireshark uyumlu `.pcap` dosyasına yazma, boyut rotasyonu, tarayıcıdan indirme
 
-### Ölçek altyapısı (Faz 4)
+### Ölçek altyapısı
 - **Depo seçimi**: `-db` dosya yolu → SQLite, `postgres://` DSN → PostgreSQL/TimescaleDB (pgx)
 - **NATS JetStream kuyruğu**: ingest → processor ayrışması, replay/kayıp toleransı, çoklu replika ingest
 - **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`), tek-node docker-compose demo (`deploy/docker-compose.yml`), k8s olmadan ölçek mimarisi (N × ingest + kontrolcü + LB: `deploy/docker-compose.scale.yml`)
 - **Yük testi**: `bazntms-loadgen` sentetik agent filosu + k6 senaryosu (`loadtest/`)
 
-### Dağıtım ve operasyon (Faz 7)
+### Dağıtım ve operasyon
 - **Yönetim CLI**: `bazntmsctl setup` (kurulum sihirbazı), `update keygen/sign` (ed25519 imza kanalı)
 - **Paketler**: deb/rpm (nfpm + systemd), Windows MSI (WiX), macOS pkg (launchd) — release CI otomatik üretir
 - **Otomatik agent güncellemesi**: stable/beta kanalları, SHA-256 + ed25519 imza doğrulamalı, atomik binary değişimi
 - **Dokümantasyon**: `docs/UPGRADE-RUNBOOK.md`, `docs/DR-RUNBOOK.md`, Docusaurus sitesi (`docs-site/`)
 
-### Uyumluluk (Faz 9)
+### Uyumluluk
 - **5651 log imzalama**: hash-zincirli loglar + saatlik Merkle checkpoint + günlük RFC 3161 nitelikli zaman damgası + ed25519 manifest imzası; WORM depoda 2 yıl saklama
 - **Delil paketi**: tarih aralıklı çıkarım, PII maskeleme, `bazntmsctl verify` ile offline doğrulama — adli süreçler için
 - **ISO 27001**: Annex A kontrol haritası, imzalı log inceleme/erişim inceleme tutanakları, zaman sapması alarmı (A.8.17)
@@ -119,7 +119,7 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 | [docs/API.md](docs/API.md) | REST + WebSocket uçlarının tam referansı ve örnekleri |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | İç tasarım: yakalama döngüsü, collector, uyarı motoru, veri şeması |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | İzin hataları, Npcap, AI sorunları, sık karşılaşılan durumlar |
-| [docs/enterprise-plan.html](docs/enterprise-plan.html) | 🗺️ Enterprise yol haritası: hub + agent + cihaz entegrasyonları, faz planı |
+| [docs/enterprise-plan.html](docs/enterprise-plan.html) | 🗺️ Enterprise yol haritası: hub + agent + cihaz entegrasyonları, ölçek hedefleri |
 
 ## Yapılandırma (özet)
 

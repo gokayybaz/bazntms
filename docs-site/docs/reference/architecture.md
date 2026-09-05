@@ -10,7 +10,7 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/ARCHITECTUR
 bazNTMS, tek Go binary'si içinde çalışan bir monolittir: yakalama motoru,
 SQLite/PostgreSQL collector, uyarı motoru, AI istemcisi, rapor üreticisi ve
 HTTP/WS sunucusu aynı süreçte yaşar. Frontend derlenip binary'ye gömülür
-(`go:embed all:frontend/dist`). Faz 4 ile depo katmanı `store.Store`
+(`go:embed all:frontend/dist`). Depo katmanı `store.Store`
 arayüzüne ayrıldı: SQLite dev modunda kalır, ölçek modunda
 PostgreSQL/TimescaleDB + opsiyonel NATS JetStream kuyruğu devreye girer.
 
@@ -258,7 +258,7 @@ grafik/harita kütüphanesi yok — kıtalar kaba poligon, konvansiyona uygun).
 Sunucu tarafı toplama saf fonksiyon (`aggregateGeo`) olarak test edilir.
 GeoIP kaynağı yoksa uç boş liste döner, kart "veri yok" durumuna düşer.
 
-## Süreç Bazlı Trafik Atfı (Faz 2)
+## Süreç Bazlı Trafik Atfı
 
 `pkg/proctraffic` + `internal/agent/attr.go`: **nethogs yöntemi** — agent pcap
 ile paket yakalar (yalnızca başlıklar, snaplen 600), 4'lü çifti donemlik
@@ -286,7 +286,7 @@ hub yerel yakalamasında vardı, çoklu-hub'da boştu).
 Hub politikası (`-agent-pcap`) + agent isteği (`-pcap`) ikisi de açıkken çalışır;
 izin yoksa atıf devre dışı kalır, temel telemetri aksamaz. Ham PCAP kaydı
 (`-record`) da aynı politika kapısıyla agent'ta yerel olarak döner.
-İleri faz: eBPF (Linux) ve ETW (Windows) sağlayıcılar aynı arayüzün arkasına
+Planlanan: eBPF (Linux) ve ETW (Windows) sağlayıcılar aynı arayüzün arkasına
 eklenerek daha hassas sayım sağlanır.
 
 ## Veri akışı özeti

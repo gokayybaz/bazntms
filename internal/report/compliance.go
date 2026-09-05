@@ -129,7 +129,7 @@ const complianceTpl = `<!doctype html>
     {{end}}
   </table>
 
-  <footer>bazNTMS uyum raporu — Faz 9.5 · detaylı delil için /api/v1/compliance/evidence</footer>
+  <footer>bazNTMS uyum raporu · detaylı delil için /api/v1/compliance/evidence</footer>
 </div>
 </body>
 </html>`

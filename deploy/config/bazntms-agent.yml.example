@@ -25,7 +25,7 @@ collect:
   pcap_record: false
   pcap_dir: /var/lib/bazntms/captures
 
-# otomatik guncelleme (Faz 7.3): hub -updates-dir ile baslatilmali
+# otomatik guncelleme: hub -updates-dir ile baslatilmali
 # update:
 #   enabled: true
 #   channel: stable

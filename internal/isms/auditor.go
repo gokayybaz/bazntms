@@ -188,7 +188,7 @@ Hariç {{.P.SOACounts.excluded}}</p>
 <td>{{.Evidence}}</td></tr>{{end}}</table>{{else}}<p class="meta">Süreklilik testi kaydı yok.</p>{{end}}
 
 <p class="meta">Varlık envanteri: {{len .P.Assets}} kayıt (cihaz/agent/site otomatik senkron + manuel).
-Bu paket hub tarafından {{.GenTime}} anında üretildi; Faz 9 imzalı log zinciriyle birlikte kanıt olarak sunulur.</p>
+Bu paket hub tarafından {{.GenTime}} anında üretildi; imzalı log zinciriyle birlikte kanıt olarak sunulur.</p>
 </body></html>`))
 
 // RenderAuditorHTML, paketi yazdırma dostu HTML raporuna çevirir.

@@ -23,4 +23,4 @@ kurulu bir ağ trafiği izleme platformudur.
 
 Süreç bazlı derin telemetri bugün platforma özgü soket→PID eşlemesiyle
 çalışır (Linux `/proc`, macOS `lsof`, Windows `netstat`); eBPF (Linux) ve
-ETW (Windows) sağlayıcıları aynı arayüzün arkasına eklenecek ileri faz.
+ETW (Windows) sağlayıcılarının aynı arayüzün arkasına eklenmesi planlanıyor.

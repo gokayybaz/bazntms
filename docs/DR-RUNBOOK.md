@@ -1,4 +1,4 @@
-# DR Runbook — Felaket Kurtarma ve Yüksek Erişilebilirlik (Faz 5.4)
+# DR Runbook — Felaket Kurtarma ve Yüksek Erişilebilirlik
 
 ## Genel Bakış
 
@@ -60,7 +60,7 @@ chmod 600 vault.key
 
 1. Bir ingest replikası ölür → LB sağlıksız pod'u çıkarır (k8s: readiness
    probe `/readyz` otomatik yönetir).
-2. Aktif uyarı/poller rolü tek replikada tutulur (Faz 4 `-alerts/-poller`
+2. Aktif uyarı/poller rolü tek replikada tutulur (`-alerts/-poller`
    bayrakları). Yönetim replikası ölürse: rodları boş bir replikaya taşı.
 3. Tüm replikalar ölürse: agent'lar offline kuyruğa yazar; hub geri geldiğinde
    kuyruklar boşalır (≤100 batch × batch aralığı kayıp toleransı).

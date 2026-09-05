@@ -37,7 +37,7 @@
     color: var(--muted); font-size: 12.5px; border-radius: 0 4px 4px 0;
   }
   aside nav a:hover { color: var(--ink); border-left-color: var(--line2); background: rgba(148,163,184,.05); }
-  aside nav a.faz::before { content: "▸ "; color: var(--dim); }
+  aside nav a.blok::before { content: "▸ "; color: var(--dim); }
   main { flex: 1; min-width: 0; padding: 32px 40px 80px; }
 
   header.top { border-bottom: 2px solid var(--accent-dim); padding-bottom: 18px; margin-bottom: 26px; }
@@ -59,19 +59,18 @@
   h2 .tag { color: var(--accent); margin-right: 8px; }
   h3 { font-size: 13.5px; color: var(--ink); margin: 18px 0 8px; }
 
-  .faz {
+  .blok {
     border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px;
     background: rgba(15,23,42,.7); padding: 18px 20px; margin: 16px 0;
   }
-  .faz-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-  .faz-head .no { font-family: var(--mono); font-weight: 700; font-size: 13px; }
-  .faz-head h3 { margin: 0; font-size: 15px; }
-  .faz-head .sure { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+  .blok-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .blok-head h3 { margin: 0; font-size: 15px; }
+  .blok-head .sure { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
   .status {
     font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em;
     padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line2); color: var(--muted);
   }
-  .faz p.ozet { color: var(--muted); font-size: 12.5px; margin: 6px 0 12px; }
+  .blok p.ozet { color: var(--muted); font-size: 12.5px; margin: 6px 0 12px; }
   .cikan { font-family: var(--mono); font-size: 11px; color: var(--emerald); margin-top: 10px; }
   .cikan::before { content: "▸ ÇIKTI: "; color: var(--dim); }
 
@@ -124,18 +123,18 @@
     display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   }
 
-  /* faz aksan renkleri */
-  .f0 { border-left-color: var(--accent); }  .f0 .no { color: var(--accent); }
-  .f1 { border-left-color: var(--sky); }     .f1 .no { color: var(--sky); }
-  .f2 { border-left-color: var(--violet); }  .f2 .no { color: var(--violet); }
-  .f3 { border-left-color: var(--emerald); } .f3 .no { color: var(--emerald); }
-  .f4 { border-left-color: var(--amber); }   .f4 .no { color: var(--amber); }
-  .f5 { border-left-color: var(--rose); }    .f5 .no { color: var(--rose); }
-  .f6 { border-left-color: var(--fuchsia); } .f6 .no { color: var(--fuchsia); }
-  .f7 { border-left-color: var(--muted); }   .f7 .no { color: var(--muted); }
-  .f8 { border-left-color: #fb923c; }        .f8 .no { color: #fb923c; }
-  .f9 { border-left-color: #2dd4bf; }        .f9 .no { color: #2dd4bf; }
-  .f10 { border-left-color: #a3e635; }       .f10 .no { color: #a3e635; }
+  /* modul aksan renkleri */
+  .f0 { border-left-color: var(--accent); }
+  .f1 { border-left-color: var(--sky); }
+  .f2 { border-left-color: var(--violet); }
+  .f3 { border-left-color: var(--emerald); }
+  .f4 { border-left-color: var(--amber); }
+  .f5 { border-left-color: var(--rose); }
+  .f6 { border-left-color: var(--fuchsia); }
+  .f7 { border-left-color: var(--muted); }
+  .f8 { border-left-color: #fb923c; }
+  .f9 { border-left-color: #2dd4bf; }
+  .f10 { border-left-color: #a3e635; }
 
   @media (max-width: 900px) {
     .layout { flex-direction: column; }
@@ -149,7 +148,7 @@
     }
     aside { display: none; }
     main { padding: 0; max-width: none; }
-    .faz, .kart { break-inside: avoid; }
+    .blok, .kart { break-inside: avoid; }
     body { background-image: none; }
     h2 { break-after: avoid; }
   }
@@ -163,22 +162,22 @@
   <nav>
     <a href="#genel">Genel Bakış</a>
     <a href="#mimari">Hedef Mimari</a>
-    <a class="faz" href="#faz0">Faz 0 — Zemin Hazırlığı</a>
-    <a class="faz" href="#faz1">Faz 1 — Hub + Agent MVP</a>
-    <a class="faz" href="#faz2">Faz 2 — Derin Telemetri</a>
-    <a class="faz" href="#faz3">Faz 3 — Cihaz Entegrasyonları</a>
-    <a class="faz" href="#faz4">Faz 4 — Ölçek Altyapısı</a>
-    <a class="faz" href="#faz5">Faz 5 — Güvenlik / RBAC / HA</a>
-    <a class="faz" href="#faz6">Faz 6 — İleri Analiz</a>
-    <a class="faz" href="#faz7">Faz 7 — Dağıtım / Operasyon</a>
-    <a class="faz" href="#faz8">Faz 8 — FortiGate Entegrasyonu</a>
-    <a class="faz" href="#faz9">Faz 9 — 5651 Uyumluluk</a>
-    <a class="faz" href="#faz10">Faz 10 — ISMS Yönetişimi</a>
+    <a class="blok" href="#zemin">Zemin Hazırlığı</a>
+    <a class="blok" href="#filo">Hub + Agent MVP</a>
+    <a class="blok" href="#telemetri">Derin Telemetri</a>
+    <a class="blok" href="#cihazlar">Cihaz Entegrasyonları</a>
+    <a class="blok" href="#olcek">Ölçek Altyapısı</a>
+    <a class="blok" href="#guvenlik">Güvenlik / RBAC / HA</a>
+    <a class="blok" href="#analiz">İleri Analiz</a>
+    <a class="blok" href="#dagitim">Dağıtım / Operasyon</a>
+    <a class="blok" href="#fortigate">FortiGate Entegrasyonu</a>
+    <a class="blok" href="#uyumluluk">5651 Uyumluluk</a>
+    <a class="blok" href="#isms">ISMS Yönetişimi</a>
     <a href="#teknoloji">Teknoloji Kararları</a>
     <a href="#riskler">Riskler</a>
     <a href="#kapasite">Kapasite Hedefleri</a>
     <a href="#lisans">Lisans Stratejisi</a>
-    <a href="#checklist">Faz 0 Checklist</a>
+    <a href="#checklist">Başlangıç Checklist</a>
   </nav>
 </aside>
 
@@ -201,7 +200,7 @@ AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü dashboard tek binary'nin içi
 bu yetenekleri <b>merkezi hub + uç agent + ağ cihazı entegrasyonları</b> üçlüsüne genişletmek ve
 1.000 cihaz / 5.000 agent ölçeğinde çoklu-siteli, hibrit dağıtılabilir bir izleme platformuna
 dönüştürmektir. Mevcut kodun tamamı hub tarafına taşınır — atılan hiçbir iş yoktur.
-Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo edilebilir bir artış vardır.
+Her modül <b>shippable dikey dilim</b> olarak tasarlanmıştır: modül sonunda demo edilebilir bir artış vardır.
 </p>
 
 <h2 id="mimari"><span class="tag">02</span>Hedef Mimari</h2>
@@ -223,9 +222,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
 └──────────────────────────────────────────────────────────────────────┘
 </pre>
 
-<h2 id="faz0"><span class="tag">FAZ 0</span>Zemin Hazırlığı <span class="status">başlanacak</span></h2>
-<div class="faz f0">
-  <div class="faz-head"><span class="no">FAZ 0</span><h3>Monolit → Enterprise İskelet</h3><span class="status">2-3 hafta</span></div>
+<h2 id="zemin">Zemin Hazırlığı <span class="status">başlanacak</span></h2>
+<div class="blok f0">
+  <div class="blok-head"><h3>Monolit → Enterprise İskelet</h3><span class="status">2-3 hafta</span></div>
   <p class="ozet">Tek-binary monoliti hub/agent ikiliğine hazırlar. Görünür özellik değişmez; yapı, config, loglama, metrik ve test altyapısı kurumsal hale gelir.</p>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
@@ -239,9 +238,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">İki derlenebilir binary (hub/agent) + kurumsal config/log/metrics iskeleti</p>
 </div>
 
-<h2 id="faz1"><span class="tag">FAZ 1</span>Hub + Agent MVP <span class="status">4-6 hafta</span></h2>
-<div class="faz f1">
-  <div class="faz-head"><span class="no">FAZ 1</span><h3>Filo Yönetiminin Temeli</h3><span class="status">4-6 hafta</span></div>
+<h2 id="filo">Hub + Agent MVP <span class="status">4-6 hafta</span></h2>
+<div class="blok f1">
+  <div class="blok-head"><h3>Filo Yönetiminin Temeli</h3><span class="status">4-6 hafta</span></div>
   <p class="ozet">İlk gerçek agent'lar hub'a bağlanır: enrollment, mTLS, batch telemetri, offline kuyruk ve uzak politika yönetimi.</p>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
@@ -256,23 +255,23 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">10 agent'lık pilot — hub'dan canlı izlenen filo</p>
 </div>
 
-<h2 id="faz2"><span class="tag">FAZ 2</span>Derin Telemetri: Süreç Bazlı Trafik <span class="status">4-6 hafta</span></h2>
-<div class="faz f2">
-  <div class="faz-head"><span class="no">FAZ 2</span><h3>Kim, Hangi Süreçle, Nereye Bağlanıyor</h3><span class="status">4-6 hafta</span></div>
+<h2 id="telemetri">Derin Telemetri: Süreç Bazlı Trafik <span class="status">4-6 hafta</span></h2>
+<div class="blok f2">
+  <div class="blok-head"><h3>Kim, Hangi Süreçle, Nereye Bağlanıyor</h3><span class="status">4-6 hafta</span></div>
   <p class="ozet">"Tam yetenek" hedefinin kalbi: platform başına en derin toplama yöntemi, düşük kernel/sürümde graceful degrade ile.</p>
   <div class="grid2">
     <div class="kart"><h4 style="color:var(--violet)">Linux — eBPF</h4>
       <ul><li>cilium/ebpf; socket bazlı byte/paket → PID eşleme</li>
       <li>CAP_BPF / CAP_PERFMON; min kernel 5.8 matrisi</li>
-      <li>Düşük kernel → Faz 1 telemetrisine otomatik degrade</li></ul>
+      <li>Düşük kernel → temel telemetriye otomatik degrade</li></ul>
     </div>
     <div class="kart"><h4 style="color:var(--violet)">Windows — ETW / WFP</h4>
       <ul><li>Kernel-Network provider (ETW) veya WFP callout; cgo binding</li>
       <li>SYSTEM servis; AV/SmartScreen için imzalı binary zorunlu</li></ul>
     </div>
     <div class="kart"><h4 style="color:var(--violet)">macOS — kademeli</h4>
-      <ul><li>Faz 1 telemetrisi + opsiyonel BPF yakalama yeterli</li>
-      <li>Endpoint Security ağ uzantısı ileri faz (notarization maliyeti)</li></ul>
+      <ul><li>Temel telemetri + opsiyonel BPF yakalama yeterli</li>
+      <li>Endpoint Security ağ uzantısı ileride (notarization maliyeti)</li></ul>
     </div>
     <div class="kart"><h4 style="color:var(--violet)">Opsiyonel PCAP</h4>
       <ul><li>Mevcut <code>record.go</code> agent'ta yeniden kullanılır</li>
@@ -284,9 +283,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">Süreç bazlı gerçek trafik sayaçları — "kim ne kadar veri transfer etti" sorusunun kesin cevabı</p>
 </div>
 
-<h2 id="faz3"><span class="tag">FAZ 3</span>Ağ Cihazı Entegrasyonları <span class="status">5-7 hafta</span></h2>
-<div class="faz f3">
-  <div class="faz-head"><span class="no">FAZ 3</span><h3>Firewall / Router / Switch / AP</h3><span class="status">5-7 hafta</span></div>
+<h2 id="cihazlar">Ağ Cihazı Entegrasyonları <span class="status">5-7 hafta</span></h2>
+<div class="blok f3">
+  <div class="blok-head"><h3>Firewall / Router / Switch / AP</h3><span class="status">5-7 hafta</span></div>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
     <tr><td class="no">3.1</td><td>SNMPv3 poller</td><td>gosnmp; arayüz sayaçları/durum, sysDescr envanter, CPU/RAM; vendor OID setleri (Cisco, Mikrotik, Ubiquiti, Fortinet, Aruba)</td></tr>
@@ -298,9 +297,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">Ağın tamamı — uçtan uca görünür: cihaz + flow + agent tek panelde</p>
 </div>
 
-<h2 id="faz4"><span class="tag">FAZ 4</span>Ölçek Altyapısı <span class="status">4-6 hafta</span></h2>
-<div class="faz f4">
-  <div class="faz-head"><span class="no">FAZ 4</span><h3>1.000 Cihaz + 5.000 Agent Ölçeği</h3><span class="status">4-6 hafta</span></div>
+<h2 id="olcek">Ölçek Altyapısı <span class="status">4-6 hafta</span></h2>
+<div class="blok f4">
+  <div class="blok-head"><h3>1.000 Cihaz + 5.000 Agent Ölçeği</h3><span class="status">4-6 hafta</span></div>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
     <tr><td class="no">4.1</td><td>Depo geçişi</td><td><b>PostgreSQL + TimescaleDB</b>; <code>store.Store</code> arayüzü sayesinde SQLite dev modunda kalır</td></tr>
@@ -312,9 +311,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">Hedef ölçekte doğrulanmış ingest hattı + kalıcı depolama</p>
 </div>
 
-<h2 id="faz5"><span class="tag">FAZ 5</span>Güvenlik, RBAC, HA <span class="status">4-5 hafta</span></h2>
-<div class="faz f5">
-  <div class="faz-head"><span class="no">FAZ 5</span><h3>Kurumsal Güvenlik Zemini</h3><span class="status">4-5 hafta</span></div>
+<h2 id="guvenlik">Güvenlik, RBAC, HA <span class="status">4-5 hafta</span></h2>
+<div class="blok f5">
+  <div class="blok-head"><h3>Kurumsal Güvenlik Zemini</h3><span class="status">4-5 hafta</span></div>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
     <tr><td class="no">5.1</td><td>RBAC</td><td>Roller: admin / netops / analyst / viewer + site scope; mevcut tek-şifre auth migrasyonu</td></tr>
@@ -326,9 +325,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">Denetlenebilir, yüksek erişilebilirlikli, SSO'lu platform</p>
 </div>
 
-<h2 id="faz6"><span class="tag">FAZ 6</span>İleri Analiz ve Kurumsal Özellikler <span class="status">sürekli</span></h2>
-<div class="faz f6">
-  <div class="faz-head"><span class="no">FAZ 6</span><h3>Akıllı Operasyon</h3><span class="status">sürekli</span></div>
+<h2 id="analiz">İleri Analiz ve Kurumsal Özellikler <span class="status">sürekli</span></h2>
+<div class="blok f6">
+  <div class="blok-head"><h3>Akıllı Operasyon</h3><span class="status">sürekli</span></div>
   <table>
     <tr><th style="width:230px">Özellik</th><th>Detay</th></tr>
     <tr><td>Topoloji keşfi</td><td>LLDP/CDP/ARP tabloları (SNMP) + agent subnet bilgisi → canlı ağ haritası (react-flow)</td></tr>
@@ -339,9 +338,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   </table>
 </div>
 
-<h2 id="faz7"><span class="tag">FAZ 7</span>Dağıtım ve Operasyon <span class="status">Faz 4 ile paralel</span></h2>
-<div class="faz f7">
-  <div class="faz-head"><span class="no">FAZ 7</span><h3>Yüklenebilir, Güncellenebilir, Desteklenebilir</h3><span class="status">paralel</span></div>
+<h2 id="dagitim">Dağıtım ve Operasyon <span class="status">ölçek ile paralel</span></h2>
+<div class="blok f7">
+  <div class="blok-head"><h3>Yüklenebilir, Güncellenebilir, Desteklenebilir</h3><span class="status">paralel</span></div>
   <table>
     <tr><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
     <tr><td>Container / Helm</td><td>Hub + agent imajları; docker-compose tek-node demo; Helm chart</td></tr>
@@ -351,9 +350,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   </table>
 </div>
 
-<h2 id="faz8"><span class="tag">FAZ 8</span>FortiGate REST API Derin Entegrasyonu <span class="status">4-6 hafta</span></h2>
-<div class="faz f8">
-  <div class="faz-head"><span class="no">FAZ 8</span><h3>Vendor Driver Mimarisi + FortiGate</h3><span class="status">4-6 hafta</span></div>
+<h2 id="fortigate">FortiGate REST API Derin Entegrasyonu <span class="status">4-6 hafta</span></h2>
+<div class="blok f8">
+  <div class="blok-head"><h3>Vendor Driver Mimarisi + FortiGate</h3><span class="status">4-6 hafta</span></div>
   <p class="ozet">SNMP'nin göremediği durum ve politika düzlemini REST API ile toplar: VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri, kaynak/oturum. DeviceDriver soyutlamasıyla gelecekteki vendor'lar aynı çatıya eklenir.</p>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
@@ -367,9 +366,9 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">Ağ güvenlik aygıtının tam durumu — SNMP + REST tek panelde; vendor mimarisi ileride Mikrotik/UniFi/Palo Alto'ya açık</p>
 </div>
 
-<h2 id="faz9"><span class="tag">FAZ 9</span>5651 Log İmzalama + ISO 27001 Kanıt Katmanı <span class="status">7-9 hafta</span></h2>
-<div class="faz f9">
-  <div class="faz-head"><span class="no">FAZ 9</span><h3>Adli Kanıt Düzeyinde Loglama</h3><span class="status">7-9 hafta</span></div>
+<h2 id="uyumluluk">5651 Log İmzalama + ISO 27001 Kanıt Katmanı <span class="status">7-9 hafta</span></h2>
+<div class="blok f9">
+  <div class="blok-head"><h3>Adli Kanıt Düzeyinde Loglama</h3><span class="status">7-9 hafta</span></div>
   <p class="ozet">Tüm loglar Merkle checkpoint + günlük RFC 3161 nitelikli zaman damgası (+ P12 e-imza) ile imzalanır, WORM depoda 2 yıl saklanır; delil paketi ve offline doğrulama ile adli süreçlerde kullanılabilir bütünlük sağlanır. ISO 27001 Annex A için kontrol haritası + inceleme iş akışları üretilir.</p>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
@@ -384,17 +383,17 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
   <p class="cikan">5651 üç profil (yerleşim yeri, erişim sağlayıcı, kurum ağı) için modüler imzalı saklama + ISO kanıt üretimi</p>
 </div>
 
-<h2 id="faz10"><span class="tag">FAZ 10</span>Tam ISMS Yönetişim Modülü <span class="status">6-8 hafta</span></h2>
-<div class="faz f10">
-  <div class="faz-head"><span class="no">FAZ 10</span><h3>ISO 27001 Yönetişim Araçları</h3><span class="status">6-8 hafta</span></div>
-  <p class="ozet">Faz 9 kanıt omurgası üzerinde ISMS yönetişim ürün yüzeyi: risk defteri, SoA, politika yönetimi, iç denetim programı, yönetim incelemesi, tedarikçi güvenliği ve tek tıkla denetçi paketi.</p>
+<h2 id="isms">Tam ISMS Yönetişim Modülü <span class="status">6-8 hafta</span></h2>
+<div class="blok f10">
+  <div class="blok-head"><h3>ISO 27001 Yönetişim Araçları</h3><span class="status">6-8 hafta</span></div>
+  <p class="ozet">5651 kanıt omurgası üzerinde ISMS yönetişim ürün yüzeyi: risk defteri, SoA, politika yönetimi, iç denetim programı, yönetim incelemesi, tedarikçi güvenliği ve tek tıkla denetçi paketi.</p>
   <table>
     <tr><th style="width:60px">#</th><th style="width:230px">İş Kalemi</th><th>Detay</th></tr>
     <tr><td class="no">10.1</td><td>Risk defteri</td><td>Varlık envanteri (cihaz/agent/site otomatik), tehdit-zaafiyet, etki×olasılık skoru, muamele planı, kalıntı risk</td></tr>
-    <tr><td class="no">10.2</td><td>SoA</td><td>93 Annex A kontrolü; uygula/hariç kararları + gerekçeler; Faz 9 haritasından otomatik kanıt bağlantıları</td></tr>
+    <tr><td class="no">10.2</td><td>SoA</td><td>93 Annex A kontrolü; uygula/hariç kararları + gerekçeler; 5651 kanıt haritasından otomatik bağlantılar</td></tr>
     <tr><td class="no">10.3</td><td>Politika yönetimi</td><td>Doküman sürümleme, onay akışı, yayın/duyuru</td></tr>
     <tr><td class="no">10.4</td><td>İç denetim programı</td><td>Denetim planı, bulgu kaydı, CAPA takibi, kapanış doğrulaması</td></tr>
-    <tr><td class="no">10.5-10.7</td><td>Yönetim incelemesi, tedarikçi, süreklilik</td><td>Metrik panoları; tedarikçi kayıt/gözden geçirme (A.5.19-22); BCDR şablonları + Faz 5 DR kanıtları</td></tr>
+    <tr><td class="no">10.5-10.7</td><td>Yönetim incelemesi, tedarikçi, süreklilik</td><td>Metrik panoları; tedarikçi kayıt/gözden geçirme (A.5.19-22); BCDR şablonları + DR kanıtları</td></tr>
     <tr><td class="no">10.8</td><td>Denetçi paketi</td><td>SoA + risk defteri + kanıtlar + inceleme kayıtları tek dışa aktarım</td></tr>
   </table>
   <p class="cikan">ISO 27001 sertifikasyon sürecinin tüm teknik kanıtlarını ve yönetişimini tek panelden yöneten modül</p>
@@ -403,10 +402,10 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
 <h2 id="teknoloji"><span class="tag">03</span>Teknoloji Kararları</h2>
 <table>
   <tr><th style="width:200px">Konu</th><th style="width:240px">Öneri</th><th>Alternatif / Gerekçe</th></tr>
-  <tr><td>Transport</td><td><code>protobuf-over-HTTPS</code> (connect-go)</td><td>Hibrit dağıtımda proxy/LB dostu; saf gRPC ileri fazda opsiyon</td></tr>
-  <tr><td>Depo</td><td><b>PostgreSQL + TimescaleDB</b></td><td>SQL bilgisini korur; flow hacmi patlarsa yalnızca flow tabloları için ClickHouse (Faz 4+ opsiyon)</td></tr>
-  <tr><td>Kuyruk</td><td><b>NATS JetStream</b></td><td>Basit başlangıç: batched HTTPS; NATS ölçek fazında girer</td></tr>
-  <tr><td>Süreç trafiği</td><td>cilium/ebpf (Linux), ETW (Windows)</td><td>macOS Faz 1 telemetrisi; ES uzantısı ileri faz</td></tr>
+  <tr><td>Transport</td><td><code>protobuf-over-HTTPS</code> (connect-go)</td><td>Hibrit dağıtımda proxy/LB dostu; saf gRPC ileride opsiyon</td></tr>
+  <tr><td>Depo</td><td><b>PostgreSQL + TimescaleDB</b></td><td>SQL bilgisini korur; flow hacmi patlarsa yalnızca flow tabloları için ClickHouse (ölçek modunda opsiyon)</td></tr>
+  <tr><td>Kuyruk</td><td><b>NATS JetStream</b></td><td>Basit başlangıç: batched HTTPS; NATS ölçek modunda girer</td></tr>
+  <tr><td>Süreç trafiği</td><td>cilium/ebpf (Linux), ETW (Windows)</td><td>macOS temel telemetrisi; ES uzantısı ileride</td></tr>
   <tr><td>Cihaz protokolleri</td><td>gosnmp (SNMPv3), goflow2 (NetFlow/IPFIX/sFlow)</td><td>Syslog: kendi UDP/TLS alıcımız</td></tr>
   <tr><td>Auth</td><td>coreos/go-oidc ile doğrudan OIDC</td><td>Keycloak/Entra ID arkasında; dış SaaS bağımlılığı yok</td></tr>
   <tr><td>UI</td><td>Mevcut React + Tailwind korunur</td><td>react-flow (topoloji), hand-rolled SVG grafikler kalır</td></tr>
@@ -417,14 +416,14 @@ Her faz <b>shippable dikey dilim</b> olarak tasarlanmıştır: faz sonunda demo 
 <table>
   <tr><th style="width:300px">Risk</th><th>Azaltıcı</th></tr>
   <tr><td>Agent'lar AV/EDR tarafından engellenir</td><td>Kod imzalama, Windows notarization akışı, dokümante hariç tutma rehberi</td></tr>
-  <tr><td>eBPF/ETW kernel-sürüm çeşitliliği</td><td>Min sürüm matrisi + Faz 1 telemetrisine graceful degrade; sürüm tespiti agent başlangıcında</td></tr>
+  <tr><td>eBPF/ETW kernel-sürüm çeşitliliği</td><td>Min sürüm matrisi + temel telemetriye graceful degrade; sürüm tespiti agent başlangıcında</td></tr>
   <tr><td>Flow hacmi patlaması</td><td>Downsample politikaları + yalnızca flow tabloları için ClickHouse opsiyonu</td></tr>
   <tr><td>Hibrit dağıtımda güvenlik açığı</td><td>mTLS, kısa ömürlü token, enrollment akışı, imzalı agent güncellemeleri</td></tr>
-  <tr><td>Tek geliştirici kapasitesi</td><td>Shippable dikey dilimler; her faz demo edilebilir; Faz 0 altyapısı sonradan işi hızlandırır</td></tr>
-  <tr><td>Ticari/müşteri baskısı ile kapsam şişmesi</td><td>Faz kapıları: bir faz "done" tanımı olmadan sonrakine geçilmez</td></tr>
+  <tr><td>Tek geliştirici kapasitesi</td><td>Shippable dikey dilimler; her modül demo edilebilir; zemin altyapısı sonradan işi hızlandırır</td></tr>
+  <tr><td>Ticari/müşteri baskısı ile kapsam şişmesi</td><td>Modül kapıları: bir modül "done" tanımı olmadan sonrakine geçilmez</td></tr>
 </table>
 
-<h2 id="kapasite"><span class="tag">05</span>Kapasite Hedefleri (Faz 4 Doğrulama Kriterleri)</h2>
+<h2 id="kapasite"><span class="tag">05</span>Kapasite Hedefleri (Ölçek Doğrulama Kriterleri)</h2>
 <div class="grid2">
   <div class="kart"><h4>Cihaz Poll</h4><ul>
     <li>1.000 cihaz, 60 sn poll döngüsü</li><li>SNMPv3 timeout/retry bütçesi: poll döngüsü %80'i aşmaz</li>
@@ -447,14 +446,14 @@ yarın open-core'a geçiş tek <code>LICENSE</code> + paket sınırı değişikl
 çekirdek yetenekler (agent, temel hub, uyarılar, raporlar) her zaman açık kalır.
 </div>
 
-<h2 id="checklist"><span class="tag">07</span>Faz 0 Checklist — Hemen Başlanacaklar</h2>
+<h2 id="checklist"><span class="tag">07</span>Başlangıç Checklist — Hemen Başlanacaklar</h2>
 <ul class="checklist">
   <li><span><b>Binary split:</b> <code>cmd/bazntms-hub</code> + <code>cmd/bazntms-agent</code> (mevcut main hub olur)</span></li>
   <li><span><b>Config iskeleti:</b> koanf ile YAML + env overlay; hub/agent şemaları</span></li>
   <li><span><b>slog geçişi:</b> JSON yapılandırılmış loglama + request-id</span></li>
   <li><span><b>/api/v1 route şeması</b> + <code>/metrics</code> + <code>/healthz</code> + <code>/readyz</code></span></li>
   <li><span><b>testcontainers entegrasyon testi</b> + CI matris güncellemesi</span></li>
-  <li><span><b>telemetry.proto ilk taslak</b> (Faz 1 hazırlığı)</span></li>
+  <li><span><b>telemetry.proto ilk taslak</b> (hub/agent hazırlığı)</span></li>
   <li><span><b>SemVer + protokol versiyon alanı</b> handshake için hazırlık</span></li>
 </ul>
 

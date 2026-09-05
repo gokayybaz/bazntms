@@ -49,7 +49,7 @@ export function ComplianceOverviewPage({ refreshKey }: { refreshKey: number }) {
       ) : !summary ? (
         <p className="text-xs text-slate-500">yükleniyor…</p>
       ) : (
-        <Card title="ISMS Olgunluk Özeti" right={<span className="text-xs text-slate-500">Faz 10</span>}>
+        <Card title="ISMS Olgunluk Özeti">
           <div className="flex flex-wrap items-center gap-2">
             {pill(`soa ${summary.soa.implemented}/${summary.soa.applicable}`, summary.soa.verified > 0 ? 'ok' : 'muted')}
             {pill(`yüksek risk ${summary.risks.high}`, summary.risks.high > 0 ? 'bad' : 'ok')}

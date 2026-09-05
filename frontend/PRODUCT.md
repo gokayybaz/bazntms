@@ -87,7 +87,7 @@ uyumluluk/denetim döngüsü. RBAC site-scope ile çoklu-site/çoklu-müşteri
 ## Evidence on Hand
 
 Kod tabanının kendisi: `frontend/src/components/*`, `frontend/src/pages/*`.
-`docs/enterprise-plan.html` — 10 fazlık kurumsal yol haritası ve lisans
+`docs/enterprise-plan.html` — kurumsal yol haritası ve lisans
 stratejisi (MIT + gelecekte open-core olasılığı, karar bekliyor).
 `CLAUDE.md` — proje konvansiyonları. Canlı kullanıcı testi, gerçek
 müşteri referansı veya kullanım metriği **yok** — bunlar icat

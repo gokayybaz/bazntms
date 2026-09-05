@@ -41,7 +41,7 @@ func main() {
 	recordDir := fl.String("record-dir", "captures", "PCAP kayit dizini")
 	logLevel := fl.String("log-level", "", "log seviyesi (config'i override eder)")
 	logFormat := fl.String("log-format", "", "log formati: json|text")
-	updateEnabled := fl.Bool("update-enabled", false, "otomatik guncelleme (imza dogrulamali, Faz 7.3)")
+	updateEnabled := fl.Bool("update-enabled", false, "otomatik guncelleme (imza dogrulamali)")
 	updateChannel := fl.String("update-channel", "stable", "guncelleme kanali: stable|beta")
 	updateKey := fl.String("update-key", "", "ed25519 public key (hex); bos ise yalnizca sha256 dogrulanir")
 	updateInterval := fl.Int("update-interval", 6, "guncelleme kontrol araligi (saat)")

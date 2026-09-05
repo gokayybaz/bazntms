@@ -6,9 +6,9 @@
 |--------|-----------|----------|
 | `-port` | `8080` | HTTP sunucu portu (0.0.0.0'a bağlanır) |
 | `-dev` | `false` | Frontend embed'ini atla; Vite dev server ile geliştirme |
-| `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (Faz 4.1: DSN ile PostgreSQL/TimescaleDB modu) |
+| `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (DSN verilirse PostgreSQL/TimescaleDB modu) |
 | `-retention-hours` | `168` (7 gün) | Ham zaman-serisi saklama süresi. TimescaleDB modunda native chunk-drop retention politikası, ayrıca 15 dk'da bir `Maintainer` (capture'dan bağımsız) siler |
-| `-nats` | — | NATS JetStream adresi (Faz 4.2). Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
+| `-nats` | — | NATS JetStream adresi. Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
@@ -135,7 +135,7 @@ zaman çözümlenmez.
 Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 `-db` ile taşınabilir; boyut kontrolü için `ls -la <db>*` (WAL dahil).
 
-## RBAC, SSO ve Denetim (Faz 5)
+## RBAC, SSO ve Denetim
 
 ### Roller
 
@@ -183,9 +183,9 @@ değişiklikleri, yakalama başlat/durdur, AI analizi, yetki reddi) append-only
 (SHA-256 zinciri); `GET /api/v1/audit/verify` zinciri yeniden hesaplayarak
 bütünlüğü kanıtlar.
 
-## İleri Analiz (Faz 6)
+## İleri Analiz
 
-### FortiGate REST API entegrasyonu (Faz 8)
+### FortiGate REST API entegrasyonu
 
 Arayüzde cihaz eklerken **vendor: FortiGate** seçilir; alanlar:
 
@@ -246,7 +246,7 @@ açılır (`sensitivity: 0` geçersiz kabul edilir).
 `/api/report?type=enterprise&days=30` — SLA (agent uptime, cihaz sağlığı,
 paket düşme oranı), kapasite (dönem büyümesi) ve banding (p50/p95/p99).
 
-## 5651 Uyumlu Log İmzalama (Faz 9)
+## 5651 Uyumlu Log İmzalama
 
 ```bash
 ./bazntms-hub -compliance \
@@ -276,7 +276,7 @@ bazntmsctl verify -bundle bazntms-delil-20260801-20260901.json \
 
 **Uyarı:** `time_drift` (A.8.17) — checkpoint saatleri sistem saatinden ileri saptığında üretilir; NTP senkronizasyonunu doğrulayın. Uyumluluk beyanı için hukuki danışmanlık gereklidir; bu özellik teknik kanıt üretir.
 
-## Ölçek Altyapısı (Faz 4)
+## Ölçek Altyapısı
 
 ### PostgreSQL / TimescaleDB
 

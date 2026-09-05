@@ -1,4 +1,4 @@
-# Faz 4.5 — Yük Testi
+# Yük Testi
 
 Kapasite hedefleri (`docs/enterprise-plan.html` → "Kapasite Hedefleri"):
 
