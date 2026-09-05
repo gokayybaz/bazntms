@@ -145,11 +145,6 @@ const STEPS = [
   },
 ];
 
-/* --- hero: ortam rx/tx izi ---------------------------------------------
-   Gerçek veri değil, ürünün 120 sn'lik örnekleme penceresini temsil eden
-   sentetik bir sinyal. Harici grafik kütüphanesi yok (DESIGN.md kuralı);
-   üretken/dekoratif olduğu için elle SVG yerine canvas. */
-
 function Wire() {
   const canvasRef = React.useRef(null);
   const rxRef = React.useRef(null);
@@ -314,41 +309,28 @@ function Wire() {
   }, []);
 
   return (
-    <>
-      <div className={styles.shell}>
-        <div className={styles.wireHead}>
-          <span className={styles.tag}>Canlı verim · 120 sn pencere</span>
-          <div className={styles.readout}>
-            <span className={styles.kRx}>
-              <i className={`${styles.swatch} ${styles.swRx}`} />
-              indirilen <b ref={rxRef}>0.00</b> Mb/s
-            </span>
-            <span className={styles.kTx}>
-              <i className={`${styles.swatch} ${styles.swTx}`} />
-              gönderilen <b ref={txRef}>0.00</b> Mb/s
-            </span>
-          </div>
+    <div className={styles.wireWrap}>
+      <div className={styles.wireHead}>
+        <span className={styles.wireLabel}>Canlı verim · 120 sn pencere</span>
+        <div className={styles.readout}>
+          <span className={styles.kRx}>
+            <i className={`${styles.swatch} ${styles.swRx}`} />
+            indirilen <b ref={rxRef}>0.00</b> Mb/s
+          </span>
+          <span className={styles.kTx}>
+            <i className={`${styles.swatch} ${styles.swTx}`} />
+            gönderilen <b ref={txRef}>0.00</b> Mb/s
+          </span>
         </div>
       </div>
-      <div className={styles.wireFrame}>
-        <div className={styles.shell}>
-          <canvas ref={canvasRef} className={styles.wireCanvas} aria-hidden="true" />
-        </div>
-      </div>
-      <div className={`${styles.shell} ${styles.wireFoot}`}>
-        <span className={styles.tag}>Temsilî akış — gerçek veri değil, örnekleme penceresini gösterir</span>
-        <span className={styles.tag}>WebSocket · 1 sn / örnek</span>
-      </div>
-    </>
+      <canvas ref={canvasRef} className={styles.wireCanvas} aria-hidden="true" />
+    </div>
   );
 }
 
-/* --- temsilî panel: ürünün kendi gösterge panelinin küçük hali --------
-   Gerçek veri yok — sentetik, döngüsel bir sahne. Grafikler elle SVG
-   (DESIGN.md: harici grafik kütüphanesi yok); stat kutuları panelin Triad
-   kalıbını (Label → Data → Caption) ve sol kenar vurgu rengini birebir
-   izler. Başlangıç durumu deterministik üretilir — SSR ile hidrasyon
-   arasında fark çıkmasın. */
+/* --- temsilî panel verisi --------------------------------------------
+   Gerçek veri yok — sentetik, döngüsel bir sahne. Başlangıç durumu
+   deterministik üretilir ki SSR ile hidrasyon arasında fark çıkmasın. */
 
 const PANEL_ENDPOINTS = [
   { host: 'cdn.example.net', meta: 'AS13335 · US', base: 0.92 },
@@ -447,7 +429,7 @@ function LivePanel() {
   return (
     <div className={styles.panel}>
       <div className={styles.panelBar}>
-        <span className={styles.tag}>bazntms.local · Genel Bakış</span>
+        <span className={styles.panelUrl}>bazntms.local · Genel Bakış</span>
         <span className={styles.panelLive}>
           <i className={styles.pulse} /> WS: CANLI
         </span>
@@ -466,7 +448,7 @@ function LivePanel() {
       <div className={styles.panelBody}>
         <div className={styles.panelCard}>
           <div className={styles.panelCardHead}>
-            <span className={styles.tag}>Verim · 48 sn</span>
+            <span className={styles.panelCardTitle}>Verim · 48 sn</span>
             <span className={styles.panelUnit}>Mb/s</span>
           </div>
           <svg className={styles.spark} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
@@ -477,7 +459,7 @@ function LivePanel() {
 
         <div className={styles.panelCard}>
           <div className={styles.panelCardHead}>
-            <span className={styles.tag}>En yoğun uç noktalar</span>
+            <span className={styles.panelCardTitle}>En yoğun uç noktalar</span>
           </div>
           <ul className={styles.epList}>
             {snap.endpoints.map((e) => (
@@ -507,7 +489,7 @@ function LivePanel() {
   );
 }
 
-/* --- mimari: uçlar → hub → depo -------------------------------------- */
+/* --- mimari --- */
 
 function Architecture() {
   const agents = [
@@ -541,7 +523,7 @@ function Architecture() {
       <text x="40" y="36" className={styles.archGroup}>UÇLAR</text>
       {agents.map((a) => (
         <g key={a.name}>
-          <rect x="40" y={a.y} width="192" height="46" rx="3" className={styles.archNode} />
+          <rect x="40" y={a.y} width="192" height="46" rx="8" className={styles.archNode} />
           <circle cx="64" cy={a.y + 23} r="3.5" className={styles.archDotRx} />
           <text x="80" y={a.y + 28} className={styles.archText}>{a.name}</text>
         </g>
@@ -550,22 +532,22 @@ function Architecture() {
       <text x="920" y="36" className={styles.archGroup} textAnchor="end">AĞ CİHAZLARI</text>
       {devices.map((d) => (
         <g key={d.name}>
-          <rect x="728" y={d.y} width="192" height="46" rx="3" className={styles.archNode} />
+          <rect x="728" y={d.y} width="192" height="46" rx="8" className={styles.archNode} />
           <circle cx="752" cy={d.y + 23} r="3.5" className={styles.archDotTx} />
           <text x="768" y={d.y + 28} className={styles.archText}>{d.name}</text>
         </g>
       ))}
 
-      <rect x="392" y="140" width="176" height="110" rx="3" className={styles.archHub} />
+      <rect x="392" y="140" width="176" height="110" rx="12" className={styles.archHub} />
       <text x="480" y="184" textAnchor="middle" className={styles.archHubText}>bazntms-hub</text>
       <text x="480" y="206" textAnchor="middle" className={styles.archSub}>ingest · RBAC</text>
       <text x="480" y="224" textAnchor="middle" className={styles.archSub}>audit · uyarı</text>
 
-      <rect x="336" y="306" width="200" height="52" rx="3" className={styles.archNode} />
+      <rect x="336" y="306" width="200" height="52" rx="8" className={styles.archNode} />
       <text x="436" y="330" textAnchor="middle" className={styles.archText}>PostgreSQL + TimescaleDB</text>
       <text x="436" y="346" textAnchor="middle" className={styles.archSub}>hypertable · cagg · retention</text>
 
-      <rect x="556" y="306" width="200" height="52" rx="3" className={styles.archNode} />
+      <rect x="556" y="306" width="200" height="52" rx="8" className={styles.archNode} />
       <text x="656" y="330" textAnchor="middle" className={styles.archText}>NATS JetStream</text>
       <text x="656" y="346" textAnchor="middle" className={styles.archSub}>ingest → processor</text>
 
@@ -577,12 +559,12 @@ function Architecture() {
 
 /* --- kopyala düğmesi --- */
 
-function CopyButton({ code }) {
+function CopyButton({ code, className }) {
   const [state, setState] = React.useState('idle'); // idle | done | error
   return (
     <button
       type="button"
-      className={`${styles.copy} ${state === 'error' ? styles.copyError : ''}`}
+      className={`${className} ${state === 'error' ? styles.copyError : ''}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(code);
@@ -600,19 +582,7 @@ function CopyButton({ code }) {
   );
 }
 
-/* --- bölüm iskeleti: mono ray + gövde --- */
-
-function Block({ rail, children }) {
-  return (
-    <div className={`${styles.shell} ${styles.block}`}>
-      <div className={styles.blockRail}>
-        <span className={styles.tag}>{rail}</span>
-        <span className={styles.railLine} />
-      </div>
-      <div className={styles.blockBody}>{children}</div>
-    </div>
-  );
-}
+const QUICK_CMD = 'docker compose -f deploy/docker-compose.yml up --build';
 
 export default function Home() {
   const docsUrl = useBaseUrl('/docs/installation');
@@ -625,196 +595,214 @@ export default function Home() {
       title="Ağ Trafiği İzleme Platformu"
       description="Hub + agent + cihaz entegrasyonları: canlı trafik izleme, TimescaleDB + NATS ölçek altyapısı, RBAC/SSO, imza doğrulamalı agent güncellemesi."
     >
-      <main className={`${styles.page} landing-root`}>
-        {/* HERO */}
-        <div className={`${styles.shell} ${styles.hero}`}>
-          <span className={`${styles.tag} ${styles.heroEyebrow}`}>
-            MIT · Go + React · sizin altyapınızda
-          </span>
-          <h1 className={styles.title}>
-            Paketten <em>imzalı kayda</em> kadar tek bir platform.
-          </h1>
-          <p className={styles.tagline}>
-            bazNTMS ağı paket seviyesinde izler, akışları ve cihaz telemetrisini tek
-            toplayıcıda birleştirir, 5651’e uygun imzalı loglar üretir. Tek makinede
-            başlayan kurulum <b>5.000 agent</b> ölçeğine aynı binary’yle çıkar.
-          </p>
-          <div className={styles.ctas}>
-            <a className={styles.btnPrimary} href={docsUrl}>
-              Kurulum dokümanı <span className={styles.arrow}>→</span>
-            </a>
-            <a
-              className={styles.btnGhost}
-              href="https://github.com/gokayybaz/bazntms"
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub <span className={styles.arrow}>↗</span>
-            </a>
+      <main className={styles.page}>
+        {/* HERO — koyu vitrin, bento ızgara */}
+        <section className={styles.hero}>
+          <div className={styles.shell}>
+            <div className={styles.heroGrid}>
+              <div className={styles.heroMain}>
+                <span className={styles.eyebrow}>Açık kaynak · MIT · kendi altyapınızda</span>
+                <h1 className={styles.title}>
+                  Paketten <em>imzalı kayda</em> kadar tek bir platform.
+                </h1>
+                <p className={styles.heroSub}>
+                  Paket seviyesinde izleme, akış toplama ve 5651 uyumlu imzalı loglar.
+                  Tek makineden <b>5.000 agent</b>’a aynı binary.
+                </p>
+
+                <div className={styles.cmd}>
+                  <code className={styles.cmdText}>{QUICK_CMD}</code>
+                  <CopyButton code={QUICK_CMD} className={styles.cmdCopy} />
+                </div>
+
+                <div className={`${styles.ctas} ${styles.heroCtas}`}>
+                  <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
+                    Kurulum dokümanı
+                  </a>
+                  <a
+                    className={`${styles.btn} ${styles.btnGhostDark}`}
+                    href="https://github.com/gokayybaz/bazntms"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    GitHub
+                  </a>
+                </div>
+              </div>
+
+              <div className={styles.heroAside}>
+                <div className={styles.asideTop}>
+                  Ölçek mimarisi tasarım hedefleri — <code>bazntms-loadgen</code> ve k6 ile doğrulanır
+                </div>
+                {STATS.map((s) => (
+                  <div key={s.label} className={styles.cell}>
+                    <span className={styles.cellValue}>{s.value}</span>
+                    <span className={styles.cellLabel}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Wire />
+
+            <div className={styles.wireFoot}>
+              <span>Temsilî akış — gerçek veri değil, örnekleme penceresini gösterir</span>
+              <span>WebSocket · 1 sn / örnek</span>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <Wire />
+        {/* YETENEKLER — açık, bento kartlar */}
+        <section className={styles.section} id="yetenekler">
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>Yetenekler</span>
+              <h2 className={styles.h2}>Uçtan uca görünürlük</h2>
+              <p className={styles.lede}>
+                Dört alan, on iki yetenek. Her rengin sabit bir okunuşu var — panelde
+                gördüğünüz anlamın aynısı.
+              </p>
+            </div>
 
-        {/* SAYILAR */}
-        <section className={styles.section}>
-          <Block rail="Hedefler">
-            <div className={styles.stats}>
-              {STATS.map((s) => (
-                <div key={s.label} className={styles.stat}>
-                  <b>{s.value}</b>
-                  <span>{s.label}</span>
+            <div className={styles.cards}>
+              {CAPABILITY_GROUPS.map((group) => (
+                <div key={group.label} className={styles.card}>
+                  <div className={styles.cardHead}>
+                    <span className={`${styles.cardDot} ${styles[group.accent]}`} />
+                    <span className={styles.cardGroup}>{group.label}</span>
+                  </div>
+                  {group.items.map((it) => (
+                    <div key={it.term} className={styles.item}>
+                      <h3>{it.desc}</h3>
+                      <p>{it.note}</p>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-            <p className={styles.hint}>
-              Ölçek mimarisi tasarım hedefleri —{' '}
-              <a href="https://github.com/gokayybaz/bazntms/tree/main/loadtest" target="_blank" rel="noreferrer">
-                <code>bazntms-loadgen</code> ve k6
-              </a>{' '}
-              ile doğrulanır.
-            </p>
-          </Block>
+          </div>
         </section>
 
-        {/* PANEL */}
-        <section className={styles.section} id="panel">
-          <Block rail="Panel">
-            <h2>Panelin kendisi</h2>
-            <p className={styles.lede}>
-              Kurulumdan sonra karşınıza çıkan görünümün küçük bir hali — filo
-              sayaçları, canlı verim, en yoğun uç noktalar ve uyarı akışı.
-            </p>
+        {/* PANEL — koyu vitrin */}
+        <section className={styles.showcase} id="panel">
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>Panel</span>
+              <h2 className={styles.h2}>Kurulumdan sonra gördüğünüz ekran</h2>
+              <p className={styles.lede}>
+                Filo sayaçları, canlı verim, en yoğun uç noktalar ve uyarı akışı —
+                sentetik veriyle sahnelenmiş bir görünüm.
+              </p>
+            </div>
             <LivePanel />
-            <p className={styles.hint}>
-              Temsilî panel — canlı bir demo değil, sentetik veriyle sahnelenmiş bir
-              görünüm. Gerçek panel için <a href={docsUrl}>kurulum dokümanına</a> bakın.
-            </p>
-          </Block>
-        </section>
-
-        {/* YETENEKLER */}
-        <section className={styles.section} id="yetenekler">
-          <Block rail="Yetenekler">
-            <h2>Uçtan uca görünürlük</h2>
-            <p className={styles.lede}>
-              Dört alan, on iki yetenek. Her rengin sabit bir okunuşu var — panelde
-              gördüğünüz anlamın aynısı.
-            </p>
-
-            {CAPABILITY_GROUPS.map((group) => (
-              <div key={group.label} className={styles.capGroup}>
-                <div className={styles.capHead}>
-                  <span className={`${styles.capDot} ${styles[group.accent]}`} />
-                  <span className={styles.tag}>{group.label}</span>
-                </div>
-                <dl className={styles.sheet}>
-                  {group.items.map((it) => (
-                    <div key={it.term} className={styles.row}>
-                      <dt>{it.term}</dt>
-                      <dd>
-                        {it.desc}
-                        <small>{it.note}</small>
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            ))}
-          </Block>
+          </div>
         </section>
 
         {/* 5651 */}
-        <section className={styles.section} id="uyumluluk">
-          <Block rail="5651">
-            <h2>Logun sonradan değişmediğini kanıtlayabilirsiniz</h2>
-            <p className={styles.lede}>
-              Kayıtlar yazıldığı anda zincire eklenir. Her halka bir öncekinin
-              özetini taşır; zincir saatlik köklerle mühürlenir, gün sonunda dış bir
-              otoriteden zaman damgası alır.
-            </p>
+        <section className={`${styles.section} ${styles.sectionTint}`} id="uyumluluk">
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>5651 · ISO 27001</span>
+              <h2 className={styles.h2}>Logun sonradan değişmediğini kanıtlayabilirsiniz</h2>
+              <p className={styles.lede}>
+                Kayıtlar yazıldığı anda zincire eklenir. Her halka bir öncekinin özetini
+                taşır; zincir saatlik köklerle mühürlenir, gün sonunda dış bir otoriteden
+                zaman damgası alır.
+              </p>
+            </div>
+
             <div className={styles.chain}>
               {CHAIN.map((c) => (
                 <div key={c.tag} className={styles.link}>
-                  <span className={styles.tag}>{c.tag}</span>
-                  <b className={c.done ? styles.chainDone : undefined}>{c.value}</b>
+                  <span className={styles.linkTag}>{c.tag}</span>
+                  <span className={`${styles.linkValue} ${c.done ? styles.chainDone : ''}`}>{c.value}</span>
                 </div>
               ))}
             </div>
-            <div className={styles.note}>
+
+            <div className={styles.notes}>
               <div>
                 <h3>Delil paketi</h3>
                 <p>
                   Tarih aralığıyla çıkarım, PII maskeleme ve <code>bazntmsctl verify</code>{' '}
-                  ile çevrimdışı doğrulama — paketi teslim alan tarafın bazNTMS
-                  kurmasına gerek yok.
+                  ile çevrimdışı doğrulama — paketi teslim alan tarafın bazNTMS kurmasına
+                  gerek yok.
                 </p>
               </div>
               <div>
                 <h3>ISO 27001</h3>
                 <p>
-                  Annex A kontrol haritası, risk defteri, SoA, iç denetim kayıtları ve
-                  tek tıkla denetçi paketi.
+                  Annex A kontrol haritası, risk defteri, SoA, iç denetim kayıtları ve tek
+                  tıkla denetçi paketi.
                 </p>
               </div>
             </div>
-          </Block>
+          </div>
         </section>
 
         {/* MİMARİ */}
         <section className={styles.section} id="mimari">
-          <Block rail="Mimari">
-            <h2>Nasıl çalışır?</h2>
-            <p className={styles.lede}>
-              Hub stateless’tır; deploy replikaları arasında uyarı, poller ve yakalama
-              rolleri bayraklarla ayrılır.
-            </p>
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>Mimari</span>
+              <h2 className={styles.h2}>Nasıl çalışır?</h2>
+              <p className={styles.lede}>
+                Hub stateless’tır; deploy replikaları arasında uyarı, poller ve yakalama
+                rolleri bayraklarla ayrılır.
+              </p>
+            </div>
             <div className={styles.svgScroll}>
               <Architecture />
             </div>
             <p className={styles.hint}>
               Ayrıntılar için <a href={upgradeUrl}>operasyon dokümanlarına</a> göz atın.
             </p>
-          </Block>
+          </div>
         </section>
 
         {/* KURULUM */}
-        <section className={styles.section} id="kurulum">
-          <Block rail="Kurulum">
-            <h2>Üç kurulum yolundan birini seçin</h2>
-            <p className={styles.lede}>
-              Üçü birbirinin alternatifi — sıralı adım değil. Hepsi aynı binary’yi kullanır.
-            </p>
+        <section className={`${styles.section} ${styles.sectionTint}`} id="kurulum">
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>Kurulum</span>
+              <h2 className={styles.h2}>Üç kurulum yolundan birini seçin</h2>
+              <p className={styles.lede}>
+                Üçü birbirinin alternatifi — sıralı adım değil. Hepsi aynı binary’yi kullanır.
+              </p>
+            </div>
+
             <div className={styles.steps}>
               {STEPS.map((s) => (
                 <div key={s.badge} className={styles.step}>
-                  <div className={styles.stepNo}>{s.badge}</div>
-                  <div className={styles.terminal}>
-                    <div className={styles.terminalHead}>
-                      <span className={styles.tag}>{s.label}</span>
-                      <CopyButton code={s.code} />
-                    </div>
-                    <pre>{s.code}</pre>
+                  <div className={styles.stepHead}>
+                    <span className={styles.stepBadge}>{s.badge}</span>
+                    <span className={styles.stepLabel}>{s.label}</span>
+                    <CopyButton code={s.code} className={styles.copy} />
                   </div>
+                  <pre>{s.code}</pre>
                 </div>
               ))}
             </div>
+
             <p className={styles.hint}>
               Tüm yapılandırma seçenekleri için <a href={configUrl}>yapılandırma referansına</a> bakın.
             </p>
-          </Block>
+          </div>
         </section>
 
         {/* v0.3.0 */}
         <section className={styles.section}>
-          <Block rail="v0.3.0">
-            <h2>Bu sürümde yeni</h2>
-            <ul className={styles.newList}>
+          <div className={styles.shell}>
+            <div className={styles.sectionHead}>
+              <span className={styles.eyebrow}>v0.3.0</span>
+              <h2 className={styles.h2}>Bu sürümde yeni</h2>
+            </div>
+            <div className={styles.badges}>
               {NEW_IN.map((n) => (
-                <li key={n}>{n}</li>
+                <span key={n} className={styles.badge}>{n}</span>
               ))}
-            </ul>
-          </Block>
+            </div>
+          </div>
         </section>
 
         {/* ALT CTA */}
@@ -825,15 +813,15 @@ export default function Home() {
               Tek-node demo ile başlayın; aynı kurulumu TimescaleDB ve NATS arkasına
               taşıyarak filo ölçeğine çıkarın.
             </p>
-            <div className={styles.ctas}>
-              <a className={styles.btnPrimary} href={docsUrl}>
-                Kurulum dokümanı <span className={styles.arrow}>→</span>
+            <div className={`${styles.ctas} ${styles.bottomCtas}`}>
+              <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
+                Kurulum dokümanı
               </a>
-              <a className={styles.btnGhost} href={apiUrl}>
+              <a className={`${styles.btn} ${styles.btnGhostDark}`} href={apiUrl}>
                 API referansı
               </a>
             </div>
-            <p className={`${styles.tag} ${styles.bottomRisk}`}>
+            <p className={styles.bottomRisk}>
               MIT lisanslı · kendi altyapınızda çalışır · vendor lock-in yok
             </p>
           </div>

@@ -1,82 +1,132 @@
-/* bazNTMS marka paleti — Infima degiskenleri (Faz 7.4) */
+/* bazNTMS docs-site teması — Strapi'nin tasarım dili uygulandı.
+   Ölçülen kaynak değerler (strapi.io + docs.strapi.io):
+   indigo #4945ff, gövde metni #292875, ikincil #666687,
+   alternatif zemin #f6f6ff, hairline #e9e9ff, koyu vitrin #030712.
+   Karakteristik: hiçbir yerde saf siyah metin ya da saf beyaz panel yok —
+   nötrler indigoya doğru kaydırılmış. Marketing Poppins, docs Inter,
+   kod JetBrains Mono (Strapi de aynı ayrımı yapıyor). */
 
 :root {
-  --ifm-color-primary: #0e7490;
-  --ifm-color-primary-dark: #0c6881;
-  --ifm-color-primary-darker: #0a6278;
-  --ifm-color-primary-darkest: #085063;
-  --ifm-color-primary-light: #0e85a8;
-  --ifm-color-primary-lighter: #118db1;
-  --ifm-color-primary-lightest: #17a1c9;
-  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --strapi-indigo: #4945ff;
+  --strapi-indigo-dark: #3732cc;
+  --strapi-indigo-100: #f0f0ff;
+  --strapi-ink: #292875;
+  --strapi-ink-soft: #666687;
+  --strapi-paper-tint: #f6f6ff;
+  --strapi-line: #e9e9ff;
+  --strapi-line-strong: #dcdce4;
+  --strapi-night: #030712;
+
+  --ifm-color-primary: #4945ff;
+  --ifm-color-primary-dark: #3732cc;
+  --ifm-color-primary-darker: #2f2bb3;
+  --ifm-color-primary-darkest: #24218c;
+  --ifm-color-primary-light: #6b68ff;
+  --ifm-color-primary-lighter: #8a87ff;
+  --ifm-color-primary-lightest: #b3b1ff;
+
+  --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --ifm-code-font-size: 92%;
+
+  --ifm-font-color-base: #292875;
+  --ifm-heading-color: #1b1a5c;
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f6f6ff;
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-footer-background-color: #030712;
+  --ifm-toc-border-color: #e9e9ff;
+  --ifm-hr-border-color: #e9e9ff;
+  --ifm-blockquote-color: #666687;
+
+  /* Strapi'nin yarıçap ölçeği: 8px kontroller, 16px kartlar */
+  --ifm-button-border-radius: 8px;
+  --ifm-global-radius: 8px;
+  --ifm-code-border-radius: 6px;
+
+  --ifm-heading-font-weight: 600;
+  --ifm-h1-font-size: 2.5rem;
 }
+
+/* Başlıklar Poppins ve sıkı harf aralığı — Strapi'de -0.025em ölçüldü */
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+h1, h2, h3 {
+  font-family: var(--ifm-heading-font-family);
+  letter-spacing: -0.025em;
+}
+
+.markdown > h1 {
+  font-size: 2.5rem;
+  line-height: 1.2;
+}
+
+/* Docusaurus varsayılan kod bloğu kenarlığı Strapi'de hairline */
+.theme-code-block,
+pre code {
+  border-radius: 8px;
+}
+
+/* yalnızca doküman içeriğindeki SATIR İÇİ kod — kod bloklarının
+   (pre > code) kendi sözdizimi teması ezilmesin */
+.markdown :not(pre) > code {
+  border: 1px solid var(--strapi-line);
+  background-color: var(--strapi-indigo-100);
+  color: var(--strapi-ink);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--strapi-line);
+  box-shadow: none;
+}
+
+.menu__link--active {
+  background-color: var(--strapi-indigo-100);
+  color: var(--strapi-indigo);
+  font-weight: 600;
+}
+
+.table-of-contents {
+  border-left-color: var(--strapi-line);
+}
+
+/* ---------- koyu tema ---------- */
 
 [data-theme='dark'] {
-  --ifm-color-primary: #22d3ee;
-  --ifm-color-primary-dark: #17c2dd;
-  --ifm-color-primary-darker: #12b5cf;
-  --ifm-color-primary-darkest: #0e95aa;
-  --ifm-color-primary-light: #43dbf2;
-  --ifm-color-primary-lighter: #63e1f4;
-  --ifm-color-primary-lightest: #8fe9f7;
-  --ifm-background-color: #020617;
-  --ifm-background-surface-color: #0f172a;
-  --ifm-font-color-base: #e2e8f0;
-  --ifm-navbar-background-color: #020617;
-  --ifm-footer-background-color: #020617;
-  --ifm-card-background-color: #0f172a;
+  --ifm-color-primary: #8a87ff;
+  --ifm-color-primary-dark: #6b68ff;
+  --ifm-color-primary-darker: #4945ff;
+  --ifm-color-primary-darkest: #3732cc;
+  --ifm-color-primary-light: #a5a3ff;
+  --ifm-color-primary-lighter: #c0bfff;
+  --ifm-color-primary-lightest: #dcdbff;
+
+  --ifm-background-color: #030712;
+  --ifm-background-surface-color: #0b1020;
+  --ifm-font-color-base: #d8d8f0;
+  --ifm-heading-color: #f2f2ff;
+  --ifm-navbar-background-color: #030712;
+  --ifm-footer-background-color: #030712;
+  --ifm-card-background-color: #0b1020;
+  --ifm-toc-border-color: #23233f;
+  --ifm-hr-border-color: #23233f;
+  --ifm-blockquote-color: #9a9ac0;
 }
 
-/* Landing page tek yönlü koyudur (depo kökündeki DESIGN.md → Do's and
-   Don'ts: "açık tema dalı açma"). Dokümanlar açık temayı desteklemeye
-   devam eder; yalnızca pages-plugin rotasında (= landing) açık tema
-   seçiliyken navbar/footer koyu kalır, yoksa beyaz navbar koyu sayfanın
-   üstünde duruyordu. */
-html.plugin-pages[data-theme='light'] {
-  --ifm-background-color: #020617;
-  --ifm-navbar-background-color: #020617;
-  --ifm-navbar-link-color: #9ba8b9;
-  --ifm-navbar-link-hover-color: #22d3ee;
-  --ifm-footer-background-color: #020617;
-  --ifm-footer-color: #9ba8b9;
-  --ifm-footer-link-color: #9ba8b9;
-  --ifm-footer-title-color: #e8edf4;
-  --ifm-heading-color: #e8edf4;
-  --ifm-font-color-base: #e8edf4;
+[data-theme='dark'] .markdown :not(pre) > code {
+  border-color: #23233f;
+  background-color: rgba(73, 69, 255, 0.12);
+  color: #c0bfff;
 }
 
-html.plugin-pages[data-theme='light'] .navbar {
-  border-bottom: 1px solid #1e293b;
+[data-theme='dark'] .navbar {
+  border-bottom: 1px solid #23233f;
 }
 
-html.plugin-pages[data-theme='light'] .navbar__title,
-html.plugin-pages[data-theme='light'] .navbar__toggle {
-  color: #e8edf4;
-}
-
-/* Aynı kural, Docusaurus'un iç sınıfına bağlı olmayan biçimi: landing
-   kökü sayfadaysa navbar/footer koyu kalır. Ayrı kural olarak duruyor —
-   :has() desteklenmeyen tarayıcıda yalnızca bu blok düşer, üstteki değil. */
-html:has(.landing-root) {
-  --ifm-background-color: #020617;
-  --ifm-navbar-background-color: #020617;
-  --ifm-navbar-link-color: #9ba8b9;
-  --ifm-navbar-link-hover-color: #22d3ee;
-  --ifm-footer-background-color: #020617;
-  --ifm-footer-color: #9ba8b9;
-  --ifm-footer-link-color: #9ba8b9;
-  --ifm-footer-title-color: #e8edf4;
-  --ifm-heading-color: #e8edf4;
-  --ifm-font-color-base: #e8edf4;
-}
-
-html:has(.landing-root) .navbar {
-  border-bottom: 1px solid #1e293b;
-}
-
-html:has(.landing-root) .navbar__title,
-html:has(.landing-root) .navbar__toggle {
-  color: #e8edf4;
+[data-theme='dark'] .menu__link--active {
+  background-color: rgba(73, 69, 255, 0.16);
+  color: #a5a3ff;
 }

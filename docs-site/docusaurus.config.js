@@ -1,4 +1,5 @@
 // @ts-check
+const { themes } = require('prism-react-renderer');
 // bazNTMS dokümantasyon sitesi (Faz 7.4, Docusaurus).
 // Kurulum: cd docs-site && npm install && npm run dev
 //
@@ -34,14 +35,17 @@ const config = {
       tagName: 'link',
       attributes: {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..112,400..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400..600&family=JetBrains+Mono:wght@400..600&family=Poppins:wght@500;600;700&display=swap',
       },
     },
   ],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      colorMode: { defaultMode: 'dark' },
+      colorMode: { defaultMode: 'light', respectPrefersColorScheme: true },
+      // kod blokları her iki temada da koyu — landing'deki <pre> ile aynı
+      // okuma deneyimi (Docusaurus varsayılanı zaten palenight'tı)
+      prism: { theme: themes.palenight, darkTheme: themes.palenight },
       navbar: {
         title: 'bazNTMS',
         logo: { src: 'img/bazntms.svg' },
