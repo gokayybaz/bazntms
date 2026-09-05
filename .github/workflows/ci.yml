@@ -77,6 +77,24 @@ jobs:
         if: runner.os == 'macOS'
         run: go test ./... -count=1
 
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+
   installer-smoke-test:
     # 2026-09-01'de bulunan 2 gercek hatanin (RPM %post stdin'i asla
     # terminale bagli gostermiyor; /dev/tty duzeltmesinin ilk hali
