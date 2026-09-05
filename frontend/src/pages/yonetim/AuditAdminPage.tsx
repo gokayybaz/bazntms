@@ -1,9 +1,16 @@
-import { AdminPageShell, Placeholder } from '../../components/AdminPageShell'
+import { AdminPageShell } from '../../components/AdminPageShell'
+import { Card } from '../../components/Card'
+import { AuditCard } from '../../components/AuditCard'
 
 export function AuditAdminPage() {
   return (
-    <AdminPageShell title="Denetim Kaydı" hint="Hash-zincirli denetim olayları + zincir bütünlüğü doğrulaması.">
-      <Placeholder note="Denetim kaydı görünümü yakında (S12.5) — /api/v1/audit + /audit/verify." />
+    <AdminPageShell
+      title="Denetim Kaydı"
+      hint="Her yönetim işlemi append-only hash-zincire yazılır (SHA-256, prev_hash → hash). Zincir bütünlüğü sunucuda doğrulanır."
+    >
+      <Card title="Denetim Olayları">
+        <AuditCard />
+      </Card>
     </AdminPageShell>
   )
 }
