@@ -46,7 +46,13 @@
              HUBURL/ENROLLTOKEN/SITE kayit defterine yazilir; agent bos
              degerleri yok sayar, o zaman config.yml devrede kalir. Env
              degiskenleri SCM tarafindan reboot'a kadar tazelenmedigi icin
-             servis konfigurasyonu kayit defterinden okur -->
+             servis konfigurasyonu kayit defterinden okur.
+
+             TODO(B4/S11.9): enroll_token bir sirdir ve HKLM altinda
+             varsayilan olarak "Users" grubunca okunabilir. WixToolset.Util
+             uzantisi + <util:PermissionEx> ile bu anahtari LocalSystem +
+             Administrators'a kisitla (Linux/macOS icin agent.yml 0600'e
+             cekildi; Windows ACL'i ayri is olarak birakildi). -->
         <Component Id='AgentRegConfig' Guid='C3D4E5F6-7A8B-9C0D-1E2F-334455667788'>
           <RegistryKey Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'>
             <RegistryValue Name='hub_url' Type='string' Value='[HUBURL]' KeyPath='yes' />

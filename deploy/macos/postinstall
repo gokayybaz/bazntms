@@ -20,6 +20,9 @@ set -u
 CONSOLE_USER="$(stat -f '%Su' /dev/console 2>/dev/null || true)"
 
 if [ -f /etc/bazntms/agent.yml ]; then
+    # eski surumlerden 0644 kalmis olabilir — enroll token acikta kalmasin (B4)
+    chown root:wheel /etc/bazntms/agent.yml 2>/dev/null || true
+    chmod 600 /etc/bazntms/agent.yml 2>/dev/null || true
     launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist 2>/dev/null || true
     exit 0
 fi
@@ -98,7 +101,10 @@ log:
   level: info
   format: json
 EOF
-chmod 644 /etc/bazntms/agent.yml
+# agent.yml enroll token'i tasir → yalnizca root okuyabilsin (LaunchDaemon
+# root olarak calisir). Dunya/grup okumasi kapali (B4).
+chown root:wheel /etc/bazntms/agent.yml
+chmod 600 /etc/bazntms/agent.yml
 
 if [ -n "$HUBURL" ]; then
     launchctl load /Library/LaunchDaemons/local.bazntms.agent.plist 2>/dev/null || true

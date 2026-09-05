@@ -26,6 +26,10 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 if [ -f /etc/bazntms/agent.yml ]; then
+    # eski surumlerden 0644 kalmis olabilir — enroll token dunyaya acik
+    # kalmasin (B4). Icerige dokunmadan izinleri sikilastir.
+    chown root:root /etc/bazntms/agent.yml 2>/dev/null || true
+    chmod 600 /etc/bazntms/agent.yml 2>/dev/null || true
     systemctl restart bazntms-agent.service 2>/dev/null || true
     echo "bazNTMS agent guncellendi (mevcut /etc/bazntms/agent.yml korundu)."
     exit 0
@@ -85,7 +89,10 @@ log:
   level: info
   format: json
 EOF
-chmod 644 /etc/bazntms/agent.yml
+# agent.yml enroll token'i tasir → yalnizca sahibi (root; servis User=root)
+# okuyabilsin. Dunya/grup okumasi kapali (B4).
+chown root:root /etc/bazntms/agent.yml
+chmod 600 /etc/bazntms/agent.yml
 
 if [ -n "$HUBURL" ]; then
     systemctl start bazntms-agent.service 2>/dev/null || true

@@ -40,7 +40,8 @@ def run_noninteractive(image, pkg_path, install_cmd):
          image, "bash", "-c",
          f"{install_cmd} /pkg >/tmp/install.log 2>&1; "
          f"echo EXIT:$?; cat /tmp/install.log; "
-         f"echo ---; cat /etc/bazntms/agent.yml 2>&1"],
+         f"echo ---; stat -c 'PERM:%a OWNER:%U:%G' /etc/bazntms/agent.yml 2>&1; "
+         f"cat /etc/bazntms/agent.yml 2>&1"],
         capture_output=True, text=True, timeout=120,
     )
     return out.stdout + out.stderr
@@ -59,7 +60,9 @@ def run_interactive(image, pkg_path, install_cmd, hub_url, token, site):
     child = pexpect.spawn(
         "docker", ["run", "--rm", "-i", "-t", "-v", f"{pkg_path}:/pkg",
                    image, "bash", "-c",
-                   f"{install_cmd} /pkg; echo EXIT:$?; cat /etc/bazntms/agent.yml"],
+                   f"{install_cmd} /pkg; echo EXIT:$?; "
+                   f"stat -c 'PERM:%a OWNER:%U:%G' /etc/bazntms/agent.yml; "
+                   f"cat /etc/bazntms/agent.yml"],
         timeout=60, encoding="utf-8",
     )
     child.logfile_read = Writer(log)
@@ -107,6 +110,9 @@ def main():
               "url: ''" in out and "token: ''" in out)
         check(f"{fmt} otomasyon: /dev/tty hatasi TUM kurulumu dusurmedi",
               "cannot create /dev/tty" not in out and "No such device" not in out)
+        # B4: agent.yml enroll token'i tasir — dunya/grup okumasi kapali olmali
+        check(f"{fmt} otomasyon: agent.yml 0600 root:root",
+              "PERM:600 OWNER:root:root" in out, detail=out)
 
         print(f"\n=== {fmt} / interaktif (gercek pty) ===")
         out = run_interactive(image, pkg, install_cmd,
@@ -115,6 +121,9 @@ def main():
         check(f"{fmt} interaktif: kurulum basarili (EXIT:0)", "EXIT:0" in out)
         check(f"{fmt} interaktif: girilen deger dogru yazildi",
               "http://smoketest.local:8081" in out and "smoketest-token" in out and "ci-smoketest" in out)
+        # B4: gercek sirlarla yazilan dosya da 0600 olmali
+        check(f"{fmt} interaktif: agent.yml 0600 root:root",
+              "PERM:600 OWNER:root:root" in out, detail=out)
 
     if FAILURES:
         print(f"\n{len(FAILURES)} kontrol basarisiz:")
