@@ -30,8 +30,13 @@ curl -s localhost:8080/api/v1/version   # sürüm yükseldi mi?
 ```
 
 Notlar:
-- Şema migrasyonu `store.Open` içinde otomatiktir (`CREATE TABLE IF NOT
-  EXISTS`); geriye dönük sürüm çalıştırılacaksa yedekten restore gerekir.
+- Şema migrasyonu `store.Open` içinde otomatiktir: gömülü sıralı migrasyon
+  dosyaları (`internal/store/migrations/{sqlite,postgres}/NNNN_*.sql`),
+  uygulanmış sürümler `schema_migrations` tablosunda izlenir. Faz 13 öncesi
+  bir veritabanı ilk açılışta `0001_init` baseline olarak işaretlenir (yeniden
+  çalıştırılmaz). Geriye dönük sürüm çalıştırılacaksa yedekten restore gerekir.
+- Çoklu hub replikası aynı veritabanına karşı aynı anda başlarsa migrasyon
+  Postgres advisory lock ile sıraya alınır.
 - TimescaleDB modunda hypertable/cagg politikaları `if_not_exists` ile
   yeniden kurulur; özel işlem gerekmez.
 

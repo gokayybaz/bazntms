@@ -1,0 +1,152 @@
+package store
+
+// Faz 13 S13.2: migrasyon runner testleri (SQLite). Postgres tarafı
+// pg_integration_test.go içindeki testcontainer testleriyle kapsanır.
+
+import (
+	"database/sql"
+	"path/filepath"
+	"testing"
+)
+
+// migVersions, schema_migrations tablosundaki sürümleri sıralı döndürür.
+func migVersions(t *testing.T, db *sql.DB) []int {
+	t.Helper()
+	rows, err := db.Query(`SELECT version FROM schema_migrations ORDER BY version`)
+	if err != nil {
+		t.Fatalf("schema_migrations sorgu: %v", err)
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func tableExists(t *testing.T, db *sql.DB, name string) bool {
+	t.Helper()
+	var n int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&n)
+	if err != nil {
+		t.Fatalf("tablo kontrolü: %v", err)
+	}
+	return n > 0
+}
+
+// TestMigrateFreshDB, boş bir DB'de 0001_init çalışır ve sürüm 1 işaretlenir.
+func TestMigrateFreshDB(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fresh.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer st.Close()
+	db := st.(*sqlStore).db
+
+	if got := migVersions(t, db); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("beklenen [1], alınan %v", got)
+	}
+	for _, tbl := range []string{"agents", "devices", "users", "isms_soa", "schema_migrations"} {
+		if !tableExists(t, db, tbl) {
+			t.Fatalf("%s tablosu oluşmadı", tbl)
+		}
+	}
+}
+
+// TestMigrateIdempotent, ikinci Open() hiçbir migrasyonu tekrar çalıştırmaz.
+func TestMigrateIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "idem.db")
+	st1, err := Open(path)
+	if err != nil {
+		t.Fatalf("ilk Open: %v", err)
+	}
+	st1.Close()
+
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatalf("ikinci Open: %v", err)
+	}
+	defer st2.Close()
+	if got := migVersions(t, st2.(*sqlStore).db); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("ikinci açılışta sürüm listesi değişti: %v", got)
+	}
+}
+
+// TestMigrateLegacyBaseline, Faz 13 öncesi bir DB'yi (schema_migrations yok
+// ama agents tablosu var) 0001_init'i YENİDEN çalıştırmadan sürüm 1 baseline
+// işaretleyerek hatasız açar.
+func TestMigrateLegacyBaseline(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+
+	// Faz 13 öncesi kurulumu taklit et: 0001_init gövdesini (bugünkü şemayla
+	// birebir) elle uygula, schema_migrations tablosunu bırakma.
+	migs, err := loadMigrations("sqlite")
+	if err != nil {
+		t.Fatalf("loadMigrations: %v", err)
+	}
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	if _, err := raw.Exec(migs[0].body); err != nil {
+		t.Fatalf("eski şema: %v", err)
+	}
+	if _, err := raw.Exec(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen) VALUES ('eski-agent', '', 'h1', 1, 1)`); err != nil {
+		t.Fatalf("eski veri: %v", err)
+	}
+	raw.Close()
+
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("eski DB açılamadı: %v", err)
+	}
+	defer st.Close()
+	db := st.(*sqlStore).db
+
+	if got := migVersions(t, db); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("baseline işaretlenmedi: %v", got)
+	}
+	// baseline satırının adı 0001_init olmalı
+	var name string
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version=1`).Scan(&name); err != nil {
+		t.Fatalf("baseline adı: %v", err)
+	}
+	if name != "0001_init" {
+		t.Fatalf("baseline adı beklenmedik: %q", name)
+	}
+	// eski veri korunmalı
+	var agentName string
+	if err := db.QueryRow(`SELECT name FROM agents WHERE token_hash='h1'`).Scan(&agentName); err != nil {
+		t.Fatalf("eski veri kayboldu: %v", err)
+	}
+	if agentName != "eski-agent" {
+		t.Fatalf("eski agent adı bozuldu: %q", agentName)
+	}
+}
+
+// TestLoadMigrations, gömülü migrasyon setinin her iki dialect için de
+// tutarlı yüklendiğini doğrular (dosya adı biçimi, sıralama, çift sürüm yok).
+func TestLoadMigrations(t *testing.T) {
+	for _, d := range []string{"sqlite", "postgres"} {
+		migs, err := loadMigrations(d)
+		if err != nil {
+			t.Fatalf("%s: %v", d, err)
+		}
+		if len(migs) == 0 {
+			t.Fatalf("%s: migrasyon bulunamadı", d)
+		}
+		if migs[0].version != 1 || migs[0].name != "0001_init" {
+			t.Fatalf("%s: ilk migrasyon 0001_init değil: %+v", d, migs[0])
+		}
+		for i := 1; i < len(migs); i++ {
+			if migs[i].version <= migs[i-1].version {
+				t.Fatalf("%s: sürümler artan sırada değil: %v / %v", d, migs[i-1].version, migs[i].version)
+			}
+		}
+	}
+}
