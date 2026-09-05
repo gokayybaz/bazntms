@@ -1,7 +1,7 @@
 -- 0001_init (PostgreSQL) — Faz 13 S13.2 baseline.
 -- Faz 13 öncesi migratePostgres() fonksiyonundaki tek CREATE TABLE bloğuyla
--- BİREBİR aynıdır (advisory lock sarmalayıcısı runner'a taşındı). Mevcut
--- kurulumlarda çalıştırılmaz, doğrudan "uygulandı" işaretlenir
+-- BİREBİR aynıdır (advisory lock sarmalayıcısı runner'a taşındı). Tamamen
+-- IF NOT EXISTS olduğu için Faz 13 öncesi bir DB üzerinde de zararsız çalışır
 -- (bkz. docs/decisions/0002-migration-framework.md).
 --
 -- SQLite sürümünden farkları: id kolonları BIGSERIAL, hypertable'a çevrilecek

@@ -288,14 +288,6 @@ func openSQLite(path string) (Store, error) {
 		return nil, fmt.Errorf("sqlite migrasyon: %w", err)
 	}
 	s := &sqlStore{db: db}
-	if err := s.ensureDeviceColumns(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
-	}
-	if err := s.ensureSyslogColumns(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
-	}
 	if err := s.seedIsmsSoa(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("SoA seed: %w", err)
@@ -317,14 +309,6 @@ func openPostgres(dsn string) (Store, error) {
 		return nil, fmt.Errorf("postgres migrasyon: %w", err)
 	}
 	s := &sqlStore{db: db, pg: true}
-	if err := s.ensureDeviceColumns(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
-	}
-	if err := s.ensureSyslogColumns(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
-	}
 	if err := s.seedIsmsSoa(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("SoA seed: %w", err)

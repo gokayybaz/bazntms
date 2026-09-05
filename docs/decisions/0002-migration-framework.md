@@ -36,24 +36,29 @@ geri-izlenebilir bir migrasyon zemini olmadan güvenli değil.
   altında, tek bir bağlantıda çalışır (çoklu replika aynı taze DB'ye karşı
   başlarsa migrasyonu sıraya sokar — `deploy/docker-compose.scale.yml` CI
   duman testi bu yarışı yakalıyordu).
-- **Baseline:** `schema_migrations` boş ama `agents` tablosu varsa (mevcut
-  kurulum) `0001_init` **çalıştırılmaz**, doğrudan "uygulandı" işaretlenir.
-  `0001_init` bugünkü şemayla birebir aynı olduğu için bu güvenli.
-- `0002+` migrasyonları mevcut DB'lerde de çalışır (`ensureX` helper'larının
-  yerini alır — S13.3).
+- **Faz 13 öncesi DB:** `schema_migrations` boştur. `0001_init` tamamen
+  `IF NOT EXISTS` olduğu için mevcut şema üzerinde zararsız çalışır (eksik
+  tablo varsa oluşturur, yoksa no-op) ve "uygulandı" işaretlenir. Ayrı bir
+  "baseline atla" heuristik'i yok — `agents` tablosu var mı gibi bir kontrol
+  gerekmiyor. `schema_migrations` satırı "0001'in tüm içeriği mevcut"
+  güvencesidir; sonraki `ALTER` içeren migrasyonlar buna güvenir.
+- **Go-fonksiyon migrasyonları:** dialect-koşullu DDL düz SQL ile ifade
+  edilemediğinde (SQLite'ta `ADD COLUMN IF NOT EXISTS` yok) `migration.fn`
+  kullanılır. `goMigrations` slice'ında kayıtlı, `.sql` dosyalarıyla aynı
+  sıralı sürüm uzayında. `0002_device_syslog_columns` = eski
+  `ensureDeviceColumns`/`ensureSyslogColumns` (S13.3).
 
-İleride veri migrasyonu (rename / tip değişikliği / backfill) gerekirse:
-runner'a `.sql` dosyalarının yanında kayıtlı Go fonksiyonu desteği ~15 satırla
-eklenir. O gün gelene kadar eklenmiyor (YAGNI).
+İleride veri migrasyonu (rename / tip değişikliği / backfill) da aynı
+`migration.fn` mekanizmasıyla yazılır.
 
 ## Reddedilen
 
 **`pressly/goose`** — embed.FS + modernc/sqlite uyumlu, Go-fonksiyon migrasyonu
 dahil olgun bir araç. Ama bir doğrudan + geçişli bağımlılık getiriyor; projenin
 "elle yaz" kültürüne (SVG grafikler, NetFlow/sFlow parser'ları, GeoIP
-merkezleri hep stdlib-only) aykırı. Tek gerçek avantajı (Go-fonksiyon
-migrasyonu) ihtiyaç doğduğunda kendi runner'a küçük bir eklemeyle karşılanır.
-İki dialect için yine ayrı dizin gerekiyordu (goose dialect-içi switch yapmaz).
+merkezleri hep stdlib-only) aykırı. Go-fonksiyon migrasyonu kendi runner'a
+~20 satırla eklendi (bkz. `migration.fn`). İki dialect için yine ayrı dizin
+gerekiyordu (goose dialect-içi switch yapmaz).
 
 **`golang-migrate/migrate`** — yalnız SQL, ayrı driver paketleri, `force` ile
 dirty-state kurtarma seremonisi. DDL transactional olduğu için o seremoniye

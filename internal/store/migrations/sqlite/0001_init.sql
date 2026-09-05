@@ -1,7 +1,7 @@
 -- 0001_init (SQLite) — Faz 13 S13.2 baseline.
 -- Faz 13 öncesi migrate() fonksiyonundaki tek CREATE TABLE bloğuyla BİREBİR
--- aynıdır. Mevcut kurulumlarda çalıştırılmaz, doğrudan "uygulandı" işaretlenir
--- (bkz. docs/decisions/0002-migration-framework.md).
+-- aynıdır. Tamamen IF NOT EXISTS olduğu için Faz 13 öncesi bir DB üzerinde de
+-- zararsız çalışır (bkz. docs/decisions/0002-migration-framework.md).
 
 CREATE TABLE IF NOT EXISTS samples (
 	ts        INTEGER NOT NULL,

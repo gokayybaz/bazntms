@@ -48,8 +48,8 @@ func TestMigrateFreshDB(t *testing.T) {
 	defer st.Close()
 	db := st.(*sqlStore).db
 
-	if got := migVersions(t, db); len(got) != 1 || got[0] != 1 {
-		t.Fatalf("beklenen [1], alınan %v", got)
+	if got := migVersions(t, db); len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("beklenen [1 2], alınan %v", got)
 	}
 	for _, tbl := range []string{"agents", "devices", "users", "isms_soa", "schema_migrations"} {
 		if !tableExists(t, db, tbl) {
@@ -72,19 +72,16 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatalf("ikinci Open: %v", err)
 	}
 	defer st2.Close()
-	if got := migVersions(t, st2.(*sqlStore).db); len(got) != 1 || got[0] != 1 {
+	if got := migVersions(t, st2.(*sqlStore).db); len(got) != 2 {
 		t.Fatalf("ikinci açılışta sürüm listesi değişti: %v", got)
 	}
 }
 
-// TestMigrateLegacyBaseline, Faz 13 öncesi bir DB'yi (schema_migrations yok
-// ama agents tablosu var) 0001_init'i YENİDEN çalıştırmadan sürüm 1 baseline
-// işaretleyerek hatasız açar.
-func TestMigrateLegacyBaseline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-
-	// Faz 13 öncesi kurulumu taklit et: 0001_init gövdesini (bugünkü şemayla
-	// birebir) elle uygula, schema_migrations tablosunu bırakma.
+// legacyDB, Faz 13 öncesi bir kurulumu taklit eder: 0001_init gövdesini
+// (bugünkü şemayla birebir) elle uygular, schema_migrations tablosunu bırakmaz.
+// extra ile ek DDL (ör. kolon düşürme) çalıştırılabilir.
+func legacyDB(t *testing.T, path string, extra ...string) {
+	t.Helper()
 	migs, err := loadMigrations("sqlite")
 	if err != nil {
 		t.Fatalf("loadMigrations: %v", err)
@@ -93,13 +90,23 @@ func TestMigrateLegacyBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("raw open: %v", err)
 	}
+	defer raw.Close()
 	if _, err := raw.Exec(migs[0].body); err != nil {
 		t.Fatalf("eski şema: %v", err)
 	}
-	if _, err := raw.Exec(`INSERT INTO agents (name, site, token_hash, first_seen, last_seen) VALUES ('eski-agent', '', 'h1', 1, 1)`); err != nil {
-		t.Fatalf("eski veri: %v", err)
+	for _, s := range extra {
+		if _, err := raw.Exec(s); err != nil {
+			t.Fatalf("ek DDL %q: %v", s, err)
+		}
 	}
-	raw.Close()
+}
+
+// TestMigrateLegacyBaseline, Faz 13 öncesi bir DB'yi (schema_migrations yok)
+// hatasız açar; 0001_init idempotent çalışır, sürüm 1 kaydedilir, eski veri korunur.
+func TestMigrateLegacyBaseline(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	legacyDB(t, path,
+		`INSERT INTO agents (name, site, token_hash, first_seen, last_seen) VALUES ('eski-agent', '', 'h1', 1, 1)`)
 
 	st, err := Open(path)
 	if err != nil {
@@ -108,18 +115,17 @@ func TestMigrateLegacyBaseline(t *testing.T) {
 	defer st.Close()
 	db := st.(*sqlStore).db
 
-	if got := migVersions(t, db); len(got) != 1 || got[0] != 1 {
-		t.Fatalf("baseline işaretlenmedi: %v", got)
+	got := migVersions(t, db)
+	if len(got) < 1 || got[0] != 1 {
+		t.Fatalf("sürüm 1 kaydedilmedi: %v", got)
 	}
-	// baseline satırının adı 0001_init olmalı
 	var name string
 	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version=1`).Scan(&name); err != nil {
-		t.Fatalf("baseline adı: %v", err)
+		t.Fatalf("sürüm 1 adı: %v", err)
 	}
 	if name != "0001_init" {
-		t.Fatalf("baseline adı beklenmedik: %q", name)
+		t.Fatalf("sürüm 1 adı beklenmedik: %q", name)
 	}
-	// eski veri korunmalı
 	var agentName string
 	if err := db.QueryRow(`SELECT name FROM agents WHERE token_hash='h1'`).Scan(&agentName); err != nil {
 		t.Fatalf("eski veri kayboldu: %v", err)
@@ -127,6 +133,55 @@ func TestMigrateLegacyBaseline(t *testing.T) {
 	if agentName != "eski-agent" {
 		t.Fatalf("eski agent adı bozuldu: %q", agentName)
 	}
+}
+
+// TestMigrate0002LegacyColumns, Faz 8 öncesi bir devices tablosunda (vendor /
+// api_* / vdom / site kolonları yok) ve source_ip'siz syslog_events'te 0002
+// migrasyonunun eksik kolonları eklediğini doğrular (S13.3 — eski
+// ensureDeviceColumns/ensureSyslogColumns davranışı).
+func TestMigrate0002LegacyColumns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "prefaz8.db")
+	legacyDB(t, path,
+		`ALTER TABLE devices DROP COLUMN vendor`,
+		`ALTER TABLE devices DROP COLUMN api_url`,
+		`ALTER TABLE devices DROP COLUMN api_token_enc`,
+		`ALTER TABLE devices DROP COLUMN api_verify_tls`,
+		`ALTER TABLE devices DROP COLUMN vdom`,
+		`ALTER TABLE devices DROP COLUMN site`,
+		`ALTER TABLE syslog_events DROP COLUMN source_ip`,
+	)
+
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer st.Close()
+	db := st.(*sqlStore).db
+
+	for _, tc := range []struct{ table, col string }{
+		{"devices", "vendor"}, {"devices", "api_url"}, {"devices", "api_token_enc"},
+		{"devices", "api_verify_tls"}, {"devices", "vdom"}, {"devices", "site"},
+		{"syslog_events", "source_ip"},
+	} {
+		set, err := columnSet(t.Context(), db, false, tc.table)
+		if err != nil {
+			t.Fatalf("columnSet %s: %v", tc.table, err)
+		}
+		if !set[tc.col] {
+			t.Fatalf("%s.%s eklenmedi", tc.table, tc.col)
+		}
+	}
+	if got := migVersions(t, db); len(got) != 2 || got[1] != 2 {
+		t.Fatalf("0002 uygulanmadı: %v", got)
+	}
+
+	// idempotent: ikinci açılış 0002'yi tekrar çalıştırmamalı (kolon zaten var)
+	st.Close()
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatalf("ikinci Open: %v", err)
+	}
+	st2.Close()
 }
 
 // TestLoadMigrations, gömülü migrasyon setinin her iki dialect için de

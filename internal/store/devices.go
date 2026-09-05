@@ -145,65 +145,6 @@ func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr 
 	return err
 }
 
-// ensureColumns, CREATE TABLE IF NOT EXISTS mevcut tabloyu degistirmedigi icin
-// eski kurulumlara eksik kolonlari ekler. table/name/def derleme zamani
-// sabitleridir (kullanici girdisi degil) — identifier parametrelenemez.
-func (s *sqlStore) ensureColumns(table string, cols [][2]string) error {
-	for _, c := range cols {
-		name, def := c[0], c[1]
-		exists := false
-		if s.pg {
-			var n int
-			err := s.db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns
-				WHERE table_name = $1 AND column_name = $2`, table, name).Scan(&n)
-			if err == nil {
-				exists = n > 0
-			}
-		} else {
-			rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
-			if err != nil {
-				return err
-			}
-			for rows.Next() {
-				var cid int
-				var cname, ctype string
-				var notnull, pk int
-				var dflt sql.NullString
-				if err := rows.Scan(&cid, &cname, &ctype, &notnull, &dflt, &pk); err == nil && cname == name {
-					exists = true
-				}
-			}
-			rows.Close()
-		}
-		if !exists {
-			if _, err := s.db.Exec(s.q(`ALTER TABLE ` + table + ` ADD COLUMN ` + name + ` ` + def)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// ensureDeviceColumns, eski kurulumlardaki devices tablosuna Faz 8 kolonlarini ekler.
-func (s *sqlStore) ensureDeviceColumns() error {
-	return s.ensureColumns("devices", [][2]string{
-		{"vendor", "TEXT NOT NULL DEFAULT 'snmp'"},
-		{"api_url", "TEXT NOT NULL DEFAULT ''"},
-		{"api_token_enc", "TEXT NOT NULL DEFAULT ''"},
-		{"api_verify_tls", "INTEGER NOT NULL DEFAULT 1"},
-		{"vdom", "TEXT NOT NULL DEFAULT ''"},
-		{"site", "TEXT NOT NULL DEFAULT ''"},
-	})
-}
-
-// ensureSyslogColumns, syslog_events tablosuna source_ip kolonunu ekler
-// (cihaz eşleştirmesi hostname yerine kaynak IP ile yapılır).
-func (s *sqlStore) ensureSyslogColumns() error {
-	return s.ensureColumns("syslog_events", [][2]string{
-		{"source_ip", "TEXT NOT NULL DEFAULT ''"},
-	})
-}
-
 func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
 	tx, err := s.db.Begin()
 	if err != nil {
