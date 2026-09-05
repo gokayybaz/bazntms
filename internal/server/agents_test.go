@@ -224,6 +224,64 @@ func TestAgentTelemetryRequiresToken(t *testing.T) {
 	}
 }
 
+// TestTelemetryUpdatesAgentVersion, kayitli agent hello'yu atladigi icin
+// surumun her telemetri batch'inden okundugunu dogrular — agent guncellenince
+// (reinstall/self-update) hub'in gosterdigi surum aksi halde donuk kalirdi.
+func TestTelemetryUpdatesAgentVersion(t *testing.T) {
+	ts := newTestServerWithEnroll(t)
+	id, token := enrollAgent(t, ts, "agent-upgrade")
+
+	send := func(ver string) {
+		body, _ := json.Marshal(map[string]any{
+			"version":          ver,
+			"protocol_version": 1,
+			"interfaces":       []map[string]any{{"name": "eth0", "rx_bytes": 1, "tx_bytes": 1}},
+		})
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/agent/telemetry", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("telemetri: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("telemetri 200 beklenirdi: %d", resp.StatusCode)
+		}
+	}
+	agentVersion := func() string {
+		resp := apiReq(t, http.MethodGet, ts.URL+"/api/v1/agents", nil)
+		defer resp.Body.Close()
+		var list []struct {
+			ID      int64  `json:"id"`
+			Version string `json:"version"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			t.Fatalf("liste cozulemedi: %v", err)
+		}
+		for _, a := range list {
+			if a.ID == id {
+				return a.Version
+			}
+		}
+		t.Fatalf("agent %d listede yok", id)
+		return ""
+	}
+
+	send("0.2.0")
+	if got := agentVersion(); got != "0.2.0" {
+		t.Fatalf("ilk surum 0.2.0 beklenirdi, gelen: %q", got)
+	}
+	send("0.3.0") // agent guncellendi
+	if got := agentVersion(); got != "0.3.0" {
+		t.Fatalf("guncelleme sonrasi 0.3.0 beklenirdi, gelen: %q", got)
+	}
+	// surum tasimayan eski agent mevcut degeri silmemeli
+	send("")
+	if got := agentVersion(); got != "0.3.0" {
+		t.Fatalf("bos surum mevcut degeri korumaliydi, gelen: %q", got)
+	}
+}
+
 // TestAgentLifecycle, enroll → telemetri → list → detail → history → rename
 // → delete akisinin ucdan uca dogru calistigini dogrular (Faz 8 UI'daki
 // agent yonetimi butonlarinin arkasindaki tam yol).

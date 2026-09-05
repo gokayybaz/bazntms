@@ -53,9 +53,16 @@ func (s *sqlStore) AgentByTokenHash(hash string) (*Agent, error) {
 }
 
 // TouchAgent, telemetri/heartbeat'te cagrılır: son gorulme + meta gunceller.
-func (s *sqlStore) TouchAgent(id int64, version, remoteIP string) error {
-	_, err := s.db.Exec(s.q(`UPDATE agents SET last_seen = ?, version = ?, remote_ip = ? WHERE id = ?`),
-		time.Now().Unix(), version, remoteIP, id)
+// version bos / protoVersion 0 ise (surum tasimayan eski agent) o alan
+// degistirilmez — mevcut deger korunur.
+func (s *sqlStore) TouchAgent(id int64, version string, protoVersion int, remoteIP string) error {
+	_, err := s.db.Exec(s.q(`UPDATE agents SET
+			last_seen = ?,
+			remote_ip = ?,
+			version = COALESCE(NULLIF(?, ''), version),
+			protocol_version = COALESCE(NULLIF(?, 0), protocol_version)
+		WHERE id = ?`),
+		time.Now().Unix(), remoteIP, version, protoVersion, id)
 	return err
 }
 

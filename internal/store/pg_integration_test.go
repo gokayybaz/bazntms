@@ -143,8 +143,11 @@ func TestPostgresStore(t *testing.T) {
 	if a, err := st.AgentByTokenHash(TokenHash("tok")); err != nil || a.Name != "pg-agent" {
 		t.Fatalf("token sorgu: %v %+v", err, a)
 	}
-	if err := st.TouchAgent(id, "0.2", "10.0.0.9"); err != nil {
+	if err := st.TouchAgent(id, "0.2", 1, "10.0.0.9"); err != nil {
 		t.Fatalf("touch: %v", err)
+	}
+	if a, _ := st.AgentByTokenHash(TokenHash("tok")); a == nil || a.Version != "0.2" {
+		t.Fatalf("TouchAgent surumu guncellemeli: %+v", a)
 	}
 	// verim hesabi icin iki farkli zaman damgasi gerekir (ilk/son delta)
 	if err := st.SaveIfaceSamples(id, now-60, []telemetry.InterfaceSample{

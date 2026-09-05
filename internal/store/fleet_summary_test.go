@@ -23,8 +23,8 @@ func TestFleetSummary(t *testing.T) {
 	on2, _ := st.RegisterAgent(Agent{Name: "a2", TokenHash: "h2"})
 	off, _ := st.RegisterAgent(Agent{Name: "a3", TokenHash: "h3"})
 	_ = off
-	st.TouchAgent(on1, "v", "1.1.1.1")
-	st.TouchAgent(on2, "v", "1.1.1.2")
+	st.TouchAgent(on1, "v", 1, "1.1.1.1")
+	st.TouchAgent(on2, "v", 1, "1.1.1.2")
 	// a3'ü eski göster
 	st.(*sqlStore).db.Exec(`UPDATE agents SET last_seen = ? WHERE id = ?`, now.Add(-1*time.Hour).Unix(), off)
 

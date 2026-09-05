@@ -68,6 +68,8 @@ message TelemetryBatch {
   repeated ConnectionSample connections = 3;
   repeated DnsQuerySample   dns_queries = 4;
   uint64 dropped_packets    = 5;
+  string agent_version      = 6;  // agent binary surumu — her batch'te (hello atlanabildigi icin)
+  uint32 protocol_version   = 7;  // agent'in destekledigi protokol surumu
 }
 
 // Heartbeat, agent canlilik sinyali (telemetry araligindan bagimsiz).

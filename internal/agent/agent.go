@@ -236,7 +236,11 @@ func (c *Client) PCAPEnabled() bool { return c.opts.PCAPEnabled }
 
 // Collect, bu anki telemetriyi toplar.
 func (c *Client) Collect() telemetry.TelemetryBatch {
-	batch := telemetry.TelemetryBatch{TS: time.Now().Unix()}
+	batch := telemetry.TelemetryBatch{
+		TS:              time.Now().Unix(),
+		Version:         version.Version,
+		ProtocolVersion: version.ProtocolVersion,
+	}
 	for _, i := range sysmon.ListInterfaces() {
 		batch.Interfaces = append(batch.Interfaces, telemetry.InterfaceSample{
 			Name: i.Name, RxBytes: i.RxBytes, TxBytes: i.TxBytes,

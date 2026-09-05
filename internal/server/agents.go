@@ -316,8 +316,15 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := agentClientIP(r)
 
+	// Surum batch ile gelir (kayitli agent hello'yu atladigi icin enrollment'taki
+	// deger guncellenemez); bos ise eski agent'tir, kayitli degeri koru.
+	ver := batch.Version
+	if ver == "" {
+		ver = agent.Version
+	}
+
 	if s.ingest != nil {
-		if err := s.ingest.PublishTelemetry(agent.ID, agent.Version, ip, ts, &batch); err != nil {
+		if err := s.ingest.PublishTelemetry(agent.ID, ver, ip, ts, &batch); err != nil {
 			slog.Error("telemetri kuyrugu yayinlama hatasi", "agent_id", agent.ID, "err", err)
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
@@ -335,7 +342,7 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.TouchAgent(agent.ID, agent.Version, ip); err != nil {
+	if err := s.store.TouchAgent(agent.ID, ver, batch.ProtocolVersion, ip); err != nil {
 		slog.Error("agent touch hatasi", "agent_id", agent.ID, "err", err)
 	}
 	if len(batch.ProcessTraffic) > 0 {

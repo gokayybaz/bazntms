@@ -112,12 +112,18 @@ type DNSSample struct {
 
 // TelemetryBatch, agent'in periyodik toplu gonderimi.
 type TelemetryBatch struct {
-	TS             int64                  `json:"ts"`
-	Interfaces     []InterfaceSample      `json:"interfaces"`
-	Connections    []ConnectionSample     `json:"connections"`
-	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`
-	L7             []L7Sample             `json:"l7,omitempty"`
-	DNS            []DNSSample            `json:"dns,omitempty"`
-	Subnets        []string               `json:"subnets,omitempty"` // yerel aglar (CIDR) — topoloji kesfi (Faz 6.1)
-	DroppedPackets uint64                 `json:"dropped_packets,omitempty"`
+	TS int64 `json:"ts"`
+	// Version/ProtocolVersion her batch'te gonderilir: enrollment yalnizca ilk
+	// kayitta calistigi icin (kayitli agent hello'yu atlar) agent guncellendiginde
+	// — MSI reinstall, self-update — hub'in bildigi surum aksi halde donuk kalir.
+	// Bos/0 ise (eski agent) hub mevcut degeri korur.
+	Version         string                 `json:"version,omitempty"`
+	ProtocolVersion int                    `json:"protocol_version,omitempty"`
+	Interfaces      []InterfaceSample      `json:"interfaces"`
+	Connections     []ConnectionSample     `json:"connections"`
+	ProcessTraffic  []ProcessTrafficSample `json:"process_traffic,omitempty"`
+	L7              []L7Sample             `json:"l7,omitempty"`
+	DNS             []DNSSample            `json:"dns,omitempty"`
+	Subnets         []string               `json:"subnets,omitempty"` // yerel aglar (CIDR) — topoloji kesfi (Faz 6.1)
+	DroppedPackets  uint64                 `json:"dropped_packets,omitempty"`
 }

@@ -26,7 +26,7 @@ func TestWSTickCarriesFleet(t *testing.T) {
 	}
 	t.Cleanup(func() { st.Close() })
 	st.RegisterAgent(store.Agent{Name: "a1", TokenHash: "h1"})
-	st.TouchAgent(1, "v", "1.1.1.1")
+	st.TouchAgent(1, "v", 1, "1.1.1.1")
 
 	srv := New(nil, capture.NewEngine(), st, "t.db",
 		alert.NewManager(alert.DefaultConfig(), st, capture.NewEngine(), 30),

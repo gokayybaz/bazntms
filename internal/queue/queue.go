@@ -195,7 +195,7 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			q.retry(msg, err)
 			return
 		}
-		if err := st.TouchAgent(env.AgentID, env.Version, env.RemoteIP); err != nil {
+		if err := st.TouchAgent(env.AgentID, env.Version, env.Batch.ProtocolVersion, env.RemoteIP); err != nil {
 			slog.Error("kuyruk: agent touch hatasi", "agent_id", env.AgentID, "err", err)
 		}
 		if len(env.Batch.ProcessTraffic) > 0 {

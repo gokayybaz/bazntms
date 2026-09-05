@@ -18,7 +18,7 @@ func TestListAgentsRateCounterReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if err := st.TouchAgent(id, "v1", "10.0.0.5"); err != nil {
+	if err := st.TouchAgent(id, "v1", 1, "10.0.0.5"); err != nil {
 		t.Fatalf("touch: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestListAgentsRateNormal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if err := st.TouchAgent(id, "v1", "10.0.0.6"); err != nil {
+	if err := st.TouchAgent(id, "v1", 1, "10.0.0.6"); err != nil {
 		t.Fatalf("touch: %v", err)
 	}
 
@@ -98,6 +98,36 @@ func TestListAgentsRateNormal(t *testing.T) {
 	// (100+50)/10sn = 15 pps
 	if r.Pps != 15 {
 		t.Fatalf("pps beklenen 15, gelen %v", r.Pps)
+	}
+}
+
+// TestTouchAgentVersionGuard, TouchAgent'in dolu surum/protokol degerini
+// yazdigini, bos "" / 0 gelince mevcut degeri KORUDUGUNU dogrular (surum
+// tasimayan eski agent hub'daki bilgiyi silmemeli).
+func TestTouchAgentVersionGuard(t *testing.T) {
+	st := openTest(t)
+	id, err := st.RegisterAgent(Agent{Name: "a", TokenHash: TokenHash("t"), Version: "0.1.0", ProtocolVersion: 1})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	if err := st.TouchAgent(id, "0.2.0", 1, "10.0.0.1"); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+	if a, _ := st.AgentByTokenHash(TokenHash("t")); a.Version != "0.2.0" {
+		t.Fatalf("dolu surum yazilmaliydi, gelen: %q", a.Version)
+	}
+
+	// bos surum + 0 protokol → degistirme
+	if err := st.TouchAgent(id, "", 0, "10.0.0.2"); err != nil {
+		t.Fatalf("touch2: %v", err)
+	}
+	a, _ := st.AgentByTokenHash(TokenHash("t"))
+	if a.Version != "0.2.0" || a.ProtocolVersion != 1 {
+		t.Fatalf("bos degerler mevcut surumu korumaliydi: %q pv=%d", a.Version, a.ProtocolVersion)
+	}
+	if a.RemoteIP != "10.0.0.2" {
+		t.Fatalf("remote_ip yine de guncellenmeliydi, gelen: %q", a.RemoteIP)
 	}
 }
 

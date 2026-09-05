@@ -113,7 +113,7 @@ type Store interface {
 	// agent filosu (Faz 1)
 	RegisterAgent(a Agent) (int64, error)
 	AgentByTokenHash(hash string) (*Agent, error)
-	TouchAgent(id int64, version, remoteIP string) error
+	TouchAgent(id int64, version string, protoVersion int, remoteIP string) error
 	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
 	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
 	ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error)
