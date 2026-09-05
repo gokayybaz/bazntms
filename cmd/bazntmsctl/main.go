@@ -188,7 +188,7 @@ func cmdSetup(args []string) error {
 	password := ask("Arayüz şifresi (boş = kimlik doğrulama kapalı, önerilmez)", "")
 	dbPath := ask("Veri deposu: SQLite dosya yolu veya postgres:// DSN", "bazntms.db")
 	nats := ask("NATS JetStream adresi (boş = kuyruk kapalı)", "")
-	enroll := ask("Agent enrollment token (boş = rastgele üretilir)", "")
+	enroll := ask("Bootstrap enrollment token (boş = rastgele üretilir; kalıcı token'ları panelden yönetin)", "")
 	updatesDir := ask("Güncelleme kanalı dizini (boş = kapalı; bkz. bazntmsctl update sign)", "")
 
 	var b strings.Builder
@@ -205,7 +205,9 @@ func cmdSetup(args []string) error {
 		fmt.Fprintf(&b, "  url: %s\n", nats)
 	}
 	if enroll != "" {
-		b.WriteString("# enrollment token'i flag ile de gecilebilir: -enroll-token\n")
+		b.WriteString("# BOOTSTRAP token — yalnizca ilk kurulum icin. Sizarsa hub'i yeniden\n")
+		b.WriteString("# baslatmadan iptal edilemez. Kalici, isimli, iptal-edilebilir token'lar\n")
+		b.WriteString("# icin: panel > Yonetim > Agent Ekle (POST /api/v1/enroll-tokens).\n")
 		fmt.Fprintf(&b, "enroll_token: %q\n", enroll)
 	}
 	if updatesDir != "" {
@@ -218,6 +220,9 @@ func cmdSetup(args []string) error {
 		return err
 	}
 	fmt.Printf("\n✔ %s yazıldı. Başlatma:\n  ./bazntms-hub -config %s\n", *out, *out)
+	fmt.Println("\nAgent eklemek için: panel > Yönetim > Agent Ekle — isimli/süreli/")
+	fmt.Println("iptal-edilebilir enrollment token'ı üretin. Yukarıdaki bootstrap token'ı")
+	fmt.Println("yalnızca ilk kurulum içindir.")
 	return nil
 }
 

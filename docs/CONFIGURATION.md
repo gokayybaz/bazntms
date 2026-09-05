@@ -18,6 +18,7 @@
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
 | `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
+| `-enroll-token` | — | **Bootstrap** agent enrollment token'ı. Boşsa rastgele üretilip loglanır. Yalnızca ilk kurulum için — sızarsa hub'ı yeniden başlatmadan iptal edilemez. Kalıcı token'lar: panel > Yönetim > Agent Ekle (bkz. aşağıda) |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
 | `-llm-model` | — | Varsayılan model. UI'dan da seçilebilir |
@@ -172,6 +173,24 @@ oidc:
 
 Giriş: `GET /api/auth/oidc/login` (arayüz oturum açma sayfasından da
 bağlanır). Grup/rol claim'i `groups` veya `roles` okunur.
+
+### Agent kaydı (enrollment) token'ları
+
+İki yol vardır:
+
+- **Bootstrap** — `-enroll-token` bayrağı (veya config `enroll_token`). Tek
+  statik sır; verilmezse rastgele üretilip loglanır. Sızarsa hub'ı yeniden
+  başlatmadan iptal edilemez. Yalnızca ilk kurulum / otomasyonsuz senaryolar
+  için.
+- **Kalıcı (DB) token'lar** — panel > **Yönetim > Agent Ekle**
+  (`POST /api/v1/enroll-tokens`). İsimli, opsiyonel site kapsamlı, opsiyonel
+  son kullanma tarihli; `DELETE /api/v1/enroll-tokens/{id}` ile hub yeniden
+  başlatılmadan iptal edilir. Agent'lar `-enroll-token`/`hub.token` alanına
+  statik sır yerine bunlardan birini verir. Üretildikten sonra düz değer bir
+  kez gösterilir (hash saklanır).
+
+Sihirbaz, hub adresini `location.origin`'den alıp seçilen işletim sistemine
+göre kopyalanabilir kurulum komutu üretir.
 
 ### Entegrasyon API token'ları
 

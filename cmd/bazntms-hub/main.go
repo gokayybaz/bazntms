@@ -255,8 +255,11 @@ func main() {
 	}
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
 	if autoTok := srv.EnrollToken(); *enrollToken == "" {
-		slog.Info("otomatik enrollment token uretildi", "enroll_token", autoTok)
+		slog.Info("otomatik bootstrap enrollment token uretildi", "enroll_token", autoTok)
 	}
+	// B7: statik token bootstrap icindir — sizarsa yeniden baslatmadan iptal
+	// edilemez. Kalici token'lar panel > Yonetim > Agent Ekle'den yonetilir.
+	slog.Info("enrollment: statik token yalnizca ilk kurulum icin — kalici/iptal-edilebilir token'lar icin panel > Yonetim > Agent Ekle")
 
 	// mTLS: CA + sunucu sertifikasi (bkz. asagida ListenAndServeTLS)
 	var tlsConf *tls.Config

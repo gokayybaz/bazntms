@@ -112,6 +112,12 @@ export function EnrollWizard() {
 
   return (
     <div className="space-y-5">
+      <p className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[11.5px] text-slate-400">
+        Hub’ın <code className="text-slate-300">-enroll-token</code> bayrağındaki statik sır yalnızca ilk kurulum
+        içindir — sızarsa hub yeniden başlatılmadan iptal edilemez. Buradan ürettiğiniz token’lar isimli, süreli ve
+        tek tıkla iptal edilebilir.
+      </p>
+
       {/* --- adım 1: token üret --- */}
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">1 · Enrollment token’ı üret</p>
