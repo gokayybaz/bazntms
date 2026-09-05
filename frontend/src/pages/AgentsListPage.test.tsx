@@ -24,6 +24,7 @@ describe('AgentsListPage', () => {
 
   it('boş filo için "eşleşen agent yok" gösterir', async () => {
     vi.mocked(fetch).mockResolvedValue({
+      ok: true,
       status: 200,
       json: async () => [],
     } as Response)
@@ -39,6 +40,7 @@ describe('AgentsListPage', () => {
 
   it('gelen agent listesini tabloda render eder', async () => {
     vi.mocked(fetch).mockResolvedValue({
+      ok: true,
       status: 200,
       json: async () => [
         {
@@ -65,5 +67,20 @@ describe('AgentsListPage', () => {
 
     await waitFor(() => expect(screen.getByText('sunucu-01')).toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'sunucu-01' })).toHaveAttribute('href', '/agentlar/1')
+  })
+
+  it('poll başarısız olursa donukluk uyarısı gösterir — eskiden sessizce yutuluyordu', async () => {
+    // impeccable critique 2026-09-05, P0: AgentDetailPage/DeviceDetailPage'deki
+    // dataStale desenini burada da uygula
+    // json() boş dizi döner — sayfanın kendisi res.ok=false'ta zaten agents
+    // state'ine dokunmuyor, ama alttaki ProcessesCard/L7Card/DnsCard aynı blanket
+    // mock'u paylaşıyor ve dizi bekliyor (obje değil)
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500, json: async () => [] } as Response)
+    render(
+      <MemoryRouter>
+        <AgentsListPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText(/Liste güncellenemiyor/)).toBeInTheDocument())
   })
 })

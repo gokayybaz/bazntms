@@ -20,6 +20,9 @@ export function AgentsListPage() {
   const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [onlyOnline, setOnlyOnline] = useState(false)
+  // poll başarısız olursa görünür bir uyarı — eskiden sessizce yutuluyordu,
+  // liste "canlı" görünmeye devam ederdi (impeccable critique 2026-09-05)
+  const [dataStale, setDataStale] = useState(false)
 
   useEffect(() => {
     let stop = false
@@ -27,12 +30,17 @@ export function AgentsListPage() {
       try {
         const res = await fetch('/api/v1/agents')
         if (res.status === 401) return
+        if (!res.ok) {
+          if (!stop) setDataStale(true)
+          return
+        }
         if (!stop) {
           setAgents(await res.json())
           setLoaded(true)
+          setDataStale(false)
         }
       } catch {
-        /* yoksay */
+        if (!stop) setDataStale(true)
       }
     }
     load()
@@ -56,8 +64,14 @@ export function AgentsListPage() {
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
       <div className="flex items-center gap-2">
         <h1 className="text-[13px] font-semibold uppercase tracking-widest text-slate-300">Agent'lar</h1>
-        <span className="text-xs text-slate-500">tüm filo · detay için bir agent'a tıklayın</span>
+        <span className="text-xs text-dim-aa">tüm filo · detay için bir agent'a tıklayın</span>
       </div>
+
+      {dataStale && (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          ⚠ Liste güncellenemiyor — bağlantı sorunu olabilir, gösterilenler son başarılı polldan.
+        </p>
+      )}
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -65,34 +79,35 @@ export function AgentsListPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filtrele: ad, site, ip, sürüm…"
-            className="w-64 rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-1.5 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-500/60"
+            aria-label="Agent filtresi"
+            className="w-64 rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-1.5 text-sm outline-none placeholder:text-dim-aa focus:border-cyan-500/60"
           />
           <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400 select-none">
             <input type="checkbox" checked={onlyOnline} onChange={(e) => setOnlyOnline(e.target.checked)} className="accent-cyan-500" />
             yalnızca online
           </label>
-          <span className="ml-auto text-xs text-slate-500">
+          <span className="ml-auto text-xs text-dim-aa">
             {formatNum(filtered.length)} / {formatNum(agents.length)} agent
           </span>
         </div>
 
         {!loaded ? (
-          <p className="py-8 text-center text-sm text-slate-600">Yükleniyor…</p>
+          <p className="py-8 text-center text-sm text-dim-aa">Yükleniyor…</p>
         ) : filtered.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-600">Eşleşen agent yok.</p>
+          <p className="py-8 text-center text-sm text-dim-aa">Eşleşen agent yok.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-800/60">
             <table className="w-full text-sm">
               <thead className="bg-slate-900/95">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2 font-medium">Durum</th>
-                  <th className="px-3 py-2 font-medium">Ad</th>
-                  <th className="px-3 py-2 font-medium">Site</th>
-                  <th className="px-3 py-2 font-medium">IP</th>
-                  <th className="px-3 py-2 font-medium">Sürüm</th>
-                  <th className="px-3 py-2 text-right font-medium">Bağlantı</th>
-                  <th className="px-3 py-2 text-right font-medium">En Yoğun Arayüz</th>
-                  <th className="px-3 py-2 font-medium">Son Görülme</th>
+                <tr className="text-left text-[11px] uppercase tracking-wider text-dim-aa">
+                  <th scope="col" className="px-3 py-2 font-medium">Durum</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Ad</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Site</th>
+                  <th scope="col" className="px-3 py-2 font-medium">IP</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Sürüm</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Bağlantı</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">En Yoğun Arayüz</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Son Görülme</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -119,7 +134,7 @@ export function AgentsListPage() {
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-slate-400">{a.site || '—'}</td>
                       <td className="px-3 py-2 font-mono text-xs text-slate-400">{a.remote_ip || '—'}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-slate-500">{a.version || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-400">{a.version || '—'}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-slate-300">{formatNum(a.conns)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">
                         {busiest ? (
@@ -129,10 +144,10 @@ export function AgentsListPage() {
                             <span className="text-violet-300/90">↑ {formatBits(busiest.tx_bps * 8)}</span>
                           </>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-dim-aa">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[11px] text-slate-500">{relTime(a.last_seen)}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] text-dim-aa">{relTime(a.last_seen)}</td>
                     </tr>
                   )
                 })}
@@ -142,15 +157,15 @@ export function AgentsListPage() {
         )}
       </Card>
 
-      <Card title="Süreç Trafiği (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">Faz 2 · atıf</span>}>
+      <Card title="Süreç Trafiği (Tüm Agent'lar)" right={<span className="text-xs text-dim-aa">süreç → agent atıflı</span>}>
         <ProcessesCard />
       </Card>
 
-      <Card title="Uygulama Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">L7 · SNI + HTTP Host</span>}>
+      <Card title="Uygulama Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-dim-aa">L7 · SNI + HTTP Host</span>}>
         <L7Card />
       </Card>
 
-      <Card title="DNS Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-slate-500">UDP/53 · süreç atıflı</span>}>
+      <Card title="DNS Görünürlüğü (Tüm Agent'lar)" right={<span className="text-xs text-dim-aa">UDP/53 · süreç atıflı</span>}>
         <DnsCard />
       </Card>
     </div>
