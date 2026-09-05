@@ -4,6 +4,7 @@ import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { SEV_NAMES, SEV_STYLES } from '../lib/syslogSeverity'
 import { Card } from '../components/Card'
 import { FortiPanel } from '../components/FortiPanel'
+import { StatusPill, type StatusTone } from '../components/StatusPill'
 
 interface Device {
   id: number
@@ -230,11 +231,11 @@ export function DeviceDetailPage() {
   // sorunlu (kapalı veya son hata var) / ilk poll'u bekliyor / sağlıklı
   const healthStatus: 'healthy' | 'pending' | 'problem' =
     !device.enabled || device.last_error ? 'problem' : device.last_poll === 0 ? 'pending' : 'healthy'
-  const HEALTH_META = {
-    healthy: { badge: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400', dot: 'bg-emerald-400', label: 'sağlıklı' },
-    pending: { badge: 'border-amber-500/30 bg-amber-500/10 text-amber-400', dot: 'bg-amber-400', label: 'ilk poll bekleniyor' },
-    problem: { badge: 'border-rose-500/30 bg-rose-500/10 text-rose-400', dot: 'bg-rose-400', label: 'sorunlu' },
-  } as const
+  const HEALTH_META: Record<typeof healthStatus, { tone: StatusTone; label: string }> = {
+    healthy: { tone: 'emerald', label: 'sağlıklı' },
+    pending: { tone: 'amber', label: 'ilk poll bekleniyor' },
+    problem: { tone: 'rose', label: 'sorunlu' },
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
@@ -248,12 +249,7 @@ export function DeviceDetailPage() {
 
       {/* başlık */}
       <div className="flex flex-wrap items-center gap-3">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${HEALTH_META[healthStatus].badge}`}
-        >
-          <span className={`size-1.5 rounded-full ${HEALTH_META[healthStatus].dot}`} />
-          {HEALTH_META[healthStatus].label}
-        </span>
+        <StatusPill tone={HEALTH_META[healthStatus].tone} label={HEALTH_META[healthStatus].label} />
         <h1 className="font-mono text-xl font-bold text-slate-100">{device.name}</h1>
         <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-xs uppercase text-slate-400">{device.kind}</span>
         {device.vendor === 'fortigate' ? (

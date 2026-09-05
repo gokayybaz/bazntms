@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { AgentWithRates, Bucket } from '../types'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
+import { StatusPill } from '../components/StatusPill'
 import { ThroughputChart } from '../components/ThroughputChart'
 import { ProcessesCard } from '../components/ProcessesCard'
 import { L7Card } from '../components/L7Card'
@@ -230,16 +231,7 @@ export function AgentDetailPage() {
 
       {/* başlık */}
       <div className="flex flex-wrap items-center gap-3">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
-            agent.online
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-slate-600 bg-slate-800 text-slate-500'
-          }`}
-        >
-          <span className={`size-1.5 rounded-full ${agent.online ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-          {agent.online ? 'online' : 'offline'}
-        </span>
+        <StatusPill tone={agent.online ? 'emerald' : 'slate'} label={agent.online ? 'online' : 'offline'} />
         {renaming ? (
           <>
             <input

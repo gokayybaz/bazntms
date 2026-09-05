@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import type { AgentWithRates } from '../types'
 import { formatBits, formatNum } from '../lib/format'
 import { Card } from '../components/Card'
+import { StatusPill } from '../components/StatusPill'
 import { ProcessesCard } from '../components/ProcessesCard'
 import { L7Card } from '../components/L7Card'
 import { DnsCard } from '../components/DnsCard'
@@ -116,16 +117,7 @@ export function AgentsListPage() {
                   return (
                     <tr key={a.id} className="hover:bg-slate-800/30">
                       <td className="px-3 py-2">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
-                            a.online
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                              : 'border-slate-600 bg-slate-800 text-slate-500'
-                          }`}
-                        >
-                          <span className={`size-1.5 rounded-full ${a.online ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                          {a.online ? 'online' : 'offline'}
-                        </span>
+                        <StatusPill tone={a.online ? 'emerald' : 'slate'} label={a.online ? 'online' : 'offline'} />
                       </td>
                       <td className="px-3 py-2">
                         <Link to={`/agentlar/${a.id}`} className="font-mono font-semibold text-cyan-300 hover:text-cyan-200 hover:underline">

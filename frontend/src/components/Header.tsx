@@ -1,3 +1,5 @@
+import { StatusPill } from './StatusPill'
+
 interface Props {
   connected: boolean
   onLogout: () => void
@@ -8,16 +10,7 @@ export function Header({ connected, onLogout, identity }: Props) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
-            connected
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-          }`}
-        >
-          <span className={`size-1.5 ${connected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-          {connected ? 'ws: canlı' : 'ws: yoklama'}
-        </span>
+        <StatusPill tone={connected ? 'emerald' : 'amber'} label={connected ? 'ws: canlı' : 'ws: yoklama'} />
 
         <div className="flex-1" />
 
