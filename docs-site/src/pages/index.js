@@ -131,8 +131,46 @@ const STATS = [
 /* Sunucuda ve JS kapalıyken son değer basılır (SSR/hidrasyon güvenli);
    istemcide monte olunca sıfırdan sayılır. prefers-reduced-motion'da
    animasyon yok. */
+/* Kartın altındaki mini spark: sayıyı değil, sistemin çalıştığını anlatır.
+   Sayılar tasarım hedefi olduğu için oynatılmıyor — oynatmak gerçek zamanlı
+   veri varmış izlenimi verirdi. rAF yerine setInterval: arka planda kısılsa
+   da çalışır, duraklarsa da geride yanlış bir DEĞER değil donmuş bir çizgi
+   kalır. */
+const SPARK_N = 26;
+
+function useLiveSpark(seed) {
+  const [pts, setPts] = React.useState(() => {
+    const rnd = makeRng(seed);
+    const a = [];
+    let v = 0.5;
+    for (let i = 0; i < SPARK_N; i++) {
+      v = Math.max(0.12, Math.min(0.92, v + (rnd() - 0.5) * 0.34));
+      a.push(v);
+    }
+    return a;
+  });
+
+  React.useEffect(() => {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return undefined;
+    const rnd = makeRng(seed + 977);
+    const id = setInterval(() => {
+      setPts((prev) => {
+        const next = prev.slice(1);
+        const last = prev[prev.length - 1];
+        next.push(Math.max(0.12, Math.min(0.92, last + (rnd() - 0.5) * 0.36)));
+        return next;
+      });
+    }, 700);
+    return () => clearInterval(id);
+  }, [seed]);
+
+  return pts;
+}
+
 function StatCard({ stat, index }) {
   const [value, setValue] = React.useState(stat.to ?? 0);
+  const spark = useLiveSpark(index * 131 + 17);
 
   React.useEffect(() => {
     if (stat.to == null) return undefined;
@@ -165,12 +203,35 @@ function StatCard({ stat, index }) {
     };
   }, [stat.to, index]);
 
+  const W = 100;
+  const H = 26;
+  const xy = (v, i) => [(i / (SPARK_N - 1)) * W, H - v * (H - 3) - 1.5];
+  const line = spark.map((v, i) => xy(v, i).join(',')).join(' ');
+  const [ex, ey] = xy(spark[spark.length - 1], SPARK_N - 1);
+
   return (
     <div className={styles.cell} style={{ animationDelay: `${index * 90}ms` }}>
       <span className={styles.cellValue}>
         {stat.static ?? value.toLocaleString('tr-TR') + stat.suffix}
       </span>
       <span className={styles.cellLabel}>{stat.label}</span>
+      <svg
+        className={styles.cellSpark}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <polyline
+          points={line}
+          fill="none"
+          stroke="#22d3ee"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          opacity="0.7"
+        />
+        <circle className={styles.sparkTip} cx={ex} cy={ey} r="2" fill="#22d3ee" />
+      </svg>
     </div>
   );
 }
@@ -228,6 +289,30 @@ const STEPS = [
     code: 'docker compose -f deploy/docker-compose.scale.yml up --build\n# 2 × ingest replikası + kontrolcü + nginx LB + JetStream\n# --scale hub-ingest=4 → yatay büyüt · dashboard: :8080 · agent API: :8081',
   },
 ];
+
+/* --- ikonlar --- */
+
+const IconGitHub = () => (
+  <svg className={styles.icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
+  </svg>
+);
+
+const IconArrowUpRight = () => (
+  <svg
+    className={styles.icon}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M7 17 17 7" />
+    <path d="M9 7h8v8" />
+  </svg>
+);
 
 function Wire() {
   const canvasRef = React.useRef(null);
@@ -701,7 +786,8 @@ export default function Home() {
 
                 <div className={`${styles.ctas} ${styles.heroCtas}`}>
                   <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
-                    Kurulum dokümanı
+                    <span className={styles.btnLabel}>Kurulum dokümanı</span>
+                    <IconArrowUpRight />
                   </a>
                   <a
                     className={`${styles.btn} ${styles.btnGhostDark}`}
@@ -709,7 +795,9 @@ export default function Home() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    GitHub
+                    <IconGitHub />
+                    <span className={styles.btnLabel}>GitHub</span>
+                    <IconArrowUpRight />
                   </a>
                 </div>
               </div>
@@ -939,7 +1027,8 @@ export default function Home() {
             </p>
             <div className={`${styles.ctas} ${styles.bottomCtas}`}>
               <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
-                Kurulum dokümanı
+                <span className={styles.btnLabel}>Kurulum dokümanı</span>
+                <IconArrowUpRight />
               </a>
               <a className={`${styles.btn} ${styles.btnGhostDark}`} href={apiUrl}>
                 API referansı
