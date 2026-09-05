@@ -110,6 +110,15 @@
         ],
         "createdAt": "2026-09-05T10:13:19.391Z",
         "reason": "bg-slate-800/text-slate-400 nötr UDP rozeti — slate-800 renkli değil nötr koyu arka plan, slate-400 üzerinde yüksek kontrast (aynı kalıp DeviceDetailPage.tsx flow-proto rozetinde de kullanılıyor, orada da flag edilmedi); canlı doğrulanmış (bkz. AgentDetailPage commit 5b665be)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/AdminPageShell.tsx"
+        ],
+        "createdAt": "2026-09-05T18:26:15.867Z",
+        "reason": "existing project convention: identical active-tab style to ComplianceSubNav.tsx (cyan-300 on cyan-500/15 light tint); keeping admin sub-nav consistent with compliance sub-nav"
       }
     ]
   }

@@ -59,6 +59,13 @@ const IconShield = () => (
   </svg>
 )
 
+const IconCog = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.35.22.72.22 1.09" />
+  </svg>
+)
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: <IconGrid />, end: true },
   { to: '/agentlar', label: "Agent'lar", icon: <IconServer />, end: false },
@@ -69,7 +76,14 @@ const NAV_ITEMS = [
   { to: '/uyumluluk', label: 'Uyumluluk', icon: <IconShield />, end: false },
 ]
 
-export function Sidebar() {
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center justify-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition sm:justify-start ${
+    isActive
+      ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+      : 'border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+  }`
+
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   return (
     // dar ekranlarda (<640px) yalnızca ikon genişliği — önceden sabit w-56
     // her viewport'ta aynıydı, 375px'te içerik alanını ~%40'a sıkıştırıp
@@ -101,23 +115,26 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-0.5 px-2.5 py-3">
         {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            title={item.label}
-            className={({ isActive }) =>
-              `flex items-center justify-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition sm:justify-start ${
-                isActive
-                  ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
-                  : 'border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-              }`
-            }
-          >
+          <NavLink key={item.to} to={item.to} end={item.end} title={item.label} className={linkClass}>
             <span className="size-4.5 flex-shrink-0">{item.icon}</span>
             <span className="hidden sm:inline">{item.label}</span>
           </NavLink>
         ))}
+
+        {isAdmin && (
+          <>
+            <p className="mt-4 mb-1 hidden px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 sm:block">
+              Yönetim
+            </p>
+            <div className="mx-2.5 mt-4 mb-1 border-t border-slate-800 sm:hidden" />
+            <NavLink to="/yonetim" title="Yönetim" className={linkClass}>
+              <span className="size-4.5 flex-shrink-0">
+                <IconCog />
+              </span>
+              <span className="hidden sm:inline">Yönetim</span>
+            </NavLink>
+          </>
+        )}
       </nav>
     </aside>
   )

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useLive } from './lib/useLive'
 import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
@@ -19,10 +19,19 @@ import { PoliciesPage } from './pages/PoliciesPage'
 import { AuditsPage } from './pages/AuditsPage'
 import { GovernancePage } from './pages/GovernancePage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { AdminGuard } from './components/AdminGuard'
+import { UsersAdminPage } from './pages/yonetim/UsersAdminPage'
+import { TokensAdminPage } from './pages/yonetim/TokensAdminPage'
+import { EnrollAdminPage } from './pages/yonetim/EnrollAdminPage'
+import { AuditAdminPage } from './pages/yonetim/AuditAdminPage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
   const [identity, setIdentity] = useState<{ username: string; role: string } | null>(null)
+  // authRequired=false → kimlik doğrulama kapalı (dev modu); sunucuda
+  // requirePerm de herkesi geçirir, o yüzden yönetim UI'ı da açılır.
+  const [authRequired, setAuthRequired] = useState(true)
+  const isAdmin = !authRequired || identity?.role === 'admin'
   const { alertEvents, fleet, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
@@ -42,6 +51,7 @@ export default function App() {
     fetch('/api/auth/status')
       .then((r) => r.json())
       .then((d: { required: boolean; authenticated: boolean; username?: string; role?: string }) => {
+        setAuthRequired(d.required)
         setAuthState(d.required && !d.authenticated ? 'locked' : 'open')
         if (d.authenticated && d.username) {
           setIdentity({ username: d.username, role: d.role ?? 'viewer' })
@@ -87,7 +97,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
+      <Sidebar isAdmin={isAdmin} />
       <div className="min-w-0 flex-1">
         <Header connected={connected} onLogout={logout} identity={identity} />
 
@@ -106,6 +116,16 @@ export default function App() {
           <Route path="/uyumluluk/politikalar" element={<PoliciesPage />} />
           <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
           <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
+
+          {/* Yönetim (Faz 12) — admin guard; kabuklar S12.2+ ile dolar */}
+          <Route path="/yonetim" element={<AdminGuard isAdmin={isAdmin} />}>
+            <Route index element={<Navigate to="/yonetim/kullanicilar" replace />} />
+            <Route path="kullanicilar" element={<UsersAdminPage />} />
+            <Route path="tokenlar" element={<TokensAdminPage />} />
+            <Route path="agent-ekle" element={<EnrollAdminPage />} />
+            <Route path="denetim" element={<AuditAdminPage />} />
+          </Route>
+
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
