@@ -56,6 +56,16 @@ func (s *sqlStore) UserByID(id int64) (*User, error) {
 	return &u, nil
 }
 
+// AdminUserExists, etkin (enabled) en az bir admin rollu kullanici olup
+// olmadigini dondurur. Legacy tek-sifre girisi bu durumda devre disi
+// birakilir (B6) — etkin admin yoksa legacy sifre "break-glass" olarak
+// calismaya devam eder.
+func (s *sqlStore) AdminUserExists() (bool, error) {
+	var n int
+	err := s.db.QueryRow(s.q(`SELECT EXISTS(SELECT 1 FROM users WHERE role = 'admin' AND enabled = 1)`)).Scan(&n)
+	return n == 1, err
+}
+
 func (s *sqlStore) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(s.q(`SELECT id, username, password_hash, role, site, enabled, created_at, last_login
 		FROM users ORDER BY username`))

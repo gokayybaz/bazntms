@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -160,5 +161,59 @@ func TestLegacyAdminStillWorks(t *testing.T) {
 	// admin tum uclara erisir
 	if status, _ := getJSON(t, ts, "/api/v1/users", tok); status != http.StatusOK {
 		t.Fatalf("admin users: %d", status)
+	}
+}
+
+// TestLegacyLoginDisabledWhenAdminExists (B6): users boşken legacy tek-şifre
+// çalışır; etkin bir admin RBAC kullanıcısı eklenince legacy giriş reddedilir.
+// Etkin admin kalmayınca legacy "break-glass" olarak geri döner.
+func TestLegacyLoginDisabledWhenAdminExists(t *testing.T) {
+	ts := newRBACServer(t, "legacy-pw-1")
+
+	// 1) users yok → legacy çalışır
+	status, out := postJSON(t, ts, "/api/login", "", map[string]string{"password": "legacy-pw-1"})
+	if status != http.StatusOK {
+		t.Fatalf("users boşken legacy giriş: %d %v", status, out)
+	}
+	legacyTok, _ := out["token"].(string)
+
+	// 2) analyst (admin DEĞİL) ekle → legacy hâlâ çalışmalı
+	if code, o := postJSON(t, ts, "/api/v1/users", legacyTok, map[string]any{
+		"username": "ana", "password": "ana-pass-1", "role": "analyst",
+	}); code != http.StatusOK {
+		t.Fatalf("analyst oluşturma: %d %v", code, o)
+	}
+	if code, _ := postJSON(t, ts, "/api/login", "", map[string]string{"password": "legacy-pw-1"}); code != http.StatusOK {
+		t.Fatalf("analyst varken legacy hâlâ çalışmalı: %d", code)
+	}
+
+	// 3) admin RBAC kullanıcısı ekle → legacy reddedilir
+	code, o := postJSON(t, ts, "/api/v1/users", legacyTok, map[string]any{
+		"username": "adm", "password": "adm-pass-1", "role": "admin",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("admin oluşturma: %d %v", code, o)
+	}
+	admID := int64(o["id"].(float64))
+
+	code, o = postJSON(t, ts, "/api/login", "", map[string]string{"password": "legacy-pw-1"})
+	if code != http.StatusUnauthorized {
+		t.Fatalf("admin RBAC varken legacy 401 beklenirdi: %d %v", code, o)
+	}
+	if msg, _ := o["error"].(string); !strings.Contains(msg, "RBAC") {
+		t.Fatalf("mesaj RBAC'a işaret etmeli: %q", msg)
+	}
+
+	// 4) yeni admin kullanıcısı ile giriş → 200
+	if code, _ := postJSON(t, ts, "/api/login", "", map[string]string{"username": "adm", "password": "adm-pass-1"}); code != http.StatusOK {
+		t.Fatalf("yeni admin girişi: %d", code)
+	}
+
+	// 5) admin kullanıcısını pasifleştir → legacy tekrar çalışır (break-glass)
+	if code, o := putJSON(t, ts, "/api/v1/users/"+strconv.FormatInt(admID, 10), legacyTok, map[string]any{"enabled": false}); code != http.StatusOK {
+		t.Fatalf("admin pasifleştirme: %d %v", code, o)
+	}
+	if code, _ := postJSON(t, ts, "/api/login", "", map[string]string{"password": "legacy-pw-1"}); code != http.StatusOK {
+		t.Fatalf("etkin admin kalmayınca legacy geri dönmeli: %d", code)
 	}
 }

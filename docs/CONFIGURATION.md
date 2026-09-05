@@ -17,7 +17,7 @@
 | `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
-| `-auth-password` | — | Arayüz şifresi. Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` ortam değişkeni de geçerli |
+| `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
 | `-llm-model` | — | Varsayılan model. UI'dan da seçilebilir |
@@ -139,9 +139,13 @@ Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 
 ### Roller
 
-Tek-şifre modu (`-auth-password`) **admin** kimliği olarak çalışmaya devam
-eder. Kalıcı kullanıcılar `-auth-password` ile ilk girişten sonra
-`/api/v1/users` üzerinden açılır (bcrypt saklanır):
+Tek-şifre modu (`-auth-password`) bir kurulum önyükleme (bootstrap)
+mekanizmasıdır: **admin** kimliği verir ve `/api/v1/users` üzerinden ilk
+kalıcı kullanıcılar açılır (bcrypt saklanır). **Etkin bir `admin` rollü RBAC
+kullanıcısı oluşturulduğu an tek-şifre girişi otomatik olarak devre dışı
+kalır** (giriş `401` + "RBAC etkin" mesajı; hub logunda `RBAC aktif` uyarısı).
+Etkin admin kullanıcı kalmazsa (hepsi pasifleştirilirse) tek-şifre girişi
+"break-glass" olarak geri döner.
 
 | Rol | Görüntüleme | Yakalama/kayıt | AI/rapor | Cihaz yönetimi | Agent silme | Kullanıcı/token/audit |
 |---|---|---|---|---|---|---|

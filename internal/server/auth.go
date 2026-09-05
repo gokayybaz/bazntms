@@ -83,6 +83,16 @@ func (a *AuthManager) UsersExist() bool {
 	return a.users
 }
 
+// LegacyLoginDisabled, legacy tek-sifre girisinin devre disi olup olmadigini
+// dondurur: etkin bir RBAC admin'i varsa legacy sifre kapalidir (B6).
+func (a *AuthManager) LegacyLoginDisabled() bool {
+	if a == nil || a.st == nil {
+		return false
+	}
+	exists, _ := a.st.AdminUserExists()
+	return exists
+}
+
 func newSessionToken() string {
 	buf := make([]byte, 32)
 	rand.Read(buf)
@@ -94,6 +104,12 @@ func newSessionToken() string {
 func (a *AuthManager) Login(password, clientIP string) (string, *Identity, bool, bool) {
 	if a == nil {
 		return "", &Identity{Username: "anonim", Role: RoleAdmin, Kind: "legacy"}, true, false
+	}
+	// B6: etkin bir RBAC admin'i varsa legacy tek-sifre girisi devre disi
+	// (rate-limit'e sayilmaz — sifre denemesi degil, politika reddi).
+	if a.LegacyLoginDisabled() {
+		slog.Warn("legacy -auth-password girisi reddedildi — RBAC aktif (etkin admin kullanici var)", "ip", clientIP)
+		return "", nil, false, false
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -370,8 +386,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		msg := "şifre hatalı"
-		if blocked {
+		switch {
+		case blocked:
 			msg = "çok fazla deneme yapıldı, bir dakika bekleyin"
+		case req.Username == "" && s.auth.LegacyLoginDisabled():
+			msg = "tek-şifre girişi kapalı: RBAC etkin — kullanıcı adınızla giriş yapın"
 		}
 		json.NewEncoder(w).Encode(map[string]any{"error": msg})
 		return
