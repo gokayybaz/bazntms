@@ -125,7 +125,7 @@ func sendEmail(nf Notifiers, subject, body string) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if ok, _ := conn.Extension("STARTTLS"); ok {
 		if err := conn.StartTLS(&tls.Config{ServerName: host}); err != nil {
 			return fmt.Errorf("starttls: %w", err)
@@ -189,14 +189,18 @@ func sendDesktop(title, message string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// G204: title/message uyari icerigi — sabit argv slotlarina gecer (kabuk
+	// yok). Yalnizca 'desktop' bildirim kanali secilince, operatorun kendi
+	// makinesinde calisir.
 	switch runtime.GOOS {
 	case "darwin":
 		script := fmt.Sprintf(`display notification %q with title %q`, message, title)
-		return exec.CommandContext(ctx, "osascript", "-e", script).Run()
+		return exec.CommandContext(ctx, "osascript", "-e", script).Run() //nolint:gosec // G204
 	case "linux":
-		return exec.CommandContext(ctx, "notify-send", title, message).Run()
+		return exec.CommandContext(ctx, "notify-send", title, message).Run() //nolint:gosec // G204
 	case "windows":
 		// BurntToast modulu kuruluysa calisir; kurulu degilse hata loglanir, sorun degil
+		//nolint:gosec // G204
 		cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command",
 			fmt.Sprintf("New-BurntToastNotification -Text %q, %q", title, message))
 		return cmd.Run()

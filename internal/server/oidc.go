@@ -105,7 +105,7 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 	state := newRandomState()
 	http.SetCookie(w, &http.Cookie{
 		Name: oidcStateCookie, Value: state, Path: "/api/auth/oidc/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 600,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 600,
 	})
 	http.Redirect(w, r, s.oidc.oauth2.AuthCodeURL(state), http.StatusFound)
 }
@@ -126,7 +126,10 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz OIDC state", http.StatusBadRequest)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/api/auth/oidc/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name: oidcStateCookie, Value: "", Path: "/api/auth/oidc/", MaxAge: -1,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,
+	})
 
 	oauth2Token, err := s.oidc.oauth2.Exchange(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
@@ -181,7 +184,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, ident, "login.oidc", "user:"+username, "SSO girisi: "+string(role))
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,
 		MaxAge: int(sessionTTL.Seconds()),
 	})
 

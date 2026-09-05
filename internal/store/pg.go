@@ -53,7 +53,7 @@ func migratePostgres(db *sql.DB) error {
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrateLockKey); err != nil {
 		return fmt.Errorf("migrasyon kilidi alinamadi: %w", err)
 	}
-	defer conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrateLockKey)
+	defer func() { _, _ = conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrateLockKey) }()
 
 	_, err = conn.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS samples (

@@ -197,7 +197,8 @@ func siemHTTP(c SIEMConfig, payload, ctype string) error {
 	client := http.DefaultClient
 	if c.Insecure {
 		client = &http.Client{
-			Timeout:   10 * time.Second,
+			Timeout: 10 * time.Second,
+			//nolint:gosec // G402: SIEM kolektorleri genelde ic self-signed; Insecure opt-in
 			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		}
 	}

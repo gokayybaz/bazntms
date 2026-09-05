@@ -251,7 +251,7 @@ func (s *Server) Handler() http.Handler {
 				serveIndex(w, s.staticFS) // SPA history fallback
 				return
 			}
-			f.Close()
+			_ = f.Close()
 			fileServer.ServeHTTP(w, r)
 		})
 	}

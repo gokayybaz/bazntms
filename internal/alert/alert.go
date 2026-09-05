@@ -268,7 +268,7 @@ func (m *Manager) checkNewProcess(cfg Config, cons []sysmon.Connection) {
 		// ilk calistirma: mevcut surecleri sessizce taban cizgisi yap
 		for _, c := range cons {
 			if c.Process != "" {
-				m.st.MarkAlertSeen("proc", c.Process)
+				m.markSeen("proc", c.Process)
 			}
 		}
 		return
@@ -288,7 +288,7 @@ func (m *Manager) checkNewProcess(cfg Config, cons []sysmon.Connection) {
 		if seen {
 			continue
 		}
-		m.st.MarkAlertSeen("proc", c.Process)
+		m.markSeen("proc", c.Process)
 		m.fire("proc", c.Process, fmt.Sprintf("Yeni süreç ağa çıktı: %s (pid %d)", c.Process, c.PID))
 	}
 }
@@ -299,7 +299,7 @@ func (m *Manager) checkNewTarget(cfg Config, snap *capture.Snapshot) {
 	}
 	if n, err := m.st.CountAlertSeen("target"); err == nil && n == 0 {
 		for _, e := range snap.TopEndpoints {
-			m.st.MarkAlertSeen("target", e.IP)
+			m.markSeen("target", e.IP)
 		}
 		return
 	}
@@ -312,7 +312,7 @@ func (m *Manager) checkNewTarget(cfg Config, snap *capture.Snapshot) {
 		if seen {
 			continue
 		}
-		m.st.MarkAlertSeen("target", e.IP)
+		m.markSeen("target", e.IP)
 		name := e.IP
 		if e.Hostname != "" {
 			name = fmt.Sprintf("%s (%s)", e.Hostname, e.IP)
@@ -375,7 +375,7 @@ func (m *Manager) checkAgentNewProcess(cfg Config, agents []store.AgentWithRates
 			// taban cizgisi yap (agent yeni eklendiginde alarm firtinasi olmasin)
 			for _, c := range cons {
 				if c.Process != "" {
-					m.st.MarkAlertSeen(seenKind, c.Process)
+					m.markSeen(seenKind, c.Process)
 				}
 			}
 			continue
@@ -391,7 +391,7 @@ func (m *Manager) checkAgentNewProcess(cfg Config, agents []store.AgentWithRates
 			if seen {
 				continue
 			}
-			m.st.MarkAlertSeen(seenKind, c.Process)
+			m.markSeen(seenKind, c.Process)
 			m.fire("proc", a.Name+":"+c.Process,
 				fmt.Sprintf("Yeni süreç ağa çıktı — agent %s: %s (pid %d)", a.Name, c.Process, c.PID))
 		}
@@ -452,6 +452,14 @@ func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates)
 		if !seen[id] {
 			delete(m.agentBw, id)
 		}
+	}
+}
+
+// markSeen, alert dedup taban çizgisine bir anahtar ekler. Hata kritik
+// değil (en fazla ileride tekrar uyarı) — loglanıp geçilir.
+func (m *Manager) markSeen(kind, key string) {
+	if err := m.st.MarkAlertSeen(kind, key); err != nil {
+		log.Printf("alert dedup kaydi yazilamadi [%s]: %v", kind, err)
 	}
 }
 

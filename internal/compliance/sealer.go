@@ -127,10 +127,12 @@ func (s *Sealer) HourlyCheckpoint(ctx context.Context, hour time.Time) error {
 	}
 	// zaman sapması tespiti (A.8.17): kayıt saati dilim gelecekteyse saat geri alınmış demektir
 	if end.Unix() > time.Now().Unix()+3600 {
-		s.st.InsertAlertEvent(store.AlertEvent{
+		if _, err := s.st.InsertAlertEvent(store.AlertEvent{
 			Ts: time.Now().Unix(), Kind: "time_drift", Key: "compliance",
 			Message: fmt.Sprintf("Zaman sapması şüphesi: saatlik dilim sistem saatinden ileride (%s) — NTP senkronizasyonunu doğrulayın", end.Format(time.RFC3339)),
-		})
+		}); err != nil {
+			slog.Warn("zaman sapması uyarısı kaydedilemedi", "err", err)
+		}
 	}
 	_, err = s.st.SaveLogCheckpoint(store.LogCheckpoint{
 		Kind: "hourly", BucketStart: start.Unix(), BucketEnd: end.Unix(),

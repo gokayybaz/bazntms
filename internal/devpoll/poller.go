@@ -116,13 +116,17 @@ func (p *Poller) pollDevice(d store.Device) {
 		snap, err = r.snap, r.err
 	case <-ctx.Done():
 		msg := "poll zaman aşımı (2 dk)"
-		p.store.UpdateDevicePoll(d.ID, "", "", msg)
+		if err := p.store.UpdateDevicePoll(d.ID, "", "", msg); err != nil {
+			slog.Warn("cihaz poll durumu yazilamadi", "device", d.Name, "err", err)
+		}
 		slog.Warn("cihaz poll basarisiz", "device", d.Name, "vendor", d.Vendor, "err", msg)
 		return
 	}
 
 	if err != nil {
-		p.store.UpdateDevicePoll(d.ID, snap.SysName, snap.SysDescr, err.Error())
+		if uerr := p.store.UpdateDevicePoll(d.ID, snap.SysName, snap.SysDescr, err.Error()); uerr != nil {
+			slog.Warn("cihaz poll durumu yazilamadi", "device", d.Name, "err", uerr)
+		}
 		slog.Warn("cihaz poll basarisiz", "device", d.Name, "vendor", d.Vendor, "err", err)
 		return
 	}

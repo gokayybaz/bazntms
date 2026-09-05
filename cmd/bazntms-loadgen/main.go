@@ -96,7 +96,7 @@ func main() {
 	duration := fl.Duration("duration", 0, "test suresi (0 = Ctrl+C'ye kadar)")
 	spread := fl.Duration("spread", 30*time.Second, "agent baslangic rampasi (thundering herd onleme)")
 	site := fl.String("site", "loadgen", "sanal agent site adi")
-	fl.Parse(os.Args[1:])
+	_ = fl.Parse(os.Args[1:])
 
 	if *enroll == "" {
 		fmt.Fprintln(os.Stderr, "-token zorunlu (hub'in logladigi enroll token)")

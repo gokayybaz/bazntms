@@ -46,7 +46,7 @@ func main() {
 	updateKey := fl.String("update-key", "", "ed25519 public key (hex); bos ise yalnizca sha256 dogrulanir")
 	updateInterval := fl.Int("update-interval", 6, "guncelleme kontrol araligi (saat)")
 	showVersion := fl.Bool("version", false, "surum bilgisini yaz ve cik")
-	fl.Parse(os.Args[1:])
+	_ = fl.Parse(os.Args[1:])
 
 	if *showVersion {
 		fmt.Printf("bazntms-agent %s (protokol v%d, %s)\n", version.Version, version.ProtocolVersion, version.Info()["go_version"])

@@ -103,7 +103,7 @@ func (c *Client) ApplyTo(currentVersion, exePath string) (bool, error) {
 		return false, err
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 	if _, err := io.Copy(tmp, io.LimitReader(resp.Body, 1<<32)); err != nil {
 		tmp.Close()
 		return false, err

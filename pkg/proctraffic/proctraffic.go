@@ -27,7 +27,8 @@ type Key struct {
 type ProcInfo struct {
 	PID     int32
 	Process string
-	inode   string
+	//nolint:unused // linux.go icinde kullaniliyor; diger platformlarda build-constraint disi kalir
+	inode string
 }
 
 // Provider, baglanti -> surec esleme tablosunun donemlik anlik gorunumunu

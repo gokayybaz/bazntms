@@ -97,7 +97,11 @@ func (s *sqlStore) ConfigureRetention(retention time.Duration) error {
 		"agent_iface_samples", "process_traffic", "l7_endpoints", "agent_dns", "flows",
 		"device_iface_samples", "syslog_events",
 	} {
+		// G202: tbl derleme-zamani sabit tablo adlari listesinden; secs int64.
+		// TimescaleDB add/remove_retention_policy identifier'i parametrelestiremez.
+		//nolint:gosec // G202
 		_, _ = s.db.Exec(`SELECT remove_retention_policy('` + tbl + `', if_exists => true)`)
+		//nolint:gosec // G202
 		if _, err := s.db.Exec(
 			`SELECT add_retention_policy('` + tbl + `', drop_after => ` + strconv.FormatInt(secs, 10) +
 				`::BIGINT, schedule_interval => INTERVAL '1 hour')`); err != nil {

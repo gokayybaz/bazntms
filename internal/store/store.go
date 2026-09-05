@@ -277,25 +277,25 @@ func openSQLite(path string) (Store, error) {
 		"PRAGMA synchronous=NORMAL",
 	} {
 		if _, err := db.Exec(p); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("%s: %w", p, err)
 		}
 	}
 	if err := migrate(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	s := &sqlStore{db: db}
 	if err := s.ensureDeviceColumns(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
 	}
 	if err := s.ensureSyslogColumns(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
 	}
 	if err := s.seedIsmsSoa(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("SoA seed: %w", err)
 	}
 	return s, nil
@@ -311,20 +311,20 @@ func openPostgres(dsn string) (Store, error) {
 	db.SetMaxIdleConns(8)
 	db.SetConnMaxLifetime(time.Hour)
 	if err := migratePostgres(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("postgres migrasyon: %w", err)
 	}
 	s := &sqlStore{db: db, pg: true}
 	if err := s.ensureDeviceColumns(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("devices kolon migrasyonu: %w", err)
 	}
 	if err := s.ensureSyslogColumns(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("syslog_events kolon migrasyonu: %w", err)
 	}
 	if err := s.seedIsmsSoa(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("SoA seed: %w", err)
 	}
 	s.ts = setupTimescale(db) // best-effort; yoksa duz PostgreSQL modu

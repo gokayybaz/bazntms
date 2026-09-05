@@ -54,7 +54,7 @@ func (l *Listener) Listen(addr string) error {
 
 func (l *Listener) Close() {
 	if l.Conn != nil {
-		l.Conn.Close()
+		_ = l.Conn.Close()
 	}
 }
 

@@ -98,7 +98,7 @@ func (c *Collector) parse(payload []byte, device, exporterKey string, receivedAt
 
 func (c *Collector) Close() {
 	if c.Conn != nil {
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}
 }
 

@@ -181,13 +181,12 @@ func Install(newFile, exePath string) error {
 		return err
 	}
 	old := exePath + ".old"
-	os.Remove(old)
+	_ = os.Remove(old) // onceki degisimden kalinti olabilir
 	if err := os.Rename(exePath, old); err != nil {
 		return fmt.Errorf("eski binary tasima: %w", err)
 	}
 	if err := os.Rename(newFile, exePath); err != nil {
-		// geri al
-		os.Rename(old, exePath)
+		_ = os.Rename(old, exePath) // en iyi cabayla geri al
 		return fmt.Errorf("yeni binary yerlestirme: %w", err)
 	}
 	return nil
@@ -195,5 +194,5 @@ func Install(newFile, exePath string) error {
 
 // CleanupOld, degisim sonrasi kalinti .old dosyasini siler (Windows uyumu).
 func CleanupOld(exePath string) {
-	os.Remove(exePath + ".old")
+	_ = os.Remove(exePath + ".old")
 }

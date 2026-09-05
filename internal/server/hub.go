@@ -90,7 +90,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		delete(h.clients, conn)
 		h.mu.Unlock()
-		conn.Close()
+		_ = conn.Close()
 		slog.Info("ws istemci ayrildi", "toplam", h.count())
 	}()
 
@@ -137,12 +137,12 @@ func (h *Hub) broadcastLoop() {
 			continue
 		}
 		for _, c := range clients {
-			c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
 				h.mu.Lock()
 				delete(h.clients, c)
 				h.mu.Unlock()
-				c.Close()
+				_ = c.Close()
 			}
 		}
 	}

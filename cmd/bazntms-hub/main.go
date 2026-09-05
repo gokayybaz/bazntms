@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	//nolint:gosec // G108: pprof yalnizca opt-in -pprof adresinde acilir, ana API mux'inda degil
 	_ "net/http/pprof" // -pprof adresinde DefaultServeMux'a kaydolur
 	"os"
 	"os/signal"
@@ -82,7 +83,7 @@ func main() {
 	maskPII := fl.Bool("mask-pii", false, "Delil paketinde PII maskeleme (A.5.34)")
 	complianceRetention := fl.Int("compliance-retention-days", 730, "Ham uyum logu saklama suresi (gun; 5651 minimum 730)")
 	showVersion := fl.Bool("version", false, "surum bilgisini yaz ve cik")
-	fl.Parse(os.Args[1:])
+	_ = fl.Parse(os.Args[1:])
 
 	if *showVersion {
 		fmt.Printf("bazntms-hub %s (protokol v%d, %s)\n", version.Version, version.ProtocolVersion, version.Info()["go_version"])
@@ -153,7 +154,7 @@ func main() {
 		slog.Error("veritabani acilamadi", "err", err)
 		os.Exit(1)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	retention := time.Duration(*retentionH) * time.Hour
 	// veritabani bakimi: eski satirlarin temizligi + (TS'te) native chunk-drop
@@ -405,14 +406,22 @@ func main() {
 	if *pprofAddr != "" {
 		go func() {
 			slog.Info("pprof dinleniyor", "addr", *pprofAddr)
-			if err := http.ListenAndServe(*pprofAddr, nil); err != nil {
+			ps := &http.Server{Addr: *pprofAddr, ReadHeaderTimeout: 10 * time.Second}
+			if err := ps.ListenAndServe(); err != nil {
 				slog.Warn("pprof sunucu hatasi", "err", err)
 			}
 		}()
 	}
 
 	addr := "0.0.0.0:" + *port
-	hs := &http.Server{Addr: addr, Handler: srv.Handler(), TLSConfig: tlsConf}
+	// ReadHeaderTimeout: Slowloris'e karsi (G112). ReadTimeout/WriteTimeout
+	// bilerek ayarlanmadi — WS akislari ve uzun rapor indirmeleri var.
+	hs := &http.Server{
+		Addr:              addr,
+		Handler:           srv.Handler(),
+		TLSConfig:         tlsConf,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		scheme := "http"
 		serve := hs.ListenAndServe

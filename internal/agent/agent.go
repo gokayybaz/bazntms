@@ -102,7 +102,9 @@ func (c *Client) LoadState() State {
 	if err != nil {
 		return st
 	}
-	json.Unmarshal(data, &st)
+	if err := json.Unmarshal(data, &st); err != nil {
+		return State{} // bozuk state dosyasi → temiz enrollment
+	}
 	return st
 }
 
@@ -339,8 +341,13 @@ func (c *Client) saveQueue(queue []queuedBatch) {
 		buf.Write(line)
 		buf.WriteByte('\n')
 	}
-	os.MkdirAll(filepath.Dir(c.queuePath()), 0o755)
-	os.WriteFile(c.queuePath(), buf.Bytes(), 0o600)
+	if err := os.MkdirAll(filepath.Dir(c.queuePath()), 0o755); err != nil {
+		slog.Warn("offline kuyruk dizini olusturulamadi", "err", err)
+		return
+	}
+	if err := os.WriteFile(c.queuePath(), buf.Bytes(), 0o600); err != nil {
+		slog.Warn("offline kuyruk diske yazilamadi", "err", err)
+	}
 }
 
 func (c *Client) postBatch(st State, ts int64, batch telemetry.TelemetryBatch) error {

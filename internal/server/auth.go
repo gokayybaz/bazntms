@@ -142,7 +142,7 @@ func (a *AuthManager) LoginUser(username, password, clientIP string) (string, *I
 	a.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}
 	a.pruneLocked()
 
-	go a.st.TouchUserLogin(u.ID) // son giris zamani (hatasiz olsun diye sessiz)
+	go func() { _ = a.st.TouchUserLogin(u.ID) }() // son giris zamani (best-effort)
 	return token, ident, true, false
 }
 
@@ -171,7 +171,7 @@ func (a *AuthManager) IdentityForToken(token string) *Identity {
 	if !role.Valid() {
 		role = RoleViewer
 	}
-	go a.st.TouchAPIToken(t.ID)
+	go func() { _ = a.st.TouchAPIToken(t.ID) }()
 	return &Identity{Username: t.Name, Role: role, Site: t.Site, Kind: "token"}
 }
 
@@ -382,6 +382,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil,
 		MaxAge:   int(sessionTTL.Seconds()),
 	})
 	writeJSON(w, map[string]any{"ok": true, "token": token, "role": string(ident.Role), "username": ident.Username})
@@ -392,7 +393,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, id, "logout", "user:"+id.Username, "")
 	}
 	s.auth.LogoutRequest(r)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,
+	})
 	writeJSON(w, map[string]any{"ok": true})
 }
 

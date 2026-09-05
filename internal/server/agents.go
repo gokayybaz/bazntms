@@ -186,7 +186,7 @@ func (s *Server) validEnrollToken(presented string) bool {
 	if t.ExpiresAt > 0 && time.Now().Unix() > t.ExpiresAt {
 		return false
 	}
-	go s.store.TouchEnrollToken(t.ID) // best-effort, akisi bloklamaz
+	go func() { _ = s.store.TouchEnrollToken(t.ID) }() // best-effort, akisi bloklamaz
 	return true
 }
 

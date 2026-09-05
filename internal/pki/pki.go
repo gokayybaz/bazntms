@@ -87,7 +87,7 @@ func LoadOrCreateCA(dir string) (*CA, error) {
 		return nil, err
 	}
 	// bu noktadan sonra hata olursa kilit dosyasini birak (baska replika uretsin)
-	cleanup := func() { lockF.Close(); os.Remove(keyPath) }
+	cleanup := func() { _ = lockF.Close(); _ = os.Remove(keyPath) }
 
 	priv, err := newKey()
 	if err != nil {

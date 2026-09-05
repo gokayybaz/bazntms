@@ -180,7 +180,7 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 		var env Envelope
 		if err := json.Unmarshal(msg.Data(), &env); err != nil {
 			slog.Error("kuyruk: telemetri cozumlenemedi", "err", err)
-			msg.Term()
+			termMsg(msg)
 			return
 		}
 		ts := env.TS
@@ -227,7 +227,7 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 		var rows []store.FlowRow
 		if err := json.Unmarshal(msg.Data(), &rows); err != nil {
 			slog.Error("kuyruk: flow cozumlenemedi", "err", err)
-			msg.Term()
+			termMsg(msg)
 			return
 		}
 		if err := st.SaveFlows(rows); err != nil {
@@ -238,7 +238,7 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 		var ev store.SyslogEvent
 		if err := json.Unmarshal(msg.Data(), &ev); err != nil {
 			slog.Error("kuyruk: syslog cozumlenemedi", "err", err)
-			msg.Term()
+			termMsg(msg)
 			return
 		}
 		if err := st.SaveSyslogEvent(ev); err != nil {
@@ -254,15 +254,31 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			slog.Error("compliance log hatasi", "err", err)
 		}
 	default:
-		msg.Term()
+		termMsg(msg)
 		return
 	}
-	msg.Ack()
+	ackMsg(msg)
 }
 
 func (q *Queue) retry(msg jetstream.Msg, cause error) {
 	slog.Error("kuyruk: yazim hatasi, mesaj yeniden kuyruga alindi", "err", cause)
-	msg.NakWithDelay(2 * time.Second)
+	if err := msg.NakWithDelay(2 * time.Second); err != nil {
+		slog.Warn("kuyruk: NakWithDelay basarisiz (ack-wait ile yine de teslim edilir)", "err", err)
+	}
+}
+
+// termMsg/ackMsg: JetStream ack sinyali hatasi kritik degil — mesaj
+// ack-wait sonrasi yeniden teslim edilir; yine de loglanir.
+func termMsg(msg jetstream.Msg) {
+	if err := msg.Term(); err != nil {
+		slog.Warn("kuyruk: msg.Term basarisiz", "err", err)
+	}
+}
+
+func ackMsg(msg jetstream.Msg) {
+	if err := msg.Ack(); err != nil {
+		slog.Warn("kuyruk: msg.Ack basarisiz", "err", err)
+	}
 }
 
 // Close, processor'u ve NATS baglantisini kapatir.

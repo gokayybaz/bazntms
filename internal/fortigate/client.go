@@ -58,7 +58,8 @@ func New(opts Options) *Client {
 	}
 	transport := &http.Transport{}
 	if !opts.VerifyTLS {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec — cihaz bazlı self-signed seçimi
+		//nolint:gosec // G402: FortiGate cihazlari genelde self-signed; VerifyTLS opt-in ile kapatilir
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	return &Client{
 		opts: opts,

@@ -1,0 +1,91 @@
+# golangci-lint v2 — Faz 11 / S11.2 statik analiz gate'i.
+# Varsayılan set (errcheck, govet, ineffassign, staticcheck, unused) +
+# güvenlik taraması için gosec.
+version: "2"
+
+linters:
+  enable:
+    - gosec
+
+  settings:
+    errcheck:
+      # Dönüş değeri kontrol etmenin anlamlı bir eylem üretmediği çağrılar.
+      exclude-functions:
+        # Kaynak/bağlantı kapatma (çoğu defer deyimi) — hata eyleme
+        # dönüştürülemez. Yazım yolları (pcap/JSONL) tamponsuz io.Writer
+        # kullanır; veri Close'da değil WritePacket/Encode'da yazılır ve
+        # oralarda hata zaten kontrol edilir.
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Conn).Close
+        - (*database/sql.Tx).Rollback # Commit sonrası ErrTxDone beklenir
+        - (io.ReadCloser).Close # http.Response.Body
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net.Conn).Close
+        - (net.Listener).Close
+        - (net.PacketConn).Close
+        # HTTP yanıt gövdesine yazma — istemci bağlantısı kopmuşsa
+        # yapılabilecek bir şey yok, handler zaten dönüyor.
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode # handler yanıtına yazım
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+    gosec:
+      excludes:
+        # errcheck zaten kapsıyor, çift raporlama olmasın.
+        - G104
+        # G115 (int overflow dönüşümü): ~26 bulgu, hepsi sınırlı-değer
+        # alanlarında (port 0-65535, paket sayaçları, PID, SNMP counter).
+        # gosec statik olarak sınırı kanıtlayamıyor; pratikte taşma yok.
+        - G115
+        # G304 / G703 (değişkenle dosya açma, taint path traversal): tüm
+        # çağrılar admin config'inden gelen yollar (sertifika/DB/updates
+        # dizini) veya beyaz-listeyle doğrulanmış path segmentleri
+        # (updatesChannel/updatesSafe) — ham kullanıcı girişi değil.
+        - G304
+        - G703
+        # G301/G302/G306 (dizin/dosya izni >0600): config'ler kasıtlı 0644,
+        # dizinler 0755 (Unix norm); özel anahtarlar zaten 0600 ile yazılır
+        # (pki.go/mtls.go/vault.go). agent.yml sıkılaştırması B4'te.
+        - G301
+        - G302
+        - G306
+        # G404 (zayıf rng): yalnız cmd/bazntms-loadgen'de (yük üreteci).
+        - G404
+        # G109 (Atoi -> int16/32): darwin proctraffic'te lsof PID ayrıştırma;
+        # PID değer aralığı sınırlı.
+        - G109
+        # G124 (cookie Secure/HttpOnly/SameSite): oturum çerezleri HttpOnly +
+        # SameSite=Lax; Secure=`r.TLS != nil` (düz HTTP / TLS-sonlandıran
+        # proxy arkasında çalışma destekleniyor, koşulsuz Secure çerezi
+        # düşürür). Proxy-farkında Secure Faz 16'da.
+        - G124
+        # G602 (slice sınır): internal/flows/nfv5.go — parser her kayıttan
+        # önce `off+v5RecordSize > len(payload)` kontrolü yapıyor; gosec
+        # sabit-boy dilimi tanıyamıyor.
+        - G602
+        # G705 (taint XSS): compliance/updates delil & manifest indirmeleri
+        # — Content-Type: application/json + Content-Disposition: attachment,
+        # HTML render yok.
+        - G705
+
+  exclusions:
+    generated: lax
+    rules:
+      # Testlerde zayıf rng / sabit kimlik / geçici dosya izni kasıtlı.
+      - path: _test\.go
+        linters:
+          - gosec
+      # Testlerde kaynak temizliği / kurgu HTTP yazımı hatalarını kontrol
+      # etmek gürültü — asıl doğrulama zaten assert'lerde.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
