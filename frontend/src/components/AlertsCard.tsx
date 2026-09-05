@@ -48,6 +48,21 @@ const inputCls =
   'w-full rounded-lg border border-slate-700/80 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-dim-aa focus:border-cyan-500/60'
 const fieldLabelCls = 'block space-y-1 text-xs text-slate-500'
 
+type ChannelStatus = { last_attempt: number; ok: boolean; error?: string }
+
+// ChannelDot, bir bildirim kanalının son teslim durumunu gösterir (D3).
+// Hiç denenmediyse hiçbir şey göstermez.
+function ChannelDot({ s }: { s?: ChannelStatus }) {
+  if (!s || !s.last_attempt) return null
+  const when = new Date(s.last_attempt * 1000).toLocaleString('tr-TR')
+  return (
+    <span
+      title={s.ok ? `son teslim: ${when}` : `hata (${when}): ${s.error}`}
+      className={`ml-1.5 inline-block size-2 rounded-full align-middle ${s.ok ? 'bg-emerald-400' : 'bg-rose-500'}`}
+    />
+  )
+}
+
 export function AlertsCard({ events }: { events: AlertEvent[] }) {
   const [cfg, setCfg] = useState<AlertConfig | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -56,6 +71,8 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
   const [saveError, setSaveError] = useState(false)
   const [savedAt, setSavedAt] = useState('')
   const [portsDropped, setPortsDropped] = useState(0)
+  const [notify, setNotify] = useState<Record<string, ChannelStatus>>({})
+  const [testing, setTesting] = useState(false)
 
   useEffect(() => {
     fetch('/api/alerts')
@@ -74,6 +91,23 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
         }
       })
       .catch(() => setLoadError(true))
+    fetch('/api/alerts/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.channels && setNotify(d.channels))
+      .catch(() => {})
+  }, [])
+
+  const testChannels = useCallback(async () => {
+    setTesting(true)
+    try {
+      const res = await fetch('/api/alerts/test', { method: 'POST' })
+      const d = await res.json()
+      if (d?.channels) setNotify(d.channels)
+    } catch {
+      /* durum güncellenmez */
+    } finally {
+      setTesting(false)
+    }
   }, [])
 
   const save = useCallback(async () => {
@@ -275,18 +309,29 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
         </Section>
 
         <Section title="Bildirim Kanalları">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={testChannels}
+              disabled={testing}
+              className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
+            >
+              {testing ? 'Test ediliyor…' : 'Kanalları Test Et'}
+            </button>
+            <span className="text-[10.5px] text-dim-aa">kaydedilmiş yapılandırmaya sınama uyarısı gönderir</span>
+          </div>
           <Toggle checked={cfg.notifiers.desktop} onChange={(v) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, desktop: v } })} label="Masaüstü bildirimi" />
-          <label className={fieldLabelCls}>Generic webhook URL
+          <label className={fieldLabelCls}><span>Generic webhook URL<ChannelDot s={notify.generic} /></span>
             <input value={cfg.notifiers.generic_url} onChange={(e) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, generic_url: e.target.value } })} placeholder="https://…" className={inputCls} />
           </label>
-          <label className={fieldLabelCls}>Discord webhook URL
+          <label className={fieldLabelCls}><span>Discord webhook URL<ChannelDot s={notify.discord} /></span>
             <input value={cfg.notifiers.discord_url} onChange={(e) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, discord_url: e.target.value } })} placeholder="https://discord.com/api/webhooks/…" className={inputCls} />
           </label>
-          <label className={fieldLabelCls}>Slack webhook URL
+          <label className={fieldLabelCls}><span>Slack webhook URL<ChannelDot s={notify.slack} /></span>
             <input value={cfg.notifiers.slack_url} onChange={(e) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, slack_url: e.target.value } })} placeholder="https://hooks.slack.com/…" className={inputCls} />
           </label>
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
-            <label className={fieldLabelCls}>Telegram bot token
+            <label className={fieldLabelCls}><span>Telegram bot token<ChannelDot s={notify.telegram} /></span>
               <input value={cfg.notifiers.telegram_token} onChange={(e) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, telegram_token: e.target.value } })} placeholder="123456:ABC-…" className={inputCls} />
             </label>
             <label className={fieldLabelCls}>Telegram chat ID
@@ -296,7 +341,10 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
         </Section>
 
         <Section title="SIEM / ITSM Bağlayıcı" status={siem.enabled ? 'açık' : 'kapalı'}>
-          <Toggle checked={siem.enabled} onChange={(v) => patchSiem({ enabled: v })} label="Uyarıları SIEM'e ilet (CEF/LEEF/JSON)" />
+          <div className="flex items-center gap-1.5">
+            <Toggle checked={siem.enabled} onChange={(v) => patchSiem({ enabled: v })} label="Uyarıları SIEM'e ilet (CEF/LEEF/JSON)" />
+            <ChannelDot s={notify.siem} />
+          </div>
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
             <label className={fieldLabelCls}>Mesaj formatı
               <select value={siem.format} onChange={(e) => patchSiem({ format: e.target.value as typeof siem.format })} className={inputCls}>

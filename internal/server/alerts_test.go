@@ -7,9 +7,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gokayybaz/bazntms/internal/alert"
@@ -161,4 +163,85 @@ func TestAlertsSecretMaskRoundTrip(t *testing.T) {
 	if stored.Notifiers.EmailPass != "REAL-smtp-password" {
 		t.Fatalf("maskeli email_pass yine korunmalıydı: %q", stored.Notifiers.EmailPass)
 	}
+}
+
+// TestAlertsTestAndStatus (D3 / S12.8): POST /api/alerts/test etkin kanallara
+// sınama gönderir; hata olan kanal durum + metriğe yansır; GET /api/alerts/status
+// aynı durumu döndürür. Admin korumalı.
+func TestAlertsTestAndStatus(t *testing.T) {
+	// biri başarılı, biri 500 dönen iki sahte webhook
+	okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer okSrv.Close()
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer badSrv.Close()
+
+	ts, _ := newAlertsTestServer(t, "admin-pass-3")
+	_, adminTok := login(t, ts, "admin-pass-3")
+
+	cfg := alert.DefaultConfig()
+	cfg.Notifiers.Desktop = false
+	cfg.Notifiers.SlackURL = okSrv.URL
+	cfg.Notifiers.DiscordURL = badSrv.URL
+	if st, _ := putJSON(t, ts, "/api/alerts", adminTok, cfg); st != http.StatusOK {
+		t.Fatalf("config PUT: %d", st)
+	}
+
+	// viewer test edemez
+	if st, out := postJSON(t, ts, "/api/v1/users", adminTok, map[string]any{
+		"username": "vic", "password": "vic-pass-1", "role": "viewer",
+	}); st != http.StatusOK {
+		t.Fatalf("viewer oluşturma: %d %v", st, out)
+	}
+	vicTok := userToken(t, ts, "vic", "vic-pass-1")
+	if st, _ := postJSON(t, ts, "/api/alerts/test", vicTok, nil); st != http.StatusForbidden {
+		t.Fatalf("viewer /api/alerts/test: %d beklendi 403", st)
+	}
+
+	// admin test → kanal sonuçları
+	st, out := postJSON(t, ts, "/api/alerts/test", adminTok, nil)
+	if st != http.StatusOK {
+		t.Fatalf("admin test: %d %v", st, out)
+	}
+	ch, _ := out["channels"].(map[string]any)
+	slack, _ := ch["slack"].(map[string]any)
+	discord, _ := ch["discord"].(map[string]any)
+	if slack["ok"] != true {
+		t.Fatalf("slack ok bekleniyordu: %v", slack)
+	}
+	if discord["ok"] != false || discord["error"] == "" {
+		t.Fatalf("discord hata bekleniyordu: %v", discord)
+	}
+
+	// GET /api/alerts/status aynı sonucu verir
+	st, out = getJSON(t, ts, "/api/alerts/status", adminTok)
+	if st != http.StatusOK {
+		t.Fatalf("status GET: %d", st)
+	}
+	ch, _ = out["channels"].(map[string]any)
+	if d, _ := ch["discord"].(map[string]any); d["ok"] != false {
+		t.Fatalf("status'ta discord hatalı olmalı: %v", ch)
+	}
+
+	// metrik: bazntms_notify_failures_total{channel="discord"} >= 1
+	resp, err := http.Get(ts.URL + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), `bazntms_notify_failures_total{channel="discord"}`) {
+		t.Fatalf("notify_failures metriği discord etiketiyle yok:\n%s", grepLines(string(body), "notify_failures"))
+	}
+}
+
+func grepLines(s, sub string) string {
+	var b strings.Builder
+	for _, l := range strings.Split(s, "\n") {
+		if strings.Contains(l, sub) {
+			b.WriteString(l + "\n")
+		}
+	}
+	return b.String()
 }

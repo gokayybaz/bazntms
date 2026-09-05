@@ -45,11 +45,12 @@ type Server struct {
 	agentCA           *pki.CA // nil ise mTLS kapali (enroll CSR imzalamaz, client-cert auth yok)
 	enrollAttempts    *enrollAttemptLimiter
 
-	httpRequests *prometheus.CounterVec
-	httpDuration *prometheus.HistogramVec
-	wsClients    prometheus.Gauge
-	captureRun   prometheus.Gauge
-	registry     *prometheus.Registry
+	httpRequests   *prometheus.CounterVec
+	httpDuration   *prometheus.HistogramVec
+	wsClients      prometheus.Gauge
+	captureRun     prometheus.Gauge
+	notifyFailures *prometheus.CounterVec
+	registry       *prometheus.Registry
 }
 
 // TelemetrySink, agent telemetrisini kuyruga aktaran arayuzdur (Faz 4.2,
@@ -104,10 +105,20 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 		Name: "bazntms_capture_running",
 		Help: "Paket yakalama aktif mi (1/0)",
 	})
+	s.notifyFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "bazntms_notify_failures_total",
+		Help: "Kanal basina bildirim teslim hatasi sayisi",
+	}, []string{"channel"})
 	// server-basina registry: testlerde coklu New() cagrisi guvenli olur
 	s.registry = prometheus.NewRegistry()
-	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun)
+	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun, s.notifyFailures)
 	s.registry.MustRegister(collectors.NewGoCollector())
+
+	if alerts != nil {
+		alerts.SetNotifyFailHook(func(channel string) {
+			s.notifyFailures.WithLabelValues(channel).Inc()
+		})
+	}
 
 	return s
 }
@@ -138,6 +149,8 @@ func (s *Server) Handler() http.Handler {
 	// EmailPass, WebhookV2Secret, SIEM token) taşır — PUT zaten admin'di.
 	mux.Handle("GET /api/alerts", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsGet)))
 	mux.Handle("PUT /api/alerts", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsPut)))
+	mux.Handle("GET /api/alerts/status", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsStatus)))
+	mux.Handle("POST /api/alerts/test", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsTest)))
 	mux.HandleFunc("GET /api/alerts/events", s.handleAlertEvents)
 
 	// agent filo uclari (agentAuth: Bearer agent token)
@@ -456,6 +469,20 @@ func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, identityFromCtx(r), "alerts.update", "", "")
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handleAlertsStatus, her bildirim kanalının son teslim denemesinin
+// durumunu döndürür (D3).
+func (s *Server) handleAlertsStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{"channels": s.alerts.NotifierStatus()})
+}
+
+// handleAlertsTest, etkin bildirim kanallarına sentetik bir uyarı gönderir
+// ve kanal başına sonucu döndürür (admin — "Test Et").
+func (s *Server) handleAlertsTest(w http.ResponseWriter, r *http.Request) {
+	res := s.alerts.TestNotifiers()
+	s.audit(r, identityFromCtx(r), "alerts.test", "", fmt.Sprintf("%d kanal denendi", len(res)))
+	writeJSON(w, map[string]any{"channels": res})
 }
 
 func (s *Server) handleAlertEvents(w http.ResponseWriter, r *http.Request) {

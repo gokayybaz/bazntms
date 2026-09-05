@@ -140,7 +140,7 @@ func NewManager(cfg Config, st store.Store, engine *capture.Engine, telemetryInt
 		telemetryInterval: telemetryInterval,
 		stopCh:            make(chan struct{}),
 		doneCh:            make(chan struct{}),
-		notifier:          &Notifier{},
+		notifier:          NewNotifier(),
 	}
 }
 
@@ -520,6 +520,43 @@ func (m *Manager) RecentEvents(n int) []store.AlertEvent {
 		return []store.AlertEvent{}
 	}
 	return evs
+}
+
+// --- bildirim kanalı durumu (D3, S12.8) ---
+
+// NotifierStatus, her bildirim kanalının son teslim denemesinin sonucunu döndürür.
+func (m *Manager) NotifierStatus() map[string]ChannelStatus {
+	m.mu.Lock()
+	n := m.notifier
+	m.mu.Unlock()
+	if n == nil {
+		return map[string]ChannelStatus{}
+	}
+	return n.Status()
+}
+
+// TestNotifiers, güncel yapılandırmadaki tüm etkin kanallara sentetik bir
+// uyarı gönderir (senkron) ve sonuçları döndürür.
+func (m *Manager) TestNotifiers() map[string]ChannelStatus {
+	m.mu.Lock()
+	cfg := m.cfg
+	n := m.notifier
+	m.mu.Unlock()
+	if n == nil {
+		return map[string]ChannelStatus{}
+	}
+	return n.Test(cfg.Notifiers)
+}
+
+// SetNotifyFailHook, kanal başına teslim hatasında çağrılacak metrik
+// kancasını Notifier'a iletir (server Prometheus counter'ı).
+func (m *Manager) SetNotifyFailHook(fn func(channel string)) {
+	m.mu.Lock()
+	n := m.notifier
+	m.mu.Unlock()
+	if n != nil {
+		n.SetFailHook(fn)
+	}
 }
 
 // remotePort, "1.2.3.4:443" formatindan portu cikarir.

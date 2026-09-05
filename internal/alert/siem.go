@@ -33,11 +33,14 @@ const (
 	siemVersion = "1.0"
 )
 
-// deliverSIEM, tek bir olayı yapılandırılmış SIEM hedefine iletir. Hata
-// yalnızca loglanır — bildirim hatası izleme işini durdurmamalı.
-func deliverSIEM(c SIEMConfig, ev store.AlertEvent) {
-	if !c.Enabled || c.Target == "" {
-		return
+// deliverSIEM, tek bir olayı yapılandırılmış SIEM hedefine iletir. Dönen
+// hata çağırana (Notifier) kanal durumu için verilir; ayrıca loglanır.
+func deliverSIEM(c SIEMConfig, ev store.AlertEvent) error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.Target == "" {
+		return fmt.Errorf("SIEM hedefi (target) boş")
 	}
 
 	var payload, ctype string
@@ -65,7 +68,9 @@ func deliverSIEM(c SIEMConfig, ev store.AlertEvent) {
 	}
 	if err != nil {
 		log.Printf("SIEM bildirimi (%s/%s): %v", c.Format, c.Transport, err)
+		return fmt.Errorf("%s/%s: %w", c.Format, c.Transport, err)
 	}
+	return nil
 }
 
 // --- formatlar ---

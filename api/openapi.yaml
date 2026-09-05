@@ -569,6 +569,21 @@ paths:
       responses:
         "200": { description: Kaydedildi }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/alerts/status:
+    get:
+      tags: [alerts]
+      summary: Bildirim kanallarının son teslim durumu (yetki:admin)
+      responses:
+        "200":
+          description: "{ channels: { <kanal>: { last_attempt, ok, error } } }"
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/alerts/test:
+    post:
+      tags: [alerts]
+      summary: Etkin bildirim kanallarına sınama uyarısı gönder (yetki:admin)
+      responses:
+        "200": { description: "{ channels: { <kanal>: { last_attempt, ok, error } } }" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/alerts/events:
     get:
       tags: [alerts]

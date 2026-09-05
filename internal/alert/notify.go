@@ -15,95 +15,179 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
-// Notifier, olaylari masaustu bildirimi ve webhook'lara dagitir.
-// Tum gonderimler asenkron ve hatayi loglayarak yutuyor: bildirim hatasi
-// izleme isini durdurmamali.
-type Notifier struct{}
+// Bildirim kanalı kimlikleri (durum haritası + metrik etiketi).
+const (
+	ChDesktop   = "desktop"
+	ChGeneric   = "generic"
+	ChDiscord   = "discord"
+	ChSlack     = "slack"
+	ChTelegram  = "telegram"
+	ChTeams     = "teams"
+	ChWebhookV2 = "webhook_v2"
+	ChEmail     = "email"
+	ChSIEM      = "siem"
+)
+
+// ChannelStatus, bir bildirim kanalının son teslim denemesinin sonucu (D3).
+type ChannelStatus struct {
+	LastAttempt int64  `json:"last_attempt"` // unix; 0 = hiç denenmedi
+	OK          bool   `json:"ok"`
+	Error       string `json:"error,omitempty"`
+}
+
+// Notifier, olaylari masaustu bildirimi ve webhook'lara dagitir. Tum
+// gonderimler asenkron; her denemenin sonucu kanal bazinda saklanir
+// (Status) ve hata olursa onFail metrik kancasi cagrilir.
+type Notifier struct {
+	mu     sync.Mutex
+	status map[string]ChannelStatus
+	onFail func(channel string)
+}
+
+func NewNotifier() *Notifier {
+	return &Notifier{status: map[string]ChannelStatus{}}
+}
+
+// SetFailHook, kanal başına teslim hatasında çağrılacak metrik kancasını
+// ayarlar (server Prometheus counter'ına bağlanır).
+func (n *Notifier) SetFailHook(fn func(channel string)) {
+	n.mu.Lock()
+	n.onFail = fn
+	n.mu.Unlock()
+}
+
+// Status, tüm kanalların son durumlarının kopyasını döndürür.
+func (n *Notifier) Status() map[string]ChannelStatus {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	out := make(map[string]ChannelStatus, len(n.status))
+	for k, v := range n.status {
+		out[k] = v
+	}
+	return out
+}
+
+func (n *Notifier) record(channel string, err error) {
+	n.mu.Lock()
+	st := ChannelStatus{LastAttempt: time.Now().Unix(), OK: err == nil}
+	if err != nil {
+		st.Error = err.Error()
+	}
+	n.status[channel] = st
+	hook := n.onFail
+	n.mu.Unlock()
+	if err != nil {
+		log.Printf("bildirim [%s]: %v", channel, err)
+		if hook != nil {
+			hook(channel)
+		}
+	}
+}
+
+func (n *Notifier) deliver(channel string, fn func() error) {
+	n.record(channel, fn())
+}
 
 func (n *Notifier) Deliver(nf Notifiers, ev store.AlertEvent) {
+	go n.dispatch(nf, ev)
+}
+
+// Test, tüm etkin kanallara sentetik bir uyarı gönderir (senkron) ve güncel
+// durumları döndürür — panelden "Test Et" için.
+func (n *Notifier) Test(nf Notifiers) map[string]ChannelStatus {
+	ev := store.AlertEvent{
+		Ts:      time.Now().Unix(),
+		Kind:    "test",
+		Key:     "manual",
+		Message: "bazNTMS test bildirimi — kanal yapılandırmasını doğrulamak için gönderildi.",
+	}
+	n.dispatch(nf, ev)
+	return n.Status()
+}
+
+// dispatch, yapılandırmadaki etkin kanalların her birine ev'i iletir ve
+// sonucu kaydeder. Deliver bunu goroutine'de, Test senkron çağırır.
+func (n *Notifier) dispatch(nf Notifiers, ev store.AlertEvent) {
 	title := fmt.Sprintf("bazNTMS [%s]", kindLabel(ev.Kind))
-	go func() {
-		if nf.Desktop {
-			if err := sendDesktop(title, ev.Message); err != nil {
-				log.Printf("masaustu bildirimi: %v", err)
-			}
-		}
-		if nf.GenericURL != "" {
-			payload := map[string]any{
+	if nf.Desktop {
+		n.deliver(ChDesktop, func() error { return sendDesktop(title, ev.Message) })
+	}
+	if nf.GenericURL != "" {
+		n.deliver(ChGeneric, func() error {
+			return postJSON(nf.GenericURL, map[string]any{
 				"ts": ev.Ts, "kind": ev.Kind, "key": ev.Key, "message": ev.Message, "title": title,
-			}
-			n.postJSON(nf.GenericURL, payload)
-		}
-		if nf.DiscordURL != "" {
-			n.postJSON(nf.DiscordURL, map[string]string{"content": "**" + title + "**\n" + ev.Message})
-		}
-		if nf.SlackURL != "" {
-			n.postJSON(nf.SlackURL, map[string]string{"text": "*" + title + "*\n" + ev.Message})
-		}
-		if nf.TelegramToken != "" && nf.TelegramChatID != "" {
+			})
+		})
+	}
+	if nf.DiscordURL != "" {
+		n.deliver(ChDiscord, func() error {
+			return postJSON(nf.DiscordURL, map[string]string{"content": "**" + title + "**\n" + ev.Message})
+		})
+	}
+	if nf.SlackURL != "" {
+		n.deliver(ChSlack, func() error {
+			return postJSON(nf.SlackURL, map[string]string{"text": "*" + title + "*\n" + ev.Message})
+		})
+	}
+	if nf.TelegramToken != "" && nf.TelegramChatID != "" {
+		n.deliver(ChTelegram, func() error {
 			url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", nf.TelegramToken)
-			n.postJSON(url, map[string]string{
-				"chat_id": nf.TelegramChatID,
-				"text":    title + "\n" + ev.Message,
+			return postJSON(url, map[string]string{"chat_id": nf.TelegramChatID, "text": title + "\n" + ev.Message})
+		})
+	}
+	if nf.TeamsURL != "" {
+		n.deliver(ChTeams, func() error {
+			return postJSON(nf.TeamsURL, map[string]any{
+				"@type": "MessageCard", "@context": "http://schema.org/extensions",
+				"themeColor": "0E7490", "title": title, "text": ev.Message,
 			})
-		}
-		// Faz 6.3: kurumsal entegrasyonlar
-		if nf.TeamsURL != "" {
-			n.postJSON(nf.TeamsURL, map[string]any{
-				"@type":      "MessageCard",
-				"@context":   "http://schema.org/extensions",
-				"themeColor": "0E7490",
-				"title":      title,
-				"text":       ev.Message,
-			})
-		}
-		if nf.WebhookV2URL != "" {
-			n.postWebhookV2(nf.WebhookV2URL, nf.WebhookV2Secret, ev, title)
-		}
-		if nf.EmailHost != "" && len(nf.EmailTo) > 0 {
-			if err := sendEmail(nf, title, ev.Message); err != nil {
-				log.Printf("e-posta bildirimi: %v", err)
-			}
-		}
-		if nf.SIEM.Enabled {
-			deliverSIEM(nf.SIEM, ev)
-		}
-	}()
+		})
+	}
+	if nf.WebhookV2URL != "" {
+		n.deliver(ChWebhookV2, func() error { return postWebhookV2(nf.WebhookV2URL, nf.WebhookV2Secret, ev, title) })
+	}
+	if nf.EmailHost != "" && len(nf.EmailTo) > 0 {
+		n.deliver(ChEmail, func() error { return sendEmail(nf, title, ev.Message) })
+	}
+	if nf.SIEM.Enabled {
+		n.deliver(ChSIEM, func() error { return deliverSIEM(nf.SIEM, ev) })
+	}
 }
 
 // postWebhookV2, imzali webhook: govde HMAC-SHA256 ile imzalanir; alici
 // tarafinda X-BazNTMS-Signature basligi dogrulanarak replay/spoof onlenir.
-func (n *Notifier) postWebhookV2(url, secret string, ev store.AlertEvent, title string) {
+func postWebhookV2(url, secret string, ev store.AlertEvent, title string) error {
 	payload := map[string]any{
 		"version": 2, "ts": ev.Ts, "kind": ev.Kind, "key": ev.Key,
 		"message": ev.Message, "title": title,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return
+		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-BazNTMS-Signature", "sha256="+hmacSHA256Hex(secret, body))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("webhook v2: %v", err)
-		return
+		return err
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		log.Printf("webhook v2 basarisiz (HTTP %d): %s", resp.StatusCode, url)
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
+	return nil
 }
 
 func hmacSHA256Hex(secret string, body []byte) string {
@@ -160,28 +244,27 @@ func sendEmail(nf Notifiers, subject, body string) error {
 	return conn.Quit()
 }
 
-func (n *Notifier) postJSON(url string, payload any) {
+func postJSON(url string, payload any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return
+		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		log.Printf("webhook: %v", err)
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("webhook: %v", err)
-		return
+		return err
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		log.Printf("webhook basarisiz (HTTP %d): %s", resp.StatusCode, url)
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
+	return nil
 }
 
 // sendDesktop, platformun yerel bildirim mekanizmasini dener.
@@ -229,6 +312,8 @@ func kindLabel(kind string) string {
 		return "SD-WAN SLA"
 	case "high_sessions":
 		return "Oturum Eşiği"
+	case "test":
+		return "Test"
 	default:
 		return strings.ToUpper(kind)
 	}
