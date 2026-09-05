@@ -48,13 +48,30 @@
              degiskenleri SCM tarafindan reboot'a kadar tazelenmedigi icin
              servis konfigurasyonu kayit defterinden okur.
 
-             TODO(B4/S11.9): enroll_token bir sirdir ve HKLM altinda
-             varsayilan olarak "Users" grubunca okunabilir. WixToolset.Util
-             uzantisi + <util:PermissionEx> ile bu anahtari LocalSystem +
-             Administrators'a kisitla (Linux/macOS icin agent.yml 0600'e
-             cekildi; Windows ACL'i ayri is olarak birakildi). -->
+             B4/S11.9: enroll_token bir sirdir; HKLM\SOFTWARE varsayilan
+             DACL'i "Users" grubuna okuma verir ve alt anahtarlar bunu
+             miras alir — yani asagidaki anahtar hicbir sey yapilmazsa
+             tum yerel kullanicilarca okunabilir. <PermissionEx> (MSI 5.0
+             MsiLockPermissionsEx tablosu; Package/@InstallerVersion=500
+             zaten bunu sart kosuyor) anahtarin DACL'ini SDDL ile komple
+             degistirir:
+               D:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)
+             'P' bayragi miras zincirini keser (Users okuma ACE'si dusler);
+             yalniz LocalSystem (SY — servis bu hesapta kosar, ServiceInstall'da
+             Account yok) ve yerel Administrators (BA) tam erisim (KA, CI ile
+             alt anahtarlara da) alir. SDDL yerellestirme-guvenli: hesap adi
+             degil SID kisaltmasi kullanir. ForceCreateOnInstall, PermissionEx'in
+             baglanacagi bir Registry tablo satiri uretmek icin zorunlu.
+             (Linux/macOS icin agent.yml 0600'e cekildi, commit d7d52fb.)
+
+             util:PermissionEx TERCIH EDILMEDI: onun SchedSecureObjects CA'i
+             yeni ACE'yi mevcut DACL'e sadece EKLER ve PROTECTED_DACL'i yalniz
+             anahtar zaten korumaliysa set eder — taze anahtarda mirasli
+             "Users: Read" kalir, yani B4'u kapatmazdi. -->
         <Component Id='AgentRegConfig' Guid='C3D4E5F6-7A8B-9C0D-1E2F-334455667788'>
-          <RegistryKey Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'>
+          <RegistryKey Id='AgentRegKey' Root='HKLM' Key='SOFTWARE\bazNTMS\Agent'
+                       ForceCreateOnInstall='yes'>
+            <PermissionEx Sddl='D:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)' />
             <RegistryValue Name='hub_url' Type='string' Value='[HUBURL]' KeyPath='yes' />
             <RegistryValue Name='enroll_token' Type='string' Value='[ENROLLTOKEN]' />
             <RegistryValue Name='site' Type='string' Value='[SITE]' />
