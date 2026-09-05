@@ -57,6 +57,7 @@ describe('AlertsPage', () => {
     // gosterilir (bkz. AlertsPage: KIND_LABELS[kind] ?? kind)
     const events = [{ id: 1, ts: 0, kind: 'yeni_bilinmeyen_tur', key: 'k1', message: 'x' }] as unknown as AlertEvent[]
     render(<AlertsPage alertEvents={events} />)
-    expect(screen.getByText('yeni_bilinmeyen_tur')).toBeInTheDocument()
+    // rozet + olay akışı listesi — ikisinde de ham kind fallback'i
+    expect(screen.getAllByText('yeni_bilinmeyen_tur').length).toBeGreaterThan(0)
   })
 })

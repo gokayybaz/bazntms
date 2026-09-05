@@ -51,6 +51,7 @@ const fieldLabelCls = 'block space-y-1 text-xs text-slate-500'
 export function AlertsCard({ events }: { events: AlertEvent[] }) {
   const [cfg, setCfg] = useState<AlertConfig | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [forbidden, setForbidden] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
   const [savedAt, setSavedAt] = useState('')
@@ -59,12 +60,18 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
   useEffect(() => {
     fetch('/api/alerts')
       .then((r) => {
+        if (r.status === 403) {
+          setForbidden(true)
+          return null
+        }
         if (!r.ok) throw new Error(String(r.status))
         return r.json()
       })
       .then((c) => {
-        setCfg(c)
-        setLoadError(false)
+        if (c) {
+          setCfg(c)
+          setLoadError(false)
+        }
       })
       .catch(() => setLoadError(true))
   }, [])
@@ -88,11 +95,48 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
     }
   }, [cfg])
 
+  const eventFeed = (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Olay Akışı</h3>
+      {events.length === 0 ? (
+        <p className="py-8 text-center text-sm text-dim-aa">Henüz uyarı yok.</p>
+      ) : (
+        <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
+          {events.map((e) => (
+            <li key={e.id} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${KIND_STYLES[e.kind] ?? 'bg-slate-500/10 text-slate-400 ring-slate-500/20'}`}
+                >
+                  {KIND_LABELS[e.kind] ?? e.kind}
+                </span>
+                <span className="ml-auto font-mono text-[10px] text-dim-aa">
+                  {new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-300">{e.message}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+
   if (!cfg) {
-    return loadError ? (
-      <p className="py-6 text-center text-sm text-rose-400">⚠ ayarlar alınamadı — sayfayı yenileyin</p>
+    const notice = forbidden ? (
+      <p className="text-sm text-dim-aa">
+        Uyarı eşikleri ve bildirim kanalları yalnızca <span className="text-slate-300">yöneticilere</span> görünür.
+      </p>
+    ) : loadError ? (
+      <p className="text-sm text-rose-400">⚠ ayarlar alınamadı — sayfayı yenileyin</p>
     ) : (
-      <p className="py-6 text-center text-sm text-dim-aa">Ayarlar yükleniyor…</p>
+      <p className="text-sm text-dim-aa">Ayarlar yükleniyor…</p>
+    )
+    return (
+      <div className="grid gap-5 lg:grid-cols-2">
+        {eventFeed}
+        <div className="flex items-start pt-7">{notice}</div>
+      </div>
     )
   }
 
@@ -104,31 +148,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      {/* olay akışı */}
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Olay Akışı</h3>
-        {events.length === 0 ? (
-          <p className="py-8 text-center text-sm text-dim-aa">Henüz uyarı yok.</p>
-        ) : (
-          <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
-            {events.map((e) => (
-              <li key={e.id} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${KIND_STYLES[e.kind] ?? 'bg-slate-500/10 text-slate-400 ring-slate-500/20'}`}
-                  >
-                    {KIND_LABELS[e.kind] ?? e.kind}
-                  </span>
-                  <span className="ml-auto font-mono text-[10px] text-dim-aa">
-                    {new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-slate-300">{e.message}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {eventFeed}
 
       {/* ayar formu — @container: iç grid'ler kartın kendi genişliğine göre
           kırılıyor (viewport'a göre değil), sayfa yerleşimi ne olursa olsun */}

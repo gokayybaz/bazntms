@@ -55,6 +55,16 @@ describe('AlertsCard', () => {
     await waitFor(() => expect(screen.getByText(/ayarlar alınamadı/)).toBeInTheDocument())
   })
 
+  it('403 → yetki mesajı gösterir ama olay akışını korur (S11.3)', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 403, ok: false, json: async () => ({}) } as Response)))
+    render(<AlertsCard events={EVENTS} />)
+    await waitFor(() => expect(screen.getByText(/yalnızca/)).toBeInTheDocument())
+    expect(screen.getByText(/yöneticilere/)).toBeInTheDocument()
+    expect(screen.queryByText('Ayarları Kaydet')).not.toBeInTheDocument()
+    // olay akışı viewer'a da görünür
+    expect(screen.getByText('şüpheli port 4444')).toBeInTheDocument()
+  })
+
   it('soğuma alanı ve SIEM taşıma seçici gerçek <label> ile eşleşiyor', async () => {
     mockFetch()
     render(<AlertsCard events={[]} />)

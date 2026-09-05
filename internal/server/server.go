@@ -134,7 +134,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)
 	mux.HandleFunc("GET /api/auth/oidc/login", s.handleOIDCLogin)
 	mux.HandleFunc("GET /api/auth/oidc/callback", s.handleOIDCCallback)
-	mux.HandleFunc("GET /api/alerts", s.handleAlertsGet)
+	// GET de admin-korumalı: alert.Config bildirim sırlarını (Telegram token,
+	// EmailPass, WebhookV2Secret, SIEM token) taşır — PUT zaten admin'di.
+	mux.Handle("GET /api/alerts", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsGet)))
 	mux.Handle("PUT /api/alerts", s.requirePerm(PermAdmin, http.HandlerFunc(s.handleAlertsPut)))
 	mux.HandleFunc("GET /api/alerts/events", s.handleAlertEvents)
 
@@ -412,7 +414,14 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAlertsGet(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.alerts.Config())
+	cfg := s.alerts.Config()
+	// bildirim sırlarını UI'ya maskeli gönder; PUT'ta maskeli değer =
+	// "değiştirme" (aşağıda handleAlertsPut geri açar).
+	cfg.Notifiers.TelegramToken = maskNonEmpty(cfg.Notifiers.TelegramToken)
+	cfg.Notifiers.EmailPass = maskNonEmpty(cfg.Notifiers.EmailPass)
+	cfg.Notifiers.WebhookV2Secret = maskNonEmpty(cfg.Notifiers.WebhookV2Secret)
+	cfg.Notifiers.SIEM.Token = maskNonEmpty(cfg.Notifiers.SIEM.Token)
+	writeJSON(w, cfg)
 }
 
 func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
@@ -421,6 +430,19 @@ func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// maskeli sır alanı (•••) geldiyse kullanıcı onu değiştirmedi — mevcut
+	// saklı değeri koru, maske metnini DB'ye yazma.
+	cur := s.alerts.Config()
+	keepIfMasked := func(in *string, stored string) {
+		if *in == secretMask {
+			*in = stored
+		}
+	}
+	keepIfMasked(&cfg.Notifiers.TelegramToken, cur.Notifiers.TelegramToken)
+	keepIfMasked(&cfg.Notifiers.EmailPass, cur.Notifiers.EmailPass)
+	keepIfMasked(&cfg.Notifiers.WebhookV2Secret, cur.Notifiers.WebhookV2Secret)
+	keepIfMasked(&cfg.Notifiers.SIEM.Token, cur.Notifiers.SIEM.Token)
+
 	if err := s.alerts.UpdateConfig(cfg); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return

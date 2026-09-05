@@ -62,11 +62,15 @@ func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, list)
 }
 
+// secretMask, dolu bir sırrın UI'ya gönderilen yer tutucusu. İstemci bu
+// değeri geri PUT ederse sunucu alanı "değiştirilmedi" sayar.
+const secretMask = "•••"
+
 func maskNonEmpty(s string) string {
 	if s == "" {
 		return ""
 	}
-	return "•••"
+	return secretMask
 }
 
 func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {

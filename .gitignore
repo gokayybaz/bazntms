@@ -4,6 +4,8 @@
 /bazntms-agent
 /bazntmsctl
 /bazntms-*
+/banner
+/loadgen
 
 # veri tabani / kayitlar
 *.db
