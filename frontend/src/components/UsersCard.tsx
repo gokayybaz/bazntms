@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { errText } from '../lib/api'
 
 interface User {
   id: number
@@ -21,17 +22,6 @@ const ROLE_LABEL: Record<string, string> = {
 const DELETE_CONFIRM_MS = 4000
 const inputCls =
   'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
-
-// http.Error düz metin döner, writeJSON JSON — hata mesajını her iki halden çıkar.
-async function errText(res: Response): Promise<string> {
-  const body = await res.text()
-  try {
-    const j = JSON.parse(body)
-    return j.error || body
-  } catch {
-    return body || `HTTP ${res.status}`
-  }
-}
 
 export function UsersCard() {
   const [users, setUsers] = useState<User[]>([])

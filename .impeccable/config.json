@@ -128,6 +128,15 @@
         ],
         "createdAt": "2026-09-05T18:37:09.061Z",
         "reason": "repo-wide muted-badge convention: bg-slate-500/10 text-slate-400 ring-slate-500/20 (verbatim in AlertsCard.tsx:109, alertKinds fallback); paired here with the identical emerald 'etkin' badge which the hook accepts"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/TokensCard.tsx"
+        ],
+        "createdAt": "2026-09-05T18:44:38.649Z",
+        "reason": "primary-button convention (identical to UsersCard 'Ekle'): text-slate-950 is near-black (#020617), deliberately paired with bright hover bg-cyan-400 for high contrast — not washed-out gray"
       }
     ]
   }

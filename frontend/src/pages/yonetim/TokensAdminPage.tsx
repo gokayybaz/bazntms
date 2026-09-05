@@ -1,9 +1,16 @@
-import { AdminPageShell, Placeholder } from '../../components/AdminPageShell'
+import { AdminPageShell } from '../../components/AdminPageShell'
+import { Card } from '../../components/Card'
+import { TokensCard } from '../../components/TokensCard'
 
 export function TokensAdminPage() {
   return (
-    <AdminPageShell title="API Token’ları" hint="Entegrasyonlar için Bearer token’ları — oluştur, listele, iptal et.">
-      <Placeholder note="Token yönetimi yakında (S12.3) — /api/v1/tokens." />
+    <AdminPageShell
+      title="API Token’ları"
+      hint="Entegrasyonlar için Bearer token’ları (Grafana, CI, script). Düz değer yalnızca oluşturulurken bir kez gösterilir; hash saklanır."
+    >
+      <Card title="API Token’ları">
+        <TokensCard />
+      </Card>
     </AdminPageShell>
   )
 }
