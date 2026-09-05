@@ -70,7 +70,11 @@ function agentY(i: number, count: number, H: number): number {
 }
 
 const DIR_COLOR: Record<Dir, string> = {
-  out: '#e879f9', // fuchsia-400 — agent'tan çıkan
+  // eskiden fuchsia (#e879f9) — DESIGN.md'nin 7 sabit renginde olmayan icat
+  // edilmiş bir 8. renkti; ThroughputChart.tsx aynı "giden/tx" anlamı için
+  // zaten violet kullanıyor, buraya da o taşındı (impeccable critique
+  // 2026-09-05)
+  out: '#a78bfa', // violet-400 — agent'tan çıkan (tx, ThroughputChart ile aynı)
   in: '#22d3ee', // cyan-400 — internetten gelen
   lan: '#34d399', // emerald-400 — yerel ağ (agent ↔ agent)
   log: '#fbbf24', // amber-400 — syslog / cihaz olayı
@@ -132,7 +136,6 @@ interface Packet {
   t0: number
   dur: number
   label: string
-  ambient: boolean
   r: number
 }
 
@@ -214,13 +217,16 @@ function AgentNode({
       <rect x={-5} y={5.6} width={10} height={1.7} rx={0.85} fill={col} />
     </g>
   )
+  // düğüm gerçek, değişken veri taşıyor (ad/site/hız) — eskiden yalnızca
+  // fare-hover <title> ile erişilebilirdi (role="img" altında ekran
+  // okuyucuya hiç ulaşmıyordu); artık klavye/ekran okuyucu ile de erişilebilir
   if (detail === 'mini') {
     return (
-      <g transform={`translate(${x},${y})`}>
+      <g transform={`translate(${x},${y})`} role="button" tabIndex={0} aria-label={titleText}>
         <title>{titleText}</title>
         {flash && <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-node" />}
         <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-led" />
-        <text x={-NODE_W / 2 + 9} y={3} fontSize={9} fill="#94a3b8" fontFamily="ui-monospace, monospace">
+        <text x={-NODE_W / 2 + 9} y={3} fontSize={9} className="fill-slate-400" fontFamily="ui-monospace, monospace">
           {short}
         </text>
         {monitor(NODE_W / 2 - 7, 0.62)}
@@ -229,7 +235,7 @@ function AgentNode({
   }
   const h = detail === 'full' ? 30 : 20
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g transform={`translate(${x},${y})`} role="button" tabIndex={0} aria-label={titleText}>
       <title>{titleText}</title>
       {flash && <circle cx={-NODE_W / 2 + 8} cy={0} r={4} fill={col} className="tfd-node" />}
       <rect
@@ -253,7 +259,7 @@ function AgentNode({
         {short}
       </text>
       {detail === 'full' && (
-        <text x={-NODE_W / 2 + 17} y={9} fontSize={8} fill="#64748b" fontFamily="ui-monospace, monospace">
+        <text x={-NODE_W / 2 + 17} y={9} fontSize={8} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
           ↓{fmtBps(agent.rxBps ?? 0)} ↑{fmtBps(agent.txBps ?? 0)}
         </text>
       )}
@@ -265,7 +271,8 @@ function AgentNode({
 function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement {
   const shield = 'M 0 -54 L 44 -38 L 44 6 C 44 31 25 50 0 59 C -25 50 -44 31 -44 6 L -44 -38 Z'
   return (
-    <g transform={`translate(${FW_X},${y})`}>
+    // sabit düğüm, değişken veri taşımıyor — dekoratif
+    <g transform={`translate(${FW_X},${y})`} aria-hidden="true">
       <path d={shield} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeOpacity={0.4} strokeWidth={1.5} />
       {!reduced && <path d={shield} className="tfd-ring" fill="none" stroke="#38bdf8" strokeWidth={1.5} />}
       <rect x={-32} y={-20} width={64} height={16} rx={3} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
@@ -289,7 +296,7 @@ function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement
         y={76}
         textAnchor="middle"
         fontSize={10}
-        fill="#94a3b8"
+        className="fill-slate-400"
         fontFamily="ui-monospace, monospace"
         letterSpacing={1}
       >
@@ -302,7 +309,9 @@ function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement
 function Globe({ y, reduced, remote }: { y: number; reduced: boolean; remote: string | null }): ReactElement {
   const R = 42
   return (
-    <g transform={`translate(${NET_X},${y})`}>
+    // sabit düğüm — "son: X" değişken ama ikincil bilgi, ana gösterge şeridinde
+    // ve paket etiketlerinde zaten aynı bilgi metin olarak mevcut; dekoratif
+    <g transform={`translate(${NET_X},${y})`} aria-hidden="true">
       <circle r={R} fill="#0a1120" stroke="#334155" strokeWidth={1.5} />
       <g clipPath="url(#tfd-globe)">
         {[-24, -12, 0, 12, 24].map((oy, i) => (
@@ -344,14 +353,14 @@ function Globe({ y, reduced, remote }: { y: number; reduced: boolean; remote: st
         y={60}
         textAnchor="middle"
         fontSize={10}
-        fill="#94a3b8"
+        className="fill-slate-400"
         fontFamily="ui-monospace, monospace"
         letterSpacing={1}
       >
         İNTERNET
       </text>
       {remote && (
-        <text x={0} y={74} textAnchor="middle" fontSize={9} fill="#64748b" fontFamily="ui-monospace, monospace">
+        <text x={0} y={74} textAnchor="middle" fontSize={9} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
           son: {remote}
         </text>
       )}
@@ -362,20 +371,16 @@ function Globe({ y, reduced, remote }: { y: number; reduced: boolean; remote: st
 export function TrafficFlowDiagram({
   events,
   agents = [],
-  pps = 0,
 }: {
   events: TrafficEvent[]
   agents?: DiagramAgent[]
-  pps?: number
 }): ReactElement {
   const reduced = usePrefersReducedMotion()
   const packetsRef = useRef<Packet[]>([])
   const idRef = useRef(0)
   const seenRef = useRef<Set<string>>(new Set())
   const primedRef = useRef(false)
-  const mountRef = useRef(0)
   const prevRef = useRef(0)
-  const ambientAccRef = useRef(0)
   const lastCountRef = useRef(0)
   const [, setFrame] = useState(0)
   const [tally, setTally] = useState<Record<Dir, number>>({ out: 0, in: 0, lan: 0, log: 0 })
@@ -434,41 +439,42 @@ export function TrafficFlowDiagram({
   }
 
   // spawn — en güncel closure'ı ref üzerinden tut (RAF döngüsü tek kez kurulur)
-  const spawnRef = useRef<(ev: TrafficEvent | null, at: number) => void>(() => {})
+  // eskiden `ev === null` özel bir dal ile sahte "ambient" paket üretiyordu
+  // (gerçek trafik yokken sahneyi canlı göstermek için) — bu paketler gerçek
+  // trafikten görsel olarak ayırt edilemiyordu ve tetikleme koşulu (pps>0)
+  // gerçek trafik arttıkça daha sık ateşleniyordu; bir izleme aracında güven
+  // riski olduğu için tamamen kaldırıldı (impeccable critique 2026-09-05, P0)
+  const spawnRef = useRef<(ev: TrafficEvent, at: number) => void>(() => {})
   spawnRef.current = (ev, at) => {
-    let dir: Dir
-    let idxA: number
+    const dir0 = classifyDir(ev)
+    const deviceFlow = ev.kind === 'flow' && !ev.agent
+    const idxA0 = deviceFlow ? -1 : resolveIdx(ev.agent, ev.from)
+    if (idxA0 === DROP) return // çevrimdışı/bilinmeyen agent olayı — şemada gösterilmez
+    let dir = dir0
+    let idxA = idxA0
     let idxB = -1
-    let label = ''
+    // syslog/olay bildirimi bir online agent'a ait değilse firewall ekseninde kalır
+    if (dir === 'log' && !(ev.agent && agentIndex.has(ev.agent))) idxA = -1
+    if (count === 0 && dir === 'lan') dir = 'in'
+    if (dir === 'lan') idxB = resolveIdx(undefined, ev.to ?? ev.key)
+    const fromH = cleanHost(ev.from)
+    const toH = cleanHost(ev.to ?? '')
+    const raw =
+      dir === 'log'
+        ? fromH || stripPort(ev.from)
+        : (ev.label ?? (toH ? `${fromH || '?'} ▸ ${toH}` : `${fromH || stripPort(ev.from)} · dinliyor`))
+    const label = raw.length > 26 ? raw.slice(0, 25) + '…' : raw
     let r = 4.5
-    if (ev) {
-      dir = classifyDir(ev)
-      const deviceFlow = ev.kind === 'flow' && !ev.agent
-      idxA = deviceFlow ? -1 : resolveIdx(ev.agent, ev.from)
-      if (idxA === DROP) return // çevrimdışı/bilinmeyen agent olayı — şemada gösterilmez
-      // syslog/olay bildirimi bir online agent'a ait değilse firewall ekseninde kalır
-      if (dir === 'log' && !(ev.agent && agentIndex.has(ev.agent))) idxA = -1
-      if (count === 0 && dir === 'lan') dir = 'in'
-      if (dir === 'lan') idxB = resolveIdx(undefined, ev.to ?? ev.key)
-      const fromH = cleanHost(ev.from)
-      const toH = cleanHost(ev.to ?? '')
-      const raw =
-        dir === 'log'
-          ? fromH || stripPort(ev.from)
-          : (ev.label ?? (toH ? `${fromH || '?'} ▸ ${toH}` : `${fromH || stripPort(ev.from)} · dinliyor`))
-      label = raw.length > 26 ? raw.slice(0, 25) + '…' : raw
-      if (ev.weight && ev.weight > 0) r = Math.min(8, 4.5 + Math.log10(ev.weight) * 0.7)
-      setTally((p) => ({ ...p, [dir]: p[dir] + 1 }))
-      if (dir === 'out') setNetEnd(toH || null)
-      else if (dir === 'in') setNetEnd(fromH || null)
-      if (idxA >= 0) flashRef.current.set(idxA, at)
-    } else {
-      const roll = Math.random()
-      dir = roll < 0.42 ? 'out' : roll < 0.85 ? 'in' : 'lan'
-      idxA = count > 0 ? Math.floor(Math.random() * count) : -1
-      if (idxA < 0 && dir === 'lan') dir = 'in' // agent yokken yerel ağ paketi anlamsız
-      r = 3
-    }
+    if (ev.weight && ev.weight > 0) r = Math.min(8, 4.5 + Math.log10(ev.weight) * 0.7)
+    // tally/netEnd — gerçek veri, hareket-azaltmada da güncellenmeye devam
+    // etmeli (bkz. aşağıdaki effect'in artık `reduced`'ı hiç kontrol etmemesi)
+    setTally((p) => ({ ...p, [dir]: p[dir] + 1 }))
+    if (dir === 'out') setNetEnd(toH || null)
+    else if (dir === 'in') setNetEnd(fromH || null)
+    if (idxA >= 0) flashRef.current.set(idxA, at)
+    // hareket-azaltma açıkken görsel paket kuyruğuna hiç eklenmiyor — zaten
+    // RAF döngüsü çalışmadığından uçmayacak, veri yukarıda zaten işlendi
+    if (reduced) return
     const pts = jitterInterior(pathFor(dir, idxA, idxB))
     const { seg, total } = polyMeta(pts)
     const base = dir === 'log' ? 1050 : dir === 'lan' ? 1750 : 2300
@@ -482,15 +488,18 @@ export function TrafficFlowDiagram({
       t0: at,
       dur: base + Math.random() * 420,
       label,
-      ambient: ev === null,
       r,
     })
     if (packetsRef.current.length > 34) packetsRef.current.splice(0, packetsRef.current.length - 34)
   }
 
-  // yeni olayları paket olarak kuyruğa al (ilk dolu partide sadece "görüldü" işaretle)
+  // yeni olayları paket olarak kuyruğa al (ilk dolu partide sadece "görüldü"
+  // işaretle) — eskiden `reduced` iken tamamen atlanıyordu, bu yüzden
+  // hareket-azaltma tercih eden kullanıcılar sayaç/son-uç verisini de hiç
+  // almıyordu; artık yalnızca görsel paket kuyruğu (spawnRef içinde) hareket
+  // tercihine göre atlanıyor, veri işleme her zaman çalışır
   useEffect(() => {
-    if (reduced || events.length === 0) return
+    if (events.length === 0) return
     if (!primedRef.current) {
       for (const e of events) seenRef.current.add(e.key)
       primedRef.current = true
@@ -506,26 +515,17 @@ export function TrafficFlowDiagram({
       .slice(-12)
       .reverse()
       .forEach((e, i) => spawnRef.current(e, now + Math.min(i, 10) * 180))
-  }, [events, reduced, agentIndex])
+  }, [events, agentIndex])
 
-  // RAF döngüsü — sadece animasyon varken yeniden çizer (boştayken sessiz)
+  // RAF döngüsü — yalnızca hareket tercih edilince kurulur; sadece animasyon
+  // varken yeniden çizer (boştayken sessiz)
   useEffect(() => {
     if (reduced) return
     let raf = 0
-    mountRef.current = performance.now()
-    prevRef.current = mountRef.current
+    prevRef.current = performance.now()
     const loop = (now: number): void => {
       raf = requestAnimationFrame(loop)
-      const dt = now - prevRef.current
       prevRef.current = now
-      if (pps > 0 && now - mountRef.current > 2500) {
-        ambientAccRef.current += dt
-        const gap = Math.max(520, 1650 - Math.log10(pps + 1) * 320)
-        if (ambientAccRef.current >= gap) {
-          ambientAccRef.current = 0
-          spawnRef.current(null, now)
-        }
-      }
       if (packetsRef.current.length) {
         packetsRef.current = packetsRef.current.filter((p) => now - p.t0 < p.dur + 150)
       }
@@ -538,7 +538,7 @@ export function TrafficFlowDiagram({
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [reduced, pps])
+  }, [reduced])
 
   // imperatif animasyon: paket listesi ref'te tutulur, RAF döngüsü her karede
   // setFrame ile yeniden çizdirir — konumlar o anki saate göre burada hesaplanır
@@ -550,7 +550,7 @@ export function TrafficFlowDiagram({
   const seenLabels = new Set<string>()
   const labelIds = new Set(
     [...live]
-      .filter((p) => !p.ambient && p.label)
+      .filter((p) => p.label)
       .sort((a, b) => b.t0 - a.t0)
       .filter((p) => !seenLabels.has(p.label) && seenLabels.add(p.label))
       .slice(0, 4)
@@ -564,7 +564,7 @@ export function TrafficFlowDiagram({
         <svg
           viewBox={`0 0 ${W} ${H}`}
           className="w-full min-w-[680px]"
-          role="img"
+          role="group"
           aria-label="Çevrimiçi agent'lar, router/güvenlik duvarı ve internet arasında canlı paket akışı şeması"
         >
           <defs>
@@ -585,55 +585,59 @@ export function TrafficFlowDiagram({
             </filter>
           </defs>
 
-          <rect x={0} y={0} width={W} height={H} rx={8} fill="url(#tfd-bg)" />
+          <rect aria-hidden="true" x={0} y={0} width={W} height={H} rx={8} fill="url(#tfd-bg)" />
 
-          {/* bölge başlıkları */}
-          <text x={AGENT_X} y={28} textAnchor="middle" fontSize={11} fill="#cbd5e1" fontFamily="ui-monospace, monospace" letterSpacing={1}>
-            AGENT FİLOSU
-          </text>
-          <text x={AGENT_X} y={H - 14} textAnchor="middle" fontSize={9} fill="#475569" fontFamily="ui-monospace, monospace">
-            {count === 0
-              ? 'aktif agent yok'
-              : `${count} aktif${offlineCount > 0 ? ` · ${offlineCount} çevrimdışı gizli` : ''}`}
-          </text>
+          {/* bölge başlıkları — dekoratif */}
+          <g aria-hidden="true">
+            <text x={AGENT_X} y={28} textAnchor="middle" fontSize={11} className="fill-slate-300" fontFamily="ui-monospace, monospace" letterSpacing={1}>
+              AGENT FİLOSU
+            </text>
+            <text x={AGENT_X} y={H - 14} textAnchor="middle" fontSize={9} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
+              {count === 0
+                ? 'aktif agent yok'
+                : `${count} aktif${offlineCount > 0 ? ` · ${offlineCount} çevrimdışı gizli` : ''}`}
+            </text>
+          </g>
 
-          {/* altyapı bağlantıları: her çevrimiçi agent düğümünden güvenlik duvarına */}
-          {count === 0 ? (
+          {/* altyapı bağlantıları: her çevrimiçi agent düğümünden güvenlik duvarına — dekoratif */}
+          <g aria-hidden="true">
+            {count === 0 ? (
+              <line
+                x1={nodeRight}
+                y1={midY}
+                x2={FW_IN[0]}
+                y2={FW_IN[1]}
+                stroke="#1e3a5f"
+                strokeWidth={1.5}
+                strokeDasharray="2 6"
+                className={reduced ? '' : 'tfd-dash'}
+              />
+            ) : (
+              onlineAgents.map((_, i) => (
+                <line
+                  key={i}
+                  x1={nodeRight}
+                  y1={agentY(i, count, H)}
+                  x2={FW_IN[0]}
+                  y2={FW_IN[1]}
+                  stroke="#17324f"
+                  strokeWidth={1}
+                  strokeDasharray="2 6"
+                  className={reduced ? '' : 'tfd-dash'}
+                />
+              ))
+            )}
             <line
-              x1={nodeRight}
-              y1={midY}
-              x2={FW_IN[0]}
-              y2={FW_IN[1]}
+              x1={FW_OUT[0]}
+              y1={FW_OUT[1]}
+              x2={NET_X - 38}
+              y2={midY}
               stroke="#1e3a5f"
               strokeWidth={1.5}
               strokeDasharray="2 6"
               className={reduced ? '' : 'tfd-dash'}
             />
-          ) : (
-            onlineAgents.map((_, i) => (
-              <line
-                key={i}
-                x1={nodeRight}
-                y1={agentY(i, count, H)}
-                x2={FW_IN[0]}
-                y2={FW_IN[1]}
-                stroke="#17324f"
-                strokeWidth={1}
-                strokeDasharray="2 6"
-                className={reduced ? '' : 'tfd-dash'}
-              />
-            ))
-          )}
-          <line
-            x1={FW_OUT[0]}
-            y1={FW_OUT[1]}
-            x2={NET_X - 38}
-            y2={midY}
-            stroke="#1e3a5f"
-            strokeWidth={1.5}
-            strokeDasharray="2 6"
-            className={reduced ? '' : 'tfd-dash'}
-          />
+          </g>
 
           {onlineAgents.map((a, i) => (
             <AgentNode
@@ -646,14 +650,16 @@ export function TrafficFlowDiagram({
             />
           ))}
           {count === 0 && (
-            <text x={AGENT_X} y={midY} textAnchor="middle" fontSize={10} fill="#475569" fontFamily="ui-monospace, monospace">
+            <text x={AGENT_X} y={midY} textAnchor="middle" fontSize={10} className="fill-dim-aa" fontFamily="ui-monospace, monospace" aria-hidden="true">
               aktif agent bekleniyor
             </text>
           )}
           <Firewall y={midY} reduced={reduced} />
           <Globe y={midY} reduced={reduced} remote={netEnd} />
 
-          {/* uçan paketler */}
+          {/* uçan paketler — dekoratif animasyon; taşıdığı bilgi (yön/sayaç)
+              alttaki gösterge şeridinde zaten metin olarak mevcut */}
+          <g aria-hidden="true">
           {live.map((p) => {
             const raw = (now - p.t0) / p.dur
             const u = easeInOut(raw)
@@ -692,7 +698,7 @@ export function TrafficFlowDiagram({
                       stroke={col}
                       strokeOpacity={0.4}
                     />
-                    <text textAnchor="middle" y={2} fontSize={9} fill="#cbd5e1" fontFamily="ui-monospace, monospace">
+                    <text textAnchor="middle" y={2} fontSize={9} className="fill-slate-300" fontFamily="ui-monospace, monospace">
                       {p.label}
                     </text>
                   </g>
@@ -700,6 +706,7 @@ export function TrafficFlowDiagram({
               </g>
             )
           })}
+          </g>
         </svg>
       </div>
 
@@ -709,10 +716,10 @@ export function TrafficFlowDiagram({
           <span key={d} className="flex items-center gap-1.5">
             <span className="size-2 rounded-full" style={{ background: DIR_COLOR[d] }} />
             <span className="text-slate-400">{DIR_LABEL[d]}</span>
-            <span className="font-mono text-slate-500">{tally[d]}</span>
+            <span className="font-mono text-dim-aa">{tally[d]}</span>
           </span>
         ))}
-        <span className="ml-auto font-mono text-slate-600">
+        <span className="ml-auto font-mono text-dim-aa">
           {reduced ? 'hareket azaltma açık' : `${live.length} aktif paket`}
         </span>
       </div>

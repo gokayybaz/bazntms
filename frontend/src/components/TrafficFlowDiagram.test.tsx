@@ -1,6 +1,18 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TrafficFlowDiagram, type DiagramAgent, type TrafficEvent } from './TrafficFlowDiagram'
+
+function mockReducedMotion(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  )
+}
 
 const now = Math.floor(Date.now() / 1000)
 
@@ -17,8 +29,10 @@ const EVENTS: TrafficEvent[] = [
 ]
 
 describe('TrafficFlowDiagram', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('üç bölgeyi ve göstergeyi çizer', () => {
-    render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} pps={0} />)
+    render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} />)
     expect(screen.getByText('AGENT FİLOSU')).toBeInTheDocument()
     expect(screen.getByText('ROUTER · GÜVENLİK DUVARI')).toBeInTheDocument()
     expect(screen.getByText('İNTERNET')).toBeInTheDocument()
@@ -27,7 +41,7 @@ describe('TrafficFlowDiagram', () => {
   })
 
   it('yalnızca ÇEVRİMİÇİ agent için düğüm çizer — kapalı agent şemadan tamamen çıkar', () => {
-    render(<TrafficFlowDiagram events={[]} agents={AGENTS} pps={0} />)
+    render(<TrafficFlowDiagram events={[]} agents={AGENTS} />)
     expect(screen.getByText('agent-a')).toBeInTheDocument()
     expect(screen.getByText('agent-b')).toBeInTheDocument()
     // agent-c kapalı → hiçbir düğüm/başlık üretmez
@@ -40,7 +54,7 @@ describe('TrafficFlowDiagram', () => {
       name: `edge-prob-${String(i).padStart(2, '0')}`,
       online: i % 4 !== 0,
     }))
-    render(<TrafficFlowDiagram events={[]} agents={many} pps={0} />)
+    render(<TrafficFlowDiagram events={[]} agents={many} />)
     // i=0 kapalı → gizli; i=1 ve i=29 çevrimiçi → görünür (her düğüm <title>+<text> üretir)
     expect(screen.queryAllByText(/edge-prob-00/).length).toBe(0)
     expect(screen.getAllByText(/edge-prob-01/).length).toBeGreaterThan(0)
@@ -56,20 +70,19 @@ describe('TrafficFlowDiagram', () => {
   })
 
   it('ilk dolu partiden sonra gelen yeni olay "giden" sayacına işlenir', () => {
-    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} pps={0} />)
+    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} />)
     expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('0')
     rerender(
       <TrafficFlowDiagram
         events={[{ key: 'f2', kind: 'flow', ts: now + 1, from: '10.0.0.9', to: '9.9.9.9:443' }, ...EVENTS]}
         agents={AGENTS}
-        pps={0}
       />,
     )
     expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('1')
   })
 
   it('ilk partiden sonra gelen ÇEVRİMDIŞI agent olayı hiçbir sayaca işlenmez', () => {
-    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} pps={0} />)
+    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} />)
     rerender(
       <TrafficFlowDiagram
         events={[
@@ -78,9 +91,26 @@ describe('TrafficFlowDiagram', () => {
           ...EVENTS,
         ]}
         agents={AGENTS}
-        pps={0}
       />,
     )
     expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('0')
+  })
+
+  it('hareket azaltma açıkken bile yeni olaylar sayaca işlenir — veri donmaz, yalnızca animasyon durur', () => {
+    // eskiden `reduced` iken olay-işleme effect'i de tamamen atlanıyordu;
+    // bu yüzden hareket-azaltma tercih eden kullanıcılar tally/netEnd
+    // verisini de hiç almıyordu (impeccable critique 2026-09-05, P1)
+    mockReducedMotion(true)
+    const { rerender } = render(<TrafficFlowDiagram events={EVENTS} agents={AGENTS} />)
+    expect(screen.getByText('hareket azaltma açık')).toBeInTheDocument()
+    expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('0')
+    rerender(
+      <TrafficFlowDiagram
+        events={[{ key: 'f2', kind: 'flow', ts: now + 1, from: '10.0.0.9', to: '9.9.9.9:443' }, ...EVENTS]}
+        agents={AGENTS}
+      />,
+    )
+    expect(screen.getByText('Giden · agent → internet').parentElement?.textContent).toContain('1')
+    vi.unstubAllGlobals()
   })
 })

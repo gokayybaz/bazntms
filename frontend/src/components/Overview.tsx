@@ -485,7 +485,7 @@ export function Overview({
           </span>
         }
       >
-        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} pps={livePps} />
+        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} />
       </Card>
 
       {/* canlı olay akışı — tam genişlik */}
