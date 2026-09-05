@@ -180,6 +180,15 @@ func main() {
 		if attrIface == "" || attrIface == "auto" {
 			attrIface = autoIface()
 		}
+		// Windows'ta friendly arayuz adini (\Device\NPF_{GUID}) pcap cihaz
+		// adina cevir — friendly ad OpenLive'a dogrudan verilince
+		// "Error opening adapter" (hata 123). Linux/macOS'ta no-op.
+		if dev, rerr := agent.ResolvePcapDevice(attrIface); rerr != nil {
+			slog.Debug("pcap cihazi cozulemedi, ham arayuz adi denenecek", "iface", attrIface, "err", rerr)
+		} else if dev != attrIface {
+			slog.Info("pcap cihazi cozuldu", "arayuz", attrIface, "cihaz", dev)
+			attrIface = dev
+		}
 		var attrEng *agent.AttrEngine
 		attrTried := false // bu politika-acik doneminde NewAttrEngine denendi mi
 		attrOffLogged := false
@@ -225,6 +234,9 @@ func main() {
 				iface := *pcapIface
 				if iface == "" || iface == "auto" {
 					iface = autoIface()
+				}
+				if dev, rerr := agent.ResolvePcapDevice(iface); rerr == nil {
+					iface = dev
 				}
 				dir := *recordDir
 				if dir == "" {
@@ -362,18 +374,29 @@ func pcapErrHint(err error) string {
 	if runtime.GOOS != "windows" || err == nil {
 		return ""
 	}
-	if strings.Contains(err.Error(), "wpcap.dll") {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "wpcap.dll"):
 		return "Npcap kurulu degil gibi gorunuyor — https://npcap.com adresinden indirip kurun (yonetici olarak calistirin), sonra agent servisini yeniden baslatin"
+	case strings.Contains(msg, "error opening adapter"),
+		strings.Contains(msg, "system cannot find the device"),
+		strings.Contains(msg, "birim etiketi"):
+		// Npcap var ama verilen arayuz adi pcap cihazi degil (friendly ad).
+		return `yakalama arayuzu pcap tarafindan taninmadi — config'de collect.pcap_interface'i "auto" birakin veya '\Device\NPF_{GUID}' verin (PowerShell: Get-NetAdapter | Select Name,InterfaceGuid)`
 	}
 	return ""
 }
 
-// autoIface, atf/kayit icin ilk uygun arayuzu secer (up, loopback degil).
+// autoIface, atf/kayit icin ilk uygun arayuzu secer: up, loopback degil ve
+// yonlendirilebilir bir IPv4'u olan. IPv4 bulunamazsa ikinci gecişte adresi
+// olan ilk arayuze duser (yalniz-IPv6 ortamlar). Windows'ta friendly ad
+// doner; cagiran taraf ResolvePcapDevice ile \Device\NPF_ adina cevirir.
 func autoIface() string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
+	var fallback string
 	for _, i := range ifaces {
 		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
 			continue
@@ -382,7 +405,20 @@ func autoIface() string {
 		if err != nil || len(addrs) == 0 {
 			continue
 		}
-		return i.Name
+		if fallback == "" {
+			fallback = i.Name
+		}
+		for _, a := range addrs {
+			ipn, ok := a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			v4 := ipn.IP.To4()
+			if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() {
+				continue
+			}
+			return i.Name
+		}
 	}
-	return ""
+	return fallback
 }

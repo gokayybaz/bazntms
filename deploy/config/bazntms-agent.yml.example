@@ -20,6 +20,9 @@ collect:
   interval_seconds: 30
   # derin toplama (paket yakalama ile surec atfi): root/admin gerekir
   pcap: false
+  # auto: ilk yonlendirilebilir arayuz. Windows'ta friendly ad ("Ethernet")
+  # otomatik \Device\NPF_{GUID} adina cevrilir; elle vermek isterseniz de
+  # NPF adini verin (PowerShell: Get-NetAdapter | Select Name,InterfaceGuid).
   pcap_interface: auto
   # ham PCAP kaydi (hub politikasi da acik olmali)
   pcap_record: false

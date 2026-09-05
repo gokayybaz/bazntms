@@ -30,6 +30,35 @@ Paket yakalama ayrıcalıklı bir işlemdir:
 - Sadece `up` ve loopback olmayan arayüzler listelenir
 - VPN/filtre sürücüleri trafiği başka sanal arayüze taşıyabilir; doğru arayüzü seçin
 
+### "Error opening adapter" / "dosya adı veya birim etiketi söz dizimi hatalı" (Windows)
+
+Npcap **kurulu** ama süreç atfı / L7 başlamıyor:
+
+```
+WARN surec atfi baslatilamadi — telemetri surecek  iface=Ethernet  err="Error opening adapter: ..."
+```
+
+libpcap Windows'ta arayüzü `\Device\NPF_{GUID}` biçiminde ister; `Ethernet` /
+`Wi-Fi` gibi friendly ad çalışmaz (hata 123, ERROR_INVALID_NAME). Agent v0.2.3+
+`collect.pcap_interface` boş/`auto` ise friendly adı otomatik NPF adına çevirir.
+Elle vermek isterseniz:
+
+```powershell
+Get-NetAdapter | Select-Object Name, InterfaceGuid
+```
+
+sonra `C:\ProgramData\bazntms\agent.yml` (tek tırnak — YAML'da `\` literal kalır):
+
+```yaml
+collect:
+  pcap: true
+  pcap_interface: '\Device\NPF_{BULUNAN-GUID}'
+```
+
+`sc stop bazntms-agent && sc start bazntms-agent`, ardından `agent.log`'da
+`surec atfi aktif` satırını bekleyin. L7 (SNI/Host) için yakalama başladıktan
+**sonra** açılan HTTPS bağlantıları gerekir; mevcut bağlantılar sayılmaz.
+
 ## Windows MSI / servis kurulumu
 
 ### "Service bazNTMS agent failed to start" (hata 1920)
