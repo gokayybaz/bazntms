@@ -33,10 +33,11 @@ function mockFetch() {
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       if (typeof url === 'string' && url.startsWith('/api/v1/agents/1/history')) {
-        return Promise.resolve({ status: 200, json: async () => [] } as Response)
+        return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
       }
       if (typeof url === 'string' && url === '/api/v1/agents/1' && (!init || init.method === undefined)) {
         return Promise.resolve({
+          ok: true,
           status: 200,
           json: async () => ({ agent: AGENT, connections: CONNECTIONS }),
         } as Response)
@@ -48,7 +49,7 @@ function mockFetch() {
         return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true }) } as Response)
       }
       if (typeof url === 'string' && url.startsWith('/api/v1/processes')) {
-        return Promise.resolve({ status: 200, json: async () => [] } as Response)
+        return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
       }
       return Promise.resolve({ status: 404, json: async () => ({}) } as Response)
     }),
@@ -107,13 +108,19 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('mDNSResponder')).toBeInTheDocument()
   })
 
-  it('"Adı Değiştir" yeni ismi PATCH ile gönderir', async () => {
+  it('"Adı Değiştir" satır-içi alanı açar, Kaydet yeni ismi PATCH ile gönderir', async () => {
+    // eskiden window.prompt() kullanıyordu — artık DevicesCard'daki gibi
+    // satır-içi <input> + Kaydet/Vazgeç (impeccable critique 2026-09-05)
     const user = userEvent.setup()
-    vi.stubGlobal('prompt', vi.fn(() => 'yeni-ad'))
     renderPage()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Adı Değiştir' }))
+    const input = await screen.findByLabelText('Yeni agent adı')
+    expect(input).toHaveValue('sunucu-01')
+    await user.clear(input)
+    await user.type(input, 'yeni-ad')
+    await user.click(screen.getByRole('button', { name: 'Kaydet' }))
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'yeni-ad' })).toBeInTheDocument())
     const patchCall = vi.mocked(fetch).mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')
@@ -121,29 +128,59 @@ describe('AgentDetailPage', () => {
     expect(JSON.parse((patchCall![1] as RequestInit).body as string)).toEqual({ name: 'yeni-ad' })
   })
 
-  it('"Agent\'ı Sil" onaylanınca DELETE gönderip listeye döner', async () => {
+  it('"Adı Değiştir" Vazgeç ile PATCH göndermeden eski isme döner', async () => {
     const user = userEvent.setup()
-    vi.stubGlobal('confirm', vi.fn(() => true))
     renderPage()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: "Agent'ı Sil" }))
+    await user.click(screen.getByRole('button', { name: 'Adı Değiştir' }))
+    const input = await screen.findByLabelText('Yeni agent adı')
+    await user.clear(input)
+    await user.type(input, 'baska-ad')
+    await user.click(screen.getByRole('button', { name: 'Vazgeç' }))
+
+    expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument()
+    const patchCall = vi.mocked(fetch).mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')
+    expect(patchCall).toBeUndefined()
+  })
+
+  it('silme iki-aşamalı onay ister — ilk tık onay durumuna geçer, ikinci tık DELETE gönderip listeye döner', async () => {
+    // eskiden window.confirm() kullanıyordu — artık DevicesCard'daki iki-aşamalı
+    // satır-içi buton deseni (impeccable critique 2026-09-05)
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /sunucu-01 agent'ını sil/ }))
+    const confirmBtn = await screen.findByRole('button', { name: /sunucu-01 silinsin mi/ })
+    expect(confirmBtn).toHaveTextContent('emin misiniz?')
+    await user.click(confirmBtn)
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/agentlar'))
     const deleteCall = vi.mocked(fetch).mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
     expect(deleteCall).toBeDefined()
   })
 
-  it('silme onaylanmazsa istek gönderilmez', async () => {
+  it('silme onay durumunda ikinci tık gelmezse istek gönderilmez', async () => {
     const user = userEvent.setup()
-    vi.stubGlobal('confirm', vi.fn(() => false))
     renderPage()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: "Agent'ı Sil" }))
+    await user.click(screen.getByRole('button', { name: /sunucu-01 agent'ını sil/ }))
+    await screen.findByRole('button', { name: /sunucu-01 silinsin mi/ })
 
     expect(navigateMock).not.toHaveBeenCalled()
     const deleteCall = vi.mocked(fetch).mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
     expect(deleteCall).toBeUndefined()
+  })
+
+  it('bağlantı başlığı filtrelenmiş/toplam sayıyı gösterir', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getByText('chrome')).toBeInTheDocument())
+    expect(screen.getByText(/2 bağlantı/)).toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Filtrele: adres, süreç, durum…'), 'mDNS')
+    expect(screen.getByText(/1 \/ 2 bağlantı/)).toBeInTheDocument()
   })
 })
