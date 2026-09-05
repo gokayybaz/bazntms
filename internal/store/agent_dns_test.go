@@ -29,7 +29,7 @@ func TestAgentDNSSaveAndTop(t *testing.T) {
 		t.Fatalf("SaveAgentDNS 2: %v", err)
 	}
 
-	top, err := st.TopAgentDNS(time.Now().Add(-time.Hour), 0, 10)
+	top, err := st.TopAgentDNS(time.Now().Add(-time.Hour), 0, 10, "")
 	if err != nil {
 		t.Fatalf("TopAgentDNS: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestAgentDNSSaveAndTop(t *testing.T) {
 	}
 
 	// agent filtresi
-	byAgent, _ := st.TopAgentDNS(time.Now().Add(-time.Hour), 2, 10)
+	byAgent, _ := st.TopAgentDNS(time.Now().Add(-time.Hour), 2, 10, "")
 	if len(byAgent) != 1 || byAgent[0].Process != "firefox" {
 		t.Fatalf("agent filtresi hatalı: %+v", byAgent)
 	}

@@ -98,7 +98,7 @@ type Store interface {
 	FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucket, error)
 	FleetSummary(onlineWindow time.Duration) (FleetSummary, error)
 	FleetProtocolTotals(since time.Time) (map[string]uint64, error)
-	FleetTopEndpoints(since time.Time, limit int) ([]EndpointDelta, error)
+	FleetTopEndpoints(since time.Time, limit int, site string) ([]EndpointDelta, error)
 	FleetIfaceHealth(since time.Time) (discards uint64, errors uint64, err error)
 
 	// uyarilar
@@ -125,12 +125,12 @@ type Store interface {
 
 	// surec trafigi (Faz 2)
 	SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error
-	TopProcessTraffic(since time.Time, agentID int64, limit int) ([]ProcessTrafficUsage, error)
+	TopProcessTraffic(since time.Time, agentID int64, limit int, site string) ([]ProcessTrafficUsage, error)
 	// L7 uygulama gorunurlugu (SNI + HTTP Host, surec bazli)
 	SaveL7(agentID int64, ts int64, samples []telemetry.L7Sample) error
-	TopL7(since time.Time, agentID int64, limit int) ([]L7Usage, error)
+	TopL7(since time.Time, agentID int64, limit int, site string) ([]L7Usage, error)
 	SaveAgentDNS(agentID int64, ts int64, samples []telemetry.DNSSample) error
-	TopAgentDNS(since time.Time, agentID int64, limit int) ([]AgentDNSUsage, error)
+	TopAgentDNS(since time.Time, agentID int64, limit int, site string) ([]AgentDNSUsage, error)
 	// RecentAgentDomains, IOC eslestirmesi icin son penceredeki L7+DNS alan adlari
 	RecentAgentDomains(since time.Time) ([]AgentDomainSeen, error)
 

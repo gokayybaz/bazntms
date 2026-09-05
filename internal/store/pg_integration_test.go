@@ -167,7 +167,7 @@ func TestPostgresStore(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("surec trafik: %v", err)
 	}
-	pt, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10)
+	pt, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10, "")
 	if err != nil || len(pt) != 1 || pt[0].Process != "curl" || pt[0].Total != 1000 {
 		t.Fatalf("surec top: %v %+v", err, pt)
 	}

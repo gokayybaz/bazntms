@@ -167,19 +167,32 @@ func (s *sqlStore) FleetProtocolTotals(since time.Time) (map[string]uint64, erro
 // (`flows` — hem kaynak hem hedef yonu), NetFlow yoksa agent surec
 // trafigindeki `remote_ip`. EndpointDelta.BytesIn = uca gelen, BytesOut =
 // uctan giden. Hostname bos kalir; Country/ASN rapor katmaninda doldurulur.
-func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int) ([]EndpointDelta, error) {
+func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int, site string) ([]EndpointDelta, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 15
 	}
+	// site bos degilse: flows cihaz site'ina, process_traffic agent site'ina gore filtrelenir.
+	flowSite, ptSite := "", ""
+	flowArgs := []any{since.Unix(), since.Unix()}
+	ptArgs := []any{since.Unix()}
+	if site != "" {
+		flowSite = ` AND device IN (SELECT host FROM devices WHERE site = ?)`
+		flowArgs = []any{since.Unix(), site, since.Unix(), site}
+		ptSite = ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
+		ptArgs = []any{since.Unix(), site}
+	}
+	flowArgs = append(flowArgs, limit)
+	ptArgs = append(ptArgs, limit)
+
 	rows, err := s.db.Query(s.q(`SELECT ip,
 			COALESCE(SUM(in_oct), 0), COALESCE(SUM(out_oct), 0), COALESCE(SUM(pk), 0)
 		FROM (
-			SELECT dst AS ip, octets AS in_oct, 0 AS out_oct, packets AS pk FROM flows WHERE ts >= ?
+			SELECT dst AS ip, octets AS in_oct, 0 AS out_oct, packets AS pk FROM flows WHERE ts >= ?`+flowSite+`
 			UNION ALL
-			SELECT src AS ip, 0 AS in_oct, octets AS out_oct, packets AS pk FROM flows WHERE ts >= ?
+			SELECT src AS ip, 0 AS in_oct, octets AS out_oct, packets AS pk FROM flows WHERE ts >= ?`+flowSite+`
 		) t
 		WHERE ip <> ''
-		GROUP BY ip ORDER BY SUM(in_oct + out_oct) DESC LIMIT ?`), since.Unix(), since.Unix(), limit)
+		GROUP BY ip ORDER BY SUM(in_oct + out_oct) DESC LIMIT ?`), flowArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -193,8 +206,8 @@ func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int) ([]EndpointDelt
 	// NetFlow yok — agent surec trafigindeki uzak IP'lere dus
 	rows2, err := s.db.Query(s.q(`SELECT remote_ip,
 			COALESCE(SUM(bytes_in), 0), COALESCE(SUM(bytes_out), 0), 0
-		FROM process_traffic WHERE ts >= ? AND remote_ip <> ''
-		GROUP BY remote_ip ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`), since.Unix(), limit)
+		FROM process_traffic WHERE ts >= ? AND remote_ip <> ''`+ptSite+`
+		GROUP BY remote_ip ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`), ptArgs...)
 	if err != nil {
 		return nil, err
 	}

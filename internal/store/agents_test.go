@@ -178,26 +178,26 @@ func TestDeleteAgentCascade(t *testing.T) {
 
 	since := time.Unix(now-60, 0)
 	// kurban: her tabloda 0 satir
-	if pt, _ := st.TopProcessTraffic(since, victim, 10); len(pt) != 0 {
+	if pt, _ := st.TopProcessTraffic(since, victim, 10, ""); len(pt) != 0 {
 		t.Errorf("silinen agent'in process_traffic satirlari kaldi: %+v", pt)
 	}
-	if l7, _ := st.TopL7(since, victim, 10); len(l7) != 0 {
+	if l7, _ := st.TopL7(since, victim, 10, ""); len(l7) != 0 {
 		t.Errorf("silinen agent'in l7_endpoints satirlari kaldi: %+v", l7)
 	}
-	if dns, _ := st.TopAgentDNS(since, victim, 10); len(dns) != 0 {
+	if dns, _ := st.TopAgentDNS(since, victim, 10, ""); len(dns) != 0 {
 		t.Errorf("silinen agent'in agent_dns satirlari kaldi: %+v", dns)
 	}
 	if ag, _ := st.ListAgents(time.Hour, ""); len(ag) != 1 || ag[0].ID != keep {
 		t.Errorf("yalnizca 'kalan' agent durmali: %+v", ag)
 	}
 	// kalan agent: verisi bozulmadi
-	if pt, _ := st.TopProcessTraffic(since, keep, 10); len(pt) != 1 {
+	if pt, _ := st.TopProcessTraffic(since, keep, 10, ""); len(pt) != 1 {
 		t.Errorf("kalan agent'in process_traffic'i silinmis: %+v", pt)
 	}
-	if l7, _ := st.TopL7(since, keep, 10); len(l7) != 1 {
+	if l7, _ := st.TopL7(since, keep, 10, ""); len(l7) != 1 {
 		t.Errorf("kalan agent'in l7'si silinmis: %+v", l7)
 	}
-	if dns, _ := st.TopAgentDNS(since, keep, 10); len(dns) != 1 {
+	if dns, _ := st.TopAgentDNS(since, keep, 10, ""); len(dns) != 1 {
 		t.Errorf("kalan agent'in dns'i silinmis: %+v", dns)
 	}
 }

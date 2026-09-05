@@ -116,7 +116,7 @@ func TestQueueRoundTrip(t *testing.T) {
 	}, "telemetri store'a yazilmadi")
 
 	waitFor(t, func() bool {
-		pt, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10)
+		pt, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10, "")
 		return err == nil && len(pt) == 1 && pt[0].Total == 750
 	}, "surec trafigi store'a yazilmadi")
 

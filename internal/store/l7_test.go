@@ -31,7 +31,7 @@ func TestL7SaveAndTop(t *testing.T) {
 		t.Fatalf("SaveL7 2: %v", err)
 	}
 
-	top, err := st.TopL7(time.Now().Add(-time.Hour), 0, 10)
+	top, err := st.TopL7(time.Now().Add(-time.Hour), 0, 10, "")
 	if err != nil {
 		t.Fatalf("TopL7: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestL7SaveAndTop(t *testing.T) {
 	}
 
 	// agent filtresi
-	byAgent, _ := st.TopL7(time.Now().Add(-time.Hour), 2, 10)
+	byAgent, _ := st.TopL7(time.Now().Add(-time.Hour), 2, 10, "")
 	if len(byAgent) != 1 || byAgent[0].Process != "firefox" {
 		t.Fatalf("agent filtresi hatali: %+v", byAgent)
 	}

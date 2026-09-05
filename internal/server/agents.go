@@ -378,15 +378,34 @@ func (s *Server) telemetryReply() telemetry.TelemetryReply {
 	return telemetry.TelemetryReply{OK: true, Interval: s.telemetryInterval, PCAPEnabled: &pcap}
 }
 
-// handleL7, surec bazli uygulama gorunurlugu (SNI + HTTP Host) top-listesi.
-func (s *Server) handleL7(w http.ResponseWriter, r *http.Request) {
+// scopedAgentQuery, L7/DNS/Processes uclarinin ortak on isi: pencere, agent_id,
+// limit ve RBAC site scope'unu cozer. agent_id verilmis ama site-disi ise
+// ok=false (404 yaz). Donen site parametreli store cagrisina gecer.
+func (s *Server) scopedAgentQuery(w http.ResponseWriter, r *http.Request) (since time.Time, agentID int64, limit int, site string, ok bool) {
 	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
 	if minutes <= 0 || minutes > 60*24*7 {
 		minutes = 60
 	}
-	agentID, _ := strconv.ParseInt(r.URL.Query().Get("agent_id"), 10, 64)
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := s.store.TopL7(time.Now().Add(-time.Duration(minutes)*time.Minute), agentID, limit)
+	agentID, _ = strconv.ParseInt(r.URL.Query().Get("agent_id"), 10, 64)
+	limit, _ = strconv.Atoi(r.URL.Query().Get("limit"))
+	site = SiteScope(identityFromCtx(r))
+	if agentID > 0 && site != "" {
+		a, err := s.store.AgentByID(agentID)
+		if err != nil || a.Site != site {
+			http.Error(w, "agent bulunamadi", http.StatusNotFound)
+			return since, 0, 0, "", false
+		}
+	}
+	return time.Now().Add(-time.Duration(minutes) * time.Minute), agentID, limit, site, true
+}
+
+// handleL7, surec bazli uygulama gorunurlugu (SNI + HTTP Host) top-listesi.
+func (s *Server) handleL7(w http.ResponseWriter, r *http.Request) {
+	since, agentID, limit, site, ok := s.scopedAgentQuery(w, r)
+	if !ok {
+		return
+	}
+	list, err := s.store.TopL7(since, agentID, limit, site)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -396,13 +415,11 @@ func (s *Server) handleL7(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentDNS, surec bazli DNS gorunurlugu top-listesi.
 func (s *Server) handleAgentDNS(w http.ResponseWriter, r *http.Request) {
-	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
-	if minutes <= 0 || minutes > 60*24*7 {
-		minutes = 60
+	since, agentID, limit, site, ok := s.scopedAgentQuery(w, r)
+	if !ok {
+		return
 	}
-	agentID, _ := strconv.ParseInt(r.URL.Query().Get("agent_id"), 10, 64)
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := s.store.TopAgentDNS(time.Now().Add(-time.Duration(minutes)*time.Minute), agentID, limit)
+	list, err := s.store.TopAgentDNS(since, agentID, limit, site)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -412,13 +429,11 @@ func (s *Server) handleAgentDNS(w http.ResponseWriter, r *http.Request) {
 
 // handleProcesses, surec bazli trafik top-listesi (UI auth ile korunur).
 func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
-	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
-	if minutes <= 0 || minutes > 60*24*7 {
-		minutes = 60
+	since, agentID, limit, site, ok := s.scopedAgentQuery(w, r)
+	if !ok {
+		return
 	}
-	agentID, _ := strconv.ParseInt(r.URL.Query().Get("agent_id"), 10, 64)
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	list, err := s.store.TopProcessTraffic(time.Now().Add(-time.Duration(minutes)*time.Minute), agentID, limit)
+	list, err := s.store.TopProcessTraffic(since, agentID, limit, site)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

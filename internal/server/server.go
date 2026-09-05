@@ -350,6 +350,13 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
+	// Rapor motoru filo geneli veriye dayaniyor (FleetSummary, protokol
+	// trendleri, top uc/surec/domain). Site-kisitli kimlige site-kapsamli
+	// rapor uretimi ayri bir is — o zamana dek erisim reddedilir (B3).
+	if SiteScope(identityFromCtx(r)) != "" {
+		http.Error(w, "site-kisitli kimlik filo raporuna erisemez", http.StatusForbidden)
+		return
+	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	if days <= 0 || days > 90 {
 		days = 7

@@ -79,7 +79,7 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 		}
 	}
 
-	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 15); err != nil {
+	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 15, ""); err != nil {
 		return nil, fmt.Errorf("hedefler: %w", err)
 	}
 	if geo != nil && geo.Enabled() {
@@ -89,10 +89,10 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 			d.TopEndpoints[i].ASN = info.ASN
 		}
 	}
-	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10); err != nil {
+	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10, ""); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
-	if d.TopDomains, err = st.TopAgentDNS(since, 0, 15); err != nil {
+	if d.TopDomains, err = st.TopAgentDNS(since, 0, 15, ""); err != nil {
 		return nil, fmt.Errorf("dns: %w", err)
 	}
 

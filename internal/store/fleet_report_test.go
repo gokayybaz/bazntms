@@ -77,7 +77,7 @@ func TestFleetTopEndpointsAndProtocols(t *testing.T) {
 	st, _ := fleetSeed(t)
 	since := time.Now().Add(-3 * time.Hour)
 
-	eps, err := st.FleetTopEndpoints(since, 10)
+	eps, err := st.FleetTopEndpoints(since, 10, "")
 	if err != nil {
 		t.Fatalf("endpoints: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestFleetTopEndpointsFallback(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("proctraffic: %v", err)
 	}
-	eps, err := st.FleetTopEndpoints(time.Now().Add(-time.Hour), 10)
+	eps, err := st.FleetTopEndpoints(time.Now().Add(-time.Hour), 10, "")
 	if err != nil {
 		t.Fatalf("endpoints: %v", err)
 	}

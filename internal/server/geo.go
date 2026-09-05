@@ -30,7 +30,7 @@ func (s *Server) handleGeo(w http.ResponseWriter, r *http.Request) {
 	}
 	since := time.Now().Add(-time.Duration(minutes) * time.Minute)
 
-	eps, err := s.store.FleetTopEndpoints(since, 200)
+	eps, err := s.store.FleetTopEndpoints(since, 200, SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

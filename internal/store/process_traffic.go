@@ -45,8 +45,9 @@ type ProcessTrafficUsage struct {
 }
 
 // TopProcessTraffic, donemdeki surec bazli trafiği toplar. agentID 0 ise
-// tum agentlar dahildir.
-func (s *sqlStore) TopProcessTraffic(since time.Time, agentID int64, limit int) ([]ProcessTrafficUsage, error) {
+// tum agentlar dahildir. site bos degilse yalnizca o site'taki agent'lar
+// (RBAC site scope).
+func (s *sqlStore) TopProcessTraffic(since time.Time, agentID int64, limit int, site string) ([]ProcessTrafficUsage, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -56,6 +57,10 @@ func (s *sqlStore) TopProcessTraffic(since time.Time, agentID int64, limit int) 
 	if agentID > 0 {
 		q += ` AND agent_id = ?`
 		args = append(args, agentID)
+	}
+	if site != "" {
+		q += ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
+		args = append(args, site)
 	}
 	q += ` GROUP BY process ORDER BY SUM(bytes_in + bytes_out) DESC LIMIT ?`
 	args = append(args, limit)

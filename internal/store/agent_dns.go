@@ -45,8 +45,9 @@ type AgentDNSUsage struct {
 }
 
 // TopAgentDNS, dönemdeki en çok sorulan domain'leri süreç ile toplar.
-// agentID 0 ise tüm filo dahildir.
-func (s *sqlStore) TopAgentDNS(since time.Time, agentID int64, limit int) ([]AgentDNSUsage, error) {
+// agentID 0 ise tüm filo dahildir. site boş değilse yalnızca o site'taki
+// agent'lar (RBAC site scope).
+func (s *sqlStore) TopAgentDNS(since time.Time, agentID int64, limit int, site string) ([]AgentDNSUsage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 30
 	}
@@ -56,6 +57,10 @@ func (s *sqlStore) TopAgentDNS(since time.Time, agentID int64, limit int) ([]Age
 	if agentID > 0 {
 		q += ` AND agent_id = ?`
 		args = append(args, agentID)
+	}
+	if site != "" {
+		q += ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
+		args = append(args, site)
 	}
 	q += ` GROUP BY domain, process ORDER BY SUM(queries + responses) DESC LIMIT ?`
 	args = append(args, limit)

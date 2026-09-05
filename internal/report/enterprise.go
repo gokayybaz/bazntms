@@ -142,10 +142,10 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	d.P50Bps, d.P95Bps, d.P99Bps = pcts[0], pcts[1], pcts[2]
 
 	// top listeler
-	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 10); err != nil {
+	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 10, ""); err != nil {
 		return nil, fmt.Errorf("hedefler: %w", err)
 	}
-	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10); err != nil {
+	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10, ""); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
 	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0

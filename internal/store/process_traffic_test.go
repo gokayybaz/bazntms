@@ -24,7 +24,7 @@ func TestProcessTraffic(t *testing.T) {
 		t.Fatalf("bos kayit: %v", err)
 	}
 
-	top, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10)
+	top, err := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10, "")
 	if err != nil {
 		t.Fatalf("sorgu: %v", err)
 	}
@@ -39,11 +39,11 @@ func TestProcessTraffic(t *testing.T) {
 	}
 
 	// agent filtresi
-	byAgent, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 1, 10)
+	byAgent, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 1, 10, "")
 	if len(byAgent) != 2 {
 		t.Fatalf("agent 1 filtresi: %d", len(byAgent))
 	}
-	byAgent2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 2, 10)
+	byAgent2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 2, 10, "")
 	if len(byAgent2) != 0 {
 		t.Fatalf("olmayan agent icin bos donmeliydi: %d", len(byAgent2))
 	}
@@ -52,14 +52,14 @@ func TestProcessTraffic(t *testing.T) {
 	if err := st.Prune(30 * time.Second); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
-	after, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10)
+	after, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10, "")
 	if len(after) != 2 {
 		t.Fatalf("taze kayitlar prune edilmemeli: %d", len(after))
 	}
 	if err := st.Prune(-time.Hour); err != nil {
 		t.Fatalf("prune2: %v", err)
 	}
-	after2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10)
+	after2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 0, 10, "")
 	if len(after2) != 0 {
 		t.Fatalf("tam temizlik sonrasi kayit kalmis: %d", len(after2))
 	}

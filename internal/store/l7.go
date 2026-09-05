@@ -46,8 +46,9 @@ type L7Usage struct {
 }
 
 // TopL7, donemdeki en cok gorulen alan adlarini (host) surec+tur ile toplar.
-// agentID 0 ise tum filo dahildir.
-func (s *sqlStore) TopL7(since time.Time, agentID int64, limit int) ([]L7Usage, error) {
+// agentID 0 ise tum filo dahildir. site bos degilse yalnizca o site'taki
+// agent'lar (RBAC site scope).
+func (s *sqlStore) TopL7(since time.Time, agentID int64, limit int, site string) ([]L7Usage, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 30
 	}
@@ -57,6 +58,10 @@ func (s *sqlStore) TopL7(since time.Time, agentID int64, limit int) ([]L7Usage, 
 	if agentID > 0 {
 		q += ` AND agent_id = ?`
 		args = append(args, agentID)
+	}
+	if site != "" {
+		q += ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
+		args = append(args, site)
 	}
 	q += ` GROUP BY host, kind, process ORDER BY SUM(hits) DESC LIMIT ?`
 	args = append(args, limit)
