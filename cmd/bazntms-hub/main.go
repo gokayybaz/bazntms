@@ -400,8 +400,11 @@ func main() {
 		go startFlowCollector(*sflowPort, "sflow")
 	}
 
-	// Syslog alici — kuyruk aciksa mesajlar JetStream'e gider; uyum loglari
-	// her iki yolda da compliance_logs zincirine eklenir (Faz 9.1)
+	// Syslog + NetFlow alicilari coklu replikada calisabilir (C1/S15.7): bir
+	// exporter tek adrese gonderir, k8s Service datagram'i tek pod'a yonlendirir;
+	// alicilar yalnizca kuyruga yazar, store-writer mesaji bir kez isler.
+	// Uyum logu SENKRON burada eklenir (durabilite) — kuyruk yolu tekrarlamaz.
+	// Kuyruk kapaliysa (-nats bos) alicilar dogrudan store'a yazar → tek node.
 	if *syslogPort != "" {
 		sl := &syslogd.Listener{OnEvent: func(srcIP string, ev syslogd.Event) {
 			se := store.SyslogEvent{

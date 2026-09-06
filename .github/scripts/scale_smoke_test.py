@@ -14,6 +14,7 @@ Kullanim: HUB_URL (varsayilan http://localhost:8080) ve AUTH_PASSWORD
 """
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -50,6 +51,44 @@ def http_json(method, path, body=None, cookie=None):
             return e.code, e.headers, json.loads(raw)
         except Exception:
             return e.code, e.headers, None
+
+
+def ha_check(cookie):
+    """Bir hub-controller container'ini oldur, panel + oturum + agent listesi
+    nginx uzerinden calismaya devam etmeli."""
+    if os.environ.get("SKIP_HA_TEST"):
+        return
+    try:
+        ids = subprocess.run(
+            ["docker", "ps", "-q", "--filter", "name=hub-controller"],
+            capture_output=True, text=True, timeout=15, check=True,
+        ).stdout.split()
+    except Exception as e:
+        check("HA: docker CLI erisimi", False, str(e))
+        return
+    if len(ids) < 2:
+        check("HA: 2 hub-controller replikasi calisiyor", False, f"gelen: {len(ids)}")
+        return
+
+    subprocess.run(["docker", "kill", ids[0]], capture_output=True, timeout=15)
+    time.sleep(3)  # nginx bir sonraki upstream'e gecsin
+
+    ok = False
+    for _ in range(12):
+        # paylasimli oturum: ayni cookie hâlâ gecerli olmali (yeni giris gerekmez)
+        s, _, agents = http_json("GET", "/api/v1/agents", cookie=cookie)
+        if s == 200 and isinstance(agents, list):
+            ok = True
+            break
+        time.sleep(2)
+    check("HA: bir controller oldurulunce panel + paylasimli oturum ayakta", ok)
+
+    # yeni giris de calismali (surdirdigimiz replika DB oturum deposunu goruyor)
+    s, h, _ = http_json("POST", "/api/login", {"password": AUTH_PASSWORD})
+    check("HA: hayatta kalan replikada yeni giris", s == 200, f"status={s}")
+
+    # kalibi geri getir (compose'un up'ini bozmadan)
+    subprocess.run(["docker", "start", ids[0]], capture_output=True, timeout=30)
 
 
 def main():
@@ -100,6 +139,10 @@ def main():
 
     docker_scale_sites = [a.get("site") for a in online if a.get("site") == "docker-scale"]
     check("agent'lar dogru site etiketiyle (docker-scale) kayitli", len(docker_scale_sites) >= 2)
+
+    # 4) HA: bir hub-controller replikasi olunce panel + oturum + agent listesi
+    # nginx uzerinden hayatta kalmali (Faz 15 — -session-store=db + lider secim).
+    ha_check(cookie)
 
     if FAILURES:
         print(f"\n{len(FAILURES)} kontrol basarisiz:")

@@ -21,20 +21,9 @@ type Vault struct {
 
 // Open, master key dosyasini acar; yoksa uretir.
 func Open(keyFile string) (*Vault, error) {
-	var key []byte
-	if data, err := os.ReadFile(keyFile); err == nil {
-		key, err = hex.DecodeString(strings.TrimSpace(string(data)))
-		if err != nil {
-			return nil, fmt.Errorf("key dosyasi hex degil: %w", err)
-		}
-	} else {
-		key = make([]byte, 32)
-		if _, err := rand.Read(key); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(keyFile, []byte(hex.EncodeToString(key)+"\n"), 0o600); err != nil {
-			return nil, err
-		}
+	key, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		return nil, err
 	}
 	if len(key) != 32 {
 		return nil, fmt.Errorf("master key 32 bayt olmali, gelen: %d", len(key))
@@ -48,6 +37,40 @@ func Open(keyFile string) (*Vault, error) {
 		return nil, err
 	}
 	return &Vault{gcm: gcm}, nil
+}
+
+// loadOrCreateKey, master key'i okur; yoksa yarışsız üretir (O_EXCL). İki
+// controller replikası aynı volume'u paylaşıp aynı anda başlarsa yalnızca biri
+// dosyayı yazar, diğeri onu okur (Faz 15 — panel HA).
+func loadOrCreateKey(keyFile string) ([]byte, error) {
+	if data, err := os.ReadFile(keyFile); err == nil {
+		key, derr := hex.DecodeString(strings.TrimSpace(string(data)))
+		if derr != nil {
+			return nil, fmt.Errorf("key dosyasi hex degil: %w", derr)
+		}
+		return key, nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(keyFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		// başka bir süreç bizden önce yazdı — onun anahtarını oku
+		data, rerr := os.ReadFile(keyFile)
+		if rerr != nil {
+			return nil, rerr
+		}
+		return hex.DecodeString(strings.TrimSpace(string(data)))
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(hex.EncodeToString(key) + "\n"); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // Encrypt, "v1:<base64(nonce+ct)>" formatinda sifreli metin dondurur.

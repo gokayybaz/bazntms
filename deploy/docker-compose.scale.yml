@@ -1,13 +1,15 @@
 # bazNTMS — ölçek mimarisi (Kubernetes olmadan, docker compose ile; Faz 4.4)
 #
-# deploy/helm/bazntms'in aynaladığı üretim topolojisi:
+# deploy/helm/bazntms'in aynaladığı üretim topolojisi (Faz 15 — HA):
 #   N × hub-ingest     salt ingest replikaları (capture/alerts/poller kapalı);
 #                      NATS JetStream durable "store-writer" tüketiciyi
 #                      paylaşarak paralel yazar (replika ekleyince ölçeklenir)
-#   1 × hub-controller durumlu roller: uyarı motoru + SNMP poller +
-#                      NetFlow/Syslog UDP alıcıları (tek sahipli)
-#   lb (nginx)         agent trafiğini ingest havuzuna dağıtır (k8s Service
-#                      karşılığı; Docker iç DNS'i ile dinamik upstream)
+#   2 × hub-controller panel + uyarı + poller + UDP alıcıları. -session-store=db
+#                      ile oturumlar paylaşımlı; -alerts/-poller Postgres
+#                      advisory-lock lider-seçimli (yalnız biri değerlendirir).
+#                      Biri ölünce nginx diğerine yönlendirir — kesinti yok.
+#   lb (nginx)         :8080 panel havuzu + :8081 agent ingest havuzu (k8s
+#                      Service karşılığı; Docker iç DNS'i ile dinamik upstream)
 #   TimescaleDB + NATS JetStream
 #
 # Kullanım:
@@ -20,8 +22,8 @@
 #   docker compose -f deploy/docker-compose.scale.yml --profile loadgen up -d loadgen
 #
 # Uçlar:
-#   dashboard  → http://localhost:8080  (hub-controller; oturumlar replika-içi
-#                bellekte tutulur, bu yüzden panel tek replikaya bağlanır)
+#   dashboard  → http://localhost:8080  (lb → hub-controller havuzu; oturumlar
+#                paylaşımlı DB'de, bir replika ölünce oturum düşmez)
 #   agent API  → http://localhost:8081  (lb → hub-ingest havuzu; agent'lar
 #                oturum kullanmaz, enrollment token ile çalışır)
 
@@ -49,7 +51,14 @@ services:
       timeout: 3s
       retries: 20
 
-  # --- durumlu kontrolcü: uyarı + poller + cihaz alıcıları (tek replika) ---
+  # --- kontrolcü: panel + uyarı + poller + cihaz alıcıları (2 replika, HA) ---
+  # Faz 15: -session-store=db ile oturumlar paylaşımlı; -alerts/-poller Postgres
+  # advisory-lock ile lider-seçimli (yalnız bir replika değerlendirir). Panel
+  # trafiği nginx `dashboard` upstream'i üzerinden dağıtılır; bir replika ölünce
+  # kesinti yok. UDP alıcıları her replikada çalışır (Service LB tek pod'a
+  # yönlendirir + kuyruk tekilleştirir) — host UDP portu bu HA varyantında
+  # yayınlanmaz; NetFlow/syslog demosu için deploy/scripts/mac-udp-relay.sh +
+  # tek-replika kurulum kullanın.
   hub-controller:
     build:
       context: ..
@@ -57,46 +66,33 @@ services:
     command:
       - "-capture=false" # paket yakalama yalnızca host'taki agent'larda anlamlı
       - "-agent-pcap" # agent'ların surec bazli atif icin pcap yapmasina izin ver (politika)
+      - "-session-store"
+      - "db" # A4: paylaşımlı oturum tablosu — panel HA
       - "-flow-port"
-      - "2055" # NetFlow v5 (tek alıcı: NATS'e kuyruklar)
-      # NetFlow, mac-udp-relay.sh üzerinden loopback'ten geldiği için paketin
-      # kaynak IP'si 172.21.0.1 (Docker gateway) olur — cihaz eşleştirmesi için
-      # gerçek router IP'sine sabitlenir. Kendi router IP'nizle değiştirin:
-      #   ROUTER_IP=10.0.0.1 docker compose -f deploy/docker-compose.scale.yml up -d
+      - "2055"
       - "-flow-exporter"
       - "${ROUTER_IP:-192.168.1.1}"
       - "-poll-interval"
-      - "30" # tüm cihazlar için tek tip SNMP poll aralığı (sn)
+      - "30"
       - "-syslog-port"
       - "5514"
       - "-ioc-file"
-      - "/etc/bazntms/ioc.txt" # tehdit istihbaratı domain kara listesi (demo)
+      - "/etc/bazntms/ioc.txt"
       - "-enroll-token"
       - "scale-enroll-token"
-    # /data kalıcı: vault.key burada üretilir. Volume olmadan her image rebuild /
-    # container recreate yeni bir master key üretir ve DB'deki AES-GCM ile şifreli
-    # cihaz kimlik bilgileri (community, v3 parola, API token) çözülemez hâle gelir
-    # ("cipher: message authentication failed"). Yalnızca controller'a gerekli —
-    # vault sadece cihaz ekleme (bu servis) ve SNMP poller (bu servis) tarafından
-    # kullanılır; ingest replikaları vault'a dokunmaz.
+    # /data kalıcı: vault.key. Volume olmadan her recreate yeni master key üretir
+    # → DB'deki AES-GCM şifreli cihaz kimlikleri çözülemez. İki replika AYNI
+    # named volume'u paylaşır (vault.key ortak).
     volumes:
       - ctldata:/data
       - ./ioc-demo.txt:/etc/bazntms/ioc.txt:ro
-    ports:
-      - "8080:8080"
-      # NetFlow/syslog: Docker Desktop for Mac, fiziksel LAN arayüzüne başka bir
-      # host'tan (ör. router) gelen UDP'yi published porta İLETMEZ — yalnızca
-      # 127.0.0.1'den geleni iletir. Bu yüzden portlar loopback'e, kaydırılmış
-      # numaralarla bağlanır; ağ cihazları için Mac'te bir UDP röle çalıştırın:
-      #   deploy/scripts/mac-udp-relay.sh
-      # (Linux'ta bu sorun yok: "2055:2055/udp" / "5514:5514/udp" kullanın.)
-      - "127.0.0.1:12055:2055/udp"
-      - "127.0.0.1:15514:5514/udp"
     environment:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
       BAZNTMS_LOG__FORMAT: json
       AUTH_PASSWORD: demo123
+    deploy:
+      replicas: 2
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
       interval: 5s
@@ -138,13 +134,14 @@ services:
       nats:
         condition: service_healthy
 
-  # --- k8s Service karşılığı: agent trafiğini ingest havuzuna dağıtır ---
+  # --- k8s Service karşılığı: :8080 panel havuzu + :8081 agent ingest havuzu ---
   lb:
     image: nginx:1.27-alpine
     volumes:
       - ./nginx/lb.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "8081:8081"
+      - "8080:8080" # panel → hub-controller havuzu (2 replika)
+      - "8081:8081" # agent API → hub-ingest havuzu
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/healthz || exit 1"]
       interval: 5s
@@ -152,6 +149,8 @@ services:
       retries: 20
     depends_on:
       hub-ingest:
+        condition: service_healthy
+      hub-controller:
         condition: service_healthy
 
   # --- gerçek agent'lar (konteyner içi telemetri; pcap için host net + NET_RAW) ---

@@ -14,7 +14,6 @@ package queue
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -261,14 +260,8 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			q.retry(msg, err)
 			return
 		}
-		// 5651 uyum zinciri (Faz 9.1): syslog kaynakli kayitlar
-		if _, err := st.AppendComplianceLog(store.ComplianceLog{
-			Ts: ev.Ts, SourceType: "syslog", SourceName: ev.Host,
-			SrcMAC: store.ExtractMAC(ev.Message), Category: "syslog",
-			Message: fmt.Sprintf("[%d] %s: %s", ev.Severity, ev.Tag, ev.Message),
-		}); err != nil {
-			slog.Error("compliance log hatasi", "err", err)
-		}
+		// 5651 uyum zinciri: alıcı tarafında SENKRON eklenir (main.go OnEvent) —
+		// kuyruk yolu tekrarlamaz, aksi halde çift kayıt olurdu (S15.7).
 	default:
 		termMsg(msg)
 		return
