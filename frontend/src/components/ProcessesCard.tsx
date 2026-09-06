@@ -13,9 +13,9 @@ interface ProcessUsage {
 }
 
 const RANGES = [
-  { label: '15 dk', minutes: 15 },
-  { label: '1 saat', minutes: 60 },
-  { label: '6 saat', minutes: 360 },
+  { label: '15 dk', value: 15 },
+  { label: '1 saat', value: 60 },
+  { label: '6 saat', value: 360 },
 ] as const
 
 export function ProcessesCard({ agentId }: { agentId?: number } = {}) {

@@ -1,26 +1,26 @@
-// RangeTabs — kartlarda tekrarlanan "15 dk | 1 saat | 6 saat" zaman aralığı
-// seçici. TUI: kare, reverse-video aktif.
-export function RangeTabs<T extends number>({
+// RangeTabs — kartlarda tekrarlanan segment seçici ("15 dk | 1 saat | 6 saat",
+// "7 gün | 30 gün" vb.). TUI: kare, reverse-video aktif.
+export function RangeTabs<T extends string | number>({
   ranges,
   value,
   onChange,
   className = '',
 }: {
-  ranges: readonly { label: string; minutes: T }[]
+  ranges: readonly { label: string; value: T }[]
   value: T
-  onChange: (m: T) => void
+  onChange: (v: T) => void
   className?: string
 }) {
   return (
-    <div className={`flex border border-rule ${className}`} role="group" aria-label="Zaman aralığı">
+    <div className={`flex border border-rule ${className}`} role="group" aria-label="Aralık seçici">
       {ranges.map((r) => (
         <button
-          key={r.minutes}
+          key={String(r.value)}
           type="button"
-          onClick={() => onChange(r.minutes)}
-          aria-pressed={value === r.minutes}
+          onClick={() => onChange(r.value)}
+          aria-pressed={value === r.value}
           className={`px-2 py-0.5 font-mono text-[11px] transition ${
-            value === r.minutes ? 'bg-rx text-ground' : 'text-tui-dim hover:text-ink-hi'
+            value === r.value ? 'bg-rx text-ground' : 'text-tui-dim hover:text-ink-hi'
           }`}
         >
           {r.label}

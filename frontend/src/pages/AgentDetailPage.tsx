@@ -22,9 +22,9 @@ interface AgentConnSample {
 }
 
 const RANGES = [
-  { label: '1 saat', minutes: 60 },
-  { label: '6 saat', minutes: 360 },
-  { label: '24 saat', minutes: 1440 },
+  { label: '1 saat', value: 60 },
+  { label: '6 saat', value: 360 },
+  { label: '24 saat', value: 1440 },
 ] as const
 
 // silme onayı bekleme süresi (ms) — DevicesCard.tsx'teki iki-aşamalı silme deseni
