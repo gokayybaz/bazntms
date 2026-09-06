@@ -27,10 +27,10 @@ describe('auditTone', () => {
   it('eylem kategorisine göre renk verir', () => {
     expect(auditTone('user.create')).toContain('emerald')
     expect(auditTone('token.revoke')).toContain('amber')
-    expect(auditTone('user.update')).toContain('cyan')
+    expect(auditTone('user.update')).toContain('rx')
     expect(auditTone('login.failed')).toContain('rose')
     expect(auditTone('denied')).toContain('rose')
-    expect(auditTone('login')).toContain('slate')
+    expect(auditTone('login')).toContain('tui-dim')
   })
 })
 
@@ -65,7 +65,7 @@ describe('AuditCard', () => {
     )
     render(<AuditCard />)
     await waitFor(() => expect(urls.some((u) => u.includes('limit=100'))).toBe(true))
-    await userEvent.selectOptions(screen.getByRole('combobox'), '250')
+    await userEvent.click(screen.getByRole('button', { name: '250' }))
     await waitFor(() => expect(urls.some((u) => u.includes('limit=250'))).toBe(true))
   })
 })
