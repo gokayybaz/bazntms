@@ -44,8 +44,13 @@ kendi verisini kendi çeken rotalar (React Router, ortak store yok).
 - **Yorumlar ve commit mesajları Türkçe.** Kod (değişken/fonksiyon adları)
   İngilizce kalabilir.
 - **Go**: parametreli SQL sorguları zorunlu (asla string concat ile sorgu
-  kurmayın); yeni store metodu eklerken hem `internal/store/store.go`'daki
-  `Store` arayüzüne hem `sqlStore` implementasyonuna ekleyin.
+  kurmayın); yeni store metodu eklerken hem `internal/store/interfaces.go`'daki
+  ilgili alan alt-arayüzüne (`AgentStore`, `DeviceStore`, …) hem `sqlStore`
+  implementasyonuna ekleyin.
+- **Şema değişikliği**: elle `ALTER TABLE` / `ensureX` helper'ı YOK. Yeni sıralı
+  migrasyon dosyası ekleyin — `internal/store/migrations/{sqlite,postgres}/NNNN_ad.sql`
+  (dialect-koşullu DDL gerekiyorsa `migrate.go`'daki `goMigrations`'a bir Go
+  adımı). `0001_init` dondurulmuştur. Bkz. `docs/decisions/0002-migration-framework.md`.
 - **Frontend**: her sayfa/bileşen kendi API tiplerini yerelde tanımlar (paylaşılan
   `types.ts` yalnızca gerçekten çok yerde kullanılan tipler için — bkz.
   `lib/isms.tsx`, `lib/alertKinds.ts` paylaşım örnekleri). Harici grafik
