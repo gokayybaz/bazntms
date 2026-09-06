@@ -178,7 +178,10 @@ func (a *AuthManager) IdentityForToken(token string) *Identity {
 		return nil
 	}
 	if ident, ok := a.sessions.Get(TokenHashString(token)); ok {
-		return ident
+		// Derinlik savunması: oturum yazımda zaten sanitize edilir, ama
+		// tutarsız (elle düzenlenmiş / gelecekte eksik yazılmış) bir kayıt
+		// site-admin'i fiilen global yapmasın (site'siz site-admin → viewer).
+		return sanitizeIdentity(ident)
 	}
 
 	if a.st == nil {
