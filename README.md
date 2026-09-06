@@ -118,6 +118,8 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Tüm komut satırı bayrakları, ortam değişkenleri, GeoIP ve LLM kurulumları |
 | [docs/API.md](docs/API.md) | REST + WebSocket uçlarının tam referansı ve örnekleri |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | İç tasarım: yakalama döngüsü, collector, uyarı motoru, veri şeması |
+| [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | Varlıklar, güven sınırları, sınır başına tehditler ve karşı önlemler |
+| [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md) | Dağıtım senaryosu kararı (tek-kurum / MSP çoklu-saha) ve izolasyon modeli |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | İzin hataları, Npcap, AI sorunları, sık karşılaşılan durumlar |
 | [docs/enterprise-plan.html](docs/enterprise-plan.html) | 🗺️ Enterprise yol haritası: hub + agent + cihaz entegrasyonları, ölçek hedefleri |
 
