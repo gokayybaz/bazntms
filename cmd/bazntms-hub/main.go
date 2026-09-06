@@ -74,7 +74,8 @@ func main() {
 	tlsKey := fl.String("tls-key", "", "operator sunucu ozel anahtari (PEM); -tls-cert ile birlikte")
 	tlsHosts := fl.String("tls-hosts", "", "sunucu sertifikasi SAN'lari (virgulle): hub'in DNS adi/IP'leri — agent'in baglandigi ad buraya girmeli")
 	publicURL := fl.String("public-url", "", "panelin dis adresi (ör. https://ntms.example.com) — WS origin izin listesi ve OIDC redirect varsayilani icin")
-	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
+	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir; -vault-key-source=file iken)")
+	vaultKeySource := fl.String("vault-key-source", "file", "Master anahtar kaynagi: file (-vault-key-file) | env (BAZNTMS_VAULT_MASTER_KEY — disk'e yazilmaz, bulut secret manager / KMS enjeksiyonu)")
 	flowPort := fl.String("flow-port", "", "NetFlow v5/v9 + IPFIX + sFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
 	sflowPort := fl.String("sflow-port", "", "sFlow v5 icin ayri UDP portu (bos = kapali; ex: 6343). -flow-port zaten sFlow'u da kabul eder; bu yalnizca farkli portta dinlemek icin")
 	flowExporter := fl.String("flow-exporter", "", "NetFlow/sFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
@@ -243,11 +244,17 @@ func main() {
 	if *agentPCAP {
 		slog.Info("agent PCAP politikasi acik")
 	}
-	v, err := vault.Open(*vaultKeyFile)
+	vaultProvider, err := vault.ProviderFor(*vaultKeySource, *vaultKeyFile)
+	if err != nil {
+		slog.Error("vault anahtar kaynagi", "err", err)
+		os.Exit(1)
+	}
+	v, err := vault.OpenWith(vaultProvider)
 	if err != nil {
 		slog.Error("kimlik kasasi acilamadi", "err", err)
 		os.Exit(1)
 	}
+	slog.Info("kimlik kasasi acildi", "anahtar_kaynagi", vaultProvider.Name())
 
 	var sink server.TelemetrySink
 	if q != nil {

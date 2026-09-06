@@ -19,6 +19,8 @@
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |
 | `-tls` | `false` | HTTPS + agent karşılıklı TLS (mTLS). Hub kendi CA'sını üretir, agent CSR'larını enrollment'ta imzalar. `-tls-dir`/`-tls-hosts`/`-tls-cert`/`-tls-key` |
+| `-vault-key-file` | `vault.key` | Kimlik kasası master anahtar dosyası (32 bayt hex; yoksa üretilir). `-vault-key-source=file` iken kullanılır |
+| `-vault-key-source` | `file` | Master anahtar kaynağı. `file` = `-vault-key-file`. `env` = `BAZNTMS_VAULT_MASTER_KEY` (hex/base64, 32 bayt) — **anahtar diske hiç yazılmaz**; k8s Secret / AWS Secrets Manager / GCP Secret Manager / HashiCorp Vault agent tarafından ortam değişkeni olarak enjekte edilir. (B8, [decisions/0006](decisions/0006-vault-key-provider.md)) |
 | `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |

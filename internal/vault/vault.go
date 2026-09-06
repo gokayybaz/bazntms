@@ -1,6 +1,8 @@
-// Package vault, hassas kimlik bilgilerini AES-256-GCM ile sifreler.
-// Master key: -vault-key-file ile verilen dosyada (32 bayt hex); yoksa
-// ilk calistirmada otomatik uretilir ve 0600 ile yazilir.
+// Package vault, hassas kimlik bilgilerini AES-256-GCM ile sifreler. Master
+// anahtarin kaynagi KeyProvider ile soyutlanmistir (bkz. provider.go):
+//   - file: -vault-key-file'daki 32 bayt hex (yoksa uretilir) — varsayilan
+//   - env:  BAZNTMS_VAULT_MASTER_KEY (disk'e yazilmaz — bulut secret manager /
+//     KMS enjeksiyonu icin)
 package vault
 
 import (
@@ -19,11 +21,16 @@ type Vault struct {
 	gcm cipher.AEAD
 }
 
-// Open, master key dosyasini acar; yoksa uretir.
+// Open, master key dosyasini acar; yoksa uretir (file kaynagi — geriye uyum).
 func Open(keyFile string) (*Vault, error) {
-	key, err := loadOrCreateKey(keyFile)
+	return OpenWith(NewFileProvider(keyFile))
+}
+
+// OpenWith, verilen KeyProvider'dan master anahtari alarak vault'u acar.
+func OpenWith(p KeyProvider) (*Vault, error) {
+	key, err := p.Master()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("master anahtar (%s): %w", p.Name(), err)
 	}
 	if len(key) != 32 {
 		return nil, fmt.Errorf("master key 32 bayt olmali, gelen: %d", len(key))

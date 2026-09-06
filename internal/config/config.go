@@ -37,6 +37,7 @@ type HubConfig struct {
 	MultiSite         bool   `koanf:"multi_site"`         // çoklu-saha (MSP) modu — site sert yetki sınırı
 	SessionStore      string `koanf:"session_store"`      // memory | db (paylaşımlı oturum tablosu, A4)
 	PublicURL         string `koanf:"public_url"`         // panelin dış adresi — WS origin allowlist + OIDC redirect (B5)
+	VaultKeySource    string `koanf:"vault_key_source"`   // file | env (B8 — master anahtar kaynağı)
 	TelemetryInterval int    `koanf:"telemetry_interval"`
 	NATS              struct {
 		URL         string `koanf:"url"`           // bos = kuyruk kapali (dogrudan store yazimi)
@@ -128,6 +129,7 @@ var hubFlagKeys = map[string]string{
 	"multi_site":               "multi-site",
 	"session_store":            "session-store",
 	"public_url":               "public-url",
+	"vault_key_source":         "vault-key-source",
 	"telemetry_interval":       "telemetry-interval",
 	"nats.url":                 "nats",
 	"nats.max_age_hours":       "queue-max-age-hours",
