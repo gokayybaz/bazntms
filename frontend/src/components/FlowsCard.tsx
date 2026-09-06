@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatBytes } from '../lib/format'
+import { TuiTable } from './TuiTable'
+import type { TuiColumn } from './TuiTable'
 
 interface FlowRow {
   ts: number
@@ -12,6 +14,30 @@ interface FlowRow {
   packets: number
   octets: number
 }
+
+const cols: TuiColumn<FlowRow>[] = [
+  {
+    key: 'ts',
+    header: 'Saat',
+    width: '5rem',
+    sortable: true,
+    sortValue: (f) => f.ts,
+    render: (f) => <span className="text-tui-dim">{f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}</span>,
+  },
+  { key: 'device', header: 'Cihaz', sortable: true, render: (f) => <span className="text-tui-dim">{f.device}</span> },
+  {
+    key: 'flow',
+    header: 'Akış',
+    render: (f) => (
+      <span className="text-ink">
+        {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
+      </span>
+    ),
+  },
+  { key: 'proto', header: 'Proto', width: '4rem', sortable: true, render: (f) => <span className="uppercase text-tui-dim">{f.proto}</span> },
+  { key: 'packets', header: 'Paket', align: 'right', sortable: true, sortValue: (f) => f.packets, render: (f) => <span className="text-tui-dim">{f.packets}</span> },
+  { key: 'octets', header: 'Octet', align: 'right', sortable: true, sortValue: (f) => f.octets, render: (f) => <span className="text-emerald-400">{formatBytes(f.octets)}</span> },
+]
 
 export function FlowsCard() {
   const [flows, setFlows] = useState<FlowRow[]>([])
@@ -40,47 +66,25 @@ export function FlowsCard() {
     }
   }, [])
 
-  if (!loaded) return <p className="py-6 text-center text-sm text-slate-600">Yükleniyor…</p>
+  if (!loaded) return <p className="py-6 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
   if (flows.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-slate-600">
-        Akış yok — cihazları NetFlow v5 export için hub'ın <code className="text-slate-400">-flow-port</code> adresine yönlendirin.
+      <p className="py-6 text-center font-mono text-[11px] text-tui-dim">
+        Akış yok — cihazları NetFlow v5 export için hub'ın <code className="text-tui-dim">-flow-port</code> adresine yönlendirin.
       </p>
     )
   }
 
   return (
-    <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800/60">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-slate-900/95">
-          <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-            <th className="px-3 py-1.5 font-medium">Saat</th>
-            <th className="px-3 py-1.5 font-medium">Cihaz</th>
-            <th className="px-3 py-1.5 font-medium">Akış</th>
-            <th className="px-3 py-1.5 font-medium">Protokol</th>
-            <th className="px-3 py-1.5 text-right font-medium">Paket</th>
-            <th className="px-3 py-1.5 text-right font-medium">Octet</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-800/50">
-          {flows.map((f, i) => (
-            <tr key={i} className="hover:bg-slate-800/30">
-              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">
-                {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
-              </td>
-              <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{f.device}</td>
-              <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
-                {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
-              </td>
-              <td className="px-3 py-1.5">
-                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{f.proto}</span>
-              </td>
-              <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-400">{f.packets}</td>
-              <td className="px-3 py-1.5 text-right font-mono text-xs text-emerald-300/90">{formatBytes(f.octets)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TuiTable
+      columns={cols}
+      rows={flows}
+      getKey={(f) => `${f.ts}-${f.src}-${f.dst}-${f.src_port}-${f.dst_port}`}
+      filterText={(f) => `${f.src} ${f.dst} ${f.device} ${f.proto}`}
+      filterLabel="Akış filtrele (ip, cihaz, proto)…"
+      initialSort={{ key: 'ts', dir: 'desc' }}
+      scrollClass="max-h-72"
+      className="border-0"
+    />
   )
 }

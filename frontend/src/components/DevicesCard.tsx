@@ -106,11 +106,11 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
   // vendor rozeti ve detay düğmesi etiketi
   const vendorBadge = (d: Device) =>
     d.vendor === 'fortigate' ? (
-      <span className="rounded border border-orange-500/40 bg-orange-500/10 px-1.5 py-0.5 font-mono text-[9px] uppercase text-orange-300">
+      <span className="border border-orange-500/40 bg-orange-500/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-orange-300">
         rest api
       </span>
     ) : (
-      <span className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[9px] uppercase text-slate-500">
+      <span className="border border-rule-hi px-1.5 py-0.5 font-mono text-[10px] uppercase text-tui-dim">
         snmp v{d.snmp_version === 3 ? '3' : '2c'}
       </span>
     )
@@ -121,11 +121,11 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
       <div className="mb-3 flex items-center gap-2">
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+          className="border border-rx/40 bg-rx/10 px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.04em] text-rx transition hover:bg-rx/20"
         >
           {showForm ? 'Vazgeç' : '+ Cihaz Ekle'}
         </button>
-        <span className="text-[11px] text-slate-500">
+        <span className="text-[11px] text-tui-dim">
           SNMPv2c/v3 veya FortiGate REST API ile yoklanır · kimlik bilgileri AES-GCM kasada şifreli
         </span>
         {deletedNotice && (
@@ -134,30 +134,30 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
       </div>
 
       {showForm && <DeviceForm onAdded={() => { setShowForm(false); load() }} onError={setError} />}
-      {error && <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{error}</p>}
+      {error && <p className="mb-3 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{error}</p>}
 
       {loaded && devices.length === 0 ? (
-        <p className="py-6 text-center text-sm text-dim-aa">Cihaz yok — SNMP poller veya FortiGate REST için cihaz ekleyin.</p>
+        <p className="py-6 text-center text-sm text-tui-dim">Cihaz yok — SNMP poller veya FortiGate REST için cihaz ekleyin.</p>
       ) : (
         <div className="space-y-2">
           {devices.map((d) => (
-            <div key={d.id} className="rounded-md border border-slate-800 bg-slate-900/50 px-3.5 py-2.5">
+            <div key={d.id} className="border border-rule bg-panel-2/40 px-3.5 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{d.kind}</span>
-                <Link to={`/cihazlar/${d.id}`} className="font-mono text-sm font-semibold text-cyan-300 hover:text-cyan-200 hover:underline">
+                <span className="bg-panel-2 px-1.5 py-0.5 font-mono text-[10px] uppercase text-tui-dim">{d.kind}</span>
+                <Link to={`/cihazlar/${d.id}`} className="font-mono text-sm font-semibold text-rx hover:text-ink-hi hover:underline">
                   {d.name}
                 </Link>
-                <span className="font-mono text-xs text-slate-500">{d.host}</span>
-                {d.site && <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[9px] text-slate-400">{d.site}</span>}
+                <span className="font-mono text-xs text-tui-dim">{d.host}</span>
+                {d.site && <span className="bg-panel-2 px-1.5 py-0.5 font-mono text-[10px] text-tui-dim">{d.site}</span>}
                 {vendorBadge(d)}
-                <span className="ml-auto font-mono text-[10px] text-dim-aa">
+                <span className="ml-auto font-mono text-[10px] text-tui-dim">
                   {d.last_poll > 0 ? `son poll: ${new Date(d.last_poll * 1000).toLocaleTimeString('tr-TR')}` : 'hiç poll edilmedi'}
                 </span>
                 <button
                   onClick={() => showIfaces(d.id, d.name)}
                   aria-label={`${d.name} — ${detailLabel(d)}`}
                   title={`${d.name} — ${detailLabel(d)}`}
-                  className="rounded-md border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+                  className="border border-rule-hi px-2 py-0.5 text-[11px] text-tui-dim transition hover:border-ink-hi hover:text-ink-hi"
                 >
                   {detailLabel(d)}
                 </button>
@@ -166,7 +166,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                   disabled={deletingId === d.id}
                   aria-label={confirmDeleteId === d.id ? `${d.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${d.name} cihazını sil`}
                   title={confirmDeleteId === d.id ? `${d.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${d.name} cihazını sil`}
-                  className={`rounded-md border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                  className={`border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
                     confirmDeleteId === d.id
                       ? 'border-rose-500 bg-rose-500/20 text-rose-200'
                       : 'border-rose-500/30 text-rose-400/80 hover:border-rose-500/60 hover:text-rose-300'
@@ -176,12 +176,12 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                 </button>
               </div>
               {d.sys_descr && (
-                <p className="mt-1 truncate text-[11px] text-dim-aa" title={d.sys_descr}>{d.sys_descr}</p>
+                <p className="mt-1 truncate text-[11px] text-tui-dim" title={d.sys_descr}>{d.sys_descr}</p>
               )}
               {d.vendor === 'fortigate' && (d.api_url || d.vdom) && (
-                <p className="mt-1 font-mono text-[10px] text-dim-aa">
+                <p className="mt-1 font-mono text-[10px] text-tui-dim">
                   {d.api_url}
-                  {d.vdom && <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">vdom: {d.vdom}</span>}
+                  {d.vdom && <span className="ml-2 bg-panel-2 px-1.5 py-0.5 text-tui-dim">vdom: {d.vdom}</span>}
                 </p>
               )}
               {d.last_error && (
@@ -191,10 +191,10 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                 <FortiPanel deviceId={d.id} />
               )}
               {detail?.id === d.id && d.vendor !== 'fortigate' && (
-                <div className="mt-2 max-h-64 overflow-x-auto overflow-y-auto rounded border border-slate-800">
+                <div className="mt-2 max-h-64 overflow-x-auto overflow-y-auto border border-rule">
                   <table className="w-full min-w-[520px] text-xs">
-                    <thead className="bg-slate-900/80">
-                      <tr className="text-left text-[10px] uppercase text-slate-500">
+                    <thead className="bg-panel">
+                      <tr className="text-left text-[10px] uppercase text-tui-dim">
                         <th className="px-2 py-1">Arayüz</th><th className="px-2 py-1">Durum</th>
                         <th className="px-2 py-1 text-right">↓</th><th className="px-2 py-1 text-right">↑</th>
                         <th className="px-2 py-1 text-right">Hata (in/out)</th>
@@ -203,17 +203,17 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
                     </thead>
                     <tbody>
                       {detail.ifaces.map((i) => (
-                        <tr key={i.if_index} className="border-t border-slate-800/60">
-                          <td className="px-2 py-1 font-mono text-slate-300">{i.name || `if${i.if_index}`}</td>
+                        <tr key={i.if_index} className="border-t border-rule">
+                          <td className="px-2 py-1 font-mono text-ink">{i.name || `if${i.if_index}`}</td>
                           <td className="px-2 py-1">
-                            <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-tui-dim'}`}>
                               {i.oper_status === 1 ? 'up' : 'down'}
                             </span>
                           </td>
-                          <td className="px-2 py-1 text-right font-mono text-cyan-300/90">{formatBits(i.rx_bps)}</td>
+                          <td className="px-2 py-1 text-right font-mono text-rx/90">{formatBits(i.rx_bps)}</td>
                           <td className="px-2 py-1 text-right font-mono text-violet-300/90">{formatBits(i.tx_bps)}</td>
-                          <td className={`px-2 py-1 text-right font-mono ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>{i.in_errors}/{i.out_errors}</td>
-                          <td className={`px-2 py-1 text-right font-mono ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-slate-500'}`}>{i.in_discards}/{i.out_discards}</td>
+                          <td className={`px-2 py-1 text-right font-mono ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-tui-dim'}`}>{i.in_errors}/{i.out_errors}</td>
+                          <td className={`px-2 py-1 text-right font-mono ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-tui-dim'}`}>{i.in_discards}/{i.out_discards}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -234,7 +234,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</span>
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-tui-dim">{label}</span>
       {children}
     </label>
   )
@@ -251,7 +251,7 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
   const [submitting, setSubmitting] = useState(false)
   const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }))
   const inputCls =
-    'w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm outline-none placeholder:text-dim-aa focus:border-cyan-500/60'
+    'w-full border border-rule-hi bg-panel px-2.5 py-1.5 text-sm outline-none placeholder:text-tui-dim focus:border-cyan-500/60'
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -275,7 +275,7 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
   }
 
   return (
-    <form onSubmit={submit} className="@container mb-3 space-y-2 rounded-md border border-slate-800 bg-slate-900/60 p-3">
+    <form onSubmit={submit} className="@container mb-3 space-y-2 border border-rule bg-panel p-3">
       <div className="grid grid-cols-2 gap-2 @lg:grid-cols-4">
         <Field label="Ad *">
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="core-sw" className={inputCls} />
@@ -312,7 +312,7 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
           <Field label="REST API Token *">
             <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="kasada şifrelenir; read-only profil önerilir" className={inputCls} />
           </Field>
-          <label className="flex items-center gap-2 text-[11px] text-slate-500">
+          <label className="flex items-center gap-2 text-[11px] text-tui-dim">
             <input type="checkbox" checked={form.api_verify_tls} onChange={(e) => set('api_verify_tls', e.target.checked)} className="accent-cyan-500" />
             TLS sertifikasını doğrula (self-signed kurulumlarda kapatın)
           </label>
@@ -358,11 +358,11 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-cyan-700 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-cyan-400 hover:text-slate-950 disabled:opacity-60"
+          className="border border-rx bg-rx px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ground transition hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? 'kaydediliyor…' : 'Kaydet'}
         </button>
-        <span className="text-[11px] text-dim-aa">poll aralığı: {form.poll_seconds} sn</span>
+        <span className="text-[11px] text-tui-dim">poll aralığı: {form.poll_seconds} sn</span>
       </div>
     </form>
   )

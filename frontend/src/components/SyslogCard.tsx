@@ -12,8 +12,7 @@ interface SyslogEvent {
 
 export function SyslogCard() {
   const [events, setEvents] = useState<SyslogEvent[]>([])
-  // varsayılan "info": ağ cihazları çoğunlukla notice/info seviyesinde loglar;
-  // 0 (yalnız emergency) çoğu kurulumda kartı boş gösteriyordu
+  // varsayılan "info": ağ cihazları çoğunlukla notice/info seviyesinde loglar
   const [minSev, setMinSev] = useState(6)
   const [loaded, setLoaded] = useState(false)
 
@@ -41,12 +40,12 @@ export function SyslogCard() {
   }, [])
 
   const shown = events.filter((e) => e.severity <= minSev)
-  if (!loaded) return <p className="py-6 text-center text-sm text-slate-600">Yükleniyor…</p>
+  if (!loaded) return <p className="py-6 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2">
-        <label className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="mb-2 flex items-center gap-2 font-mono text-[11px]">
+        <label className="flex items-center gap-2 text-tui-dim">
           en az seviye:
           <input
             type="range"
@@ -56,26 +55,31 @@ export function SyslogCard() {
             onChange={(e) => setMinSev(+e.target.value)}
             className="w-32 accent-cyan-500"
           />
-          <span className="font-mono text-slate-300">{SEV_NAMES[minSev]}</span>
+          <span className="text-ink-hi">{SEV_NAMES[minSev]}</span>
         </label>
-        <span className="ml-auto font-mono text-[10px] text-slate-600">{shown.length}/{events.length} olay</span>
+        <span className="ml-auto text-tui-dim">
+          {shown.length}/{events.length} olay
+        </span>
       </div>
 
       {shown.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-600">
-          Olay yok — cihazları syslog'u hub'ın <code className="text-slate-400">-syslog-port</code> adresine gönderecek şekilde ayarlayın.
+        <p className="py-6 text-center font-mono text-[11px] text-tui-dim">
+          Olay yok — cihazları syslog'u hub'ın <code className="text-tui-dim">-syslog-port</code> adresine gönderecek şekilde ayarlayın.
         </p>
       ) : (
-        <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
-          {shown.map((e) => (
-            <li key={e.id} className="flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/30">
-              <span className="text-slate-600">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
-              <span className="text-slate-400">{e.host}</span>
-              <span className={`rounded px-1 ring-1 ${SEV_STYLES[e.severity]}`}>{SEV_NAMES[e.severity]}</span>
-              <span className="truncate text-slate-300">{e.tag && <span className="text-slate-500">{e.tag}: </span>}{e.message}</span>
-            </li>
+        <div role="log" aria-live="polite" className="max-h-72 overflow-y-auto font-mono text-[11px]">
+          {shown.map((e, i) => (
+            <div key={e.id} className={`flex items-baseline gap-2 px-2 py-0.5 ${i % 2 ? 'bg-panel-2/40' : ''}`}>
+              <span className="shrink-0 text-tui-dim">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+              <span className="shrink-0 text-tui-dim">{e.host}</span>
+              <span className={`shrink-0 px-1 ${SEV_STYLES[e.severity]}`}>{SEV_NAMES[e.severity]}</span>
+              <span className="min-w-0 flex-1 truncate text-ink">
+                {e.tag && <span className="text-tui-dim">{e.tag}: </span>}
+                {e.message}
+              </span>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )
