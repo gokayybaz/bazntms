@@ -128,10 +128,6 @@ export const statusTone = (s: string): Tone => {
 export const btnCls =
   'border border-rule-hi px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-tui-dim transition hover:border-ink-hi hover:text-ink-hi'
 
-// ask — geçici native prompt sarmalayıcı. ISMS sayfaları dokunuldukça
-// useDialog().prompt()'a taşınıyor; hepsi taşınınca bu silinecek.
-export const ask = (q: string, def = '') => prompt(q, def) ?? ''
-
 export async function ismsPost(url: string, body: unknown) {
   await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {})
 }

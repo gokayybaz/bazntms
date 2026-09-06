@@ -16,11 +16,8 @@
   --color-ink:     #ced7e3; /* birincil okunabilir metin */
   --color-ink-hi:  #f1f5fa; /* vurgulu metin / başlık */
 
-  /* slate-500/600/700 koyu zeminde WCAG AA'yı geçmiyordu (bkz. DESIGN.md).
-     text-dim-aa mevcut kullanımların yerine geçer; --color-tui-dim yeni ad,
-     ikisi aynı değer (#8794a8 → ground üzerinde ~6.4:1). Faz 17 dosyaları
-     dokunuldukça slate-500/600/700 → tui-dim'e taşınır (S17.31 süpürmesi). */
-  --color-dim-aa:  #8794a8;
+  /* en düşük öncelikli metin — ground üzerinde ~6.4:1 (WCAG AA ✔). Eski
+     slate-500/600/700 + text-dim-aa kullanımlarının hepsi buna taşındı. */
   --color-tui-dim: #8794a8;
 
   /* --- anlam renkleri: DESIGN.md sabit-anlam sözleşmesi, htop yakınsaması ---
