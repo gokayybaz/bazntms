@@ -174,13 +174,15 @@ describe('AgentDetailPage', () => {
     expect(deleteCall).toBeUndefined()
   })
 
-  it('bağlantı başlığı filtrelenmiş/toplam sayıyı gösterir', async () => {
+  it('bağlantı tablosu filtrelenmiş/toplam sayıyı gösterir', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getByText('chrome')).toBeInTheDocument())
     expect(screen.getByText(/2 bağlantı/)).toBeInTheDocument()
 
     await user.type(screen.getByPlaceholderText('Filtrele: adres, süreç, durum…'), 'mDNS')
-    expect(screen.getByText(/1 \/ 2 bağlantı/)).toBeInTheDocument()
+    // TuiTable filtre çubuğu daralmış sayacı gösterir
+    expect(screen.getByText('1 / 2')).toBeInTheDocument()
+    expect(screen.queryByText('chrome')).not.toBeInTheDocument()
   })
 })
