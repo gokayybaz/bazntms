@@ -4,7 +4,7 @@ import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300 select-none">
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-ink select-none">
       <input
         type="checkbox"
         checked={checked}
@@ -31,13 +31,13 @@ function Section({
   accent?: 'slate' | 'orange'
   children: React.ReactNode
 }) {
-  const borderCls = accent === 'orange' ? 'border-orange-500/20' : 'border-slate-800'
+  const borderCls = accent === 'orange' ? 'border-orange-500/20' : 'border-rule'
   return (
-    <details open className={`group rounded-lg border ${borderCls} p-3`}>
-      <summary className="cursor-pointer list-none text-sm font-medium text-slate-200 marker:content-none">
-        <span className="mr-1.5 inline-block text-dim-aa transition group-open:rotate-90">▸</span>
+    <details open className={`group border ${borderCls} p-3`}>
+      <summary className="cursor-pointer list-none text-sm font-medium text-ink-hi marker:content-none">
+        <span className="mr-1.5 inline-block text-tui-dim transition group-open:rotate-90">▸</span>
         {title}
-        {status && <span className="ml-2 text-xs font-normal text-dim-aa">· {status}</span>}
+        {status && <span className="ml-2 text-xs font-normal text-tui-dim">· {status}</span>}
       </summary>
       <fieldset className="mt-2 space-y-2">{children}</fieldset>
     </details>
@@ -45,8 +45,8 @@ function Section({
 }
 
 const inputCls =
-  'w-full rounded-lg border border-slate-700/80 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-dim-aa focus:border-cyan-500/60'
-const fieldLabelCls = 'block space-y-1 text-xs text-slate-500'
+  'w-full border border-rule-hi bg-panel px-2.5 py-1.5 text-sm text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
+const fieldLabelCls = 'block space-y-1 text-xs text-tui-dim'
 
 type ChannelStatus = { last_attempt: number; ok: boolean; error?: string }
 
@@ -58,7 +58,7 @@ function ChannelDot({ s }: { s?: ChannelStatus }) {
   return (
     <span
       title={s.ok ? `son teslim: ${when}` : `hata (${when}): ${s.error}`}
-      className={`ml-1.5 inline-block size-2 rounded-full align-middle ${s.ok ? 'bg-emerald-400' : 'bg-rose-500'}`}
+      className={`ml-1.5 inline-block size-2  align-middle ${s.ok ? 'bg-emerald-400' : 'bg-rose-500'}`}
     />
   )
 }
@@ -130,41 +130,35 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
   }, [cfg])
 
   const eventFeed = (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Olay Akışı</h3>
+    <div className="font-mono">
+      <h3 className="mb-2 text-[10px] font-medium uppercase tracking-[0.06em] text-rx">Olay Akışı</h3>
       {events.length === 0 ? (
-        <p className="py-8 text-center text-sm text-dim-aa">Henüz uyarı yok.</p>
+        <p className="py-8 text-center text-[11px] text-tui-dim">Henüz uyarı yok.</p>
       ) : (
-        <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
-          {events.map((e) => (
-            <li key={e.id} className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${KIND_STYLES[e.kind] ?? 'bg-slate-500/10 text-slate-400 ring-slate-500/20'}`}
-                >
-                  {KIND_LABELS[e.kind] ?? e.kind}
-                </span>
-                <span className="ml-auto font-mono text-[10px] text-dim-aa">
-                  {new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-slate-300">{e.message}</p>
-            </li>
+        <div role="log" aria-live="polite" className="max-h-96 overflow-y-auto text-[11px]">
+          {events.map((e, i) => (
+            <div key={e.id} className={`flex items-baseline gap-2 px-2 py-0.5 ${i % 2 ? 'bg-panel-2/40' : ''}`}>
+              <span className="shrink-0 text-tui-dim">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+              <span className={`shrink-0 px-1 text-[10px] uppercase ${KIND_STYLES[e.kind] ?? 'text-tui-dim'}`}>
+                {KIND_LABELS[e.kind] ?? e.kind}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink">{e.message}</span>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )
 
   if (!cfg) {
     const notice = forbidden ? (
-      <p className="text-sm text-dim-aa">
-        Uyarı eşikleri ve bildirim kanalları yalnızca <span className="text-slate-300">yöneticilere</span> görünür.
+      <p className="text-sm text-tui-dim">
+        Uyarı eşikleri ve bildirim kanalları yalnızca <span className="text-ink">yöneticilere</span> görünür.
       </p>
     ) : loadError ? (
       <p className="text-sm text-rose-400">⚠ ayarlar alınamadı — sayfayı yenileyin</p>
     ) : (
-      <p className="text-sm text-dim-aa">Ayarlar yükleniyor…</p>
+      <p className="text-sm text-tui-dim">Ayarlar yükleniyor…</p>
     )
     return (
       <div className="grid gap-5 lg:grid-cols-2">
@@ -187,11 +181,11 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
       {/* ayar formu — @container: iç grid'ler kartın kendi genişliğine göre
           kırılıyor (viewport'a göre değil), sayfa yerleşimi ne olursa olsun */}
       <div className="@container space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ayarlar</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-tui-dim">Ayarlar</h3>
 
         <div className="flex items-center gap-4">
           <Toggle checked={cfg.enabled} onChange={(v) => set('enabled', v)} label="Uyarılar açık" />
-          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          <label className="flex items-center gap-1.5 text-xs text-tui-dim">
             soğuma
             <input
               type="number"
@@ -204,13 +198,13 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           </label>
         </div>
 
-        <p className="text-[10.5px] font-semibold uppercase tracking-wider text-dim-aa">
-          Yerel yakalama gerektirir <span className="font-normal normal-case text-dim-aa">— hub'ın kendi ağ yakalaması aktifken tetiklenir</span>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-tui-dim">
+          Yerel yakalama gerektirir <span className="font-normal normal-case text-tui-dim">— hub'ın kendi ağ yakalaması aktifken tetiklenir</span>
         </p>
 
         <Section title="Bant genişliği zirvesi" status={cfg.bandwidth.enabled ? 'açık' : 'kapalı'}>
           <Toggle checked={cfg.bandwidth.enabled} onChange={(v) => setCfg((c) => c && { ...c, bandwidth: { ...c.bandwidth, enabled: v } })} label="Bant genişliği zirvesi" />
-          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3 text-xs text-slate-500">
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3 text-xs text-tui-dim">
             <label className={fieldLabelCls}>indirme (Mbps)
               <input type="number" min={1} value={cfg.bandwidth.in_mbps} onChange={(e) => setCfg((c) => c && { ...c, bandwidth: { ...c.bandwidth, in_mbps: +e.target.value || 0 } })} className={inputCls} />
             </label>
@@ -268,7 +262,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
             onChange={(v) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, enabled: v } })}
             label="İstatistiksel anomali (z-skoru baseline)"
           />
-          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3 text-xs text-slate-500">
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3 text-xs text-tui-dim">
             <label className={fieldLabelCls}>hassasiyet (z-skoru)
               <input type="number" min={0.5} step={0.5} value={cfg.anomaly.sensitivity} onChange={(e) => setCfg((c) => c && { ...c, anomaly: { ...c.anomaly, sensitivity: +e.target.value || 3 } })} className={inputCls} />
             </label>
@@ -281,8 +275,8 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           </div>
         </Section>
 
-        <p className="pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-dim-aa">
-          Filo/cihaz tabanlı <span className="font-normal normal-case text-dim-aa">— hub yakalaması gerekmez, cihaz poll'undan gelir</span>
+        <p className="pt-1 text-[10px] font-semibold uppercase tracking-wider text-tui-dim">
+          Filo/cihaz tabanlı <span className="font-normal normal-case text-tui-dim">— hub yakalaması gerekmez, cihaz poll'undan gelir</span>
         </p>
 
         <Section title="FortiGate: VPN / SD-WAN" accent="orange">
@@ -291,7 +285,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
             onChange={(v) => setCfg((c) => c && { ...c, forti: { ...c.forti, vpn_down: v } })}
             label="FortiGate: VPN tüneli/kullanıcısı down"
           />
-          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2 text-xs text-slate-500">
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2 text-xs text-tui-dim">
             <label className={fieldLabelCls}>sd-wan gecikme eşiği (ms)
               <input type="number" min={0} value={cfg.forti.sdwan_latency_ms} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, sdwan_latency_ms: +e.target.value || 0 } })} className={inputCls} />
             </label>
@@ -305,7 +299,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
               <input type="number" min={0} value={cfg.forti.max_sessions} onChange={(e) => setCfg((c) => c && { ...c, forti: { ...c.forti, max_sessions: +e.target.value || 0 } })} className={inputCls} />
             </label>
           </div>
-          <p className="text-[10.5px] text-dim-aa">Eşik 0 ise o kontrol kapalıdır (VPN down hariç, ayrı toggle).</p>
+          <p className="text-[10px] text-tui-dim">Eşik 0 ise o kontrol kapalıdır (VPN down hariç, ayrı toggle).</p>
         </Section>
 
         <Section title="Bildirim Kanalları">
@@ -314,11 +308,11 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
               type="button"
               onClick={testChannels}
               disabled={testing}
-              className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
+              className="border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-rx transition hover:bg-cyan-500/20 disabled:opacity-40"
             >
               {testing ? 'Test ediliyor…' : 'Kanalları Test Et'}
             </button>
-            <span className="text-[10.5px] text-dim-aa">kaydedilmiş yapılandırmaya sınama uyarısı gönderir</span>
+            <span className="text-[10px] text-tui-dim">kaydedilmiş yapılandırmaya sınama uyarısı gönderir</span>
           </div>
           <Toggle checked={cfg.notifiers.desktop} onChange={(v) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, desktop: v } })} label="Masaüstü bildirimi" />
           <label className={fieldLabelCls}><span>Generic webhook URL<ChannelDot s={notify.generic} /></span>
@@ -375,14 +369,14 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
               <Toggle checked={siem.insecure} onChange={(v) => patchSiem({ insecure: v })} label="TLS doğrulamasını atla (self-signed toplayıcı)" />
             </>
           )}
-          <p className="text-[10.5px] text-dim-aa">CEF/LEEF önem: port 9 · vpn_down 8 · anomali/sdwan 6 · bant/oturum 5 · süreç/hedef 4. syslog facility local0.</p>
+          <p className="text-[10px] text-tui-dim">CEF/LEEF önem: port 9 · vpn_down 8 · anomali/sdwan 6 · bant/oturum 5 · süreç/hedef 4. syslog facility local0.</p>
         </Section>
 
         <div className="flex items-center gap-3">
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-lg bg-cyan-700 px-4 py-1.5 text-sm font-semibold text-white transition enabled:hover:bg-cyan-400 enabled:hover:text-slate-950 disabled:opacity-40"
+            className="bg-rx px-4 py-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ground border border-rx transition enabled:hover:opacity-90 disabled:opacity-40"
           >
             {saving ? 'Kaydediliyor…' : 'Ayarları Kaydet'}
           </button>

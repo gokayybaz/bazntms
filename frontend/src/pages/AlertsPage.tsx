@@ -3,7 +3,7 @@ import type { AlertEvent } from '../types'
 import { formatNum } from '../lib/format'
 import { AlertsCard } from '../components/AlertsCard'
 import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
-import { Card } from '../components/Card'
+import { Panel } from '../components/Panel'
 
 export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
   const byKind = useMemo(() => {
@@ -13,29 +13,31 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
   }, [alertEvents])
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-      <div className="flex items-center gap-2">
-        <h1 className="text-[13px] font-semibold uppercase tracking-widest text-slate-300">Uyarılar</h1>
-        <span className="text-xs text-dim-aa">olay akışı + eşik ayarları + bildirim kanalları</span>
+    <div className="mx-auto max-w-[1600px] space-y-3 px-3 py-3 font-mono">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyarılar</h1>
+        <span className="text-[10px] text-tui-dim">olay akışı + eşik ayarları + bildirim kanalları</span>
       </div>
 
       {byKind.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {byKind.map(([kind, count]) => (
             <span
               key={kind}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium ring-1 ${KIND_STYLES[kind] ?? 'bg-slate-500/10 text-slate-400 ring-slate-500/20'}`}
+              className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] ${
+                KIND_STYLES[kind] ?? 'border-rule-hi text-tui-dim'
+              }`}
             >
               {KIND_LABELS[kind] ?? kind}
-              <span className="font-mono font-semibold">{formatNum(count)}</span>
+              <span className="font-bold">{formatNum(count)}</span>
             </span>
           ))}
         </div>
       )}
 
-      <Card title="Uyarılar" right={<span className="text-xs text-dim-aa">{formatNum(alertEvents.length)} olay</span>}>
+      <Panel title="Uyarılar" right={<span className="text-[10px] text-tui-dim">{formatNum(alertEvents.length)} olay</span>}>
         <AlertsCard events={alertEvents} />
-      </Card>
+      </Panel>
     </div>
   )
 }
