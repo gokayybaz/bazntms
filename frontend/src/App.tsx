@@ -27,11 +27,17 @@ import { AuditAdminPage } from './pages/yonetim/AuditAdminPage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
-  const [identity, setIdentity] = useState<{ username: string; role: string } | null>(null)
+  const [identity, setIdentity] = useState<{ username: string; role: string; site?: string } | null>(null)
   // authRequired=false → kimlik doğrulama kapalı (dev modu); sunucuda
   // requirePerm de herkesi geçirir, o yüzden yönetim UI'ı da açılır.
   const [authRequired, setAuthRequired] = useState(true)
-  const isAdmin = !authRequired || identity?.role === 'admin'
+  const [multiSite, setMultiSite] = useState(false)
+  // Yönetim bölümü: admin VEYA site-admin (kendi sahası). Uyumluluk/ISMS
+  // (saha-üstü yönetişim) yalnız global admin — S14.B (çoklu-saha).
+  const isAdmin = !authRequired || identity?.role === 'admin' || identity?.role === 'site-admin'
+  const canGovern = !authRequired || identity?.role === 'admin'
+  // site-admin ise yönetim formları bu sahaya kilitli; global admin ise boş.
+  const lockedSite = identity?.role === 'site-admin' ? (identity.site ?? '') : ''
   const { alertEvents, fleet, connected, reconnect } = useLive(
     useCallback(() => setAuthState('locked'), []),
   )
@@ -50,13 +56,23 @@ export default function App() {
   useEffect(() => {
     fetch('/api/auth/status')
       .then((r) => r.json())
-      .then((d: { required: boolean; authenticated: boolean; username?: string; role?: string }) => {
-        setAuthRequired(d.required)
-        setAuthState(d.required && !d.authenticated ? 'locked' : 'open')
-        if (d.authenticated && d.username) {
-          setIdentity({ username: d.username, role: d.role ?? 'viewer' })
-        }
-      })
+      .then(
+        (d: {
+          required: boolean
+          authenticated: boolean
+          username?: string
+          role?: string
+          site?: string
+          multi_site?: boolean
+        }) => {
+          setAuthRequired(d.required)
+          setMultiSite(!!d.multi_site)
+          setAuthState(d.required && !d.authenticated ? 'locked' : 'open')
+          if (d.authenticated && d.username) {
+            setIdentity({ username: d.username, role: d.role ?? 'viewer', site: d.site ?? '' })
+          }
+        },
+      )
       .catch(() => setAuthState('open'))
   }, [])
 
@@ -97,7 +113,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar isAdmin={isAdmin} />
+      <Sidebar isAdmin={isAdmin} canGovern={canGovern} />
       <div className="min-w-0 flex-1">
         <Header connected={connected} onLogout={logout} identity={identity} />
 
@@ -117,12 +133,13 @@ export default function App() {
           <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
           <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
 
-          {/* Yönetim (Faz 12) — admin guard; kabuklar S12.2+ ile dolar */}
+          {/* Yönetim (Faz 12) — admin/site-admin guard. site-admin kendi sahasına
+              kilitli (S14.B): lockedSite dolu ise site alanı sabit, admin rolü gizli. */}
           <Route path="/yonetim" element={<AdminGuard isAdmin={isAdmin} />}>
             <Route index element={<Navigate to="/yonetim/kullanicilar" replace />} />
-            <Route path="kullanicilar" element={<UsersAdminPage />} />
-            <Route path="tokenlar" element={<TokensAdminPage />} />
-            <Route path="agent-ekle" element={<EnrollAdminPage />} />
+            <Route path="kullanicilar" element={<UsersAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
+            <Route path="tokenlar" element={<TokensAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
+            <Route path="agent-ekle" element={<EnrollAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
             <Route path="denetim" element={<AuditAdminPage />} />
           </Route>
 

@@ -11,9 +11,10 @@ interface User {
   last_login: number
 }
 
-const ROLES = ['admin', 'netops', 'analyst', 'viewer'] as const
+const ROLES = ['admin', 'site-admin', 'netops', 'analyst', 'viewer'] as const
 const ROLE_LABEL: Record<string, string> = {
-  admin: 'Yönetici',
+  admin: 'Yönetici (global)',
+  'site-admin': 'Saha Yöneticisi',
   netops: 'Ağ Operatörü',
   analyst: 'Analist',
   viewer: 'İzleyici',
@@ -23,7 +24,10 @@ const DELETE_CONFIRM_MS = 4000
 const inputCls =
   'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
 
-export function UsersCard() {
+// lockedSite dolu ise (site-admin) form o sahaya sabitlenir ve "admin" (global)
+// rolü seçilemez — sunucu da reddeder (S14.B2).
+export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
+  const roles = lockedSite ? ROLES.filter((r) => r !== 'admin') : ROLES
   const [users, setUsers] = useState<User[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
@@ -31,7 +35,7 @@ export function UsersCard() {
 
   // ekleme formu
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ username: '', password: '', role: 'viewer', site: '' })
+  const [form, setForm] = useState({ username: '', password: '', role: 'viewer', site: lockedSite })
   const [creating, setCreating] = useState(false)
 
   // satır içi şifre sıfırlama
@@ -106,7 +110,7 @@ export function UsersCard() {
         return
       }
       flash(`${form.username} eklendi`)
-      setForm({ username: '', password: '', role: 'viewer', site: '' })
+      setForm({ username: '', password: '', role: 'viewer', site: lockedSite })
       setShowForm(false)
       await load()
     } finally {
@@ -182,7 +186,7 @@ export function UsersCard() {
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
           >
-            {ROLES.map((r) => (
+            {roles.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
               </option>
@@ -191,6 +195,8 @@ export function UsersCard() {
           <input
             className={inputCls}
             placeholder="site (boş = tüm siteler)"
+            title={lockedSite ? 'sahanıza sabit' : undefined}
+            readOnly={!!lockedSite}
             value={form.site}
             onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
           />
@@ -233,7 +239,7 @@ export function UsersCard() {
                       onChange={(e) => patch(u.id, { role: e.target.value }, 'rol güncellendi')}
                       className="rounded border border-slate-700/80 bg-slate-950 px-1.5 py-1 text-xs text-slate-300 focus:border-cyan-500/60"
                     >
-                      {ROLES.map((r) => (
+                      {roles.map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABEL[r]}
                         </option>

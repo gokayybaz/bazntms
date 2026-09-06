@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 
 /* --- ikonlar (24px, stroke tabanlı — Header logosuyla aynı dil) --- */
@@ -66,14 +67,17 @@ const IconCog = () => (
   </svg>
 )
 
-const NAV_ITEMS = [
+type NavItem = { to: string; label: string; icon: ReactNode; end: boolean; govern?: boolean }
+
+const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: <IconGrid />, end: true },
   { to: '/agentlar', label: "Agent'lar", icon: <IconServer />, end: false },
   { to: '/cihazlar', label: 'Cihazlar', icon: <IconRouter />, end: false },
   { to: '/topoloji', label: 'Ağ Topolojisi', icon: <IconTopo />, end: false },
   { to: '/uyarilar', label: 'Uyarılar', icon: <IconBell />, end: false },
   { to: '/raporlar', label: 'Raporlar', icon: <IconDoc />, end: false },
-  { to: '/uyumluluk', label: 'Uyumluluk', icon: <IconShield />, end: false },
+  // Uyumluluk (ISMS/5651) saha-üstü yönetişim — yalnız global admin (S14.B).
+  { to: '/uyumluluk', label: 'Uyumluluk', icon: <IconShield />, end: false, govern: true },
 ]
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -83,7 +87,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : 'border border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200'
   }`
 
-export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
+export function Sidebar({ isAdmin = false, canGovern = true }: { isAdmin?: boolean; canGovern?: boolean }) {
   return (
     // dar ekranlarda (<640px) yalnızca ikon genişliği — önceden sabit w-56
     // her viewport'ta aynıydı, 375px'te içerik alanını ~%40'a sıkıştırıp
@@ -114,7 +118,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
 
       <nav className="flex-1 space-y-0.5 px-2.5 py-3">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => !item.govern || canGovern).map((item) => (
           <NavLink key={item.to} to={item.to} end={item.end} title={item.label} className={linkClass}>
             <span className="size-4.5 flex-shrink-0">{item.icon}</span>
             <span className="hidden sm:inline">{item.label}</span>

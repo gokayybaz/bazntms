@@ -1,8 +1,9 @@
 import { Link, Outlet } from 'react-router-dom'
 
-// AdminGuard, /yonetim/* alt rotalarını sarar. Erişim: RBAC admin rolü VEYA
-// kimlik doğrulama tamamen kapalıysa (dev modu — sunucuda requirePerm da
-// aynı şekilde herkesi geçirir). Aksi halde "yetkiniz yok" paneli.
+// AdminGuard, /yonetim/* alt rotalarını sarar. Erişim: RBAC admin VEYA
+// site-admin (kendi sahası, S14.B) rolü VEYA kimlik doğrulama tamamen kapalıysa
+// (dev modu — sunucuda requirePerm da aynı şekilde davranır). Aksi halde
+// "yetkiniz yok" paneli.
 export function AdminGuard({ isAdmin }: { isAdmin: boolean }) {
   if (isAdmin) return <Outlet />
   return (
@@ -13,7 +14,8 @@ export function AdminGuard({ isAdmin }: { isAdmin: boolean }) {
       </svg>
       <h1 className="text-lg font-semibold text-slate-300">Yetkiniz yok</h1>
       <p className="max-w-sm text-sm text-slate-500">
-        Yönetim bölümü yalnızca <span className="text-slate-300">yönetici</span> rolündeki hesaplara açıktır.
+        Yönetim bölümü <span className="text-slate-300">yönetici</span> ve{' '}
+        <span className="text-slate-300">saha yöneticisi</span> rolündeki hesaplara açıktır.
       </p>
       <Link
         to="/"

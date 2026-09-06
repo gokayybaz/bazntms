@@ -17,7 +17,9 @@ const REVOKE_CONFIRM_MS = 4000
 const inputCls =
   'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
 
-export function EnrollWizard() {
+// lockedSite dolu ise (site-admin) enroll token o sahaya sabit. multiSite ise
+// (çoklu-saha modu) site zorunlu — statik/site'siz token agent kaydında reddedilir.
+export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSite?: string; multiSite?: boolean }) {
   const hubUrl = window.location.origin
 
   const [tokens, setTokens] = useState<EnrollToken[]>([])
@@ -25,7 +27,7 @@ export function EnrollWizard() {
   const [error, setError] = useState('')
 
   // sihirbaz
-  const [form, setForm] = useState({ name: '', site: '', expires_in_days: 0 })
+  const [form, setForm] = useState({ name: '', site: lockedSite, expires_in_days: 0 })
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState<{ token: string; site: string } | null>(null)
   const [osId, setOsId] = useState(OS_OPTIONS[0].id)
@@ -77,7 +79,7 @@ export function EnrollWizard() {
       }
       const data = await res.json()
       setGenerated({ token: data.token, site: form.site })
-      setForm({ name: '', site: '', expires_in_days: 0 })
+      setForm({ name: '', site: lockedSite, expires_in_days: 0 })
       await load()
     } finally {
       setGenerating(false)
@@ -131,7 +133,15 @@ export function EnrollWizard() {
           />
           <input
             className={inputCls}
-            placeholder="site (boş = agent kendi beyan eder)"
+            placeholder={
+              lockedSite
+                ? 'site'
+                : multiSite
+                  ? 'site (zorunlu)'
+                  : 'site (boş = agent kendi beyan eder)'
+            }
+            title={lockedSite ? 'sahanıza sabit' : undefined}
+            readOnly={!!lockedSite}
             value={form.site}
             onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
           />

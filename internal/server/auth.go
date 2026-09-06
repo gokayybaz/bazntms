@@ -412,7 +412,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 		MaxAge:   int(sessionTTL.Seconds()),
 	})
-	writeJSON(w, map[string]any{"ok": true, "token": token, "role": string(ident.Role), "username": ident.Username})
+	writeJSON(w, map[string]any{"ok": true, "token": token, "role": string(ident.Role), "username": ident.Username, "site": ident.Site})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

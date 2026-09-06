@@ -3,7 +3,7 @@ import { StatusPill } from './StatusPill'
 interface Props {
   connected: boolean
   onLogout: () => void
-  identity: { username: string; role: string } | null
+  identity: { username: string; role: string; site?: string } | null
 }
 
 export function Header({ connected, onLogout, identity }: Props) {
@@ -20,6 +20,7 @@ export function Header({ connected, onLogout, identity }: Props) {
             className="rounded border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-violet-300"
           >
             {identity.username} · {identity.role}
+            {identity.site ? ` · ${identity.site}` : ''}
           </span>
         )}
 

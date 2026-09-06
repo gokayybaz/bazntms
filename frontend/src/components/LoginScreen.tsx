@@ -1,6 +1,10 @@
 import { useState } from 'react'
 
-export function LoginScreen({ onSuccess }: { onSuccess: (identity: { username: string; role: string }) => void }) {
+export function LoginScreen({
+  onSuccess,
+}: {
+  onSuccess: (identity: { username: string; role: string; site?: string }) => void
+}) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -20,7 +24,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: (identity: { username: s
       })
       const data = await res.json()
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'giriş başarısız')
-      onSuccess({ username: data.username ?? 'admin', role: data.role ?? 'admin' })
+      onSuccess({ username: data.username ?? 'admin', role: data.role ?? 'admin', site: data.site ?? '' })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {

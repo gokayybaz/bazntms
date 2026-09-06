@@ -13,9 +13,10 @@ interface APIToken {
   revoked: boolean
 }
 
-const ROLES = ['admin', 'netops', 'analyst', 'viewer'] as const
+const ROLES = ['admin', 'site-admin', 'netops', 'analyst', 'viewer'] as const
 const ROLE_LABEL: Record<string, string> = {
-  admin: 'Yönetici',
+  admin: 'Yönetici (global)',
+  'site-admin': 'Saha Yöneticisi',
   netops: 'Ağ Operatörü',
   analyst: 'Analist',
   viewer: 'İzleyici',
@@ -24,13 +25,15 @@ const REVOKE_CONFIRM_MS = 4000
 const inputCls =
   'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
 
-export function TokensCard() {
+// lockedSite dolu ise (site-admin) token o sahaya sabitlenir, "admin" rolü gizli.
+export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
+  const roles = lockedSite ? ROLES.filter((r) => r !== 'admin') : ROLES
   const [tokens, setTokens] = useState<APIToken[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
 
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', role: 'viewer', site: '' })
+  const [form, setForm] = useState({ name: '', role: 'viewer', site: lockedSite })
   const [creating, setCreating] = useState(false)
   const [reveal, setReveal] = useState<{ name: string; token: string } | null>(null)
 
@@ -81,7 +84,7 @@ export function TokensCard() {
       }
       const data = await res.json()
       setReveal({ name: form.name, token: data.token })
-      setForm({ name: '', role: 'viewer', site: '' })
+      setForm({ name: '', role: 'viewer', site: lockedSite })
       setShowForm(false)
       await load()
     } finally {
@@ -132,7 +135,7 @@ export function TokensCard() {
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
           <select className={inputCls} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
-            {ROLES.map((r) => (
+            {roles.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
               </option>
@@ -141,6 +144,8 @@ export function TokensCard() {
           <input
             className={inputCls}
             placeholder="site (boş = tüm siteler)"
+            title={lockedSite ? 'sahanıza sabit' : undefined}
+            readOnly={!!lockedSite}
             value={form.site}
             onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
           />
