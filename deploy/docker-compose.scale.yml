@@ -55,10 +55,11 @@ services:
   # Faz 15: -session-store=db ile oturumlar paylaşımlı; -alerts/-poller Postgres
   # advisory-lock ile lider-seçimli (yalnız bir replika değerlendirir). Panel
   # trafiği nginx `dashboard` upstream'i üzerinden dağıtılır; bir replika ölünce
-  # kesinti yok. UDP alıcıları her replikada çalışır (Service LB tek pod'a
-  # yönlendirir + kuyruk tekilleştirir) — host UDP portu bu HA varyantında
-  # yayınlanmaz; NetFlow/syslog demosu için deploy/scripts/mac-udp-relay.sh +
-  # tek-replika kurulum kullanın.
+  # kesinti yok. NetFlow/syslog UDP alıcıları her replikada çalışır (bkz.
+  # docs/decisions/0005): nginx `lb` stream{} bloğu her datagram'ı TEK replikaya
+  # yönlendirir (k8s Service karşılığı), kuyruk store-writer'da tekilleştirir.
+  # Cihazlar nginx'in yayınladığı loopback portlarına ulaşır (lb.ports +
+  # deploy/scripts/mac-udp-relay.sh).
   hub-controller:
     build:
       context: ..
@@ -142,6 +143,14 @@ services:
     ports:
       - "8080:8080" # panel → hub-controller havuzu (2 replika)
       - "8081:8081" # agent API → hub-ingest havuzu
+      # NetFlow/syslog UDP → nginx stream{} → hub-controller havuzu. Docker
+      # Desktop for Mac fiziksel LAN'dan gelen UDP'yi published porta İLETMEZ
+      # (yalnız 127.0.0.1'den) — bu yüzden loopback'e kaydırılmış portlara
+      # bağlanır; deploy/scripts/mac-udp-relay.sh Mac'te gerçek 2055/5514'ü
+      # dinleyip buraya iletir. Linux'ta röle gereksiz: bu iki satırı
+      # "2055:2055/udp" / "5514:5514/udp" ile değiştirin.
+      - "127.0.0.1:12055:2055/udp" # NetFlow v5/v9 · IPFIX · sFlow
+      - "127.0.0.1:15514:5514/udp" # syslog (RFC3164)
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/healthz || exit 1"]
       interval: 5s

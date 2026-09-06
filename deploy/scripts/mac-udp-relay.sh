@@ -3,21 +3,23 @@
 #
 # Sorun: Docker Desktop, Mac'in fiziksel LAN arayüzüne başka bir host'tan (router,
 # switch, firewall) gelen UDP datagramlarını published container portuna İLETMEZ;
-# yalnızca 127.0.0.1'den geleni iletir. Bu yüzden hub-controller NetFlow/syslog
-# portları docker-compose.scale.yml'de loopback'e kaydırılmış numaralarla bağlıdır
-# (127.0.0.1:12055 -> konteyner 2055, 127.0.0.1:15514 -> konteyner 5514).
+# yalnızca 127.0.0.1'den geleni iletir. Bu yüzden docker-compose.scale.yml'de
+# nginx `lb` NetFlow/syslog portları loopback'e kaydırılmış numaralarla bağlıdır
+# (127.0.0.1:12055 -> lb 2055, 127.0.0.1:15514 -> lb 5514); lb bunları stream{}
+# bloğunda hub-controller havuzuna proxy'ler.
 #
 # Bu script, Mac'te native bir süreç olarak gerçek portları (2055/5514) dinler ve
 # her paketi loopback'teki kaydırılmış porta iletir; oradan Docker konteynere sokar:
 #
-#   router --LAN--> Mac:2055  --[socat]-->  127.0.0.1:12055  --[Docker]-->  konteyner:2055
+#   router --LAN--> Mac:2055 --[socat]--> 127.0.0.1:12055 --[Docker]--> lb:2055 --[nginx]--> hub-controller:2055
 #
 # Kullanım:
 #   deploy/scripts/mac-udp-relay.sh          # ön planda, Ctrl+C ile durdurun
 #   deploy/scripts/mac-udp-relay.sh &        # arka planda
 #
-# Not: socat paketi kendi IP'sinden (127.0.0.1) yeniden gönderir; konteyner
-# source_ip'yi 127.0.0.1 görür. Cihaz eşleştirmesi SNMP sys_name / syslog
+# Not: paket iki NAT hop'undan geçtiği için (socat + nginx) hub-controller
+# source_ip'yi röle/nginx IP'si görür — NetFlow atfı bu yüzden -flow-exporter
+# override'ına dayanır (compose'da ROUTER_IP). Syslog eşleştirmesi mesajdaki
 # hostname üzerinden yürür (bkz. DeviceDetailPage deviceSyslog filtresi).
 #
 # Linux'ta gerek yok — orada compose'da doğrudan "2055:2055/udp" kullanın.

@@ -59,6 +59,12 @@ dışı (YAGNI).
 Kuyruk kapalıysa (`-nats` boş) alıcılar doğrudan store'a yazar → o modda tek
 replika gerekir (zaten tek-node kurulum).
 
+Compose'da "Service LB" rolünü nginx `lb` üstlenir: `deploy/nginx/lb.conf`
+`stream{}` bloğunda `listen 2055 udp` / `listen 5514 udp` sunucuları her
+datagram'ı `hub-controller` havuzundan **tek** replikaya proxy'ler (bkz.
+`deploy/docker-compose.scale.yml` `lb.ports` loopback eşlemeleri; Docker Desktop
+for Mac için `deploy/scripts/mac-udp-relay.sh`).
+
 ## Sonuç
 
 `-alerts` / `-poller` açık her replika lider yarışına girer; kazanan çalışır,
