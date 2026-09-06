@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -304,6 +305,14 @@ func main() {
 		defer timer.Stop()
 		slog.Info("telemetri dongusu basladi", "interval", client.Interval())
 
+		// Ard arda 401 sayaci: hub veritabani sifirlaninca (agent kaydi dustu)
+		// telemetri kalici 401 doner. Tek bir 401 gecici olabilir (hub restart
+		// sirasinda DB baglantisi) — bu yuzden esige ulasinca yeniden enroll
+		// edilir. reenrollAfter * interval kadar bekleme, hub tarafinin ayni
+		// machine_id'li bayat kaydi yeniden kullanmasi icin de yeterli sure.
+		authFails := 0
+		const reenrollAfter = 3
+
 		for {
 			select {
 			case <-stop:
@@ -316,10 +325,26 @@ func main() {
 					batch.L7 = attrEng.L7Deltas()
 					batch.DNS = attrEng.DNSDeltas()
 				}
-				if err := client.Send(st, batch); err != nil {
-					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)
-				} else {
+				switch err := client.Send(st, batch); {
+				case err == nil:
+					authFails = 0
 					slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
+				case errors.Is(err, agent.ErrUnauthorized):
+					authFails++
+					if authFails < reenrollAfter {
+						slog.Warn("telemetri reddedildi (401) — offline kuyruga alindi", "ard_arda", authFails, "esik", reenrollAfter)
+						break
+					}
+					slog.Warn("hub agent kimligini surekli reddediyor (401) — yeniden enroll ediliyor", "denemeler", authFails)
+					if newSt, rerr := client.Reenroll(); rerr != nil {
+						slog.Error("yeniden enroll basarisiz — elle mudahale gerekebilir", "err", rerr)
+					} else {
+						st = newSt
+						authFails = 0
+						slog.Info("yeniden enroll tamamlandi", "agent_id", st.AgentID)
+					}
+				default:
+					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)
 				}
 				// Send, hub politikasini (interval + pcap_enabled) tazeledi;
 				// atif motorunu yeni duruma gore ac/kapat.

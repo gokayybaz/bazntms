@@ -6,6 +6,7 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -23,6 +24,12 @@ import (
 )
 
 const maxQueuedBatches = 100
+
+// ErrUnauthorized, hub bir agent isteğini 401 ile reddettiğinde döner: kayıtlı
+// agent token'ı artık geçerli değil (tipik neden: hub veritabanı sıfırlandı ya
+// da kayıt elle silindi). Kalıcı bir hatadır — yeniden denemek düzeltmez;
+// çağıran taraf enroll token varsa Reenroll ile sıfırdan kaydolmalı.
+var ErrUnauthorized = errors.New("hub agent kimliğini reddetti (401)")
 
 // Options, agent istemcisi yapilandirmasi.
 type Options struct {
@@ -181,6 +188,29 @@ func (c *Client) Enroll() (State, error) {
 	}
 	c.opts.PCAPEnabled = reply.PCAPEnabled
 	return st, nil
+}
+
+// Reenroll, diskteki bayat kimliği (state + varsa mTLS istemci sertifikası)
+// silip enroll token ile sıfırdan kaydolur. Telemetri kalıcı olarak 401
+// dönünce (ErrUnauthorized) çağrılır. Pinlenmiş hub CA'sı (<state>.ca) korunur
+// — hub kimliği değişmedi, yalnızca agent kaydı düştü. Enroll token yoksa hata
+// döner (elle müdahale gerekir: agent.yml'e hub.token ekleyip servisi başlat).
+//
+// Not: hub tarafı aynı machine_id'li çevrimdışı kaydı yeniden kullanır
+// (RegisterOrReuseAgent) — kalıcı 401 zaten last_seen'i bayatlatmış olur, bu
+// yüzden yeni satır açmak yerine mevcut satır tazelenir (agents şişmez).
+func (c *Client) Reenroll() (State, error) {
+	if c.opts.EnrollToken == "" {
+		return State{}, fmt.Errorf("yeniden enroll için enroll token yok — agent.yml'e hub.token ekleyin")
+	}
+	if err := os.Remove(c.opts.StateFile); err != nil && !os.IsNotExist(err) {
+		return State{}, fmt.Errorf("bayat state silinemedi: %w", err)
+	}
+	_ = os.Remove(c.certPath())
+	_ = os.Remove(c.keyPath())
+	c.mtls = false
+	c.reloadTLS()
+	return c.Enroll()
 }
 
 // anyHTTPSHub, havuzdaki en az bir hub URL'si https ise true.
@@ -392,6 +422,9 @@ func doJSONWith(client *http.Client, req *http.Request, out any) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return ErrUnauthorized
+	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("hub %s: HTTP %d", req.URL.Path, resp.StatusCode)
 	}
