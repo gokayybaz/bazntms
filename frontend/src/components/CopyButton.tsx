@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 // CopyButton, verilen metni panoya kopyalar ve kısa süre "kopyalandı" gösterir.
+// TUI: kare, mono, küçük — cyan (bilgi/nötr eylem) rozeti.
 export function CopyButton({ text, label = 'Kopyala', className = '' }: { text: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false)
   const copy = async () => {
@@ -15,7 +16,7 @@ export function CopyButton({ text, label = 'Kopyala', className = '' }: { text: 
   return (
     <button
       onClick={copy}
-      className={`rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20 ${className}`}
+      className={`border border-rx/40 bg-rx/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-rx transition hover:bg-rx/20 ${className}`}
     >
       {done ? '✓ kopyalandı' : label}
     </button>

@@ -1,31 +1,45 @@
-// StatusPill — küçük durum rozeti (nokta + etiket), online/offline veya
-// sağlıklı/bekliyor/sorunlu gibi 2-3 durumlu göstergeler için ortak kabuk.
-// Aynı satır-içi kalıp Header/AgentDetailPage/AgentsListPage/DeviceDetailPage'de
-// elle kopyalanıyordu (impeccable Faz 6, extract) — renk-anlam sözleşmesi
-// (DESIGN.md) burada tek yerden korunuyor: emerald=sağlıklı, amber=uyarı/
-// bekleme, rose=sorunlu, slate=çevrimdışı/nötr.
-export type StatusTone = 'emerald' | 'amber' | 'rose' | 'slate'
+// StatusPill — küçük durum rozeti (glyph + etiket). TUI: kare, dolgu yok,
+// ● (aktif) / ○ (çevrimdışı) glyph + kenarlık + anlam-rengi metin.
+// Renk-anlam sözleşmesi (DESIGN.md): emerald=sağlıklı, amber=uyarı/bekleme,
+// rose=sorunlu, cyan=bilgi/nötr-aktif, slate=çevrimdışı/nötr.
+export type StatusTone = 'emerald' | 'amber' | 'rose' | 'cyan' | 'slate'
 
 const TONE_STYLES: Record<StatusTone, string> = {
-  emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  amber: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  rose: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
-  slate: 'border-slate-600 bg-slate-800 text-slate-500',
+  emerald: 'border-emerald-500/40 text-emerald-400',
+  amber: 'border-amber-500/40 text-amber-400',
+  rose: 'border-rose-500/40 text-rose-400',
+  cyan: 'border-rx/40 text-rx',
+  slate: 'border-rule-hi text-tui-dim',
 }
 
-const DOT_STYLES: Record<StatusTone, string> = {
-  emerald: 'bg-emerald-400',
-  amber: 'bg-amber-400',
-  rose: 'bg-rose-400',
-  slate: 'bg-slate-500',
+// reverse-video (seçili/vurgulu satır) — tam sınıf adları (Tailwind JIT görebilsin)
+const TONE_REVERSE: Record<StatusTone, string> = {
+  emerald: 'border-emerald-400 bg-emerald-400 text-ground',
+  amber: 'border-amber-400 bg-amber-400 text-ground',
+  rose: 'border-rose-400 bg-rose-400 text-ground',
+  cyan: 'border-rx bg-rx text-ground',
+  slate: 'border-rule-hi bg-rule-hi text-ground',
 }
 
-export function StatusPill({ tone, label, dot = true }: { tone: StatusTone; label: string; dot?: boolean }) {
+export function StatusPill({
+  tone,
+  label,
+  dot = true,
+  reverse = false,
+}: {
+  tone: StatusTone
+  label: string
+  dot?: boolean
+  /** Seçili/vurgulu bağlamda reverse-video (zemin = ton rengi). */
+  reverse?: boolean
+}) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${TONE_STYLES[tone]}`}
+      className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
+        reverse ? TONE_REVERSE[tone] : TONE_STYLES[tone]
+      }`}
     >
-      {dot && <span className={`size-1.5 rounded-full ${DOT_STYLES[tone]}`} />}
+      {dot && <span aria-hidden>{tone === 'slate' ? '○' : '●'}</span>}
       {label}
     </span>
   )

@@ -19,6 +19,19 @@ describe('StatusPill', () => {
     const { rerender } = render(<StatusPill tone="amber" label="x" />)
     expect(screen.getByText('x')).toHaveClass('text-amber-400')
     rerender(<StatusPill tone="slate" label="x" />)
-    expect(screen.getByText('x')).toHaveClass('text-slate-500')
+    expect(screen.getByText('x')).toHaveClass('text-tui-dim')
+  })
+
+  it('reverse varyantı ton zeminli reverse-video verir', () => {
+    render(<StatusPill tone="emerald" label="online" reverse />)
+    const pill = screen.getByText('online')
+    expect(pill).toHaveClass('bg-emerald-400', 'text-ground')
+  })
+
+  it('slate tonu ○, diğerleri ● glyph gösterir', () => {
+    const { rerender } = render(<StatusPill tone="emerald" label="a" />)
+    expect(screen.getByText('a').textContent).toContain('●')
+    rerender(<StatusPill tone="slate" label="a" />)
+    expect(screen.getByText('a').textContent).toContain('○')
   })
 })
