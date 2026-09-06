@@ -206,7 +206,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
             </g>
 
             {/* spoke hatları: hub → client'lar (sol), hub → cihazlar (sağ) — dekoratif */}
-            <g aria-hidden="true" stroke="#1e293b" strokeWidth={1.3}>
+            <g aria-hidden="true" stroke="#232b3a" strokeWidth={1.3}>
               {layout.agents.map((a) => {
                 const p = layout.agentPos.get(a.id)!
                 return <line key={`sa${a.id}`} x1={HUB.x} y1={HUB.y} x2={p.x} y2={p.y} />
@@ -268,7 +268,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
                 y={ROUTER.y - 16}
                 width={54}
                 height={32}
-                rx={5}
+               
                 className={
                   routerDev
                     ? routerDev.online
@@ -304,7 +304,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
 
             {/* depo düğümü — sabit, dekoratif */}
             <g aria-hidden="true">
-              <rect x={storage.x - 54} y={storage.y - 12} width={108} height={24} rx={5} className="fill-slate-900 stroke-slate-700" strokeWidth={1.2} />
+              <rect x={storage.x - 54} y={storage.y - 12} width={108} height={24} className="fill-slate-900 stroke-slate-700" strokeWidth={1.2} />
               <text x={storage.x} y={storage.y + 3.5} textAnchor="middle" className="fill-slate-400" fontSize={8.5} fontFamily="monospace">
                 depolama
               </text>
@@ -369,7 +369,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
               <text x={104} y={0} className="fill-dim-aa" fontSize={8.5}>subnet</text>
               <circle cx={156} cy={-3} r={3.4} fill="#475569" />
               <text x={164} y={0} className="fill-dim-aa" fontSize={8.5}>ARP ucu</text>
-              <line x1={220} y1={-3} x2={236} y2={-3} stroke="#1e293b" strokeWidth={1.3} />
+              <line x1={220} y1={-3} x2={236} y2={-3} stroke="#232b3a" strokeWidth={1.3} />
               <text x={240} y={0} className="fill-dim-aa" fontSize={8.5}>hub bağlantısı</text>
               <line x1={318} y1={-3} x2={334} y2={-3} stroke="#0e7490" strokeWidth={2} />
               <text x={338} y={0} className="fill-dim-aa" fontSize={8.5}>omurga (hub▸router▸net)</text>

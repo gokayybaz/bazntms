@@ -127,14 +127,14 @@ export function GeoMapCard() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-slate-700/80 p-0.5" role="group" aria-label="Zaman aralığı">
+        <div className="flex border border-rule" role="group" aria-label="Zaman aralığı">
           {RANGES.map((r) => (
             <button
               key={r.minutes}
               onClick={() => setMinutes(r.minutes)}
               aria-pressed={minutes === r.minutes}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                minutes === r.minutes ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              className={`px-2 py-0.5 font-mono text-[11px] transition ${
+                minutes === r.minutes ? 'bg-rx text-ground' : 'text-tui-dim hover:text-ink-hi'
               }`}
             >
               {r.label}
@@ -142,22 +142,22 @@ export function GeoMapCard() {
           ))}
         </div>
         {fetchError && (
-          <span className="ml-auto text-[11px] text-rose-400">⚠ veri alınamadı, yeniden deneniyor…</span>
+          <span className="ml-auto font-mono text-[11px] text-rose-400">⚠ veri alınamadı, yeniden deneniyor…</span>
         )}
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center text-sm text-dim-aa">Yükleniyor…</p>
+        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-dim-aa">
-          Coğrafi veri yok — MaxMind MMDB veya <code className="text-slate-400">-ip-api-lookup</code> gerekir ve
+        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
+          Coğrafi veri yok — MaxMind MMDB veya <code className="text-tui-dim">-ip-api-lookup</code> gerekir ve
           uzak trafik (NetFlow/agent) görülmüş olmalı.
         </p>
       ) : (
         <div className="overflow-x-auto">
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[560px]" role="group" aria-label="Uzak trafiğin ülke bazlı dünya haritası">
             <g aria-hidden="true">
-              <rect x={0} y={0} width={W} height={H} rx={6} fill="#0a1120" />
+              <rect x={0} y={0} width={W} height={H} fill="#0a0d13" />
               {/* graticule */}
               {[-120, -60, 0, 60, 120].map((lon) => (
                 <line key={`v${lon}`} x1={px(lon)} y1={0} x2={px(lon)} y2={H} stroke="#16233a" strokeWidth={1} />
@@ -211,8 +211,8 @@ export function GeoMapCard() {
                     y={lp.y - 8}
                     width={labelW}
                     height={10}
-                    rx={2}
-                    fill="#0a1120"
+                   
+                    fill="#0a0d13"
                     fillOpacity={0.75}
                   />
                   <text
@@ -249,7 +249,7 @@ export function GeoMapCard() {
           konum doğrudan sabit kutu boyutuna göre viewport'a kenetleniyor */}
       {hover && tip && (
         <div
-          className="pointer-events-none fixed z-50 w-[190px] rounded-md border border-slate-600 bg-slate-900/95 px-2.5 py-1.5 text-[11px] shadow-lg shadow-black/40"
+          className="pointer-events-none fixed z-50 w-[190px] border border-rule-hi bg-panel px-2.5 py-1.5 text-[11px] "
           style={{
             left: Math.max(8, Math.min(tip.x + 14, window.innerWidth - 190 - 8)),
             top: Math.max(8, Math.min(tip.y + 16, window.innerHeight - 80 - 8)),

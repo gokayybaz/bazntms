@@ -243,7 +243,7 @@ function AgentNode({
         y={-h / 2}
         width={NODE_W}
         height={h}
-        rx={4}
+       
         fill="#0d1424"
         stroke="#1e5245"
         strokeWidth={1.2}
@@ -275,8 +275,8 @@ function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement
     <g transform={`translate(${FW_X},${y})`} aria-hidden="true">
       <path d={shield} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeOpacity={0.4} strokeWidth={1.5} />
       {!reduced && <path d={shield} className="tfd-ring" fill="none" stroke="#38bdf8" strokeWidth={1.5} />}
-      <rect x={-32} y={-20} width={64} height={16} rx={3} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
-      <rect x={-32} y={0} width={64} height={16} rx={3} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
+      <rect x={-32} y={-20} width={64} height={16} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
+      <rect x={-32} y={0} width={64} height={16} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
       {[0, 1, 2].map((i) => (
         <circle
           key={i}
@@ -585,7 +585,7 @@ export function TrafficFlowDiagram({
             </filter>
           </defs>
 
-          <rect aria-hidden="true" x={0} y={0} width={W} height={H} rx={8} fill="url(#tfd-bg)" />
+          <rect aria-hidden="true" x={0} y={0} width={W} height={H} fill="url(#tfd-bg)" />
 
           {/* bölge başlıkları — dekoratif */}
           <g aria-hidden="true">
@@ -693,7 +693,7 @@ export function TrafficFlowDiagram({
                       y={-9}
                       width={p.label.length * 6.3 + 10}
                       height={15}
-                      rx={3}
+                     
                       fill="#0b1220"
                       stroke={col}
                       strokeOpacity={0.4}
