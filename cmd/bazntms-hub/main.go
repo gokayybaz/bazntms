@@ -221,6 +221,11 @@ func main() {
 		}
 	}
 	if *alertsOn {
+		// C1 (Faz 15): coklu controller replikasinda yalnizca lider degerlendirir.
+		// SQLite / tek replika modunda Leader hemen ve kalici lider olur (no-op).
+		leaderAlerts := st.Leader(store.LeaderKeyAlerts, "alerts")
+		go leaderAlerts.Run(ctx)
+		alerts.SetLeaderCheck(leaderAlerts.IsLeader)
 		alerts.Start()
 		defer alerts.Stop()
 	} else {
@@ -347,6 +352,9 @@ func main() {
 		poller.SetInterval(time.Duration(*pollInterval) * time.Second)
 	}
 	if *pollerOn {
+		leaderPoller := st.Leader(store.LeaderKeyPoller, "poller")
+		go leaderPoller.Run(ctx)
+		poller.SetLeaderCheck(leaderPoller.IsLeader)
 		poller.Start()
 		defer poller.Stop()
 	} else {

@@ -22,6 +22,13 @@ type Store interface {
 	TopologyStore
 	ComplianceStore
 	IsmsStore
+	ClusterStore
+}
+
+// ClusterStore, çoklu replika koordinasyonu (C1, Faz 15): tek-sahipli roller
+// (uyarı motoru, SNMP poller) için DB tabanlı liderlik.
+type ClusterStore interface {
+	Leader(key int64, name string) *Leader
 }
 
 // BaseStore, her arka ucun sagladigi yasam dongusu.

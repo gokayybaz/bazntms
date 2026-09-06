@@ -123,7 +123,17 @@ type Manager struct {
 
 	notifier *Notifier
 	ioc      IOCMatcher // -ioc-file yüklendiyse; nil ise IOC kontrolü pasif
+
+	// isLeader, çoklu controller replikasında yalnız liderin değerlendirmesi
+	// için (C1, Faz 15). nil → daima lider (tek replika / dev). Lider değilken
+	// motor "sıcak" kalır ama hiçbir kural değerlendirmez.
+	isLeader func() bool
 }
+
+// SetLeaderCheck, değerlendirme öncesi çağrılacak liderlik denetimini bağlar.
+func (m *Manager) SetLeaderCheck(fn func() bool) { m.isLeader = fn }
+
+func (m *Manager) leading() bool { return m.isLeader == nil || m.isLeader() }
 
 type agentBwCounter struct{ in, out int }
 
@@ -169,6 +179,13 @@ func (m *Manager) run() {
 			m.mu.Unlock()
 
 			if !cfg.Enabled {
+				continue
+			}
+			// C1: çoklu replikada yalnız lider değerlendirir (alarm çift
+			// ateşlenmesin). Lider değilken bant genişliği sayaçları sıfırlanır
+			// ki devralınca geçmiş kalıntısıyla tetiklenmesin.
+			if !m.leading() {
+				m.bwInCount, m.bwOutCount = 0, 0
 				continue
 			}
 			snap := m.engine.Snapshot()

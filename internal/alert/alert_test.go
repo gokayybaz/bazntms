@@ -153,3 +153,30 @@ func TestRemotePort(t *testing.T) {
 	}
 	_ = time.Now
 }
+
+// TestManagerLeaderGate, C1: SetLeaderCheck bağlıysa lider değilken run()
+// döngüsü hiçbir kural değerlendirmez (bant genişliği sayacı da ilerlemez).
+func TestManagerLeaderGate(t *testing.T) {
+	m, _ := newTestManager(t)
+	if !m.leading() {
+		t.Fatal("nil leader-check → daima lider olmalı")
+	}
+	lead := false
+	m.SetLeaderCheck(func() bool { return lead })
+	if m.leading() {
+		t.Fatal("lider değilken leading() false dönmeli")
+	}
+
+	// lider DEĞİLKEN çalışan motor birkaç saniye boyunca hiçbir olay üretmemeli.
+	m.Start()
+	time.Sleep(1200 * time.Millisecond)
+	m.Stop()
+	if evs, _ := m.st.RecentAlertEvents(10); len(evs) != 0 {
+		t.Fatalf("lider olmayan replika olay üretti: %d", len(evs))
+	}
+
+	lead = true
+	if !m.leading() {
+		t.Fatal("lider olunca leading() true dönmeli")
+	}
+}

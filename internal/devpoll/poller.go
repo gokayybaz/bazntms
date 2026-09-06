@@ -21,9 +21,15 @@ type Poller struct {
 	// override > 0 ise tüm cihazlar için per-device PollSeconds yerine bu aralık
 	// kullanılır (tek tip poll takvimi).
 	override time.Duration
+	// isLeader, çoklu controller replikasında yalnız liderin poll etmesi için
+	// (C1, Faz 15). nil → daima poll eder.
+	isLeader func() bool
 	stop     chan struct{}
 	done     chan struct{}
 }
+
+// SetLeaderCheck, poll öncesi çağrılacak liderlik denetimini bağlar.
+func (p *Poller) SetLeaderCheck(fn func() bool) { p.isLeader = fn }
 
 func New(st store.Store, v *vault.Vault) *Poller {
 	return &Poller{store: st, vault: v, stop: make(chan struct{}), done: make(chan struct{})}
@@ -68,6 +74,9 @@ func (p *Poller) run() {
 }
 
 func (p *Poller) pollAll() {
+	if p.isLeader != nil && !p.isLeader() {
+		return // C1: çoklu replikada yalnız lider poll eder (cihaz başına tek poll)
+	}
 	devices, err := p.store.ListDevices("")
 	if err != nil {
 		return
