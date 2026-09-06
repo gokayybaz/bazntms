@@ -5,6 +5,7 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -48,6 +49,31 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// S14.B4: site-kısıtlı kimlik için kenarları görünür düğümlere daralt —
+	// RecentTopologyLinks tüm sahaları döndürür (bir agent'ın subnet kenarı
+	// aksi halde başka sahaya sızardı). Global kimlikte (scope=="") tümü kalır.
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		vis := map[string]bool{}
+		for _, d := range devices {
+			vis["device:"+strconv.FormatInt(d.ID, 10)] = true
+		}
+		for _, a := range agents {
+			vis["agent:"+strconv.FormatInt(a.ID, 10)] = true
+		}
+		nodeVisible := func(typ string, id int64) bool {
+			if typ != "agent" && typ != "device" {
+				return true // host / harici uç — kaynak zaten görünürse sorun yok
+			}
+			return vis[typ+":"+strconv.FormatInt(id, 10)]
+		}
+		scoped := links[:0]
+		for _, l := range links {
+			if nodeVisible(l.SourceType, l.SourceID) && nodeVisible(l.PeerType, l.PeerID) {
+				scoped = append(scoped, l)
+			}
+		}
+		links = scoped
 	}
 
 	graph := topologyGraph{
