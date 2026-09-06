@@ -77,8 +77,9 @@ components:
     textColor: "{colors.bg-base}"
     typography: "{typography.label}"
   row-selected:
-    backgroundColor: "{colors.rx-cyan}"
-    textColor: "{colors.bg-base}"
+    backgroundColor: "{colors.border-hi} @ 50%"
+    textColor: "{colors.ink-hi}"
+    note: "nötr grileştirme — cyan yalnızca başlıkta"
   fn-key-bar:
     backgroundColor: "{colors.rx-cyan}"
     textColor: "{colors.bg-base}"
@@ -129,7 +130,7 @@ kullanımından bu tokenlere faz boyunca göç ediyor.
 
 | Rol | htop karşılığı | Token / hex | Not |
 |-----|----------------|-------------|-----|
-| rx / birincil / seçim | cyan (seçili süreç bar) | `--color-rx` `#22d3ee` | En sık vurgu. **Reverse-video seçili satırın ve F-bar'ın zemini.** Link, aktif nav, odak. |
+| rx / birincil / seçim | cyan (htop başlık) | `--color-rx` `#22d3ee` | En sık vurgu. **Tablo/log başlık şeridi, aktif sekme, F-tuşu bar zemini** (reverse-video). Link, aktif nav, odak. Seçili satır cyan DEĞİL — nötr gri. |
 | tx | magenta | `--color-tx` `#a78bfa` | Her zaman rx ile çift (rx/tx lejantı). Asla tek başına birincil vurgu değil. |
 | sağlıklı / düşük yük | green (user CPU) | emerald-400 `#34d399` | online, onay, `Meter` ilk eşiği (`<60%`). |
 | uyarı / orta yük | yellow | amber-400 `#fbbf24` | eşik aşımı, `Meter` ikinci eşik (`<85%`), pps/bw zirvesi. |
@@ -255,9 +256,10 @@ atlar, `TrafficFlowDiagram` paket animasyonu durur (mevcut davranış). Tarama
 ### TuiTable (imza bileşen)
 - Kaynak: `frontend/src/components/TuiTable.tsx`.
 - **Başlık:** reverse-video (`bg-rx text-ground`), mono uppercase; aktif sort
-  kolonu `▼`/`▲`.
+  kolonu `▼`/`▲`. **Cyan yalnızca başlıkta** — satırlarda kullanılmaz.
 - **Satır:** `↑↓`/`j`/`k` seçim (wrap yok), `g`/`G` baş/son, `Enter` →
-  `onActivate(row)`. Seçili satır reverse-video bar.
+  `onActivate(row)`. Seçili satır **nötr gri highlight** (`bg-rule-hi/50
+  text-ink-hi`) — cyan değil; hücre renkleri (rx/tx/emerald…) okunur kalır.
 - **Filtre:** `/` → label'lı filtre alanına odaklan, `Esc` temizler + çıkar.
   Başlık **filtrelenmiş** satır sayısını gösterir (filtre aktifken `/ toplam`).
 - **Kesme:** `maxRows` üstünde sınırlı yükseklik + iç kaydırma + kesme notu.

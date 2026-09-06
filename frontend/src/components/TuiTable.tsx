@@ -272,7 +272,7 @@ export function TuiTable<Row>({
                   }}
                   className={`${
                     selected
-                      ? 'bg-rx text-ground'
+                      ? 'bg-rule-hi/50 text-ink-hi'
                       : i % 2
                         ? 'bg-panel-2/50 text-ink'
                         : 'text-ink'

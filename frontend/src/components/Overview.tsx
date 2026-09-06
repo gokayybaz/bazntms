@@ -588,23 +588,23 @@ export function Overview({
                   onClick={clickable ? () => navigate(`/agentlar/${agentId}`) : undefined}
                   title={clickable ? `${it.source} agent detayına git` : undefined}
                   className={`flex items-baseline gap-2 px-2 py-0.5 ${
-                    sel ? 'bg-rx text-ground' : i % 2 ? 'bg-panel-2/40 text-ink' : 'text-ink'
+                    sel ? 'bg-rule-hi/50 text-ink-hi' : i % 2 ? 'bg-panel-2/40 text-ink' : 'text-ink'
                   } ${clickable ? 'cursor-pointer' : ''} ${!sel ? 'hover:bg-panel-2' : ''}`}
                 >
-                  <span className={`w-16 shrink-0 text-right ${sel ? '' : 'text-tui-dim'}`}>
+                  <span className="w-16 shrink-0 text-right text-tui-dim">
                     {new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}
                   </span>
-                  <span className={`w-14 shrink-0 uppercase tracking-[0.04em] ${sel ? '' : kindCls}`}>{it.kind}</span>
+                  <span className={`w-14 shrink-0 uppercase tracking-[0.04em] ${kindCls}`}>{it.kind}</span>
                   <span className="min-w-0 flex-1 truncate">{it.primary}</span>
                   {it.kind === 'flow' && it.bytes > 0 && (
-                    <span className={`hidden shrink-0 text-[10px] md:inline ${sel ? '' : 'text-tui-dim'}`}>
+                    <span className={`hidden shrink-0 text-[10px] md:inline text-tui-dim`}>
                       {formatBytes(it.bytes)} · {formatNum(it.packets)} pkt
                     </span>
                   )}
                   {it.kind === 'agent' && it.pid ? (
-                    <span className={`hidden shrink-0 text-[10px] md:inline ${sel ? '' : 'text-tui-dim'}`}>pid {it.pid}</span>
+                    <span className={`hidden shrink-0 text-[10px] md:inline text-tui-dim`}>pid {it.pid}</span>
                   ) : null}
-                  <span className={`w-28 shrink-0 truncate text-right text-[10px] ${sel ? '' : 'text-tui-dim'}`}>{it.source}</span>
+                  <span className={`w-28 shrink-0 truncate text-right text-[10px] text-tui-dim`}>{it.source}</span>
                 </div>
               )
             })}
