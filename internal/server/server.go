@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -404,6 +406,42 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// writeJSONETag, sık çekilen listeler için içerik-hash tabanlı ETag ekler
+// (D4 / Faz 16). If-None-Match eşleşirse 304 döner — istemci yeniden
+// serileştirmez / yeniden render etmez, ağ trafiği düşer. Zayıf önbellek:
+// yanıt yine de hesaplanır (DB sorgusu çalışır) ama gövde gönderilmez.
+func writeJSONETag(w http.ResponseWriter, r *http.Request, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache") // her zaman revalidate et
+	if match := r.Header.Get("If-None-Match"); match != "" && etagMatch(match, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
+}
+
+// etagMatch, If-None-Match başlığında (virgülle ayrılmış olabilir; "*" özel)
+// verilen etag var mı.
+func etagMatch(header, etag string) bool {
+	if strings.TrimSpace(header) == "*" {
+		return true
+	}
+	for _, part := range strings.Split(header, ",") {
+		if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(part), "W/")) == etag {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// Rapor motoru filo geneli veriye dayaniyor (FleetSummary, protokol
 	// trendleri, top uc/surec/domain). Site-kisitli kimlige site-kapsamli
@@ -532,7 +570,7 @@ func (s *Server) handleAlertEvents(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	writeJSON(w, s.alerts.RecentEvents(limit))
+	writeJSONETag(w, r, s.alerts.RecentEvents(limit)) // D4: sık pollanır
 }
 
 // EnrollToken, otomatik uretilen enrollment token'ini dondurur (banner logu icin).

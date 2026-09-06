@@ -472,7 +472,7 @@ func (s *Server) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, agents)
+	writeJSONETag(w, r, agents) // D4: sık pollanır
 }
 
 // agentInScope, site-sinirli kimligin verilen agent'i gorup goremeyecegi.

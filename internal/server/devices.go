@@ -59,7 +59,7 @@ func (s *Server) handleDevicesList(w http.ResponseWriter, r *http.Request) {
 		list[i].V3AuthPass = maskNonEmpty(list[i].V3AuthPass)
 		list[i].V3PrivPass = maskNonEmpty(list[i].V3PrivPass)
 	}
-	writeJSON(w, list)
+	writeJSONETag(w, r, list) // D4: sık pollanır
 }
 
 // secretMask, dolu bir sırrın UI'ya gönderilen yer tutucusu. İstemci bu

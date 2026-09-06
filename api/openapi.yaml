@@ -313,17 +313,19 @@ paths:
   /api/v1/agents:
     get:
       tags: [fleet]
-      summary: Agent listesi (oran özetleriyle)
+      summary: Agent listesi (oran özetleriyle) — ETag / If-None-Match destekli
       parameters:
         - $ref: "#/components/parameters/minutes"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: Agent dizisi
+          description: Agent dizisi (ETag başlığıyla)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Agent" }
+        "304": { $ref: "#/components/responses/NotModified" }
   /api/v1/agents/{id}:
     get:
       tags: [fleet]
@@ -453,15 +455,18 @@ paths:
   /api/v1/devices:
     get:
       tags: [devices]
-      summary: Kayıtlı cihazlar (kimlik bilgileri maskeli)
+      summary: Kayıtlı cihazlar (kimlik bilgileri maskeli) — ETag destekli
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: Cihaz dizisi
+          description: Cihaz dizisi (ETag başlığıyla)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Device" }
+        "304": { $ref: "#/components/responses/NotModified" }
     post:
       tags: [devices]
       summary: Cihaz ekle (SNMP v2c/v3 veya FortiGate REST) — yetki:devices
@@ -593,11 +598,14 @@ paths:
   /api/alerts/events:
     get:
       tags: [alerts]
-      summary: Son uyarı olayları
-      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      summary: Son uyarı olayları — ETag / If-None-Match destekli
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/ifNoneMatch" }
       responses:
+        "304": { $ref: "#/components/responses/NotModified" }
         "200":
-          description: Olay dizisi
+          description: Olay dizisi (ETag başlığıyla)
           content:
             application/json:
               schema:
@@ -890,6 +898,12 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    ifNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema: { type: string }
+      description: Önceki yanıtın ETag'i; değişmemişse 304 döner (D4)
   responses:
     Unauthorized:
       description: Oturum gerekli
@@ -904,6 +918,11 @@ components:
       description: Yetki yetersiz (RBAC) veya site kapsamı dışında
     NotFound:
       description: Bulunamadı (veya site kapsamı dışında)
+    NotModified:
+      description: İçerik değişmedi (If-None-Match eşleşti) — gövde yok
+      headers:
+        ETag:
+          schema: { type: string }
     RateLimited:
       description: Çok fazla başarısız deneme
       headers:
