@@ -9,23 +9,24 @@ const ITEMS = [
   { to: '/uyumluluk/yonetisim', label: 'Yönetişim', end: true },
 ]
 
+// Uyumluluk ikincil şeridi — TabBar diliyle aynı (numarasız, reverse-video aktif).
 export function ComplianceSubNav() {
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-slate-800 pb-3">
+    <nav className="flex flex-wrap border border-rule bg-ground font-mono text-[11px]">
       {ITEMS.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
           className={({ isActive }) =>
-            `rounded-md px-3 py-1.5 text-xs font-medium transition ${
-              isActive ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+            `border-r border-rule px-3 py-1 uppercase tracking-[0.04em] transition ${
+              isActive ? 'bg-rx text-ground' : 'text-tui-dim hover:bg-panel-2 hover:text-ink-hi'
             }`
           }
         >
           {item.label}
         </NavLink>
       ))}
-    </div>
+    </nav>
   )
 }

@@ -2,6 +2,8 @@
 // paketi indirici ve inceleme tutanakları (ISO A.8.15 / A.8.2).
 
 import { useCallback, useEffect, useState } from 'react'
+import { useDialog } from '../lib/dialog'
+import { btnCls } from '../lib/isms'
 
 interface ComplianceConfig {
   enabled: boolean
@@ -38,8 +40,8 @@ interface Review {
 function badge(ok: boolean, on: string, off: string) {
   return (
     <span
-      className={`rounded px-1.5 py-0.5 font-mono text-[9px] uppercase ${
-        ok ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border border-slate-700 text-dim-aa'
+      className={`border px-1 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] ${
+        ok ? 'border-emerald-500/40 text-emerald-400' : 'border-rule-hi text-tui-dim'
       }`}
     >
       {ok ? on : off}
@@ -48,6 +50,7 @@ function badge(ok: boolean, on: string, off: string) {
 }
 
 export function ComplianceCard({ refreshKey }: { refreshKey: number }) {
+  const { prompt } = useDialog()
   const [status, setStatus] = useState<ComplianceStatus | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [error, setError] = useState('')
@@ -81,27 +84,17 @@ export function ComplianceCard({ refreshKey }: { refreshKey: number }) {
   }
 
   const addReview = async (kind: 'log' | 'access') => {
-    const notes = prompt(
-      kind === 'log' ? 'Log inceleme notları:' : 'Erişim incelemesi notları:',
-      '',
-    )
+    const notes = await prompt(kind === 'log' ? 'Log inceleme notları:' : 'Erişim incelemesi notları:', { title: 'İnceleme tutanağı' })
     if (notes === null) return
-    // ikinci prompt'ta da iptal (null) tam vazgeçme sayılır — önceden `?? ''`
-    // ile sessizce boş bulguyla devam ediyordu, kullanıcı "vazgeçtim"
-    // sanırken gerçek bir tutanak kaydı oluşuyordu
-    const finding = prompt('Bulgu (yoksa boş bırakın):', '')
+    // ikinci prompt iptali de tam vazgeçme sayılır (sessizce boş bulgu kaydı olmasın)
+    const finding = await prompt('Bulgu (yoksa boş bırakın):', { title: 'Bulgu' })
     if (finding === null) return
     setReviewError('')
     try {
       const res = await fetch('/api/v1/compliance/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kind,
-          period: new Date().toISOString().slice(0, 7),
-          notes,
-          finding,
-        }),
+        body: JSON.stringify({ kind, period: new Date().toISOString().slice(0, 7), notes, finding }),
       })
       if (!res.ok) throw new Error('tutanak kaydedilemedi')
     } catch (e) {
@@ -111,41 +104,39 @@ export function ComplianceCard({ refreshKey }: { refreshKey: number }) {
     load()
   }
 
-  if (error) return <p className="text-xs text-rose-400">{error}</p>
-  if (!status) return <p className="text-xs text-dim-aa">yükleniyor…</p>
+  if (error) return <p className="font-mono text-[11px] text-rose-400">{error}</p>
+  if (!status) return <p className="font-mono text-[11px] text-tui-dim">yükleniyor…</p>
 
   const cfg = status.config
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 font-mono text-[11px]">
       {/* motor durumu */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         {badge(cfg.enabled, 'motor aktif', 'motor kapalı')}
         {badge(!!cfg.tsa_url, 'tsa yapılandırıldı', 'tsa yok')}
         {badge(cfg.sign_key, 'imza anahtarı', 'imza yok')}
         {badge(!!cfg.worm_dir, 'worm dizini', 'worm yok')}
         {badge(cfg.mask_pii, 'pii maskeleme', 'maskeleme kapalı')}
-        <span className="ml-auto font-mono text-[10px] text-dim-aa">
-          saklama: {cfg.retention_days} gün
-        </span>
+        <span className="ml-auto text-[10px] text-tui-dim">saklama: {cfg.retention_days} gün</span>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-3">
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2">
-          <span className="text-[10px] uppercase tracking-wider text-dim-aa">imzalı kayıt</span>
-          <div className="font-mono text-sm text-slate-200">{status.records.toLocaleString('tr-TR')}</div>
+        <div className="border border-rule bg-panel-2/40 px-3 py-2">
+          <span className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">imzalı kayıt</span>
+          <div className="text-[13px] font-bold text-ink-hi">{status.records.toLocaleString('tr-TR')}</div>
         </div>
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2">
-          <span className="text-[10px] uppercase tracking-wider text-dim-aa">son saatlik checkpoint</span>
-          <div className="truncate font-mono text-xs text-slate-300" title={status.last_hourly?.root}>
+        <div className="border border-rule bg-panel-2/40 px-3 py-2">
+          <span className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">son saatlik checkpoint</span>
+          <div className="truncate text-ink" title={status.last_hourly?.root}>
             {status.last_hourly
               ? `${new Date(status.last_hourly.bucket_start * 1000).toLocaleString('tr-TR')} · ${status.last_hourly.root.slice(0, 12)}…`
               : '—'}
           </div>
         </div>
-        <div className="rounded border border-slate-800 bg-slate-900/60 px-3 py-2">
-          <span className="text-[10px] uppercase tracking-wider text-dim-aa">son günlük mühür</span>
-          <div className="truncate font-mono text-xs text-slate-300">
+        <div className="border border-rule bg-panel-2/40 px-3 py-2">
+          <span className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">son günlük mühür</span>
+          <div className="truncate text-ink">
             {status.last_daily ? (
               <>
                 {status.last_daily.day} ·{' '}
@@ -162,83 +153,71 @@ export function ComplianceCard({ refreshKey }: { refreshKey: number }) {
       </div>
 
       {/* delil paketi */}
-      <div className="flex flex-wrap items-center gap-2 rounded border border-slate-800 bg-slate-900/50 p-2.5">
-        <span className="text-[11px] font-medium text-slate-400">delil paketi (A.5.28):</span>
+      <div className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 p-2.5">
+        <span className="text-[11px] text-tui-dim">delil paketi (A.5.28):</span>
         <input
           type="date"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
           aria-label="Başlangıç tarihi"
-          className="rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-300"
+          className="border border-rule-hi bg-ground px-2 py-0.5 text-[11px] text-ink"
         />
         <input
           type="date"
           value={to}
           onChange={(e) => setTo(e.target.value)}
           aria-label="Bitiş tarihi"
-          className="rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-300"
+          className="border border-rule-hi bg-ground px-2 py-0.5 text-[11px] text-ink"
         />
-        <label className="flex items-center gap-1.5 text-[11px] text-dim-aa">
+        <label className="flex items-center gap-1.5 text-[11px] text-tui-dim">
           <input type="checkbox" checked={mask} onChange={(e) => setMask(e.target.checked)} className="accent-cyan-500" />
           PII maskele
         </label>
         <a
           href={evidenceUrl()}
           aria-label={`Kanıt paketini indir (${from || 'başlangıç belirtilmedi'} – ${to || 'bitiş belirtilmedi'}, PII ${mask ? 'maskeli' : 'maskesiz'})`}
-          className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+          className="border border-rx/40 bg-rx/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] text-rx transition hover:bg-rx/20"
         >
           indir ↓
         </a>
-        <span className="text-[10px] text-dim-aa">
-          doğrulama: <code className="font-mono">bazntmsctl verify -bundle &lt;dosya&gt;</code>
+        <span className="text-[10px] text-tui-dim">
+          doğrulama: <code>bazntmsctl verify -bundle &lt;dosya&gt;</code>
         </span>
       </div>
 
       {/* inceleme tutanakları */}
       <div>
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-dim-aa">inceleme tutanakları</span>
-          <button
-            onClick={() => addReview('log')}
-            className="rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
-          >
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">inceleme tutanakları</span>
+          <button onClick={() => addReview('log')} className={btnCls}>
             + log inceleme (A.8.15)
           </button>
-          <button
-            onClick={() => addReview('access')}
-            className="rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
-          >
+          <button onClick={() => addReview('access')} className={btnCls}>
             + erişim incelemesi (A.8.2)
           </button>
         </div>
-        <p className="mb-1.5 text-[10px] text-dim-aa">tutanaklar oluşturulduktan sonra değiştirilemez (WORM)</p>
-        {reviewError && <p className="mb-1.5 text-xs text-rose-400">⚠ {reviewError}</p>}
+        <p className="mb-1.5 text-[10px] text-tui-dim">tutanaklar oluşturulduktan sonra değiştirilemez (WORM)</p>
+        {reviewError && <p className="mb-1.5 text-[11px] text-rose-400">⚠ {reviewError}</p>}
         {reviews.length === 0 ? (
-          <p className="text-xs text-dim-aa">tutanak yok — periyodik incelemeler burada imzalı olarak listelenir</p>
+          <p className="text-[11px] text-tui-dim">tutanak yok — periyodik incelemeler burada imzalı olarak listelenir</p>
         ) : (
           <div className="space-y-1">
             {reviews.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-800 bg-slate-900/50 px-2.5 py-1.5">
+              <div key={r.id} className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 px-2.5 py-1.5">
                 <span
-                  className={`rounded px-1.5 py-0.5 font-mono text-[9px] uppercase ${
-                    // 'access' önceden tek başına violet kullanıyordu — DESIGN.md'de
-                    // violet her zaman cyan ile eşleşmesi gereken tx-trafik rengi,
-                    // burada bir kategori etiketi için sözleşme dışı kullanılıyordu;
-                    // nötr slate'e taşındı (log/access ayrımı zaten metinle sağlanıyor)
-                    r.kind === 'log' ? 'bg-cyan-500/10 text-cyan-300' : 'border border-slate-600 bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`px-1 font-mono text-[10px] uppercase ${r.kind === 'log' ? 'text-rx' : 'border border-rule-hi text-ink'}`}
                 >
                   {r.kind}
                 </span>
-                <span className="text-xs text-slate-300">{r.period}</span>
-                <span className="font-mono text-[10px] text-dim-aa">{r.username}</span>
-                {r.finding && (
-                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] text-amber-300">bulgu</span>
+                <span className="text-ink">{r.period}</span>
+                <span className="text-[10px] text-tui-dim">{r.username}</span>
+                {r.finding && <span className="px-1 font-mono text-[10px] text-amber-400">bulgu</span>}
+                <span className="ml-auto text-[10px] text-tui-dim">{new Date(r.ts * 1000).toLocaleString('tr-TR')}</span>
+                {r.notes && (
+                  <p className="w-full truncate text-[11px] text-tui-dim" title={r.notes}>
+                    {r.notes}
+                  </p>
                 )}
-                <span className="ml-auto text-[10px] text-dim-aa">
-                  {new Date(r.ts * 1000).toLocaleString('tr-TR')}
-                </span>
-                {r.notes && <p className="w-full truncate text-[11px] text-dim-aa" title={r.notes}>{r.notes}</p>}
               </div>
             ))}
           </div>

@@ -108,12 +108,12 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'muted'
 
 export function pill(text: string, tone: Tone = 'muted') {
   const tones: Record<Tone, string> = {
-    ok: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-    bad: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
-    muted: 'border-slate-700 text-slate-400',
+    ok: 'border-emerald-500/40 text-emerald-400',
+    warn: 'border-amber-500/40 text-amber-400',
+    bad: 'border-rose-500/40 text-rose-400',
+    muted: 'border-rule-hi text-tui-dim',
   }
-  return <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] uppercase ${tones[tone]}`}>{text}</span>
+  return <span className={`border px-1 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] ${tones[tone]}`}>{text}</span>
 }
 
 export const riskTone = (score: number): Tone => (score >= 15 ? 'bad' : score >= 8 ? 'warn' : 'ok')
@@ -125,8 +125,11 @@ export const statusTone = (s: string): Tone => {
   return map[s] ?? 'muted'
 }
 
-export const btnCls = 'rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200'
+export const btnCls =
+  'border border-rule-hi px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-tui-dim transition hover:border-ink-hi hover:text-ink-hi'
 
+// ask — geçici native prompt sarmalayıcı. ISMS sayfaları dokunuldukça
+// useDialog().prompt()'a taşınıyor; hepsi taşınınca bu silinecek.
 export const ask = (q: string, def = '') => prompt(q, def) ?? ''
 
 export async function ismsPost(url: string, body: unknown) {
