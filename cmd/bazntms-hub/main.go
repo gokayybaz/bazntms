@@ -64,6 +64,7 @@ func main() {
 	logFormat := fl.String("log-format", "", "log formati: json|text (config'i override eder)")
 	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
 	multiSite := fl.Bool("multi-site", false, "coklu-saha (MSP) modu: site sert yetki siniri — agent kaydi site-bagli enroll token ister, site-admin rolu etkinlesir (bkz. docs/DEPLOYMENT-MODEL.md)")
+	sessionStore := fl.String("session-store", "memory", "panel oturum deposu: memory (tek replika) | db (paylasimli `sessions` tablosu — coklu controller replikasi icin, A4)")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
 	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
@@ -261,6 +262,12 @@ func main() {
 	srv.SetMultiSite(*multiSite)
 	if *multiSite {
 		slog.Info("coklu-saha (MSP) modu aktif — site sert yetki siniri, site-bagli enroll token zorunlu")
+	}
+	if *sessionStore == "db" {
+		srv.UseDBSessions(ctx)
+		slog.Info("panel oturumlari paylasimli DB deposunda (coklu controller replikasi mumkun)")
+	} else if *sessionStore != "memory" {
+		slog.Warn("bilinmeyen -session-store degeri, memory kullaniliyor", "verilen", *sessionStore)
 	}
 	if autoTok := srv.EnrollToken(); *enrollToken == "" {
 		slog.Info("otomatik bootstrap enrollment token uretildi", "enroll_token", autoTok)

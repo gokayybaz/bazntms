@@ -32,10 +32,11 @@ type HubConfig struct {
 	Database struct {
 		Path string `koanf:"path"` // SQLite dosya yolu veya postgres:// DSN (Faz 4.1)
 	} `koanf:"database"`
-	RetentionHours    int  `koanf:"retention_hours"`
-	AgentArchiveDays  int  `koanf:"agent_archive_days"` // bu kadar gün çevrimdışı agent'lar silinir (0 = kapalı)
-	MultiSite         bool `koanf:"multi_site"`         // çoklu-saha (MSP) modu — site sert yetki sınırı
-	TelemetryInterval int  `koanf:"telemetry_interval"`
+	RetentionHours    int    `koanf:"retention_hours"`
+	AgentArchiveDays  int    `koanf:"agent_archive_days"` // bu kadar gün çevrimdışı agent'lar silinir (0 = kapalı)
+	MultiSite         bool   `koanf:"multi_site"`         // çoklu-saha (MSP) modu — site sert yetki sınırı
+	SessionStore      string `koanf:"session_store"`      // memory | db (paylaşımlı oturum tablosu, A4)
+	TelemetryInterval int    `koanf:"telemetry_interval"`
 	NATS              struct {
 		URL string `koanf:"url"` // bos = kuyruk kapali (dogrudan store yazimi)
 	} `koanf:"nats"`
@@ -123,6 +124,7 @@ var hubFlagKeys = map[string]string{
 	"retention_hours":          "retention-hours",
 	"agent_archive_days":       "agent-archive-days",
 	"multi_site":               "multi-site",
+	"session_store":            "session-store",
 	"telemetry_interval":       "telemetry-interval",
 	"nats.url":                 "nats",
 	"capture.enabled":          "capture",

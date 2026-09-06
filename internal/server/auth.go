@@ -25,25 +25,20 @@ const (
 	attemptWindow = time.Minute
 )
 
-// session, kimlik tasiran oturumdur (Faz 5.1).
-type session struct {
-	ident Identity
-	exp   time.Time
-}
-
 // AuthManager, oturum ve kimlik denetimidir. Uc giris yolu vardir:
 //   - legacy: tek sifre (-auth-password) → admin kimligi (geriye uyumlu)
 //   - user:   users tablosu (bcrypt) → rol + site scope kimligi
 //   - token:  api_tokens tablosu (Bearer) → entegrasyon kimligi
 //
-// Oturumlar bellekte tutulur (7 gun) — sunucu yeniden baslayinca tekrar
-// giris gerekir.
+// Oturumlar SessionStore arkasinda: varsayilan bellek-ici (tek replika),
+// -session-store=db ile Postgres (coklu replika, A4 / Faz 15). Oturum anahtari
+// sha256(cerez token'i) — ham token depoda tutulmaz.
 type AuthManager struct {
 	mu       sync.Mutex
 	password string
 	st       store.Store
 	users    bool // users tablosunda kayit var mi (ilk kontrolde ogrenilir)
-	sessions map[string]*session
+	sessions SessionStore
 	attempts map[string]*attemptLog
 }
 
@@ -57,7 +52,7 @@ func NewAuthManager(password string, st store.Store) *AuthManager {
 	a := &AuthManager{
 		password: password,
 		st:       st,
-		sessions: map[string]*session{},
+		sessions: newMemSessionStore(),
 		attempts: map[string]*attemptLog{},
 	}
 	if st != nil {
@@ -73,6 +68,14 @@ func NewAuthManager(password string, st store.Store) *AuthManager {
 
 // Enabled, kimlik dogrulama aktif mi?
 func (a *AuthManager) Enabled() bool { return a != nil }
+
+// SetSessionStore, oturum deposunu degistirir (ilk istekten once cagrilmali —
+// -session-store=db icin srv.UseDBSessions).
+func (a *AuthManager) SetSessionStore(s SessionStore) {
+	if a != nil && s != nil {
+		a.sessions = s
+	}
+}
 
 func (a *AuthManager) UsersExist() bool {
 	if a == nil {
@@ -132,8 +135,7 @@ func (a *AuthManager) Login(password, clientIP string) (string, *Identity, bool,
 
 	token := newSessionToken()
 	ident := &Identity{Username: "admin", Role: RoleAdmin, Kind: "legacy"}
-	a.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}
-	a.pruneLocked()
+	_ = a.sessions.Put(TokenHashString(token), *ident, time.Now().Add(sessionTTL))
 	return token, ident, true, false
 }
 
@@ -163,8 +165,7 @@ func (a *AuthManager) LoginUser(username, password, clientIP string) (string, *I
 		ident.Role = RoleViewer
 	}
 	sanitizeIdentity(ident)
-	a.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}
-	a.pruneLocked()
+	_ = a.sessions.Put(TokenHashString(token), *ident, time.Now().Add(sessionTTL))
 
 	go func() { _ = a.st.TouchUserLogin(u.ID) }() // son giris zamani (best-effort)
 	return token, ident, true, false
@@ -176,13 +177,9 @@ func (a *AuthManager) IdentityForToken(token string) *Identity {
 	if a == nil || token == "" {
 		return nil
 	}
-	a.mu.Lock()
-	if sess, ok := a.sessions[token]; ok {
-		ident := sess.ident
-		a.mu.Unlock()
-		return &ident
+	if ident, ok := a.sessions.Get(TokenHashString(token)); ok {
+		return ident
 	}
-	a.mu.Unlock()
 
 	if a.st == nil {
 		return nil
@@ -235,9 +232,7 @@ func (a *AuthManager) Logout(token string) {
 	if a == nil {
 		return
 	}
-	a.mu.Lock()
-	delete(a.sessions, token)
-	a.mu.Unlock()
+	_ = a.sessions.Delete(TokenHashString(token))
 }
 
 // LogoutCookie, request'teki cookie/bearer oturumunu kapatir.
@@ -278,16 +273,6 @@ func (a *AuthManager) recordFailure(ip string) {
 	if l.count >= maxAttempts {
 		l.block = time.Now().Add(attemptWindow)
 		l.count = 0
-	}
-}
-
-// pruneLocked, suresi gecmis oturumlari temizler (mu kilitliyken cagir).
-func (a *AuthManager) pruneLocked() {
-	now := time.Now()
-	for t, sess := range a.sessions {
-		if now.After(sess.exp) {
-			delete(a.sessions, t)
-		}
 	}
 }
 

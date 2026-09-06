@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -142,6 +143,16 @@ func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
 
 // SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
 func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
+
+// UseDBSessions, oturumları paylaşımlı `sessions` tablosuna taşır (A4, Faz 15
+// — panel HA). İlk istekten ÖNCE (New sonrası, ListenAndServe öncesi)
+// çağrılmalı. ctx bitene dek süresi geçmiş oturumları temizleyen bir janitor
+// goroutine başlatır.
+func (s *Server) UseDBSessions(ctx context.Context) {
+	ds := newDBSessionStore(s.store)
+	s.auth.SetSessionStore(ds)
+	go ds.runJanitor(ctx)
+}
 
 // MultiSite, çoklu-saha modu açık mı.
 func (s *Server) MultiSite() bool { return s.multiSite }

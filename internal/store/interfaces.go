@@ -161,6 +161,12 @@ type AuthStore interface {
 	InsertAuditEvent(e AuditEvent) (int64, error)
 	RecentAuditEvents(limit int, site string) ([]AuditEvent, error)
 	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
+
+	// paylaşımlı oturum deposu (A4, Faz 15 — -session-store=db)
+	PutSession(s Session) error
+	GetSession(tokenHash string) (*Session, error)
+	DeleteSession(tokenHash string) error
+	PruneSessions() error
 }
 
 // TopologyStore, topoloji kesfi + istatistiksel baseline (Faz 6).

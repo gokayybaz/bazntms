@@ -179,9 +179,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// (sanitizeIdentity site'siz site-admin'i viewer'a düşürür).
 	ident := sanitizeIdentity(&Identity{Username: username, Role: role, Kind: "oidc"})
 	token := newSessionToken()
-	s.auth.mu.Lock()
-	s.auth.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}
-	s.auth.mu.Unlock()
+	_ = s.auth.sessions.Put(TokenHashString(token), *ident, time.Now().Add(sessionTTL))
 
 	s.audit(r, ident, "login.oidc", "user:"+username, "SSO girisi: "+string(role))
 	http.SetCookie(w, &http.Cookie{
