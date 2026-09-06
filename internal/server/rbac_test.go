@@ -20,6 +20,14 @@ import (
 
 func newRBACServer(t *testing.T, password string) *httptest.Server {
 	t.Helper()
+	ts, _, _ := newRBACServerEx(t, password, "", false)
+	return ts
+}
+
+// newRBACServerEx, testin store'a ve Server'a erişmesi gereken (multi-site,
+// doğrudan RegisterAgent vb.) durumlar için genişletilmiş kurulum.
+func newRBACServerEx(t *testing.T, password, enrollToken string, multiSite bool) (*httptest.Server, *Server, store.Store) {
+	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "rbac.db"))
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -27,10 +35,11 @@ func newRBACServer(t *testing.T, password string) *httptest.Server {
 	t.Cleanup(func() { st.Close() })
 	engine := capture.NewEngine()
 	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
-	srv := New(nil, engine, st, "test.db", mgr, nil, password, "", 30, false, nil, nil, nil)
+	srv := New(nil, engine, st, "test.db", mgr, nil, password, enrollToken, 30, false, nil, nil, nil)
+	srv.SetMultiSite(multiSite)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, srv, st
 }
 
 func postJSON(t *testing.T, ts *httptest.Server, path, token string, body any) (int, map[string]any) {

@@ -102,6 +102,40 @@ func TestEnrollTokenLifecycle(t *testing.T) {
 	}
 }
 
+// TestMultiSiteEnrollRequiresSite, S14.B1: çoklu-saha modunda statik / site'siz
+// token ile agent kaydı reddedilir; enroll token üretimi site ister.
+func TestMultiSiteEnrollRequiresSite(t *testing.T) {
+	ts, _, st := newRBACServerEx(t, "admin-pass-1", "boot-static", true)
+
+	_, out := postJSON(t, ts, "/api/login", "", map[string]string{"password": "admin-pass-1"})
+	adminTok, _ := out["token"].(string)
+
+	// statik token → çoklu-saha modunda reddedilir
+	resp := helloReq(t, ts, "boot-static", "static-agent")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("çoklu-saha: statik token 401 beklenirdi, %d", resp.StatusCode)
+	}
+
+	// site'siz enroll token üretimi → 400
+	if status, _ := postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{"name": "sitesiz"}); status != http.StatusBadRequest {
+		t.Fatalf("çoklu-saha: site'siz enroll token 400 beklenirdi, %d", status)
+	}
+
+	// site-bağlı token → çalışır, agent o site'a bağlanır
+	_, out = postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{"name": "dc1-token", "site": "dc1"})
+	plain, _ := out["token"].(string)
+	resp = helloReq(t, ts, plain, "dc1-agent")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("site-bağlı token enroll: %d", resp.StatusCode)
+	}
+	agents, _ := st.ListAgents(time.Hour, "")
+	if len(agents) != 1 || agents[0].Site != "dc1" {
+		t.Fatalf("agent dc1'e bağlanmalıydı: %+v", agents)
+	}
+}
+
 // TestEnrollTokenExpiredRejected, suresi gecmis (ExpiresAt < now) bir DB
 // token'inin enrollment'ta reddedildigini dogrular. Store'a dogrudan
 // yazilir (handler yalniz pozitif "gelecekte X gun" kabul eder, testte

@@ -216,6 +216,14 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		unauthorized(w, "geçersiz enrollment token")
 		return
 	}
+	// S14.B1: çoklu-saha modunda site sert bir yetki sınırıdır — site'siz
+	// (statik veya site'siz DB) token ile kayıt reddedilir. Panelde site-bağlı
+	// bir enroll token üretin (Yönetim > Agent Ekle).
+	if s.multiSite && tokenSite == "" {
+		s.enrollAttempts.recordFailure(ip)
+		unauthorized(w, "çoklu-saha modu: agent kaydı için site-bağlı enroll token gerekli")
+		return
+	}
 	s.enrollAttempts.recordSuccess(ip)
 	var hello telemetry.AgentHello
 	if err := json.NewDecoder(r.Body).Decode(&hello); err != nil {

@@ -432,6 +432,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		"required":      s.auth.Enabled(),
 		"authenticated": ident != nil,
 		"oidc":          s.oidc.Enabled(),
+		"multi_site":    s.multiSite,
 	}
 	if ident != nil {
 		resp["username"] = ident.Username

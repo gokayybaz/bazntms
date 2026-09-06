@@ -41,9 +41,13 @@ type Server struct {
 	enrollToken       string
 	telemetryInterval int
 	agentPCAP         bool
-	vault             *vault.Vault
-	agentCA           *pki.CA // nil ise mTLS kapali (enroll CSR imzalamaz, client-cert auth yok)
-	enrollAttempts    *enrollAttemptLimiter
+	// multiSite (çoklu-saha / MSP modu, S14.B1): site sert bir yetki sınırıdır
+	// — agent kaydı için site-bağlı enroll token zorunlu, enroll token üretimi
+	// site ister. Bkz. docs/DEPLOYMENT-MODEL.md.
+	multiSite      bool
+	vault          *vault.Vault
+	agentCA        *pki.CA // nil ise mTLS kapali (enroll CSR imzalamaz, client-cert auth yok)
+	enrollAttempts *enrollAttemptLimiter
 
 	httpRequests   *prometheus.CounterVec
 	httpDuration   *prometheus.HistogramVec
@@ -135,6 +139,12 @@ func derefOIDC(o *OIDCOptions) OIDCOptions {
 // istemci sertifikasi Bearer token'a esdeger kimlik sayilir. nil verilirse
 // (varsayilan) mTLS kapali kalir.
 func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
+
+// SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
+func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
+
+// MultiSite, çoklu-saha modu açık mı.
+func (s *Server) MultiSite() bool { return s.multiSite }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()

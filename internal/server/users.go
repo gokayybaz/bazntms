@@ -290,6 +290,15 @@ func (s *Server) handleEnrollTokenCreate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "name zorunlu", http.StatusBadRequest)
 		return
 	}
+	// S14.B2: saha-kısıtlı yönetici yalnız kendi sahasına token üretir.
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		req.Site = scope
+	}
+	// S14.B1: çoklu-saha modunda site zorunlu (site'siz token agent kaydında reddedilir).
+	if s.multiSite && req.Site == "" {
+		http.Error(w, "çoklu-saha modu: enroll token için site zorunlu", http.StatusBadRequest)
+		return
+	}
 	var expiresAt int64
 	if req.ExpiresInDay > 0 {
 		expiresAt = time.Now().AddDate(0, 0, req.ExpiresInDay).Unix()

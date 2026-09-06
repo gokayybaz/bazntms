@@ -63,6 +63,7 @@ func main() {
 	logLevel := fl.String("log-level", "", "log seviyesi: debug|info|warn|error (config'i override eder)")
 	logFormat := fl.String("log-format", "", "log formati: json|text (config'i override eder)")
 	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
+	multiSite := fl.Bool("multi-site", false, "coklu-saha (MSP) modu: site sert yetki siniri — agent kaydi site-bagli enroll token ister, site-admin rolu etkinlesir (bkz. docs/DEPLOYMENT-MODEL.md)")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
 	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
@@ -257,6 +258,10 @@ func main() {
 		slog.Info("SSO (OIDC) aktif", "issuer", cfg.OIDC.Issuer, "client_id", cfg.OIDC.ClientID)
 	}
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
+	srv.SetMultiSite(*multiSite)
+	if *multiSite {
+		slog.Info("coklu-saha (MSP) modu aktif — site sert yetki siniri, site-bagli enroll token zorunlu")
+	}
 	if autoTok := srv.EnrollToken(); *enrollToken == "" {
 		slog.Info("otomatik bootstrap enrollment token uretildi", "enroll_token", autoTok)
 	}
