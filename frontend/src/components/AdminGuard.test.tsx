@@ -18,15 +18,15 @@ function renderAt(path: string, isAdmin: boolean) {
 }
 
 describe('AdminGuard', () => {
-  it('admin değilken "Yetkiniz yok" gösterir, alt rotayı render etmez', () => {
+  it('admin değilken erişim reddi gösterir, alt rotayı render etmez', () => {
     renderAt('/yonetim/kullanicilar', false)
-    expect(screen.getByText('Yetkiniz yok')).toBeInTheDocument()
+    expect(screen.getByText(/erişim reddedildi/)).toBeInTheDocument()
     expect(screen.queryByText('KULLANICI YÖNETİMİ')).not.toBeInTheDocument()
   })
 
   it('admin (veya auth kapalı) iken alt rotayı render eder', () => {
     renderAt('/yonetim/kullanicilar', true)
     expect(screen.getByText('KULLANICI YÖNETİMİ')).toBeInTheDocument()
-    expect(screen.queryByText('Yetkiniz yok')).not.toBeInTheDocument()
+    expect(screen.queryByText(/erişim reddedildi/)).not.toBeInTheDocument()
   })
 })

@@ -237,7 +237,7 @@ export function GeoMapCard() {
         {rows.slice(0, 6).map((r) => (
           <span
             key={r.country}
-            className={`font-mono ${hover?.country === r.country ? 'text-cyan-300' : 'text-slate-500'}`}
+            className={`font-mono ${hover?.country === r.country ? 'text-cyan-300' : 'text-tui-dim'}`}
           >
             {r.country} {formatBytes(r.bytes)}
           </span>
@@ -256,10 +256,10 @@ export function GeoMapCard() {
           }}
         >
           <div className="font-mono font-semibold text-cyan-300">
-            {hover.name} <span className="text-slate-500">({hover.country})</span>
+            {hover.name} <span className="text-tui-dim">({hover.country})</span>
           </div>
-          <div className="mt-0.5 text-slate-300">{formatBytes(hover.bytes)} trafik</div>
-          <div className="text-slate-400">{formatNum(hover.sessions)} uç nokta oturumu</div>
+          <div className="mt-0.5 text-ink">{formatBytes(hover.bytes)} trafik</div>
+          <div className="text-tui-dim">{formatNum(hover.sessions)} uç nokta oturumu</div>
         </div>
       )}
     </div>

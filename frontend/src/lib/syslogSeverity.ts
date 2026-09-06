@@ -12,8 +12,8 @@ export const SEV_STYLES: Record<number, string> = {
   1: 'bg-rose-600/20 text-rose-300 ring-rose-500/40',
   2: 'bg-rose-500/15 text-rose-400 ring-rose-500/30',
   3: 'bg-amber-500/15 text-amber-400 ring-amber-500/30',
-  4: 'bg-amber-500/10 text-amber-300/80 ring-amber-500/20',
+  4: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
   5: 'bg-sky-500/10 text-sky-400 ring-sky-500/20',
-  6: 'bg-slate-500/10 text-slate-400 ring-slate-500/20',
-  7: 'bg-slate-500/10 text-slate-500 ring-slate-500/20',
+  6: 'border border-rule-hi text-tui-dim',
+  7: 'border border-rule text-tui-dim',
 }

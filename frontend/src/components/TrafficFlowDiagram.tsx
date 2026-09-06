@@ -226,7 +226,7 @@ function AgentNode({
         <title>{titleText}</title>
         {flash && <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-node" />}
         <circle cx={-NODE_W / 2} r={3} fill={col} className="tfd-led" />
-        <text x={-NODE_W / 2 + 9} y={3} fontSize={9} className="fill-slate-400" fontFamily="ui-monospace, monospace">
+        <text x={-NODE_W / 2 + 9} y={3} fontSize={9} className="fill-tui-dim" fontFamily="ui-monospace, monospace">
           {short}
         </text>
         {monitor(NODE_W / 2 - 7, 0.62)}
@@ -253,13 +253,13 @@ function AgentNode({
         x={-NODE_W / 2 + 17}
         y={detail === 'full' ? -2 : 3.2}
         fontSize={detail === 'full' ? 9.5 : 9}
-        fill="#cbd5e1"
+        fill="#ced7e3"
         fontFamily="ui-monospace, monospace"
       >
         {short}
       </text>
       {detail === 'full' && (
-        <text x={-NODE_W / 2 + 17} y={9} fontSize={8} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
+        <text x={-NODE_W / 2 + 17} y={9} fontSize={8} className="fill-tui-dim" fontFamily="ui-monospace, monospace">
           ↓{fmtBps(agent.rxBps ?? 0)} ↑{fmtBps(agent.txBps ?? 0)}
         </text>
       )}
@@ -275,8 +275,8 @@ function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement
     <g transform={`translate(${FW_X},${y})`} aria-hidden="true">
       <path d={shield} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeOpacity={0.4} strokeWidth={1.5} />
       {!reduced && <path d={shield} className="tfd-ring" fill="none" stroke="#38bdf8" strokeWidth={1.5} />}
-      <rect x={-32} y={-20} width={64} height={16} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
-      <rect x={-32} y={0} width={64} height={16} fill="#0d1526" stroke="#334155" strokeWidth={1.2} />
+      <rect x={-32} y={-20} width={64} height={16} fill="#0d1526" stroke="#35485f" strokeWidth={1.2} />
+      <rect x={-32} y={0} width={64} height={16} fill="#0d1526" stroke="#35485f" strokeWidth={1.2} />
       {[0, 1, 2].map((i) => (
         <circle
           key={i}
@@ -296,7 +296,7 @@ function Firewall({ y, reduced }: { y: number; reduced: boolean }): ReactElement
         y={76}
         textAnchor="middle"
         fontSize={10}
-        className="fill-slate-400"
+        className="fill-tui-dim"
         fontFamily="ui-monospace, monospace"
         letterSpacing={1}
       >
@@ -312,7 +312,7 @@ function Globe({ y, reduced, remote }: { y: number; reduced: boolean; remote: st
     // sabit düğüm — "son: X" değişken ama ikincil bilgi, ana gösterge şeridinde
     // ve paket etiketlerinde zaten aynı bilgi metin olarak mevcut; dekoratif
     <g transform={`translate(${NET_X},${y})`} aria-hidden="true">
-      <circle r={R} fill="#0a1120" stroke="#334155" strokeWidth={1.5} />
+      <circle r={R} fill="#0a1120" stroke="#35485f" strokeWidth={1.5} />
       <g clipPath="url(#tfd-globe)">
         {[-24, -12, 0, 12, 24].map((oy, i) => (
           <ellipse
@@ -353,14 +353,14 @@ function Globe({ y, reduced, remote }: { y: number; reduced: boolean; remote: st
         y={60}
         textAnchor="middle"
         fontSize={10}
-        className="fill-slate-400"
+        className="fill-tui-dim"
         fontFamily="ui-monospace, monospace"
         letterSpacing={1}
       >
         İNTERNET
       </text>
       {remote && (
-        <text x={0} y={74} textAnchor="middle" fontSize={9} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
+        <text x={0} y={74} textAnchor="middle" fontSize={9} className="fill-tui-dim" fontFamily="ui-monospace, monospace">
           son: {remote}
         </text>
       )}
@@ -589,10 +589,10 @@ export function TrafficFlowDiagram({
 
           {/* bölge başlıkları — dekoratif */}
           <g aria-hidden="true">
-            <text x={AGENT_X} y={28} textAnchor="middle" fontSize={11} className="fill-slate-300" fontFamily="ui-monospace, monospace" letterSpacing={1}>
+            <text x={AGENT_X} y={28} textAnchor="middle" fontSize={11} className="fill-ink" fontFamily="ui-monospace, monospace" letterSpacing={1}>
               AGENT FİLOSU
             </text>
-            <text x={AGENT_X} y={H - 14} textAnchor="middle" fontSize={9} className="fill-dim-aa" fontFamily="ui-monospace, monospace">
+            <text x={AGENT_X} y={H - 14} textAnchor="middle" fontSize={9} className="fill-tui-dim" fontFamily="ui-monospace, monospace">
               {count === 0
                 ? 'aktif agent yok'
                 : `${count} aktif${offlineCount > 0 ? ` · ${offlineCount} çevrimdışı gizli` : ''}`}
@@ -650,7 +650,7 @@ export function TrafficFlowDiagram({
             />
           ))}
           {count === 0 && (
-            <text x={AGENT_X} y={midY} textAnchor="middle" fontSize={10} className="fill-dim-aa" fontFamily="ui-monospace, monospace" aria-hidden="true">
+            <text x={AGENT_X} y={midY} textAnchor="middle" fontSize={10} className="fill-tui-dim" fontFamily="ui-monospace, monospace" aria-hidden="true">
               aktif agent bekleniyor
             </text>
           )}
@@ -698,7 +698,7 @@ export function TrafficFlowDiagram({
                       stroke={col}
                       strokeOpacity={0.4}
                     />
-                    <text textAnchor="middle" y={2} fontSize={9} className="fill-slate-300" fontFamily="ui-monospace, monospace">
+                    <text textAnchor="middle" y={2} fontSize={9} className="fill-ink" fontFamily="ui-monospace, monospace">
                       {p.label}
                     </text>
                   </g>
@@ -715,11 +715,11 @@ export function TrafficFlowDiagram({
         {(['out', 'in', 'lan', 'log'] as Dir[]).map((d) => (
           <span key={d} className="flex items-center gap-1.5">
             <span className="size-2 rounded-full" style={{ background: DIR_COLOR[d] }} />
-            <span className="text-slate-400">{DIR_LABEL[d]}</span>
-            <span className="font-mono text-dim-aa">{tally[d]}</span>
+            <span className="text-tui-dim">{DIR_LABEL[d]}</span>
+            <span className="font-mono text-tui-dim">{tally[d]}</span>
           </span>
         ))}
-        <span className="ml-auto font-mono text-dim-aa">
+        <span className="ml-auto font-mono text-tui-dim">
           {reduced ? 'hareket azaltma açık' : `${live.length} aktif paket`}
         </span>
       </div>
