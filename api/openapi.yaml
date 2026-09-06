@@ -163,6 +163,12 @@ paths:
                 properties:
                   required: { type: boolean }
                   authenticated: { type: boolean }
+                  oidc: { type: boolean }
+                  multi_site: { type: boolean, description: "çoklu-saha (MSP) modu — site sert yetki sınırı (S14.B1)" }
+                  role: { type: string }
+                  site: { type: string }
+                  username: { type: string }
+                  kind: { type: string }
   /api/auth/oidc/login:
     get:
       tags: [auth]
@@ -641,10 +647,11 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string, minLength: 8 }
-                role: { type: string, enum: [admin, netops, analyst, viewer] }
-                site: { type: string }
+                role: { type: string, enum: [admin, site-admin, netops, analyst, viewer] }
+                site: { type: string, description: "site-admin için zorunlu; admin için boş olmalı (çoklu-saha, S14.B2)" }
       responses:
         "200": { description: Oluşturuldu }
+        "400": { description: "rol/site tutarsız veya çoklu-saha kısıtı" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/users/{id}:
     put:

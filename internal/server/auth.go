@@ -162,6 +162,7 @@ func (a *AuthManager) LoginUser(username, password, clientIP string) (string, *I
 	if !ident.Role.Valid() {
 		ident.Role = RoleViewer
 	}
+	sanitizeIdentity(ident)
 	a.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}
 	a.pruneLocked()
 
@@ -195,7 +196,7 @@ func (a *AuthManager) IdentityForToken(token string) *Identity {
 		role = RoleViewer
 	}
 	go func() { _ = a.st.TouchAPIToken(t.ID) }()
-	return &Identity{Username: t.Name, Role: role, Site: t.Site, Kind: "token"}
+	return sanitizeIdentity(&Identity{Username: t.Name, Role: role, Site: t.Site, Kind: "token"})
 }
 
 func TokenHashString(s string) string {
@@ -340,7 +341,7 @@ func (s *Server) audit(r *http.Request, id *Identity, action, target, detail str
 		ident = &Identity{Username: "-", Role: RoleViewer, Kind: "-"}
 	}
 	_, err := s.store.InsertAuditEvent(store.AuditEvent{
-		Username: ident.Username, Role: string(ident.Role),
+		Username: ident.Username, Role: string(ident.Role), Site: ident.Site,
 		Action: action, Target: target, Detail: detail,
 		IP: clientIP(r),
 	})

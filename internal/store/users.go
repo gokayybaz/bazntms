@@ -194,6 +194,7 @@ type AuditEvent struct {
 	Ts       int64  `json:"ts"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	Site     string `json:"site"`   // aktörün sahası (S14.B2); hash zincirine DAHİL DEĞİL
 	Action   string `json:"action"` // login|logout|user.create|device.add|capture.start|...
 	Target   string `json:"target"` // etkilenecek nesne (agent:3, user:bob)
 	Detail   string `json:"detail"` // kisa insan-okur aciklama
@@ -226,18 +227,21 @@ func (s *sqlStore) InsertAuditEvent(e AuditEvent) (int64, error) {
 	e.Hash = auditHash(prev, e)
 
 	var id int64
-	err = s.db.QueryRow(s.q(`INSERT INTO audit_events (ts, username, role, action, target, detail, ip, prev_hash, hash)
-		VALUES (?,?,?,?,?,?,?,?,?) RETURNING id`),
-		e.Ts, e.Username, e.Role, e.Action, e.Target, e.Detail, e.IP, e.PrevHash, e.Hash).Scan(&id)
+	err = s.db.QueryRow(s.q(`INSERT INTO audit_events (ts, username, role, site, action, target, detail, ip, prev_hash, hash)
+		VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		e.Ts, e.Username, e.Role, e.Site, e.Action, e.Target, e.Detail, e.IP, e.PrevHash, e.Hash).Scan(&id)
 	return id, err
 }
 
-func (s *sqlStore) RecentAuditEvents(limit int) ([]AuditEvent, error) {
+// RecentAuditEvents, son denetim olaylarini dondurur. site "" ise hepsi,
+// dolu ise yalnizca o sahanin (aktör-site) olaylari (S14.B2 — site-admin).
+func (s *sqlStore) RecentAuditEvents(limit int, site string) ([]AuditEvent, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	rows, err := s.db.Query(s.q(`SELECT id, ts, username, role, action, target, detail, ip, prev_hash, hash
-		FROM audit_events ORDER BY id DESC LIMIT ?`), limit)
+	q := `SELECT id, ts, username, role, site, action, target, detail, ip, prev_hash, hash
+		FROM audit_events WHERE (? = '' OR site = ?) ORDER BY id DESC LIMIT ?`
+	rows, err := s.db.Query(s.q(q), site, site, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +249,7 @@ func (s *sqlStore) RecentAuditEvents(limit int) ([]AuditEvent, error) {
 	out := []AuditEvent{}
 	for rows.Next() {
 		var e AuditEvent
-		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash); err != nil {
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Site, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

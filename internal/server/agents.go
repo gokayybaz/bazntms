@@ -541,6 +541,11 @@ func (s *Server) handleAgentDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	// S14.B2: saha-kısıtlı kimlik yalnız kendi sahasının agent'ını silebilir.
+	if a, err := s.store.AgentByID(id); err != nil || !s.agentInScope(r, a) {
+		http.Error(w, "agent bulunamadı", http.StatusNotFound)
+		return
+	}
 	if err := s.store.DeleteAgent(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -573,6 +578,11 @@ func (s *Server) handleAgentRename(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(name) > 128 {
 		http.Error(w, "isim çok uzun (maksimum 128 karakter)", http.StatusBadRequest)
+		return
+	}
+	// S14.B2: saha-kısıtlı kimlik yalnız kendi sahasının agent'ını adlandırabilir.
+	if a, err := s.store.AgentByID(id); err != nil || !s.agentInScope(r, a) {
+		http.Error(w, "agent bulunamadı", http.StatusNotFound)
 		return
 	}
 	if err := s.store.RenameAgent(id, name); err != nil {

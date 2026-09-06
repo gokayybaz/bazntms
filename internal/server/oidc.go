@@ -175,7 +175,9 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		role = RoleViewer
 	}
 
-	ident := &Identity{Username: username, Role: role, Kind: "oidc"}
+	// OIDC kimliği daima global (Site boş) — site-admin ataması yapılamaz
+	// (sanitizeIdentity site'siz site-admin'i viewer'a düşürür).
+	ident := sanitizeIdentity(&Identity{Username: username, Role: role, Kind: "oidc"})
 	token := newSessionToken()
 	s.auth.mu.Lock()
 	s.auth.sessions[token] = &session{ident: *ident, exp: time.Now().Add(sessionTTL)}

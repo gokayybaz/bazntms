@@ -36,6 +36,15 @@ func (s *Server) handleUsersList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		filtered := users[:0]
+		for _, u := range users {
+			if u.Site == scope {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
 	writeJSON(w, users)
 }
 
@@ -57,6 +66,14 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 	role := Role(req.Role)
 	if !role.Valid() {
 		role = RoleViewer
+	}
+	// S14.B2: saha yöneticisi yalnız kendi sahasına, global admin dışında rol atar.
+	if !s.enforceCreateScope(w, r, &req.Site, role) {
+		return
+	}
+	if ok, msg := roleSiteConsistent(role, req.Site); !ok {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -86,6 +103,10 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kullanıcı bulunamadı", http.StatusNotFound)
 		return
 	}
+	// S14.B2: saha yöneticisi yalnız kendi sahasının kullanıcısına dokunabilir.
+	if !s.scopedManageAllowed(w, r, u.Site) {
+		return
+	}
 	var req struct {
 		Role     *string `json:"role"`
 		Site     *string `json:"site"`
@@ -94,6 +115,28 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// S14.B2: saha yöneticisi kullanıcıyı başka sahaya taşıyamaz / global admin yapamaz.
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		scopeCopy := scope
+		req.Site = &scopeCopy
+		if req.Role != nil && *req.Role == string(RoleAdmin) {
+			forbidden(w, "saha yöneticisi global admin ataması yapamaz")
+			return
+		}
+	}
+	// rol ↔ site tutarlılığı (nihai değerler üzerinden)
+	finalRole := Role(u.Role)
+	if req.Role != nil {
+		finalRole = Role(*req.Role)
+	}
+	finalSite := u.Site
+	if req.Site != nil {
+		finalSite = *req.Site
+	}
+	if ok, msg := roleSiteConsistent(finalRole, finalSite); !ok {
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	// kendi hesabını devre dışı bırakma koruması
@@ -162,6 +205,9 @@ func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kullanıcı bulunamadı", http.StatusNotFound)
 		return
 	}
+	if !s.scopedManageAllowed(w, r, u.Site) {
+		return
+	}
 	if s.lastAdminBlocked(u) {
 		http.Error(w, "sistemdeki son etkin yöneticiyi silemezsiniz", http.StatusBadRequest)
 		return
@@ -209,6 +255,15 @@ func (s *Server) handleTokensList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		f := tokens[:0]
+		for _, t := range tokens {
+			if t.Site == scope {
+				f = append(f, t)
+			}
+		}
+		tokens = f
+	}
 	writeJSON(w, tokens)
 }
 
@@ -230,6 +285,13 @@ func (s *Server) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 	if !role.Valid() {
 		role = RoleViewer
 	}
+	if !s.enforceCreateScope(w, r, &req.Site, role) {
+		return
+	}
+	if ok, msg := roleSiteConsistent(role, req.Site); !ok {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
 	plain := newAPITokenValue()
 	id, err := s.store.CreateAPIToken(store.APIToken{
 		Name: req.Name, TokenHash: TokenHashString(plain),
@@ -249,6 +311,23 @@ func (s *Server) handleTokenDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		toks, _ := s.store.ListAPITokens()
+		found := false
+		for _, t := range toks {
+			if t.ID == id {
+				found = true
+				if t.Site != scope {
+					forbidden(w, "bu token sizin sahanızın dışında")
+					return
+				}
+			}
+		}
+		if !found {
+			http.Error(w, "token bulunamadı", http.StatusNotFound)
+			return
+		}
 	}
 	if err := s.store.RevokeAPIToken(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -272,6 +351,15 @@ func (s *Server) handleEnrollTokensList(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		f := tokens[:0]
+		for _, t := range tokens {
+			if t.Site == scope {
+				f = append(f, t)
+			}
+		}
+		tokens = f
 	}
 	writeJSON(w, tokens)
 }
@@ -323,6 +411,23 @@ func (s *Server) handleEnrollTokenDelete(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "geçersiz id", http.StatusBadRequest)
 		return
 	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		toks, _ := s.store.ListEnrollTokens()
+		found := false
+		for _, t := range toks {
+			if t.ID == id {
+				found = true
+				if t.Site != scope {
+					forbidden(w, "bu enroll token sizin sahanızın dışında")
+					return
+				}
+			}
+		}
+		if !found {
+			http.Error(w, "enroll token bulunamadı", http.StatusNotFound)
+			return
+		}
+	}
 	if err := s.store.RevokeEnrollToken(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -335,7 +440,8 @@ func (s *Server) handleEnrollTokenDelete(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	events, err := s.store.RecentAuditEvents(limit)
+	// S14.B2: site-admin yalnız kendi sahasının denetim olaylarını görür.
+	events, err := s.store.RecentAuditEvents(limit, SiteScope(identityFromCtx(r)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

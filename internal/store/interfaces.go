@@ -159,7 +159,7 @@ type AuthStore interface {
 	RevokeEnrollToken(id int64) error
 	TouchEnrollToken(id int64) error
 	InsertAuditEvent(e AuditEvent) (int64, error)
-	RecentAuditEvents(limit int) ([]AuditEvent, error)
+	RecentAuditEvents(limit int, site string) ([]AuditEvent, error)
 	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
 }
 

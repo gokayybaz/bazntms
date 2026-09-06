@@ -1,18 +1,25 @@
 package server
 
-// RBAC (Faz 5.1): roller, yetkiler ve kimlik denetimi.
+// RBAC (Faz 5.1, çoklu-saha S14.B2): roller, yetkiler ve kimlik denetimi.
 //
 // Roller ve yetki matrisi:
 //
-//           view  operate  analyze  manage-devices  manage-agents  admin
-//   admin    ✓       ✓        ✓          ✓              ✓          ✓
-//   netops   ✓       ✓        ✓          ✓              ✗          ✗
-//   analyst  ✓       ✗        ✓          ✗              ✗          ✗
-//   viewer   ✓       ✗        ✗          ✗              ✗          ✗
+//               view  operate  analyze  devices  agents  admin  global-admin
+//   admin        ✓       ✓        ✓        ✓       ✓      ✓         ✓
+//   site-admin   ✓       ✓        ✓        ✓       ✓      ✓         ✗
+//   netops       ✓       ✓        ✓        ✓       ✗      ✗         ✗
+//   analyst      ✓       ✗        ✓        ✗       ✗      ✗         ✗
+//   viewer       ✓       ✗        ✗        ✗       ✗      ✗         ✗
 //
-// "view" salt-okuma GET ucudur; "operate" yakalama/kayit kontrolu;
-// "manage-*" silme/olusturma; "admin" kullanici/token/audit yonetimi.
-// Site scope: Identity.Site bos degilse filo sorgulari o site ile sinirli.
+// "view" salt-okuma GET; "operate" yakalama/kayit; "devices/agents" silme/
+// olusturma; "admin" kullanici/token/enroll-token/agent yonetimi (kapsam ici);
+// "global-admin" saha-ustu: ISMS, 5651 compliance, uyari config, audit zinciri
+// dogrulama.
+//
+// Site scope (Identity.Site): bos = global (tum sahalar). Dolu = o sahaya
+// kilitli — filo sorgulari + yonetim uclari o site ile sinirli (inSiteScope).
+// `site-admin` her zaman dolu bir Site tasir; `admin` her zaman bos.
+// Bkz. docs/DEPLOYMENT-MODEL.md.
 
 import (
 	"context"
@@ -23,15 +30,16 @@ import (
 type Role string
 
 const (
-	RoleAdmin   Role = "admin"
-	RoleNetOps  Role = "netops"
-	RoleAnalyst Role = "analyst"
-	RoleViewer  Role = "viewer"
+	RoleAdmin     Role = "admin"
+	RoleSiteAdmin Role = "site-admin"
+	RoleNetOps    Role = "netops"
+	RoleAnalyst   Role = "analyst"
+	RoleViewer    Role = "viewer"
 )
 
 func (r Role) Valid() bool {
 	switch r {
-	case RoleAdmin, RoleNetOps, RoleAnalyst, RoleViewer:
+	case RoleAdmin, RoleSiteAdmin, RoleNetOps, RoleAnalyst, RoleViewer:
 		return true
 	}
 	return false
@@ -45,13 +53,18 @@ const (
 	PermAnalyze       Permission = "analyze" // AI analizi, rapor
 	PermManageDevices Permission = "devices" // cihaz ekle/sil
 	PermManageAgents  Permission = "agents"  // agent sil
-	PermAdmin         Permission = "admin"   // kullanicilar, token'lar, audit, uyari config
+	PermAdmin         Permission = "admin"   // kullanici/token/enroll-token/agent yonetimi (kapsam ici)
+	PermGlobalAdmin   Permission = "global-admin"
 )
 
 var rolePermissions = map[Role]map[Permission]bool{
 	RoleAdmin: {
 		PermView: true, PermOperate: true, PermAnalyze: true,
-		PermManageDevices: true, PermManageAgents: true, PermAdmin: true,
+		PermManageDevices: true, PermManageAgents: true, PermAdmin: true, PermGlobalAdmin: true,
+	},
+	RoleSiteAdmin: {
+		PermView: true, PermOperate: true, PermAnalyze: true,
+		PermManageDevices: true, PermManageAgents: true, PermAdmin: true, PermGlobalAdmin: false,
 	},
 	RoleNetOps: {
 		PermView: true, PermOperate: true, PermAnalyze: true,
@@ -128,4 +141,39 @@ func SiteScope(id *Identity) string {
 		return ""
 	}
 	return id.Site
+}
+
+// sanitizeIdentity, tutarsiz kimlikleri guvenli tarafa cevirir (savunma
+// derinligi — create/update zaten roleSiteConsistent uygular):
+//   - site-admin ama Site bos → fiilen global olurdu; viewer'a dusur
+//   - admin ama Site dolu     → global admin bir siteye baglanamaz; Site'i sil
+func sanitizeIdentity(id *Identity) *Identity {
+	if id == nil {
+		return nil
+	}
+	switch id.Role {
+	case RoleSiteAdmin:
+		if id.Site == "" {
+			id.Role = RoleViewer
+		}
+	case RoleAdmin:
+		id.Site = ""
+	}
+	return id
+}
+
+// inSiteScope, kimligin verilen kaynak-site'ina erisip erisemeyecegini soyler:
+// global kimlik (Site=="") her seye, saha-kisitli kimlik yalnizca kendi
+// sahasina. Bir yonetim islemi (kullanici/token/enroll-token/agent CRUD) bu
+// denetimden gecmelidir (S14.B2).
+func inSiteScope(id *Identity, resourceSite string) bool {
+	scope := SiteScope(id)
+	return scope == "" || scope == resourceSite
+}
+
+// forbidden, 403 + JSON gerekce dondurur (yetki reddi loglama cagirana birakilir).
+func forbidden(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]any{"error": msg})
 }
