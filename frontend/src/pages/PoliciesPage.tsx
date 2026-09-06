@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Card } from '../components/Card'
+import { Panel } from '../components/Panel'
 import { ComplianceSubNav } from '../components/ComplianceSubNav'
-import { ask, btnCls, ismsPost, pill, statusTone, type Policy } from '../lib/isms'
+import { useDialog } from '../lib/dialog'
+import { btnCls, ismsPost, pill, statusTone, type Policy } from '../lib/isms'
 
 export function PoliciesPage() {
+  const { form } = useDialog()
   const [policies, setPolicies] = useState<Policy[]>([])
   const [error, setError] = useState('')
 
@@ -23,9 +25,16 @@ export function PoliciesPage() {
   }, [load])
 
   const addPolicy = async () => {
-    const title = ask('Politika başlığı:')
-    if (!title) return
-    await ismsPost('/api/v1/isms/policies', { title, owner: ask('Sahip:'), content: ask('İçerik (boş geçilebilir):') })
+    const v = await form({
+      title: 'Yeni Politika',
+      fields: [
+        { key: 'title', label: 'Politika başlığı' },
+        { key: 'owner', label: 'Sahip' },
+        { key: 'content', label: 'İçerik (boş geçilebilir)', type: 'textarea' },
+      ],
+    })
+    if (!v || !v.title.trim()) return
+    await ismsPost('/api/v1/isms/policies', v)
     load()
   }
 
@@ -35,35 +44,35 @@ export function PoliciesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-      <div className="flex items-center gap-2">
-        <h1 className="text-[13px] font-semibold uppercase tracking-widest text-slate-300">Uyumluluk</h1>
-        <span className="text-xs text-slate-500">5651 + ISO 27001</span>
+    <div className="mx-auto max-w-[1600px] space-y-3 px-3 py-3 font-mono">
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
+        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />
 
-      <Card title="Politika Yaşam Döngüsü" right={<span className="text-xs text-slate-500">taslak → inceleme → onay → yayın</span>}>
+      <Panel title="Politika Yaşam Döngüsü" right={<span className="text-[10px] text-tui-dim">taslak → inceleme → onay → yayın</span>}>
         <div className="space-y-1">
-          <div className="mb-1.5 flex items-center gap-2">
+          <div className="mb-1.5">
             <button onClick={addPolicy} className={btnCls}>
               + politika
             </button>
           </div>
           {error ? (
-            <p className="text-xs text-rose-400">{error}</p>
+            <p className="text-[11px] text-rose-400">{error}</p>
           ) : policies.length === 0 ? (
-            <p className="text-xs text-slate-600">politika yok — akış: taslak → inceleme → onay → yayın</p>
+            <p className="text-[11px] text-tui-dim">politika yok — akış: taslak → inceleme → onay → yayın</p>
           ) : (
             policies.map((p) => (
-              <div key={p.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-800 bg-slate-900/50 px-2.5 py-1.5">
-                <span className="font-mono text-[10px] text-cyan-300">{p.ref}</span>
-                <span className="text-xs text-slate-300">{p.title}</span>
-                <span className="font-mono text-[10px] text-slate-600">v{p.version}</span>
+              <div key={p.id} className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 px-2.5 py-1.5 text-[11px]">
+                <span className="text-[10px] text-rx">{p.ref}</span>
+                <span className="text-ink">{p.title}</span>
+                <span className="text-[10px] text-tui-dim">v{p.version}</span>
                 {pill(p.status, statusTone(p.status))}
-                {p.approved_by && <span className="font-mono text-[10px] text-slate-500">{p.approved_by}</span>}
+                {p.approved_by && <span className="text-[10px] text-tui-dim">{p.approved_by}</span>}
                 {p.next_review > 0 && (
-                  <span className="text-[10px] text-slate-600">inceleme: {new Date(p.next_review * 1000).toLocaleDateString('tr-TR')}</span>
+                  <span className="text-[10px] text-tui-dim">inceleme: {new Date(p.next_review * 1000).toLocaleDateString('tr-TR')}</span>
                 )}
                 <span className="ml-auto flex gap-1">
                   {p.status === 'draft' && (
@@ -86,7 +95,7 @@ export function PoliciesPage() {
             ))
           )}
         </div>
-      </Card>
+      </Panel>
     </div>
   )
 }

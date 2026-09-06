@@ -6,12 +6,29 @@ import { DialogProvider, useDialog } from './dialog'
 
 // confirm/prompt sonucunu ekrana yazan test sürücüsü
 function Harness() {
-  const { confirm, prompt } = useDialog()
+  const { confirm, prompt, form } = useDialog()
   const [out, setOut] = useState('—')
   return (
     <div>
       <button onClick={async () => setOut(String(await confirm('Silinsin mi?', { danger: true })))}>ask-confirm</button>
       <button onClick={async () => setOut(String(await prompt('Yeni ad', { defaultValue: 'eski' })))}>ask-prompt</button>
+      <button
+        onClick={async () =>
+          setOut(
+            JSON.stringify(
+              await form({
+                title: 'Risk',
+                fields: [
+                  { key: 'threat', label: 'Tehdit' },
+                  { key: 'impact', label: 'Etki', type: 'number', defaultValue: '3' },
+                ],
+              }),
+            ),
+          )
+        }
+      >
+        ask-form
+      </button>
       <output>{out}</output>
     </div>
   )
@@ -56,6 +73,21 @@ describe('useDialog', () => {
     expect(screen.getByRole('status').textContent).toBe('yeni-ad')
 
     await user.click(screen.getByText('ask-prompt'))
+    await user.click(screen.getByRole('button', { name: 'İptal' }))
+    expect(screen.getByRole('status').textContent).toBe('null')
+  })
+
+  it('form → alanları toplar, İptal null döner', async () => {
+    const { user } = renderHarness()
+    await user.click(screen.getByText('ask-form'))
+    const inputs = screen.getAllByRole('spinbutton').concat(screen.getAllByRole('textbox'))
+    await user.type(screen.getByRole('textbox'), 'sızıntı')
+    await user.click(screen.getByRole('button', { name: 'Kaydet' }))
+    expect(screen.getByRole('status').textContent).toContain('"threat":"sızıntı"')
+    expect(screen.getByRole('status').textContent).toContain('"impact":"3"')
+    expect(inputs.length).toBeGreaterThan(0)
+
+    await user.click(screen.getByText('ask-form'))
     await user.click(screen.getByRole('button', { name: 'İptal' }))
     expect(screen.getByRole('status').textContent).toBe('null')
   })
