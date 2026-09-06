@@ -9,10 +9,12 @@ interface Props {
   subtitle?: string
 }
 
+// TUI: basamaklı (step) çizgi, alan dolgusu / gradyan YOK, mono tick etiketleri,
+// karakter-ızgara zemin (dikey + yatay grid), son noktada vurgu.
 export function ThroughputChart({ history, running = false, rangeMinutes = 2, subtitle }: Props) {
   const W = 1000
-  const H = 260
-  const PAD = { top: 16, right: 12, bottom: 24, left: 56 }
+  const H = 240
+  const PAD = { top: 14, right: 12, bottom: 22, left: 58 }
   const iw = W - PAD.left - PAD.right
   const ih = H - PAD.top - PAD.bottom
 
@@ -23,17 +25,21 @@ export function ThroughputChart({ history, running = false, rangeMinutes = 2, su
   const x = (i: number, n: number) => PAD.left + (n <= 1 ? iw : (i / (n - 1)) * iw)
   const y = (v: number) => PAD.top + ih - (v / maxBps) * ih
 
-  const line = (get: (b: Bucket) => number) =>
-    data.map((b, i) => `${i === 0 ? 'M' : 'L'}${x(i, data.length).toFixed(1)},${y(get(b) * 8).toFixed(1)}`).join(' ')
-
-  const area = (get: (b: Bucket) => number) => {
+  // basamaklı çizgi: her noktaya yatay git, sonra dikey (step-after)
+  const stepLine = (get: (b: Bucket) => number) => {
     if (data.length === 0) return ''
-    return `${line(get)} L${x(data.length - 1, data.length).toFixed(1)},${(PAD.top + ih).toFixed(1)} L${x(0, data.length).toFixed(1)},${(PAD.top + ih).toFixed(1)} Z`
+    let d = `M${x(0, data.length).toFixed(1)},${y(get(data[0]) * 8).toFixed(1)}`
+    for (let i = 1; i < data.length; i++) {
+      const px = x(i, data.length).toFixed(1)
+      d += ` L${px},${y(get(data[i - 1]) * 8).toFixed(1)} L${px},${y(get(data[i]) * 8).toFixed(1)}`
+    }
+    return d
   }
 
   const last = data[data.length - 1]
   const lastIn = (last?.in ?? 0) * 8
   const lastOut = (last?.out ?? 0) * 8
+  const lastX = x(data.length - 1, data.length)
 
   const yTicks = Array.from({ length: ticks + 1 }, (_, i) => (maxBps / ticks) * i)
   const windowSecs = rangeMinutes * 60
@@ -41,43 +47,49 @@ export function ThroughputChart({ history, running = false, rangeMinutes = 2, su
 
   const xLabel = (secs: number) => {
     if (secs === 0) return 'şimdi'
-    if (secs < 90) return `-${secs} sn`
-    return `-${Math.round(secs / 60)} dk`
+    if (secs < 90) return `-${secs}s`
+    return `-${Math.round(secs / 60)}d`
   }
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-        <div className="flex items-center gap-2">
-          <span className="size-2.5 rounded-sm bg-cyan-400" />
-          <span className="text-xs text-slate-400">İndirilen</span>
-          <span className="font-mono text-sm font-semibold text-cyan-300">{formatBits(lastIn)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="size-2.5 rounded-sm bg-violet-400" />
-          <span className="text-xs text-slate-400">Gönderilen</span>
-          <span className="font-mono text-sm font-semibold text-violet-300">{formatBits(lastOut)}</span>
-        </div>
-        <span className="ml-auto text-xs text-slate-500">
+    <div className="font-mono">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[11px]">
+        <span className="flex items-center gap-1.5">
+          <span className="text-rx">▉</span>
+          <span className="text-tui-dim">İndirilen</span>
+          <span className="font-semibold text-rx">{formatBits(lastIn)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-tx">▉</span>
+          <span className="text-tui-dim">Gönderilen</span>
+          <span className="font-semibold text-tx">{formatBits(lastOut)}</span>
+        </span>
+        <span className="ml-auto text-[10px] text-tui-dim">
           {subtitle ?? (running ? 'son 2 dakika · saniyelik örnekleme' : 'yakalama durduruldu')}
         </span>
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Trafik grafiği">
+        {/* yatay grid + y ekseni etiketleri */}
         {yTicks.map((v, i) => (
-          <g key={i}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#1e293b" strokeWidth="1" />
-            <text x={PAD.left - 8} y={y(v) + 4} textAnchor="end" className="fill-slate-500" fontSize="10">
-              {formatBits(v).replace(' bit/s', 'b').replace('bit/s', 'b')}
+          <g key={`y${i}`}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#232b3a" strokeWidth="1" />
+            <text x={PAD.left - 8} y={y(v) + 3.5} textAnchor="end" fill="#8794a8" fontSize="9" fontFamily="ui-monospace, monospace">
+              {formatBits(v).replace(/ ?bit\/s/, 'b').replace(/ ?Kbit\/s/, 'K').replace(/ ?Mbit\/s/, 'M').replace(/ ?Gbit\/s/, 'G')}
             </text>
           </g>
         ))}
-
+        {/* dikey grid (karakter-ızgara hissi) */}
+        {xTicks.map((s) => {
+          const px = PAD.left + (s / windowSecs) * iw
+          if (px > W - PAD.right + 1) return null
+          return <line key={`vg${s}`} x1={px} x2={px} y1={PAD.top} y2={PAD.top + ih} stroke="#232b3a" strokeWidth="1" />
+        })}
         {xTicks.map((s) => {
           const px = PAD.left + (s / windowSecs) * iw
           if (px > W - PAD.right + 1) return null
           return (
-            <text key={s} x={px} y={H - 6} textAnchor={s === 0 ? 'start' : 'middle'} className="fill-slate-500" fontSize="10">
+            <text key={`x${s}`} x={px} y={H - 5} textAnchor={s === 0 ? 'start' : 'middle'} fill="#8794a8" fontSize="9" fontFamily="ui-monospace, monospace">
               {xLabel(s)}
             </text>
           )
@@ -85,15 +97,16 @@ export function ThroughputChart({ history, running = false, rangeMinutes = 2, su
 
         {data.length > 1 && (
           <>
-            <path d={area((b) => b.local + b.in + b.out)} fill="#a78bfa" fillOpacity="0.08" />
-            <path d={area((b) => b.in)} fill="#22d3ee" fillOpacity="0.10" />
-            <path d={line((b) => b.out)} fill="none" stroke="#a78bfa" strokeWidth="1.5" />
-            <path d={line((b) => b.in)} fill="none" stroke="#22d3ee" strokeWidth="2" />
+            <path d={stepLine((b) => b.out)} fill="none" stroke="#a78bfa" strokeWidth="1.5" />
+            <path d={stepLine((b) => b.in)} fill="none" stroke="#22d3ee" strokeWidth="1.5" />
+            {/* son nokta vurgusu */}
+            <rect x={lastX - 2.5} y={y(lastOut) - 2.5} width="5" height="5" fill="#a78bfa" />
+            <rect x={lastX - 2.5} y={y(lastIn) - 2.5} width="5" height="5" fill="#22d3ee" />
           </>
         )}
 
         {data.length <= 1 && (
-          <text x={W / 2} y={H / 2} textAnchor="middle" className="fill-slate-600" fontSize="13">
+          <text x={W / 2} y={H / 2} textAnchor="middle" fill="#8794a8" fontSize="11" fontFamily="ui-monospace, monospace">
             Veri bekleniyor…
           </text>
         )}

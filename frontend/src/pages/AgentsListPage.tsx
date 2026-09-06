@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { AgentWithRates } from '../types'
 import { formatBits, formatNum } from '../lib/format'
 import { Panel } from '../components/Panel'
+import { Sparkline } from '../components/Sparkline'
 import { TuiTable } from '../components/TuiTable'
 import type { TuiColumn } from '../components/TuiTable'
 import { ProcessesCard } from '../components/ProcessesCard'
@@ -54,6 +55,21 @@ export function AgentsListPage() {
       window.clearInterval(id)
     }
   }, [])
+
+  // oturum-içi trend: her poll'da agent'ın en-yoğun arayüz toplamını biriktir
+  // (htop'un süreç geçmişi gibi — ayrı bir history endpoint'i gerekmez)
+  const trendRef = useRef<Map<number, number[]>>(new Map())
+  useEffect(() => {
+    const m = trendRef.current
+    for (const a of agents) {
+      const b = busiestRate(a)
+      const v = b ? (b.rx_bps + b.tx_bps) * 8 : 0
+      const arr = m.get(a.id) ?? []
+      arr.push(v)
+      if (arr.length > 20) arr.shift()
+      m.set(a.id, arr)
+    }
+  }, [agents])
 
   const rows = useMemo(() => (onlyOnline ? agents.filter((a) => a.online) : agents), [agents, onlyOnline])
 
@@ -109,6 +125,15 @@ export function AgentsListPage() {
         ) : (
           <span className="text-tui-dim">—</span>
         )
+      },
+    },
+    {
+      key: 'trend',
+      header: 'Trend',
+      width: '7rem',
+      render: (a) => {
+        const t = trendRef.current.get(a.id) ?? []
+        return t.length > 1 ? <Sparkline data={t} points={20} label={`${a.name} trafik trendi`} /> : <span className="text-rule-hi">·</span>
       },
     },
     {
