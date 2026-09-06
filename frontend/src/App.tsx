@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useLive } from './lib/useLive'
-import { Header } from './components/Header'
-import { Sidebar } from './components/Sidebar'
+import { KeymapProvider } from './lib/KeymapContext'
+import { DialogProvider } from './lib/dialog'
+import { TuiHeader } from './components/TuiHeader'
+import { TabBar } from './components/TabBar'
+import { FnKeyBar } from './components/FnKeyBar'
+import { ShellKeys } from './components/ShellKeys'
 import { LoginScreen } from './components/LoginScreen'
 import { DashboardPage } from './pages/DashboardPage'
 import { AgentsListPage } from './pages/AgentsListPage'
@@ -112,40 +116,53 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar isAdmin={isAdmin} canGovern={canGovern} />
-      <div className="min-w-0 flex-1">
-        <Header connected={connected} onLogout={logout} identity={identity} />
+    <KeymapProvider>
+      <DialogProvider>
+        <div className="grid h-screen grid-rows-[auto_auto_1fr_auto] bg-ground">
+          <TuiHeader
+            connected={connected}
+            fleet={fleet}
+            alertEvents={alertEvents}
+            identity={identity}
+            onLogout={logout}
+          />
+          <TabBar isAdmin={isAdmin} canGovern={canGovern} />
 
-        <Routes>
-          <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} fleet={fleet} />} />
-          <Route path="/agentlar" element={<AgentsListPage />} />
-          <Route path="/agentlar/:id" element={<AgentDetailPage />} />
-          <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
-          <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
-          <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
-          <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
-          <Route path="/raporlar" element={<ReportsPage />} />
-          <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
-          <Route path="/uyumluluk/risk" element={<RiskRegisterPage />} />
-          <Route path="/uyumluluk/soa" element={<SoaPage />} />
-          <Route path="/uyumluluk/politikalar" element={<PoliciesPage />} />
-          <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
-          <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
+          <main className="min-w-0 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} fleet={fleet} />} />
+              <Route path="/agentlar" element={<AgentsListPage />} />
+              <Route path="/agentlar/:id" element={<AgentDetailPage />} />
+              <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
+              <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
+              <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
+              <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
+              <Route path="/raporlar" element={<ReportsPage />} />
+              <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
+              <Route path="/uyumluluk/risk" element={<RiskRegisterPage />} />
+              <Route path="/uyumluluk/soa" element={<SoaPage />} />
+              <Route path="/uyumluluk/politikalar" element={<PoliciesPage />} />
+              <Route path="/uyumluluk/denetimler" element={<AuditsPage />} />
+              <Route path="/uyumluluk/yonetisim" element={<GovernancePage />} />
 
-          {/* Yönetim (Faz 12) — admin/site-admin guard. site-admin kendi sahasına
-              kilitli (S14.B): lockedSite dolu ise site alanı sabit, admin rolü gizli. */}
-          <Route path="/yonetim" element={<AdminGuard isAdmin={isAdmin} />}>
-            <Route index element={<Navigate to="/yonetim/kullanicilar" replace />} />
-            <Route path="kullanicilar" element={<UsersAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
-            <Route path="tokenlar" element={<TokensAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
-            <Route path="agent-ekle" element={<EnrollAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
-            <Route path="denetim" element={<AuditAdminPage />} />
-          </Route>
+              {/* Yönetim (Faz 12) — admin/site-admin guard. site-admin kendi sahasına
+                  kilitli (S14.B): lockedSite dolu ise site alanı sabit, admin rolü gizli. */}
+              <Route path="/yonetim" element={<AdminGuard isAdmin={isAdmin} />}>
+                <Route index element={<Navigate to="/yonetim/kullanicilar" replace />} />
+                <Route path="kullanicilar" element={<UsersAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
+                <Route path="tokenlar" element={<TokensAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
+                <Route path="agent-ekle" element={<EnrollAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
+                <Route path="denetim" element={<AuditAdminPage />} />
+              </Route>
 
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </div>
-    </div>
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </main>
+
+          <FnKeyBar />
+        </div>
+        <ShellKeys onLogout={logout} onRefresh={() => setHistoryRefresh((k) => k + 1)} />
+      </DialogProvider>
+    </KeymapProvider>
   )
 }
