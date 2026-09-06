@@ -13,6 +13,8 @@ import { AgentsListPage } from './pages/AgentsListPage'
 import { AgentDetailPage } from './pages/AgentDetailPage'
 import { DevicesPage } from './pages/DevicesPage'
 import { DeviceDetailPage } from './pages/DeviceDetailPage'
+import { TrafficFlowPage } from './pages/TrafficFlowPage'
+import { GeoPage } from './pages/GeoPage'
 import { TopologyPage } from './pages/TopologyPage'
 import { AlertsPage } from './pages/AlertsPage'
 import { ReportsPage } from './pages/ReportsPage'
@@ -135,6 +137,8 @@ export default function App() {
               <Route path="/agentlar/:id" element={<AgentDetailPage />} />
               <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
               <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
+              <Route path="/akis" element={<TrafficFlowPage />} />
+              <Route path="/cografi" element={<GeoPage />} />
               <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
               <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
               <Route path="/raporlar" element={<ReportsPage />} />

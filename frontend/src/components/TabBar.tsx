@@ -11,6 +11,8 @@ const TABS: Tab[] = [
   { to: '/', label: 'Pano', end: true },
   { to: '/agentlar', label: 'Agent', end: false },
   { to: '/cihazlar', label: 'Cihaz', end: false },
+  { to: '/akis', label: 'Akış', end: false },
+  { to: '/cografi', label: 'Harita', end: false },
   { to: '/topoloji', label: 'Topo', end: false },
   { to: '/uyarilar', label: 'Uyarı', end: false },
   { to: '/raporlar', label: 'Rapor', end: false },
@@ -45,7 +47,7 @@ export function TabBar({ isAdmin = false, canGovern = true }: { isAdmin?: boolea
           >
             {({ isActive }) => (
               <>
-                <span className={isActive ? 'font-bold' : 'text-rx'}>{i + 1}</span>
+                {i < 9 && <span className={isActive ? 'font-bold' : 'text-rx'}>{i + 1}</span>}
                 {t.label}
               </>
             )}

@@ -9,9 +9,6 @@ import { Meter } from './Meter'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
 import { TopologyCard } from './TopologyCard'
-import { GeoMapCard } from './GeoMapCard'
-import { TrafficFlowDiagram } from './TrafficFlowDiagram'
-import type { DiagramAgent, TrafficEvent } from './TrafficFlowDiagram'
 
 // --- yerel API tipleri (DevicesCard/FlowsCard/SyslogCard ile ayni sema) ---
 
@@ -355,43 +352,8 @@ export function Overview({
   // arama gerekiyordu)
   const agentIdByName = useMemo(() => new Map(agents.map((a) => [a.name, a.id])), [agents])
 
-  // canlı trafik şeması: yalnızca ÇEVRİMİÇİ agent'lar düğüm olur (süzme bileşen
-  // içinde) — kapalı agent trafik üretmez. Tüm filo yine de geçilir ki bileşen
-  // "N çevrimdışı gizli" ipucunu gösterebilsin; sıralama online-first.
-  const diagramAgents = useMemo<DiagramAgent[]>(
-    () =>
-      [...agents]
-        .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
-        .map((a) => {
-          const busiest = [...(a.rates ?? [])].sort((x, y) => y.rx_bps + y.tx_bps - (x.rx_bps + x.tx_bps))[0]
-          return {
-            name: a.name,
-            online: a.online,
-            site: a.site || undefined,
-            rxBps: busiest?.rx_bps ?? 0,
-            txBps: busiest?.tx_bps ?? 0,
-          }
-        }),
-    [agents],
-  )
-
-  // canlı trafik şeması için olay listesi — akıştaki en yeni 80 satır,
-  // yön sınıflandırması diyagramın içinde (from/to özel/genel IP kontrolü).
-  // Karşı ucu olmayan agent satırları (LISTEN soketleri) şemaya alınmaz —
-  // yön taşımazlar, yalnızca "· dinliyor" gürültüsü olurlar.
-  const diagramEvents = useMemo<TrafficEvent[]>(
-    () =>
-      visibleStream.slice(0, 80).flatMap((it): TrafficEvent[] => {
-        if (it.kind === 'flow') {
-          return [{ key: it.key, kind: 'flow', ts: it.ts, from: it.src, to: `${it.dst}:${it.dport}`, weight: it.bytes }]
-        }
-        if (it.kind === 'agent') {
-          return it.remote ? [{ key: it.key, kind: 'agent', ts: it.ts, agent: it.source, from: it.local, to: it.remote }] : []
-        }
-        return [{ key: it.key, kind: 'syslog', ts: it.ts, from: it.source }]
-      }),
-    [visibleStream],
-  )
+  // Canlı Trafik Şeması ve Coğrafi Trafik ayrı sekmelere taşındı (/akis, /cografi)
+  // — çok agent / çok trafik senaryosunda pano şişmesin.
 
   const polledEventRate = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
@@ -503,18 +465,6 @@ export function Overview({
           </div>
         </Panel>
       </div>
-
-      {/* canlı trafik şeması — agent filosu ↔ router/güvenlik duvarı ↔ internet */}
-      <Panel
-        title="Canlı Trafik Şeması"
-        right={
-          <span className="hidden font-mono text-[10px] text-tui-dim sm:inline">
-            agent filosu → router/güvenlik duvarı → internet
-          </span>
-        }
-      >
-        <TrafficFlowDiagram events={diagramEvents} agents={diagramAgents} />
-      </Panel>
 
       {/* canlı olay akışı — log-tail */}
       <Panel
@@ -676,11 +626,6 @@ export function Overview({
           <TopologyCard refreshKey={refreshKey} />
         </Panel>
       </div>
-
-      {/* coğrafi trafik haritası */}
-      <Panel title="Coğrafi Trafik" right={<span className="font-mono text-[10px] text-tui-dim">netflow + agent · geoip</span>}>
-        <GeoMapCard />
-      </Panel>
 
       {/* cihazlar */}
       <Panel title="Cihazlar" right={<span className="font-mono text-[10px] text-tui-dim">snmp v2c/v3 · fortigate rest</span>} bodyClassName="">
