@@ -163,17 +163,31 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 
 ## Frontend (`frontend/`)
 
-Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
-birincil, REST yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş).
-WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard stat şeridinde
-**filo rx/tx/pps ve olay hızı** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten).
-**Agent sayısı (aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden**
-gelir — canlı trafik şeması, topoloji ve alttaki filo kartları da aynı listeyi
-kullandığı için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
+Vite + React + Tailwind v4 + `react-router-dom`. **Tasarım dili htop/ncurses
+TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+düz siyah zemin, tek monospace aile, kare köşe (`*{border-radius:0}`), gölge
+yok, klavye-öncelikli. İmza bileşenler: `Meter` (htop eşik çubuğu), `TuiTable`
+(sort/`/` filtre/↑↓-jk klavye-nav kolonlu tablo), `Panel` (tek konteyner —
+eski `Card.tsx` bunun alias'ı), `Sparkline` (blok rampası), `TabBar`/`FnKeyBar`.
+Renk tokenleri `index.css` `@theme` (`--color-ground/panel/rule/ink/tui-dim/rx/tx`).
+
+`useLive` hook'u WS'i birincil, REST yoklamasını yedek kaynak yapar (WS koparsa
+otomatik dönüş). WS tick'i alarm olayları + `fleet` özetini taşır → üst
+`TuiHeader` şeridinde **filo rx/tx/pps Meter bandı + olay/uyarı sayaç + canlı
+saat** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten). **Agent sayısı
+(aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden** gelir — canlı
+trafik şeması, topoloji ve alttaki filo tabloları da aynı listeyi kullandığı
+için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
 (`fleet.agents_online` yalnızca ilk poll gelene kadar geçici kaynak).
-401 görülürse App login ekranına düşer; 60 sn'de bir de oturum denetimi
-yapılır. Grafikler (ThroughputChart, CompareCard, DayBars) harici grafik
-kütüphanesi olmadan, elle yazılmış SVG'dir.
+401 görülürse App TTY login ekranına düşer; 60 sn'de bir de oturum denetimi
+yapılır. Grafikler (ThroughputChart — basamaklı çizgi, gradyan yok) harici
+grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
+
+**Klavye modeli** (`lib/useHotkeys.ts` + `lib/KeymapContext.tsx`): tek global
+`keydown`; `1-9` sekme değiştir, `↑↓/jk` + `Enter` liste gezinme, `/` filtre,
+`s`/`F6` sırala, `F1`/`?` yardım overlay, `F5` yenile, `F10` çıkış. Metin alanı
+odaktayken tek-harf kısayolları bastırılır. `FnKeyBar` alt şeridi aktif ekranın
+`useRegisterKeys` ile kaydettiği eylemleri çizer.
 
 Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG
 bir sahnedir: sol sütunda **yalnızca ÇEVRİMİÇİ agent'lar** ayrı bir istemci
@@ -194,12 +208,13 @@ sessiz kalıp yalnızca hareket varken yeniden çizdirir; yön sınıflandırmas
 
 ### Sayfa yapısı (routing)
 
-`App.tsx` bir kabuk: sol sabit `Sidebar` (rota listesi) + üst `Header` (WS
-durumu, kullanıcı kimliği, çıkış — hub'ın kendi yerel yakalamasıyla ilgili
-hiçbir kontrol barındırmaz, bkz. aşağıdaki not) + `<Routes>` içinde sayfa
-gövdesi. Backend zaten SPA history-fallback sağladığı için (`server.go`:
-bilinmeyen path → `index.html`) istemci tarafı routing ek backend desteği
-gerektirmeden çalışır.
+`App.tsx` bir kabuk (`grid-rows-[auto_auto_1fr_auto]`): üst `TuiHeader` (filo
+Meter bandı + WS durumu + kimlik + saat) / `TabBar` (numaralı yatay nav, `1-9`
+tuşları) / `<main>` (kayan sayfa gövdesi, `<Routes>`) / alt `FnKeyBar`
+(bağlam F-tuşları). `KeymapProvider` + `DialogProvider` tüm kabuğu sarar.
+Sol sidebar ve ayrı header kaldırıldı (Faz 17). Backend zaten SPA
+history-fallback sağladığı için (`server.go`: bilinmeyen path → `index.html`)
+istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 
 | Rota | Sayfa | Veri kaynağı |
 |------|-------|--------------|

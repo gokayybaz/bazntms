@@ -87,10 +87,11 @@ components:
 
 # Design System: bazNTMS Dashboard
 
-> **Durum (2026-09-06):** Faz 17 TUI dönüşümü sürüyor. Bu döküman hedef tasarım
-> dilini tarif eder; kod tabanı S17.1'den itibaren buna göç ediyor, S17.33'te
-> shipped değerlerle birebir eşitlenecek. Faz 17 tamamlanana kadar bazı
-> bileşenler hâlâ eski "NOC panosu" dilinde olabilir.
+> **Durum (2026-09-06):** Faz 17 TUI dönüşümü **tamamlandı** — izleme yüzeyinin
+> tamamı (kabuk, Pano, Agent/Cihaz/Topoloji/Uyarılar/Raporlar + tüm kartlar)
+> bu dile taşındı. **Kalan:** Uyumluluk/ISMS (`/uyumluluk/*`) ve Yönetim
+> (`/yonetim/*`) sayfaları Faz 18'de dönüştürülecek — o sayfalar hâlâ eski
+> "NOC panosu" dilinde ve `Card.tsx` alias'ını kullanıyor (Faz 18 sonunda silinir).
 
 ## Overview
 
@@ -171,7 +172,7 @@ açıklama paragrafları (rapor açıklamaları, ISMS politika metinleri) bilin�
 `font-sans` ile sistem sans-serif'e döner.
 
 JetBrains Mono kurulu değilse fallback yığınına düşülür; box-drawing (`─│┤├`) ve
-braille (`⣀⣤⣶⣿`) karakterleri fallback fontlarda da hizalanır — **hiçbir layout
+blok rampası (`▁▂▃▄▅▆▇█`) ve braille karakterleri fallback fontlarda da hizalanır — **hiçbir layout
 box-drawing karakter genişliğine bağlı değildir** (yalnızca görsel aksan).
 
 ### Hierarchy
@@ -272,8 +273,8 @@ atlar, `TrafficFlowDiagram` paket animasyonu durur (mevcut davranış). Tarama
   ekran-özel `F2-F6`).
 
 ### Sparkline
-- Kaynak: `frontend/src/components/Sparkline.tsx`. Sayı dizisi → braille
-  (`⣀⣤⣶⣿`) sabit genişlik string. Liste satırlarında satır-içi trend
+- Kaynak: `frontend/src/components/Sparkline.tsx`. Sayı dizisi → 8 seviyeli blok rampası
+  (`▁▂▃▄▅▆▇█`) sabit genişlik string; `toSparkChars` saf fonksiyonu ayrı ihraç. Liste satırlarında satır-içi trend
   (agent en-yoğun-arayüz, cihaz). Harici kütüphane yok.
 
 ### Badges / Status Pills
