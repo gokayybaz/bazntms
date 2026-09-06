@@ -67,3 +67,77 @@ func TestWSTickCarriesFleet(t *testing.T) {
 	}
 	t.Fatal("tick mesajında fleet özeti gelmedi")
 }
+
+// TestWSCheckOrigin, B5: origin izin listesi ayarlıyken yabancı origin'den
+// gelen WS handshake reddedilir; same-origin / izinli origin kabul edilir.
+func TestWSCheckOrigin(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "wso.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := New(nil, capture.NewEngine(), st, "t.db",
+		alert.NewManager(alert.DefaultConfig(), st, capture.NewEngine(), 30),
+		nil, "", "", 30, false, nil, nil, nil)
+	srv.SetWSOrigins([]string{"https://ntms.example.com", "panel.internal"})
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	dial := func(origin string) (*http.Response, error) {
+		h := http.Header{}
+		if origin != "" {
+			h.Set("Origin", origin)
+		}
+		c, resp, err := websocket.DefaultDialer.Dial(wsURL, h)
+		if c != nil {
+			c.Close()
+		}
+		return resp, err
+	}
+
+	// yabancı origin → 403
+	if resp, err := dial("https://evil.example.org"); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("yabancı origin reddedilmeliydi: err=%v resp=%v", err, resp)
+	}
+	// izinli origin → OK
+	if _, err := dial("https://ntms.example.com"); err != nil {
+		t.Fatalf("izinli origin kabul edilmeliydi: %v", err)
+	}
+	// port farklı ama host izinli → OK
+	if _, err := dial("http://panel.internal:9000"); err != nil {
+		t.Fatalf("host izinli (port fark etmez): %v", err)
+	}
+	// Origin başlığı yok (tarayıcı dışı) → OK
+	if _, err := dial(""); err != nil {
+		t.Fatalf("Origin'siz istek kabul edilmeliydi: %v", err)
+	}
+	// same-origin (httptest sunucusunun kendi adresi) → OK
+	if _, err := dial(ts.URL); err != nil {
+		t.Fatalf("same-origin kabul edilmeliydi: %v", err)
+	}
+}
+
+// TestWSCheckOriginDefaultAllowsAll, izin listesi ayarlanmadıysa (nil) tüm
+// origin'ler kabul edilir (bugünkü davranış, geriye uyum).
+func TestWSCheckOriginDefaultAllowsAll(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "wsd.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := New(nil, capture.NewEngine(), st, "t.db",
+		alert.NewManager(alert.DefaultConfig(), st, capture.NewEngine(), 30),
+		nil, "", "", 30, false, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	h := http.Header{}
+	h.Set("Origin", "https://whatever.example.org")
+	c, _, err := websocket.DefaultDialer.Dial(wsURL, h)
+	if err != nil {
+		t.Fatalf("varsayılan modda her origin kabul edilmeliydi: %v", err)
+	}
+	c.Close()
+}

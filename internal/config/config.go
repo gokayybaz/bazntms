@@ -36,6 +36,7 @@ type HubConfig struct {
 	AgentArchiveDays  int    `koanf:"agent_archive_days"` // bu kadar gün çevrimdışı agent'lar silinir (0 = kapalı)
 	MultiSite         bool   `koanf:"multi_site"`         // çoklu-saha (MSP) modu — site sert yetki sınırı
 	SessionStore      string `koanf:"session_store"`      // memory | db (paylaşımlı oturum tablosu, A4)
+	PublicURL         string `koanf:"public_url"`         // panelin dış adresi — WS origin allowlist + OIDC redirect (B5)
 	TelemetryInterval int    `koanf:"telemetry_interval"`
 	NATS              struct {
 		URL         string `koanf:"url"`           // bos = kuyruk kapali (dogrudan store yazimi)
@@ -126,6 +127,7 @@ var hubFlagKeys = map[string]string{
 	"agent_archive_days":       "agent-archive-days",
 	"multi_site":               "multi-site",
 	"session_store":            "session-store",
+	"public_url":               "public-url",
 	"telemetry_interval":       "telemetry-interval",
 	"nats.url":                 "nats",
 	"nats.max_age_hours":       "queue-max-age-hours",

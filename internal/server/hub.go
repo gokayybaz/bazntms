@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,19 +16,18 @@ import (
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 64 * 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // ayni makine uzerinde calisir
-	},
-}
-
 type Hub struct {
 	mu      sync.Mutex
 	clients map[*websocket.Conn]struct{}
 	tick    *time.Ticker
 	alerts  *alert.Manager
+
+	upgrader websocket.Upgrader
+	// allowedOrigins, Cross-Site WebSocket Hijacking'e karsi izin listesi (B5):
+	// host (kucuk harf, portsuz) → true. Bos ise tum origin'ler kabul edilir
+	// (bugunku davranis) + bir kez uyari loglanir.
+	allowedOrigins map[string]bool
+	originWarned   atomic.Bool
 
 	store        store.Store
 	onlineWindow time.Duration
@@ -40,8 +42,63 @@ func NewHub(alerts *alert.Manager) *Hub {
 		tick:    time.NewTicker(time.Second),
 		alerts:  alerts,
 	}
+	h.upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 64 * 1024,
+		CheckOrigin:     h.checkOrigin,
+	}
 	go h.broadcastLoop()
 	return h
+}
+
+// setAllowedOrigins, WS origin izin listesini ayarlar (host adlari; port/scheme
+// yok sayilir). server.SetWSOrigins → main (-public-url + -tls-hosts + localhost).
+func (h *Hub) setAllowedOrigins(hosts []string) {
+	set := map[string]bool{}
+	for _, x := range hosts {
+		if hn := originHost(strings.TrimSpace(x)); hn != "" {
+			set[hn] = true
+		}
+	}
+	h.allowedOrigins = set
+}
+
+// checkOrigin, WS handshake origin denetimi (B5 — CSWSH savunmasi).
+func (h *Hub) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // tarayici disi istemci / same-origin
+	}
+	oh := originHost(origin)
+	if oh == "" {
+		return false
+	}
+	// same-origin: Origin host == istek Host'u
+	if oh == originHost(r.Host) {
+		return true
+	}
+	if len(h.allowedOrigins) == 0 {
+		if h.originWarned.CompareAndSwap(false, true) {
+			slog.Warn("WS origin izin listesi bos — tum origin'ler kabul ediliyor; -public-url ile sinirlayin", "origin", origin)
+		}
+		return true
+	}
+	return h.allowedOrigins[oh]
+}
+
+// originHost, bir Origin / Host degerinden kucuk-harf, portsuz host cikarir.
+func originHost(v string) string {
+	if v == "" {
+		return ""
+	}
+	if !strings.Contains(v, "://") {
+		v = "//" + v // "host:port" → parse edilebilir
+	}
+	u, err := url.Parse(v)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
 }
 
 // setFleetSource, WS tick'inde yayınlanacak filo özetinin kaynağını bağlar
@@ -77,7 +134,7 @@ func (h *Hub) fleetSummary() *store.FleetSummary {
 }
 
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}

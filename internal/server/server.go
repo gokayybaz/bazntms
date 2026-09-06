@@ -157,6 +157,13 @@ func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
 // SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
 func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
 
+// SetWSOrigins, WebSocket handshake için izin verilen origin host'larını
+// ayarlar (B5 — CSWSH savunması). localhost/127.0.0.1/[::1] her zaman eklenir.
+// Boş liste → tüm origin'ler kabul (bugünkü davranış) + uyarı logu.
+func (s *Server) SetWSOrigins(hosts []string) {
+	s.hub.setAllowedOrigins(append([]string{"localhost", "127.0.0.1", "::1"}, hosts...))
+}
+
 // UseDBSessions, oturumları paylaşımlı `sessions` tablosuna taşır (A4, Faz 15
 // — panel HA). İlk istekten ÖNCE (New sonrası, ListenAndServe öncesi)
 // çağrılmalı. ctx bitene dek süresi geçmiş oturumları temizleyen bir janitor

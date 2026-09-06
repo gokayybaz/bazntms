@@ -73,6 +73,7 @@ func main() {
 	tlsCert := fl.String("tls-cert", "", "operator sunucu sertifikasi (PEM); bos = CA'dan otomatik uret")
 	tlsKey := fl.String("tls-key", "", "operator sunucu ozel anahtari (PEM); -tls-cert ile birlikte")
 	tlsHosts := fl.String("tls-hosts", "", "sunucu sertifikasi SAN'lari (virgulle): hub'in DNS adi/IP'leri — agent'in baglandigi ad buraya girmeli")
+	publicURL := fl.String("public-url", "", "panelin dis adresi (ör. https://ntms.example.com) — WS origin izin listesi ve OIDC redirect varsayilani icin")
 	vaultKeyFile := fl.String("vault-key-file", "vault.key", "Kimlik kasasi master key dosyasi (yoksa uretilir)")
 	flowPort := fl.String("flow-port", "", "NetFlow v5/v9 + IPFIX + sFlow v5 UDP dinleme portu (bos = kapali; ex: 2055)")
 	sflowPort := fl.String("sflow-port", "", "sFlow v5 icin ayri UDP portu (bos = kapali; ex: 6343). -flow-port zaten sFlow'u da kabul eder; bu yalnizca farkli portta dinlemek icin")
@@ -254,11 +255,15 @@ func main() {
 	}
 	var oidcOpts *server.OIDCOptions
 	if cfg.OIDC.Issuer != "" {
+		redirect := cfg.OIDC.RedirectURL
+		if redirect == "" && *publicURL != "" {
+			redirect = strings.TrimRight(*publicURL, "/") + "/api/auth/oidc/callback"
+		}
 		oidcOpts = &server.OIDCOptions{
 			Issuer:       cfg.OIDC.Issuer,
 			ClientID:     cfg.OIDC.ClientID,
 			ClientSecret: cfg.OIDC.ClientSecret,
-			RedirectURL:  cfg.OIDC.RedirectURL,
+			RedirectURL:  redirect,
 			GroupRoles:   cfg.OIDC.GroupRoles,
 			DefaultRole:  cfg.OIDC.DefaultRole,
 		}
@@ -267,6 +272,21 @@ func main() {
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
+	}
+	// B5: WS origin izin listesi — -public-url + -tls-hosts. Bos ise tum
+	// origin'ler kabul edilir (bugunku davranis) + uyari loglanir.
+	var wsHosts []string
+	if *publicURL != "" {
+		wsHosts = append(wsHosts, *publicURL)
+	}
+	for _, h := range strings.Split(*tlsHosts, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			wsHosts = append(wsHosts, h)
+		}
+	}
+	if len(wsHosts) > 0 {
+		srv.SetWSOrigins(wsHosts)
+		slog.Info("WS origin izin listesi aktif", "host_sayisi", len(wsHosts)+3)
 	}
 	srv.SetMultiSite(*multiSite)
 	if *multiSite {
