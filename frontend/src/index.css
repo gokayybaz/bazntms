@@ -71,3 +71,46 @@ body {
 select option {
   background: var(--color-panel);
 }
+
+/* --- ince CRT (S17.2) --- */
+
+/* hareketsiz tarama çizgisi: 1px koyu satır her 3px'te bir. Saf siyah zemin
+   üzerinde görünmez, panel/metin üzerinde hafif koyulaşma → fosfor CRT hissi.
+   pointer-events:none, sabit; reduced-motion'da da kalır (hareket yok). */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.13) 0,
+    rgba(0, 0, 0, 0.13) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* blok imleç — canlı/güncellenen değerlerin yanında (TuiHeader saati, canlı
+   sayaçlar). Terminal imleci gibi sert yanıp söner (fade yok). */
+@keyframes tui-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.tui-cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  background: var(--color-rx);
+  vertical-align: text-bottom;
+  animation: tui-blink 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tui-cursor {
+    animation: none;
+  }
+}
