@@ -319,7 +319,7 @@ export function AgentDetailPage() {
       )}
 
       {/* özet + trafik geçmişi */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_1.6fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.6fr]">
         <Panel title="Özet">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
             {[
@@ -354,7 +354,7 @@ export function AgentDetailPage() {
         {!agent.rates || agent.rates.length === 0 ? (
           <p className="py-6 text-center text-[11px] text-tui-dim">Henüz arayüz verisi yok.</p>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {agent.rates.map((r) => (
               <div key={r.name} className="border border-rule bg-panel-2/40 p-2.5">
                 <p className="truncate text-[13px] font-semibold text-ink-hi">{r.name}</p>

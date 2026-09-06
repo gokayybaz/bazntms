@@ -15,7 +15,7 @@ interface EnrollToken {
 
 const REVOKE_CONFIRM_MS = 4000
 const inputCls =
-  'border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
+  'w-full border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
 
 // lockedSite dolu ise (site-admin) enroll token o sahaya sabit. multiSite ise
 // (çoklu-saha modu) site zorunlu — statik/site'siz token agent kaydında reddedilir.
@@ -123,7 +123,7 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
       {/* --- adım 1: token üret --- */}
       <div className="space-y-2">
         <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-rx">1 · Enrollment token’ı üret</p>
-        <div className="grid gap-2 border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="grid grid-cols-1 gap-2 border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
           <input
             className={inputCls}
             placeholder="ad (ör. ofis-linux, k8s-daemonset)"

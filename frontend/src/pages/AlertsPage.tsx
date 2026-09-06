@@ -16,7 +16,7 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex flex-wrap items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyarılar</h1>
-        <span className="text-[10px] text-tui-dim">olay akışı + eşik ayarları + bildirim kanalları</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">olay akışı + eşik ayarları + bildirim kanalları</span>
       </div>
 
       {byKind.length > 0 && (

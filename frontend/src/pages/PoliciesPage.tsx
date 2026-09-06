@@ -47,7 +47,7 @@ export function PoliciesPage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
-        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />
@@ -68,11 +68,11 @@ export function PoliciesPage() {
               <div key={p.id} className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 px-2.5 py-1.5 text-[11px]">
                 <span className="text-[10px] text-rx">{p.ref}</span>
                 <span className="text-ink">{p.title}</span>
-                <span className="text-[10px] text-tui-dim">v{p.version}</span>
+                <span className="hidden truncate text-[10px] text-tui-dim sm:inline">v{p.version}</span>
                 {pill(p.status, statusTone(p.status))}
                 {p.approved_by && <span className="text-[10px] text-tui-dim">{p.approved_by}</span>}
                 {p.next_review > 0 && (
-                  <span className="text-[10px] text-tui-dim">inceleme: {new Date(p.next_review * 1000).toLocaleDateString('tr-TR')}</span>
+                  <span className="hidden truncate text-[10px] text-tui-dim sm:inline">inceleme: {new Date(p.next_review * 1000).toLocaleDateString('tr-TR')}</span>
                 )}
                 <span className="ml-auto flex gap-1">
                   {p.status === 'draft' && (

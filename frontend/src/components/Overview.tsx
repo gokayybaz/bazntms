@@ -439,10 +439,10 @@ export function Overview({
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_1.1fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.1fr]">
         {/* filo özeti — sayaç satırları (htop üst panel dili) */}
         <Panel title="Filo Özeti">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[11px]">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[11px] sm:grid-cols-3">
             <StatRow label="Aktif Agent" value={`${onlineAgents}/${agentsTotal}`} caption={`${Math.max(0, agentsTotal - onlineAgents)} offline`} live={!!fleet} />
             <StatRow label="Aktif Cihaz" value={`${healthyDevices}/${devices.length}`} caption="snmp + fortigate" />
             <StatRow label="Bağlantı" value={formatNum(totalConns)} caption="agent filosu toplamı" />
@@ -523,7 +523,7 @@ export function Overview({
                 }
               }
             }}
-            className="max-h-[28rem] overflow-y-auto font-mono text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-rx/40"
+            className="max-h-[28rem] overflow-x-hidden overflow-y-auto font-mono text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-rx/40"
           >
             {visibleStream.map((it, i) => {
               const agentId = it.kind === 'agent' ? agentIdByName.get(it.source) : undefined
@@ -544,7 +544,7 @@ export function Overview({
                   <span className="w-16 shrink-0 text-right text-tui-dim">
                     {new Date(it.ts * 1000).toLocaleTimeString('tr-TR')}
                   </span>
-                  <span className={`w-14 shrink-0 uppercase tracking-[0.04em] ${kindCls}`}>{it.kind}</span>
+                  <span className={`w-12 shrink-0 uppercase tracking-[0.04em] sm:w-14 ${kindCls}`}>{it.kind}</span>
                   <span className="min-w-0 flex-1 truncate">{it.primary}</span>
                   {it.kind === 'flow' && it.bytes > 0 && (
                     <span className={`hidden shrink-0 text-[10px] md:inline text-tui-dim`}>
@@ -554,7 +554,7 @@ export function Overview({
                   {it.kind === 'agent' && it.pid ? (
                     <span className={`hidden shrink-0 text-[10px] md:inline text-tui-dim`}>pid {it.pid}</span>
                   ) : null}
-                  <span className={`w-28 shrink-0 truncate text-right text-[10px] text-tui-dim`}>{it.source}</span>
+                  <span className="hidden w-28 shrink-0 truncate text-right text-[10px] text-tui-dim sm:inline-block">{it.source}</span>
                 </div>
               )
             })}
@@ -567,7 +567,7 @@ export function Overview({
         {recentAlerts.length === 0 ? (
           <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Henüz uyarı yok.</p>
         ) : (
-          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
             {recentAlerts.map((e) => (
               <div key={e.id} className="border border-rule bg-panel-2/40 px-2 py-1.5">
                 <div className="flex items-center gap-2">
@@ -584,7 +584,7 @@ export function Overview({
       </Panel>
 
       {/* agent filosu + topoloji */}
-      <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.35fr_1fr]">
         <Panel title="Agent Filosu" right={<span className="font-mono text-[10px] text-tui-dim">{onlineAgents}/{agents.length} online</span>}>
           {agents.length === 0 ? (
             <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Henüz agent yok.</p>

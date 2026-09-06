@@ -150,7 +150,7 @@ export function AgentsListPage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-2 font-mono">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Agent'lar</h1>
-        <span className="text-[10px] text-tui-dim">tüm filo · Enter / tıklama → detay</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">tüm filo · Enter / tıklama → detay</span>
         <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-tui-dim select-none">
           <input type="checkbox" checked={onlyOnline} onChange={(e) => setOnlyOnline(e.target.checked)} className="accent-cyan-500" />
           yalnızca online

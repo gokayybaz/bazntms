@@ -36,7 +36,7 @@ export function ComplianceOverviewPage({ refreshKey }: { refreshKey: number }) {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
-        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />

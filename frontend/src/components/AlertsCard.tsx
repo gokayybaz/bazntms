@@ -135,7 +135,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
       {events.length === 0 ? (
         <p className="py-8 text-center text-[11px] text-tui-dim">Henüz uyarı yok.</p>
       ) : (
-        <div role="log" aria-live="polite" className="max-h-96 overflow-y-auto text-[11px]">
+        <div role="log" aria-live="polite" className="max-h-96 overflow-x-hidden overflow-y-auto text-[11px]">
           {events.map((e, i) => (
             <div key={e.id} className={`flex items-baseline gap-2 px-2 py-0.5 ${i % 2 ? 'bg-panel-2/40' : ''}`}>
               <span className="shrink-0 text-tui-dim">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
@@ -161,7 +161,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
       <p className="text-sm text-tui-dim">Ayarlar yükleniyor…</p>
     )
     return (
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {eventFeed}
         <div className="flex items-start pt-7">{notice}</div>
       </div>
@@ -175,7 +175,7 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
   const patchSiem = (p: Partial<typeof siem>) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, siem: { ...siem, ...p } } })
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       {eventFeed}
 
       {/* ayar formu — @container: iç grid'ler kartın kendi genişliğine göre

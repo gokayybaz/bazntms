@@ -19,15 +19,15 @@ export function Panel({
   return (
     <section className={`border border-rule bg-panel ${className}`}>
       {(title || right) && (
-        <header className="flex items-center gap-2 border-b border-rule px-3 py-1.5">
+        <header className="flex min-w-0 items-center gap-2 border-b border-rule px-3 py-1.5">
           {title && (
-            <h2 className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-ink-hi">
-              <span aria-hidden className="text-rule-hi">┤</span>
+            <h2 className="flex min-w-0 shrink items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-ink-hi">
+              <span aria-hidden className="hidden text-rule-hi sm:inline">┤</span>
               <span className="truncate">{title}</span>
-              <span aria-hidden className="text-rule-hi">├</span>
+              <span aria-hidden className="hidden text-rule-hi sm:inline">├</span>
             </h2>
           )}
-          {right && <div className="ml-auto flex min-w-0 items-center gap-2">{right}</div>}
+          {right && <div className="ml-auto flex min-w-0 items-center gap-2 overflow-x-auto">{right}</div>}
         </header>
       )}
       <div className={bodyClassName}>{children}</div>

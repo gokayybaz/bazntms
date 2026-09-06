@@ -67,7 +67,7 @@ export function RiskRegisterPage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
-        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />
@@ -89,7 +89,7 @@ export function RiskRegisterPage() {
                 {pill(String(rk.score), riskTone(rk.score))}
                 <span className="text-ink">{rk.threat}</span>
                 {rk.vulnerability && <span className="text-[10px] text-tui-dim">{rk.vulnerability}</span>}
-                <span className="text-[10px] text-tui-dim">{rk.treatment}</span>
+                <span className="hidden truncate text-[10px] text-tui-dim sm:inline">{rk.treatment}</span>
                 {rk.res_score > 0 && pill(`kalıntı ${rk.res_score}`, riskTone(rk.res_score))}
                 {pill(rk.status, statusTone(rk.status))}
                 {rk.owner && <span className="text-[10px] text-tui-dim">{rk.owner}</span>}

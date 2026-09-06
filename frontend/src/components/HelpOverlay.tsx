@@ -27,7 +27,7 @@ const GROUPS: { title: string; rows: [string[], string][] }[] = [
 export function HelpOverlay({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Klavye" onClose={onClose} width="max-w-lg">
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {GROUPS.map((g) => (
           <div key={g.title}>
             <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-rx">{g.title}</h3>

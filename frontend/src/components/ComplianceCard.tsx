@@ -121,7 +121,7 @@ export function ComplianceCard({ refreshKey }: { refreshKey: number }) {
         <span className="ml-auto text-[10px] text-tui-dim">saklama: {cfg.retention_days} gün</span>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="border border-rule bg-panel-2/40 px-3 py-2">
           <span className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">imzalı kayıt</span>
           <div className="text-[13px] font-bold text-ink-hi">{status.records.toLocaleString('tr-TR')}</div>

@@ -130,7 +130,7 @@ export default function App() {
           />
           <TabBar isAdmin={isAdmin} canGovern={canGovern} />
 
-          <main className="min-w-0 overflow-y-auto">
+          <main className="min-w-0 overflow-x-hidden overflow-y-auto">
             <Routes>
               <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} fleet={fleet} />} />
               <Route path="/agentlar" element={<AgentsListPage />} />

@@ -73,13 +73,16 @@ export function Meter({
       className={`flex items-center gap-2 font-mono text-[11px] leading-tight ${className}`}
     >
       <span className="w-12 shrink-0 truncate uppercase tracking-[0.04em] text-tui-dim">{label}</span>
-      <span aria-hidden className="whitespace-pre">
-        <span className="text-rule-hi">[</span>
-        {bar}
-        <span className="text-rule">{'·'.repeat(empty)}</span>
-        <span className="text-rule-hi">]</span>
+      {/* çubuk: dar ekranda boş `·` kuyruğu kırpılır, dolgu + değer korunur */}
+      <span aria-hidden className="flex min-w-0 shrink whitespace-pre">
+        <span className="shrink-0 text-rule-hi">[</span>
+        <span className="min-w-0 overflow-hidden">
+          {bar}
+          <span className="text-rule">{'·'.repeat(empty)}</span>
+        </span>
+        <span className="shrink-0 text-rule-hi">]</span>
       </span>
-      <span className={`ml-auto shrink-0 font-semibold tabular-nums ${valueCls}`}>{text}</span>
+      <span className={`shrink-0 font-semibold tabular-nums ${valueCls}`}>{text}</span>
       {right}
     </div>
   )

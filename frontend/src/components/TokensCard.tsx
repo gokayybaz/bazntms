@@ -23,7 +23,7 @@ const ROLE_LABEL: Record<string, string> = {
 }
 const REVOKE_CONFIRM_MS = 4000
 const inputCls =
-  'border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
+  'w-full border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
 
 // lockedSite dolu ise (site-admin) token o sahaya sabitlenir, "admin" rolü gizli.
 export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
@@ -126,7 +126,7 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
       </div>
 
       {showForm && (
-        <div className="grid gap-2 rounded-lg border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_auto_1fr_auto]">
+        <div className="grid grid-cols-1 gap-2 rounded-lg border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_auto_1fr_auto]">
           <input
             className={inputCls}
             placeholder="ad (ör. grafana, ci-pipeline)"

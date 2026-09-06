@@ -90,7 +90,7 @@ export function GovernancePage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
-        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />
@@ -105,7 +105,7 @@ export function GovernancePage() {
             {reviews.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 px-2.5 py-1">
                 <span className="text-ink">{r.period}</span>
-                <span className="text-[10px] text-tui-dim">{r.attendees}</span>
+                <span className="hidden truncate text-[10px] text-tui-dim sm:inline">{r.attendees}</span>
                 <span className="ml-auto text-[10px] text-tui-dim">{new Date(r.ts * 1000).toLocaleDateString('tr-TR')}</span>
                 {r.decisions && (
                   <p className="w-full truncate text-[11px] text-tui-dim" title={r.decisions}>
@@ -136,7 +136,7 @@ export function GovernancePage() {
             {suppliers.map((sp) => (
               <div key={sp.id} className="flex flex-wrap items-center gap-2 border border-rule bg-panel-2/40 px-2.5 py-1">
                 <span className="text-ink">{sp.name}</span>
-                <span className="text-[10px] text-tui-dim">{sp.service}</span>
+                <span className="hidden truncate text-[10px] text-tui-dim sm:inline">{sp.service}</span>
                 {pill(sp.criticality, sp.criticality === 'kritik' || sp.criticality === 'yuksek' ? 'warn' : 'muted')}
                 {sp.next_review > 0 && sp.next_review <= Date.now() / 1000 && pill('vadesi geçti', 'bad')}
                 <button onClick={() => removeSupplier(sp)} className={`${btnCls} ml-auto`}>

@@ -87,7 +87,7 @@ export function AuditsPage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyumluluk</h1>
-        <span className="text-[10px] text-tui-dim">5651 + ISO 27001</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">5651 + ISO 27001</span>
       </div>
 
       <ComplianceSubNav />
@@ -131,7 +131,7 @@ export function AuditsPage() {
                     ) : (
                       findings.map((f) => (
                         <div key={f.id} className="flex flex-wrap items-center gap-2 px-1 py-0.5">
-                          <span className="text-[10px] text-tui-dim">{f.ref}</span>
+                          <span className="hidden truncate text-[10px] text-tui-dim sm:inline">{f.ref}</span>
                           <span className="text-[11px] text-ink">{f.description}</span>
                           {pill(f.severity, f.severity === 'yuksek' ? 'bad' : f.severity === 'orta' ? 'warn' : 'muted')}
                           {f.control_id && <span className="text-[10px] text-rx">{f.control_id}</span>}

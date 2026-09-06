@@ -35,7 +35,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
         reverse ? TONE_REVERSE[tone] : TONE_STYLES[tone]
       }`}
     >
