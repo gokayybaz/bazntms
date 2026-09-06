@@ -31,7 +31,13 @@ const (
 	subTelemetry = "ingest.telemetry"
 	subFlows     = "ingest.flows"
 	subSyslog    = "ingest.syslog"
+	subDead      = "ingest.dead" // DLQ (C4): MaxDeliver'a ulaşan mesajlar
 	consumerName = "store-writer"
+
+	maxDeliver     = 10
+	defaultMaxAge  = 24 * time.Hour
+	deadHeaderSubj = "Bazntms-Orig-Subject"
+	deadHeaderErr  = "Bazntms-Error"
 )
 
 // Envelope, kuyruktaki telemetri mesajinin icerigidir: agent kimligi + batch.
@@ -45,14 +51,23 @@ type Envelope struct {
 
 // Queue, JetStream yayincisi + store-writer processor'u.
 type Queue struct {
-	nc     *nats.Conn
-	js     jetstream.JetStream
-	cancel context.CancelFunc
-	done   chan struct{}
+	nc       *nats.Conn
+	js       jetstream.JetStream
+	cancel   context.CancelFunc
+	done     chan struct{}
+	deadHook func(subject string) // C4: DLQ'ya düşen mesaj için (metrik); nil olabilir
 }
 
-// Connect, NATS sunucusuna baglanir ve BAZNTMS akisini hazirlar.
-func Connect(url string) (*Queue, error) {
+// SetDeadLetterHook, bir mesaj MaxDeliver denemeden sonra DLQ'ya taşındığında
+// çağrılır (subject = orijinal ingest.* konusu). Metrik/uyarı için.
+func (q *Queue) SetDeadLetterHook(fn func(subject string)) { q.deadHook = fn }
+
+// Connect, NATS sunucusuna baglanir ve BAZNTMS akisini hazirlar. maxAge <= 0 ise
+// varsayilan 24 saat (tuketilmese bile birikimin siniri).
+func Connect(url string, maxAge time.Duration) (*Queue, error) {
+	if maxAge <= 0 {
+		maxAge = defaultMaxAge
+	}
 	nc, err := nats.Connect(url,
 		nats.Name("bazntms-hub"),
 		nats.Timeout(5*time.Second),
@@ -71,10 +86,10 @@ func Connect(url string) (*Queue, error) {
 	defer cancel()
 	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     streamName,
-		Subjects: []string{subTelemetry, subFlows, subSyslog},
+		Subjects: []string{subTelemetry, subFlows, subSyslog, subDead},
 		Storage:  jetstream.FileStorage,
 		MaxMsgs:  5_000_000,
-		MaxAge:   24 * time.Hour, // tuketilmese bile birikimin siniri
+		MaxAge:   maxAge, // tuketilmese bile birikimin siniri
 	})
 	if err != nil {
 		nc.Close()
@@ -130,12 +145,13 @@ func (q *Queue) RunProcessor(ctx context.Context, st store.Store, workers int) e
 		workers = 4
 	}
 	cons, err := q.js.CreateOrUpdateConsumer(ctx, streamName, jetstream.ConsumerConfig{
-		Durable:       consumerName,
-		FilterSubject: "ingest.>",
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		AckWait:       30 * time.Second,
-		MaxDeliver:    10,
-		MaxAckPending: 4096,
+		Durable: consumerName,
+		// yalnizca gercek ingest konulari; ingest.dead DLQ'dur, tuketilmez.
+		FilterSubjects: []string{subTelemetry, subFlows, subSyslog},
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		AckWait:        30 * time.Second,
+		MaxDeliver:     maxDeliver,
+		MaxAckPending:  4096,
 	})
 	if err != nil {
 		return err
@@ -261,9 +277,36 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 }
 
 func (q *Queue) retry(msg jetstream.Msg, cause error) {
+	// C4: son denemede (MaxDeliver'a ulasmadan) mesaji DLQ'ya tasi — aksi halde
+	// JetStream sessizce atardi ve kayip yalnizca loglardan anlasilirdi.
+	if md, err := msg.Metadata(); err == nil && md.NumDelivered >= maxDeliver-1 {
+		q.deadLetter(msg, cause)
+		return
+	}
 	slog.Error("kuyruk: yazim hatasi, mesaj yeniden kuyruga alindi", "err", cause)
 	if err := msg.NakWithDelay(2 * time.Second); err != nil {
 		slog.Warn("kuyruk: NakWithDelay basarisiz (ack-wait ile yine de teslim edilir)", "err", err)
+	}
+}
+
+// deadLetter, mesaji ingest.dead konusuna kopyalar, orijinali Term eder ve
+// deadHook'u cagirir (metrik). DLQ tuketilmez — nats stream'de incelenir.
+func (q *Queue) deadLetter(msg jetstream.Msg, cause error) {
+	orig := msg.Subject()
+	slog.Error("kuyruk: mesaj DLQ'ya tasindi (MaxDeliver asildi)", "subject", orig, "err", cause)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	hdr := nats.Header{}
+	hdr.Set(deadHeaderSubj, orig)
+	hdr.Set(deadHeaderErr, cause.Error())
+	if _, err := q.js.PublishMsg(ctx, &nats.Msg{Subject: subDead, Data: msg.Data(), Header: hdr}); err != nil {
+		slog.Error("kuyruk: DLQ yayini basarisiz — mesaj Nak ediliyor", "err", err)
+		_ = msg.NakWithDelay(5 * time.Second)
+		return
+	}
+	termMsg(msg)
+	if q.deadHook != nil {
+		q.deadHook(orig)
 	}
 }
 

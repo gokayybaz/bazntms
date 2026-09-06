@@ -38,7 +38,8 @@ type HubConfig struct {
 	SessionStore      string `koanf:"session_store"`      // memory | db (paylaşımlı oturum tablosu, A4)
 	TelemetryInterval int    `koanf:"telemetry_interval"`
 	NATS              struct {
-		URL string `koanf:"url"` // bos = kuyruk kapali (dogrudan store yazimi)
+		URL         string `koanf:"url"`           // bos = kuyruk kapali (dogrudan store yazimi)
+		MaxAgeHours int    `koanf:"max_age_hours"` // JetStream stream mesaj yasi siniri (0 → 24)
 	} `koanf:"nats"`
 	OIDC struct {
 		Issuer       string            `koanf:"issuer"` // bos = SSO kapali
@@ -127,6 +128,7 @@ var hubFlagKeys = map[string]string{
 	"session_store":            "session-store",
 	"telemetry_interval":       "telemetry-interval",
 	"nats.url":                 "nats",
+	"nats.max_age_hours":       "queue-max-age-hours",
 	"capture.enabled":          "capture",
 	"alerts.enabled":           "alerts",
 	"poller.enabled":           "poller",

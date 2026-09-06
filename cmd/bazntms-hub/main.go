@@ -65,6 +65,7 @@ func main() {
 	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
 	multiSite := fl.Bool("multi-site", false, "coklu-saha (MSP) modu: site sert yetki siniri — agent kaydi site-bagli enroll token ister, site-admin rolu etkinlesir (bkz. docs/DEPLOYMENT-MODEL.md)")
 	sessionStore := fl.String("session-store", "memory", "panel oturum deposu: memory (tek replika) | db (paylasimli `sessions` tablosu — coklu controller replikasi icin, A4)")
+	queueMaxAgeH := fl.Int("queue-max-age-hours", 24, "JetStream stream mesaj yasi siniri (saat) — tuketilmeyen mesajlar bu sureden sonra dusurulur")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
 	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
@@ -179,7 +180,7 @@ func main() {
 	// NATS JetStream kuyrugu (Faz 4.2): ingest → processor ayrismasi
 	var q *queue.Queue
 	if *natsURL != "" {
-		q, err = queue.Connect(*natsURL)
+		q, err = queue.Connect(*natsURL, time.Duration(*queueMaxAgeH)*time.Hour)
 		if err != nil {
 			slog.Error("nats baglantisi kurulamadi", "url", *natsURL, "err", err)
 			os.Exit(1)
@@ -264,6 +265,9 @@ func main() {
 		slog.Info("SSO (OIDC) aktif", "issuer", cfg.OIDC.Issuer, "client_id", cfg.OIDC.ClientID)
 	}
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
+	if q != nil {
+		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
+	}
 	srv.SetMultiSite(*multiSite)
 	if *multiSite {
 		slog.Info("coklu-saha (MSP) modu aktif — site sert yetki siniri, site-bagli enroll token zorunlu")

@@ -55,7 +55,16 @@ type Server struct {
 	wsClients      prometheus.Gauge
 	captureRun     prometheus.Gauge
 	notifyFailures *prometheus.CounterVec
+	ingestDead     *prometheus.CounterVec
 	registry       *prometheus.Registry
+}
+
+// IngestDead, bir telemetri/flow/syslog mesajı JetStream DLQ'ya taşındığında
+// çağrılır (C4, Faz 15). queue.SetDeadLetterHook ile bağlanır.
+func (s *Server) IngestDead(subject string) {
+	if s.ingestDead != nil {
+		s.ingestDead.WithLabelValues(subject).Inc()
+	}
 }
 
 // TelemetrySink, agent telemetrisini kuyruga aktaran arayuzdur (Faz 4.2,
@@ -114,9 +123,13 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 		Name: "bazntms_notify_failures_total",
 		Help: "Kanal basina bildirim teslim hatasi sayisi",
 	}, []string{"channel"})
+	s.ingestDead = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "bazntms_ingest_dead_total",
+		Help: "JetStream DLQ'ya (ingest.dead) tasinan mesaj sayisi (orijinal konu bazinda)",
+	}, []string{"subject"})
 	// server-basina registry: testlerde coklu New() cagrisi guvenli olur
 	s.registry = prometheus.NewRegistry()
-	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun, s.notifyFailures)
+	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun, s.notifyFailures, s.ingestDead)
 	s.registry.MustRegister(collectors.NewGoCollector())
 
 	if alerts != nil {
