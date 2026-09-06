@@ -419,7 +419,9 @@ func writeJSONETag(w http.ResponseWriter, r *http.Request, v any) {
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache") // her zaman revalidate et
+	// private: kimliğe bağlı (site-kapsamlı) yanıt — paylaşımlı proxy saklamamalı.
+	// no-cache: tarayıcı saklar ama her seferinde revalidate eder.
+	w.Header().Set("Cache-Control", "private, no-cache")
 	if match := r.Header.Get("If-None-Match"); match != "" && etagMatch(match, etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
