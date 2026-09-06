@@ -217,7 +217,7 @@ export function AgentDetailPage() {
 
   if (notFound) {
     return (
-      <div className="mx-auto max-w-[1600px] px-3 py-10">
+      <div className="mx-auto max-w-[1600px] px-4 py-10">
         <p className="text-center font-mono text-[11px] text-tui-dim">
           Agent bulunamadı.{' '}
           <Link to="/agentlar" className="text-rx hover:underline">
@@ -230,14 +230,14 @@ export function AgentDetailPage() {
 
   if (!loaded || !agent) {
     return (
-      <div className="mx-auto max-w-[1600px] px-3 py-10">
+      <div className="mx-auto max-w-[1600px] px-4 py-10">
         <p className="text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-3 px-3 py-3 font-mono">
+    <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <Link to="/agentlar" className="text-[11px] text-tui-dim hover:text-rx">
         ← Agent'lar
       </Link>

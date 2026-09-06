@@ -30,26 +30,28 @@ export function TabBar({ isAdmin = false, canGovern = true }: { isAdmin?: boolea
   )
 
   return (
-    <nav className="flex overflow-x-auto border-b border-rule bg-ground font-mono text-[11px]">
-      {items.map((t, i) => (
-        <NavLink
-          key={t.to}
-          to={t.to}
-          end={t.end}
-          className={({ isActive }) =>
-            `flex shrink-0 items-center gap-1.5 border-r border-rule px-3 py-1.5 uppercase tracking-[0.04em] transition ${
-              isActive ? 'bg-rx text-ground' : 'text-tui-dim hover:bg-panel-2 hover:text-ink-hi'
-            }`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <span className={isActive ? 'font-bold' : 'text-rx'}>{i + 1}</span>
-              {t.label}
-            </>
-          )}
-        </NavLink>
-      ))}
+    <nav className="border-b border-rule bg-ground font-mono text-[11px]">
+      <div className="mx-auto flex w-full max-w-[1600px] overflow-x-auto">
+        {items.map((t, i) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className={({ isActive }) =>
+              `flex shrink-0 items-center gap-1.5 border-r border-rule px-2.5 py-1.5 uppercase tracking-[0.04em] transition first:pl-4 ${
+                isActive ? 'bg-rx text-ground' : 'text-tui-dim hover:bg-panel-2 hover:text-ink-hi'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className={isActive ? 'font-bold' : 'text-rx'}>{i + 1}</span>
+                {t.label}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   )
 }
