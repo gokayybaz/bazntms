@@ -1,5 +1,5 @@
 import { AdminPageShell } from '../../components/AdminPageShell'
-import { Card } from '../../components/Card'
+import { Panel } from '../../components/Panel'
 import { TokensCard } from '../../components/TokensCard'
 
 export function TokensAdminPage({ lockedSite = '' }: { lockedSite?: string; multiSite?: boolean }) {
@@ -12,9 +12,9 @@ export function TokensAdminPage({ lockedSite = '' }: { lockedSite?: string; mult
           : 'Entegrasyonlar için Bearer token’ları (Grafana, CI, script). Düz değer yalnızca oluşturulurken bir kez gösterilir; hash saklanır.'
       }
     >
-      <Card title="API Token’ları">
+      <Panel title="API Token’ları">
         <TokensCard lockedSite={lockedSite} />
-      </Card>
+      </Panel>
     </AdminPageShell>
   )
 }

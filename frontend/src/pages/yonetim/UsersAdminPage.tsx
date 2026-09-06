@@ -1,5 +1,5 @@
 import { AdminPageShell } from '../../components/AdminPageShell'
-import { Card } from '../../components/Card'
+import { Panel } from '../../components/Panel'
 import { UsersCard } from '../../components/UsersCard'
 
 export function UsersAdminPage({ lockedSite = '' }: { lockedSite?: string; multiSite?: boolean }) {
@@ -12,9 +12,9 @@ export function UsersAdminPage({ lockedSite = '' }: { lockedSite?: string; multi
           : 'RBAC hesapları — rol, site kapsamı, etkin/pasif, şifre sıfırlama. Şifreler bcrypt ile saklanır.'
       }
     >
-      <Card title="RBAC Kullanıcıları">
+      <Panel title="RBAC Kullanıcıları">
         <UsersCard lockedSite={lockedSite} />
-      </Card>
+      </Panel>
     </AdminPageShell>
   )
 }

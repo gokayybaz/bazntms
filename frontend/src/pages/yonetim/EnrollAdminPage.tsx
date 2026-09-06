@@ -1,5 +1,5 @@
 import { AdminPageShell } from '../../components/AdminPageShell'
-import { Card } from '../../components/Card'
+import { Panel } from '../../components/Panel'
 import { EnrollWizard } from '../../components/EnrollWizard'
 
 export function EnrollAdminPage({
@@ -20,9 +20,9 @@ export function EnrollAdminPage({
             : 'Enrollment token üret → işletim sistemi → hedef makinede çalıştırılacak kurulum komutu. Token yalnızca üretilirken bir kez görünür.'
       }
     >
-      <Card title="Yeni Agent Sihirbazı">
+      <Panel title="Yeni Agent Sihirbazı">
         <EnrollWizard lockedSite={lockedSite} multiSite={multiSite} />
-      </Card>
+      </Panel>
     </AdminPageShell>
   )
 }

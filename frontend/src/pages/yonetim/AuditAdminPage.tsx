@@ -1,5 +1,5 @@
 import { AdminPageShell } from '../../components/AdminPageShell'
-import { Card } from '../../components/Card'
+import { Panel } from '../../components/Panel'
 import { AuditCard } from '../../components/AuditCard'
 
 export function AuditAdminPage() {
@@ -8,9 +8,9 @@ export function AuditAdminPage() {
       title="Denetim Kaydı"
       hint="Her yönetim işlemi append-only hash-zincire yazılır (SHA-256, prev_hash → hash). Zincir bütünlüğü sunucuda doğrulanır."
     >
-      <Card title="Denetim Olayları">
+      <Panel title="Denetim Olayları">
         <AuditCard />
-      </Card>
+      </Panel>
     </AdminPageShell>
   )
 }

@@ -23,7 +23,7 @@ const ROLE_LABEL: Record<string, string> = {
 }
 const REVOKE_CONFIRM_MS = 4000
 const inputCls =
-  'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
+  'border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
 
 // lockedSite dolu ise (site-admin) token o sahaya sabitlenir, "admin" rolü gizli.
 export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
@@ -118,7 +118,7 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+          className="border border-rx/40 bg-rx/10 px-3 py-1 text-xs font-medium text-rx transition hover:bg-rx/20"
         >
           {showForm ? 'Vazgeç' : '+ Token Oluştur'}
         </button>
@@ -126,7 +126,7 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
       </div>
 
       {showForm && (
-        <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:grid-cols-[1fr_auto_1fr_auto]">
+        <div className="grid gap-2 rounded-lg border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_auto_1fr_auto]">
           <input
             className={inputCls}
             placeholder="ad (ör. grafana, ci-pipeline)"
@@ -152,7 +152,7 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
           <button
             onClick={create}
             disabled={creating}
-            className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm font-semibold text-white transition enabled:hover:bg-cyan-400 enabled:hover:text-slate-950 disabled:opacity-40"
+            className="border border-rx bg-rx px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ground transition enabled:hover:opacity-90 disabled:opacity-40"
           >
             {creating ? 'Oluşturuluyor…' : 'Oluştur'}
           </button>
@@ -160,14 +160,14 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
       )}
 
       {!loaded && !error ? (
-        <p className="py-6 text-center text-sm text-slate-500">Yükleniyor…</p>
+        <p className="py-6 text-center text-sm text-tui-dim">Yükleniyor…</p>
       ) : tokens.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">Henüz API token’ı yok.</p>
+        <p className="py-6 text-center text-sm text-tui-dim">Henüz API token’ı yok.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                 <th className="py-2 pr-3 font-medium">Ad</th>
                 <th className="py-2 pr-3 font-medium">Rol</th>
                 <th className="py-2 pr-3 font-medium">Site</th>
@@ -178,32 +178,32 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
             </thead>
             <tbody>
               {tokens.map((t) => (
-                <tr key={t.id} className="border-b border-slate-800/60 last:border-0">
-                  <td className="py-2 pr-3 font-mono text-slate-200">{t.name}</td>
-                  <td className="py-2 pr-3 text-slate-400">{ROLE_LABEL[t.role] ?? t.role}</td>
-                  <td className="py-2 pr-3 text-slate-400">{t.site || <span className="text-slate-600">tümü</span>}</td>
-                  <td className="py-2 pr-3 font-mono text-[11px] text-slate-500">
+                <tr key={t.id} className="border-b border-rule last:border-0">
+                  <td className="py-2 pr-3 font-mono text-ink-hi">{t.name}</td>
+                  <td className="py-2 pr-3 text-tui-dim">{ROLE_LABEL[t.role] ?? t.role}</td>
+                  <td className="py-2 pr-3 text-tui-dim">{t.site || <span className="text-tui-dim">tümü</span>}</td>
+                  <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">
                     {t.last_used > 0 ? new Date(t.last_used * 1000).toLocaleString('tr-TR') : 'hiç'}
                   </td>
                   <td className="py-2 pr-3">
                     {t.revoked ? (
-                      <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-400 ring-1 ring-rose-500/20">
+                      <span className="border border-rose-500/40 px-1 text-[10px] font-semibold uppercase text-rose-400">
                         iptal
                       </span>
                     ) : (
-                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-400 ring-1 ring-emerald-500/20">
+                      <span className="border border-emerald-500/40 px-1 text-[10px] font-semibold uppercase text-emerald-400">
                         etkin
                       </span>
                     )}
                   </td>
                   <td className="py-2">
                     {t.revoked ? (
-                      <span className="text-[11px] text-slate-600">—</span>
+                      <span className="text-[11px] text-tui-dim">—</span>
                     ) : (
                       <button
                         onClick={() => handleRevokeClick(t)}
                         className={`text-[11px] transition ${
-                          confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-slate-500 hover:text-rose-400'
+                          confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-tui-dim hover:text-rose-400'
                         }`}
                       >
                         {confirmRevokeId === t.id ? 'emin misiniz?' : 'iptal et'}
@@ -219,21 +219,21 @@ export function TokensCard({ lockedSite = '' }: { lockedSite?: string }) {
 
       {reveal && (
         <Modal title="Yeni API Token’ı" onClose={() => setReveal(null)}>
-          <p className="mb-3 text-sm text-slate-300">
-            <span className="font-mono text-cyan-300">{reveal.name}</span> için token oluşturuldu. Bu değer{' '}
+          <p className="mb-3 text-sm text-ink">
+            <span className="font-mono text-rx">{reveal.name}</span> için token oluşturuldu. Bu değer{' '}
             <strong className="text-amber-400">yalnızca bir kez</strong> gösterilir — şimdi kopyalayın.
           </p>
-          <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-950 p-2.5">
-            <code className="min-w-0 flex-1 break-all font-mono text-xs text-slate-200">{reveal.token}</code>
+          <div className="flex items-center gap-2 border border-rule-hi bg-ground p-2.5">
+            <code className="min-w-0 flex-1 break-all font-mono text-xs text-ink-hi">{reveal.token}</code>
             <CopyButton text={reveal.token} />
           </div>
-          <p className="mt-3 text-[11px] text-slate-500">
-            Kullanım: <code className="text-slate-400">Authorization: Bearer {reveal.token.slice(0, 12)}…</code>
+          <p className="mt-3 text-[11px] text-tui-dim">
+            Kullanım: <code className="text-tui-dim">Authorization: Bearer {reveal.token.slice(0, 12)}…</code>
           </p>
           <div className="mt-4 flex justify-end">
             <button
               onClick={() => setReveal(null)}
-              className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:border-slate-500"
+              className="border border-rule-hi px-3 py-1 font-mono text-[11px] uppercase text-tui-dim transition hover:border-ink-hi hover:text-ink-hi"
             >
               Kapat
             </button>

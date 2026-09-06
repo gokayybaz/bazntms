@@ -15,7 +15,7 @@ interface EnrollToken {
 
 const REVOKE_CONFIRM_MS = 4000
 const inputCls =
-  'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
+  'border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
 
 // lockedSite dolu ise (site-admin) enroll token o sahaya sabit. multiSite ise
 // (çoklu-saha modu) site zorunlu — statik/site'siz token agent kaydında reddedilir.
@@ -114,16 +114,16 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
 
   return (
     <div className="space-y-5">
-      <p className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[11.5px] text-slate-400">
-        Hub’ın <code className="text-slate-300">-enroll-token</code> bayrağındaki statik sır yalnızca ilk kurulum
+      <p className="border border-rule bg-panel-2/40 px-3 py-2 text-[11px] text-tui-dim">
+        Hub’ın <code className="text-ink">-enroll-token</code> bayrağındaki statik sır yalnızca ilk kurulum
         içindir — sızarsa hub yeniden başlatılmadan iptal edilemez. Buradan ürettiğiniz token’lar isimli, süreli ve
         tek tıkla iptal edilebilir.
       </p>
 
       {/* --- adım 1: token üret --- */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">1 · Enrollment token’ı üret</p>
-        <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+        <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-rx">1 · Enrollment token’ı üret</p>
+        <div className="grid gap-2 border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
           <input
             className={inputCls}
             placeholder="ad (ör. ofis-linux, k8s-daemonset)"
@@ -145,7 +145,7 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
             value={form.site}
             onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
           />
-          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          <label className="flex items-center gap-1.5 text-xs text-tui-dim">
             geçerlilik
             <input
               type="number"
@@ -159,7 +159,7 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
           <button
             onClick={generate}
             disabled={generating}
-            className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm font-semibold text-white transition enabled:hover:bg-cyan-400 enabled:hover:text-slate-950 disabled:opacity-40"
+            className="border border-rx bg-rx px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ground transition enabled:hover:opacity-90 disabled:opacity-40"
           >
             {generating ? 'Üretiliyor…' : 'Token Üret'}
           </button>
@@ -170,51 +170,51 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
       {/* --- adım 2: kurulum komutu --- */}
       {generated ? (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">2 · Hedef makinede çalıştır</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-rx">2 · Hedef makinede çalıştır</p>
           <div className="flex flex-wrap gap-1.5">
             {OS_OPTIONS.map((o) => (
               <button
                 key={o.id}
                 onClick={() => setOsId(o.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  o.id === osId ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-500 hover:bg-slate-900 hover:text-slate-300'
+                className={`border-r border-rule px-3 py-1 font-mono text-[11px] uppercase tracking-[0.04em] transition ${
+                  o.id === osId ? 'bg-rx text-ground' : 'text-tui-dim hover:bg-panel-2 hover:text-ink-hi'
                 }`}
               >
                 {o.label}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-slate-500">{os.note}</p>
-          <div className="rounded-md border border-slate-700 bg-slate-950">
-            <div className="flex items-center justify-between border-b border-slate-800 px-3 py-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">{os.label}</span>
+          <p className="text-[11px] text-tui-dim">{os.note}</p>
+          <div className="border border-rule-hi bg-ground">
+            <div className="flex items-center justify-between border-b border-rule px-3 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-tui-dim">{os.label}</span>
               <CopyButton text={command ?? ''} />
             </div>
-            <pre className="overflow-x-auto p-3 font-mono text-[11.5px] leading-relaxed text-slate-200">{command}</pre>
+            <pre className="overflow-x-auto p-3 font-mono text-[11px] leading-relaxed text-ink-hi">{command}</pre>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Hub adresi <code className="text-slate-400">{hubUrl}</code> · token yalnızca bu ekranda görünür ·
-            enroll olan agent <a href="/agentlar" className="text-cyan-400 hover:underline">Agent’lar</a> sayfasında listelenir.
+          <p className="text-[11px] text-tui-dim">
+            Hub adresi <code className="text-tui-dim">{hubUrl}</code> · token yalnızca bu ekranda görünür ·
+            enroll olan agent <a href="/agentlar" className="text-rx hover:underline">Agent’lar</a> sayfasında listelenir.
           </p>
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-center text-sm text-slate-500">
+        <p className="border border-dashed border-rule-hi bg-panel-2/40 px-4 py-6 text-center text-sm text-tui-dim">
           Önce bir enrollment token’ı üretin — kurulum komutu burada görünecek.
         </p>
       )}
 
       {/* --- token listesi (yönetim) --- */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Enrollment token’ları</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-rx">Enrollment token’ları</p>
         {!loaded && !error ? (
-          <p className="py-4 text-center text-sm text-slate-500">Yükleniyor…</p>
+          <p className="py-4 text-center text-sm text-tui-dim">Yükleniyor…</p>
         ) : tokens.length === 0 ? (
-          <p className="py-4 text-center text-sm text-slate-500">Henüz DB enrollment token’ı yok.</p>
+          <p className="py-4 text-center text-sm text-tui-dim">Henüz DB enrollment token’ı yok.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                   <th className="py-2 pr-3 font-medium">Ad</th>
                   <th className="py-2 pr-3 font-medium">Site</th>
                   <th className="py-2 pr-3 font-medium">Geçerlilik</th>
@@ -225,34 +225,34 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
               </thead>
               <tbody>
                 {tokens.map((t) => (
-                  <tr key={t.id} className="border-b border-slate-800/60 last:border-0">
-                    <td className="py-2 pr-3 font-mono text-slate-200">{t.name}</td>
-                    <td className="py-2 pr-3 text-slate-400">{t.site || <span className="text-slate-600">—</span>}</td>
-                    <td className="py-2 pr-3 text-slate-400">
+                  <tr key={t.id} className="border-b border-rule last:border-0">
+                    <td className="py-2 pr-3 font-mono text-ink-hi">{t.name}</td>
+                    <td className="py-2 pr-3 text-tui-dim">{t.site || <span className="text-tui-dim">—</span>}</td>
+                    <td className="py-2 pr-3 text-tui-dim">
                       {t.expires_at > 0 ? new Date(t.expires_at * 1000).toLocaleDateString('tr-TR') : 'süresiz'}
                     </td>
-                    <td className="py-2 pr-3 font-mono text-[11px] text-slate-500">
+                    <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">
                       {t.last_used > 0 ? new Date(t.last_used * 1000).toLocaleString('tr-TR') : 'hiç'}
                     </td>
                     <td className="py-2 pr-3">
                       {t.revoked ? (
-                        <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-400 ring-1 ring-rose-500/20">
+                        <span className="border border-rose-500/40 px-1 text-[10px] font-semibold uppercase text-rose-400">
                           iptal
                         </span>
                       ) : (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-400 ring-1 ring-emerald-500/20">
+                        <span className="border border-emerald-500/40 px-1 text-[10px] font-semibold uppercase text-emerald-400">
                           etkin
                         </span>
                       )}
                     </td>
                     <td className="py-2">
                       {t.revoked ? (
-                        <span className="text-[11px] text-slate-600">—</span>
+                        <span className="text-[11px] text-tui-dim">—</span>
                       ) : (
                         <button
                           onClick={() => handleRevokeClick(t)}
                           className={`text-[11px] transition ${
-                            confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-slate-500 hover:text-rose-400'
+                            confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-tui-dim hover:text-rose-400'
                           }`}
                         >
                           {confirmRevokeId === t.id ? 'emin misiniz?' : 'iptal et'}

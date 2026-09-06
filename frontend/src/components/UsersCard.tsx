@@ -22,7 +22,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 const DELETE_CONFIRM_MS = 4000
 const inputCls =
-  'rounded-md border border-slate-700/80 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/60'
+  'border border-rule-hi bg-ground px-2 py-1 font-mono text-[11px] text-ink-hi outline-none placeholder:text-tui-dim focus:border-rx/60'
 
 // lockedSite dolu ise (site-admin) form o sahaya sabitlenir ve "admin" (global)
 // rolü seçilemez — sunucu da reddeder (S14.B2).
@@ -156,7 +156,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+          className="border border-rx/40 bg-rx/10 px-3 py-1 text-xs font-medium text-rx transition hover:bg-rx/20"
         >
           {showForm ? 'Vazgeç' : '+ Kullanıcı Ekle'}
         </button>
@@ -165,7 +165,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
       </div>
 
       {showForm && (
-        <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:grid-cols-[1fr_1fr_auto_1fr_auto]">
+        <div className="grid gap-2 rounded-lg border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_1fr_auto_1fr_auto]">
           <input
             className={inputCls}
             placeholder="kullanıcı adı"
@@ -203,7 +203,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
           <button
             onClick={create}
             disabled={creating}
-            className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm font-semibold text-white transition enabled:hover:bg-cyan-400 enabled:hover:text-slate-950 disabled:opacity-40"
+            className="border border-rx bg-rx px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-ground transition enabled:hover:opacity-90 disabled:opacity-40"
           >
             {creating ? 'Ekleniyor…' : 'Ekle'}
           </button>
@@ -211,16 +211,16 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
       )}
 
       {!loaded && !error ? (
-        <p className="py-6 text-center text-sm text-slate-500">Yükleniyor…</p>
+        <p className="py-6 text-center text-sm text-tui-dim">Yükleniyor…</p>
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">
+        <p className="py-6 text-center text-sm text-tui-dim">
           Henüz RBAC kullanıcısı yok — tek-şifre (bootstrap) modu devrede.
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                 <th className="py-2 pr-3 font-medium">Kullanıcı</th>
                 <th className="py-2 pr-3 font-medium">Rol</th>
                 <th className="py-2 pr-3 font-medium">Site</th>
@@ -231,13 +231,13 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-slate-800/60 last:border-0">
-                  <td className="py-2 pr-3 font-mono text-slate-200">{u.username}</td>
+                <tr key={u.id} className="border-b border-rule last:border-0">
+                  <td className="py-2 pr-3 font-mono text-ink-hi">{u.username}</td>
                   <td className="py-2 pr-3">
                     <select
                       value={u.role}
                       onChange={(e) => patch(u.id, { role: e.target.value }, 'rol güncellendi')}
-                      className="rounded border border-slate-700/80 bg-slate-950 px-1.5 py-1 text-xs text-slate-300 focus:border-cyan-500/60"
+                      className="border border-rule-hi bg-ground px-1.5 py-0.5 text-[11px] text-ink focus:border-rx/60"
                     >
                       {roles.map((r) => (
                         <option key={r} value={r}>
@@ -246,20 +246,20 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
                       ))}
                     </select>
                   </td>
-                  <td className="py-2 pr-3 text-slate-400">{u.site || <span className="text-slate-600">tümü</span>}</td>
+                  <td className="py-2 pr-3 text-tui-dim">{u.site || <span className="text-tui-dim">tümü</span>}</td>
                   <td className="py-2 pr-3">
                     <button
                       onClick={() => patch(u.id, { enabled: !u.enabled }, u.enabled ? 'pasifleştirildi' : 'etkinleştirildi')}
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 transition ${
+                      className={`px-1 text-[10px] font-semibold uppercase transition ${
                         u.enabled
-                          ? 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20 hover:bg-emerald-500/20'
-                          : 'bg-slate-500/10 text-slate-400 ring-slate-500/20 hover:bg-slate-500/20'
+                          ? 'border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
+                          : 'border border-rule-hi text-tui-dim hover:bg-panel-2'
                       }`}
                     >
                       {u.enabled ? 'etkin' : 'pasif'}
                     </button>
                   </td>
-                  <td className="py-2 pr-3 font-mono text-[11px] text-slate-500">
+                  <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">
                     {u.last_login > 0 ? new Date(u.last_login * 1000).toLocaleString('tr-TR') : 'hiç'}
                   </td>
                   <td className="py-2">
@@ -275,7 +275,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
                         />
                         <button
                           onClick={() => submitPw(u.id)}
-                          className="rounded border border-cyan-500/40 px-2 py-1 text-[11px] text-cyan-300 hover:bg-cyan-500/10"
+                          className="border border-rx/40 px-2 py-1 text-[11px] text-rx hover:bg-rx/10"
                         >
                           Kaydet
                         </button>
@@ -284,7 +284,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
                             setPwFor(null)
                             setPwValue('')
                           }}
-                          className="text-[11px] text-slate-500 hover:text-slate-300"
+                          className="text-[11px] text-tui-dim hover:text-ink"
                         >
                           vazgeç
                         </button>
@@ -296,7 +296,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
                             setPwFor(u.id)
                             setPwValue('')
                           }}
-                          className="text-[11px] text-slate-400 hover:text-slate-200"
+                          className="text-[11px] text-tui-dim hover:text-ink-hi"
                         >
                           şifre sıfırla
                         </button>
@@ -305,7 +305,7 @@ export function UsersCard({ lockedSite = '' }: { lockedSite?: string }) {
                           className={`text-[11px] transition ${
                             confirmDeleteId === u.id
                               ? 'font-semibold text-rose-400'
-                              : 'text-slate-500 hover:text-rose-400'
+                              : 'text-tui-dim hover:text-rose-400'
                           }`}
                         >
                           {confirmDeleteId === u.id ? 'emin misiniz?' : 'sil'}
