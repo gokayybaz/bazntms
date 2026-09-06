@@ -12,10 +12,10 @@ export function DashboardPage({
   fleet: FleetSummary | null
 }) {
   return (
-    <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
-      <div className="flex items-center gap-2">
-        <h1 className="text-[13px] font-semibold uppercase tracking-widest text-slate-300">Genel Bakış</h1>
-        <span className="text-xs text-slate-500">agent filosu + cihaz telemetrisi tek ekranda</span>
+    <div className="mx-auto max-w-[1600px] space-y-3 px-3 py-3">
+      <div className="flex items-baseline gap-2 font-mono">
+        <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Genel Bakış</h1>
+        <span className="text-[10px] text-tui-dim">agent filosu + cihaz telemetrisi · tek ekran</span>
       </div>
       <Overview refreshKey={refreshKey} alertEvents={alertEvents} fleet={fleet} />
     </div>
