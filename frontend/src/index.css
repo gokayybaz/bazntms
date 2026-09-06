@@ -1,14 +1,33 @@
 @import "tailwindcss";
 
 @theme {
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* slate-500/600/700 koyu zeminde WCAG AA'yı (4.5:1) geçmiyordu (impeccable
-     critique P0 — slate-600 ~2.4:1, slate-700 ~1.8:1 ölçüldü). Bu ton hem
-     panel hem base zeminde 5:1+ veriyor; docs-site landing page'in --dim
-     token'ıyla (#7d8aa0) aynı — iki yüzey arasında kasıtlı akrabalık.
-     text-dim-aa: mevcut text-slate-600/700 kullanımlarının AA-uyumlu
-     yerine geçer, dosya-dosya taşınıyor (bkz. DESIGN.md Colors → Dim AA). */
-  --color-dim-aa: #7d8aa0;
+  /* TUI: gövde fontu mono'ya sabitlendi (body{font-family}), --font-sans yalnızca
+     uzun açıklama paragraflarında bilinçli `font-sans` ile geri çağrılır.
+     JetBrains Mono kurulu değilse ui-monospace'e düşer — box-drawing/braille
+     karakterleri fallback yığınında da hizalanır. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, "DejaVu Sans Mono", monospace;
+
+  /* --- TUI yüzey tokenleri (S17.1) — kod tabanı bunlara faz boyunca göç eder --- */
+  --color-ground:  #0a0d13; /* sayfa zemini: slate-950'den daha derin, hafif mavi-bias fosfor siyahı */
+  --color-panel:   #10141d; /* kart/konteyner zemini — OPAK (blur/alfa yok) */
+  --color-panel-2: #151b27; /* iç içe yüzey, pasif sekme, zebra satır */
+  --color-rule:    #232b3a; /* kenarlık, ayraç çizgisi */
+  --color-rule-hi: #35485f; /* vurgulu kenarlık + box-drawing aksanı (┤ ├ ─ │) */
+  --color-ink:     #ced7e3; /* birincil okunabilir metin */
+  --color-ink-hi:  #f1f5fa; /* vurgulu metin / başlık */
+
+  /* slate-500/600/700 koyu zeminde WCAG AA'yı geçmiyordu (bkz. DESIGN.md).
+     text-dim-aa mevcut kullanımların yerine geçer; --color-tui-dim yeni ad,
+     ikisi aynı değer (#8794a8 → ground üzerinde ~6.4:1). Faz 17 dosyaları
+     dokunuldukça slate-500/600/700 → tui-dim'e taşınır (S17.31 süpürmesi). */
+  --color-dim-aa:  #8794a8;
+  --color-tui-dim: #8794a8;
+
+  /* --- anlam renkleri: DESIGN.md sabit-anlam sözleşmesi, htop yakınsaması ---
+     (cyan=rx/seçim, violet=tx, emerald=sağlıklı/düşük, amber=uyarı,
+      rose=kritik/yüksek, sky=proc-alarm, orange=vendor) */
+  --color-rx: #22d3ee;
+  --color-tx: #a78bfa;
 }
 
 html {
@@ -16,30 +35,39 @@ html {
 }
 
 body {
-  @apply bg-slate-950 text-slate-200 antialiased;
-  /* network blueprint: sessiz nokta izgarasi */
-  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
-  background-size: 22px 22px;
+  @apply text-slate-200 antialiased;
+  background: var(--color-ground);
+  /* TUI: her şey mono; uzun prose bloğu bilinçli `font-sans` ile opt-out yapar */
+  font-family: var(--font-mono);
 }
 
+/* TUI: köşeler kare. Global !important — onlarca `rounded-*` utility'sini tek
+   tek sökmek yerine hepsini nötrleştirir (bkz. plan S17.1). */
+*, ::before, ::after {
+  border-radius: 0 !important;
+}
+
+/* terminal seçimi: dolu cyan blok, zemin rengi metin */
 ::selection {
-  @apply bg-cyan-500/30;
+  background: var(--color-rx);
+  color: var(--color-ground);
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--color-panel);
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-700/60 rounded-full;
+  background: var(--color-rule-hi);
+  border: 2px solid var(--color-panel);
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-600;
+  background: var(--color-tui-dim);
 }
 
 select option {
-  @apply bg-slate-900;
+  background: var(--color-panel);
 }
