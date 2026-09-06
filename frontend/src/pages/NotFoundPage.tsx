@@ -1,17 +1,25 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 export function NotFoundPage() {
+  const { pathname } = useLocation()
   return (
-    <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-3 px-4 py-24 text-center">
-      <span className="font-mono text-5xl font-bold text-slate-700">404</span>
-      <h1 className="text-lg font-semibold text-slate-300">Sayfa bulunamadı</h1>
-      <p className="max-w-sm text-sm text-slate-500">Aradığınız adres yok ya da taşındı.</p>
-      <Link
-        to="/"
-        className="mt-2 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-4 py-1.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
-      >
-        Dashboard'a dön
-      </Link>
+    <div className="mx-auto max-w-[900px] px-4 py-16 font-mono text-[13px] leading-relaxed">
+      <p className="text-tui-dim">
+        <span className="text-rx">bazntms</span>:<span className="text-tx">~</span>$ open <span className="text-ink-hi">{pathname}</span>
+      </p>
+      <p className="mt-1 text-rose-400">bazntms: {pathname}: böyle bir sayfa yok (404)</p>
+      <p className="mt-4 text-tui-dim">
+        Geçerli rotalar için <Link to="/" className="text-rx hover:underline">1:Pano</Link>'ya dönün ya da{' '}
+        <span className="border border-rule-hi bg-panel-2 px-1 text-ink-hi">F1</span> ile klavye yardımını açın.
+      </p>
+      <p className="mt-6">
+        <Link
+          to="/"
+          className="inline-block border border-rx/40 bg-rx/10 px-2.5 py-0.5 text-[11px] uppercase tracking-[0.04em] text-rx transition hover:bg-rx/20"
+        >
+          cd ~ (Pano)
+        </Link>
+      </p>
     </div>
   )
 }
