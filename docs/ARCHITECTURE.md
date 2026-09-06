@@ -291,6 +291,26 @@ atfedilir → `dns` telemetri alanı → `agent_dns` tablosu → `GET /api/v1/dn
 fleet raporundaki "DNS Görünürlüğü" bölümü (`internal/report`, önceden yalnızca
 hub yerel yakalamasında vardı, çoklu-hub'da boştu).
 
+Ana atıf handle'ı loopback-*olmayan* tek bir arayüzü dinler; oysa
+`systemd-resolved` (127.0.0.53), `dnsmasq`/Pi-hole, Docker gömülü DNS
+(127.0.0.11) gibi **stub-resolver**'lara giden sorgular `lo` üzerinden gider ve
+o handle'da hiç görünmez. Bu yüzden `AttrEngine` ayrıca loopback cihazında
+`udp` BPF filtresiyle ikinci bir handle açar (`internal/agent/loopback.go`,
+best-effort — açılamazsa yalnızca DNS görünürlüğü kısıtlanır, telemetri akmaya
+devam eder). Filtre `port 53` değil sade `udp`: Docker gömülü DNS, konteyner-içi
+iptables ile sorgunun hedef portunu 53'ten rastgele bir porta DNAT eder — port
+filtresi sorguyu kaçırırdı; DNS olmayan paketleri `parseDNSNames` eler.
+Loopback paketleri `attributeDNS` → `sniffDNS` yolundan geçer: süreç trafik
+sayaçlarına (`e.totals`) yazılmaz, yalnızca alan adı kaydı düşer.
+
+**Süreç atfı DNS'te best-effort:** DNS UDP soketleri milisaniyelik olduğundan
+3 sn'lik `/proc/net/udp` anlığına çoğu zaman yakalanmaz — alan adı o durumda
+boş süreçle kaydedilir (domain görünürlüğü süreç atfından bağımsız). `musl`
+libc (Alpine/BusyBox) resolver'ı UDP soketini `connect()` etmediği için
+(`glibc` eder) `lookupDNSProc` ayrıca 53-olmayan tarafı yalnızca yerel porttan
+eşleştirmeyi dener. Windows'ta ayrı bir Npcap loopback adaptörü gerekir; yoksa
+bu handle açılmaz.
+
 | Platform | Soket→PID kaynağı |
 |----------|-------------------|
 | Linux    | `/proc/net/*` inode ↔ `/proc/[pid]/fd` (root: tüm süreçler) |

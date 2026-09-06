@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type AttrEngine struct {
 	mu       sync.Mutex
 	prov     proctraffic.Provider
 	handle   *pcap.Handle
+	loHandle *pcap.Handle // loopback stub-resolver DNS (best-effort; nil olabilir)
 	localIPs map[string]struct{}
 	totals   map[attrKey][2]uint64 // [in, out] kumulatif
 	lastSent map[attrKey][2]uint64
@@ -86,6 +88,16 @@ func NewAttrEngine(iface string) (*AttrEngine, error) {
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
 	}
+	// Loopback stub-resolver DNS: ana handle loopback-disi tek arayuzu
+	// dinledigi icin systemd-resolved / dnsmasq / Docker gomulu DNS'e giden
+	// sorgular gorunmez. Ayri bir loopback handle'i (BPF: udp) acilir;
+	// acilamazsa DNS gorunurlugu kisitli kalir ama atif/telemetri aksamaz.
+	if lo, lerr := openLoopbackDNS(); lerr != nil {
+		slog.Debug("loopback DNS yakalama yok — stub-resolver DNS gorunurlugu kisitli", "err", lerr)
+	} else {
+		e.loHandle = lo
+		slog.Info("loopback DNS yakalama aktif")
+	}
 	go e.loop()
 	return e, nil
 }
@@ -94,6 +106,9 @@ func (e *AttrEngine) Stop() {
 	close(e.stopCh)
 	<-e.doneCh
 	e.handle.Close()
+	if e.loHandle != nil {
+		e.loHandle.Close()
+	}
 }
 
 func (e *AttrEngine) loop() {
@@ -123,6 +138,17 @@ func (e *AttrEngine) loop() {
 	src.NoCopy = true
 	packets := src.Packets()
 
+	// Loopback handle (varsa) yalnizca UDP tasir → attributeDNS: e.totals'a
+	// yazmaz, yalnizca DNS gorunurlugunu besler. loHandle yoksa loPackets nil
+	// kalir ve o select dali hic tetiklenmez.
+	var loPackets <-chan gopacket.Packet
+	if e.loHandle != nil {
+		loSrc := gopacket.NewPacketSource(e.loHandle, e.loHandle.LinkType())
+		loSrc.Lazy = true
+		loSrc.NoCopy = true
+		loPackets = loSrc.Packets()
+	}
+
 	for {
 		select {
 		case <-e.stopCh:
@@ -141,6 +167,13 @@ func (e *AttrEngine) loop() {
 			}
 			e.mu.Lock()
 			e.attribute(pkt, full, index)
+			e.mu.Unlock()
+		case pkt := <-loPackets:
+			if pkt == nil {
+				continue
+			}
+			e.mu.Lock()
+			e.attributeDNS(pkt, full, index)
 			e.mu.Unlock()
 		}
 	}
@@ -188,19 +221,15 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 		return
 	}
 
-	// once tam anahtarlar, sonra yalnizca port eslemesi
-	var info ProcInfoAlias
-	var ok bool
-	if info, ok = full[proctraffic.Key{Proto: proto, LocalIP: srcIP, LocalPort: sport, RemoteIP: dstIP, RemotePort: dport}]; !ok {
-		if info, ok = full[proctraffic.Key{Proto: proto, LocalIP: dstIP, LocalPort: dport, RemoteIP: srcIP, RemotePort: sport}]; !ok {
-			if info, ok = index[portKey{proto: proto, lp: sport, rp: dport}]; !ok {
-				if info, ok = index[portKey{proto: proto, lp: dport, rp: sport}]; !ok {
-					return
-				}
-			}
-		}
+	// DNS gorunurlugu: UDP/53 sorgu ve yanitlarindaki alan adlari. Genel atif
+	// gatinden ONCE calisir — DNS soketi kisa omurlu oldugu icin surece
+	// atfedilemese bile alan adi kayda gecmeli.
+	if proto == "udp" && (sport == 53 || dport == 53) {
+		e.sniffDNS(srcIP, sport, dstIP, dport, payload, full, index)
 	}
-	if info.Process == "" && info.PID == 0 {
+
+	info, ok := lookupProc(proto, srcIP, sport, dstIP, dport, full, index)
+	if !ok || (info.Process == "" && info.PID == 0) {
 		return
 	}
 
@@ -225,28 +254,6 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 		}
 	}
 
-	// DNS gorunurlugu: UDP/53 sorgu ve yanitlarinda domain adlari
-	if proto == "udp" && (sport == 53 || dport == 53) && len(payload) >= 12 {
-		if names, isResp := parseDNSNames(payload); len(names) > 0 {
-			for _, dom := range names {
-				k := dnsKey{pid: info.PID, process: info.Process, domain: dom}
-				a := e.dns[k]
-				if a == nil {
-					if len(e.dns) >= 4000 {
-						continue
-					}
-					a = &dnsAgg{}
-					e.dns[k] = a
-				}
-				if isResp {
-					a.responses++
-				} else {
-					a.queries++
-				}
-			}
-		}
-	}
-
 	key := attrKey{pid: info.PID, process: info.Process, proto: proto, remoteIP: dstIP, port: dport}
 	if srcLocal { // giden: uzak taraf dst
 		tot := e.totals[key]
@@ -259,6 +266,104 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 	tot[0] += length
 	e.totals[key] = tot
 	_ = dstLocal
+}
+
+// attributeDNS, loopback handle'indan gelen bir UDP paketini DNS gorunurlugu
+// icin isler. attribute()'in tam yolundan farki: e.totals'a hic yazmaz
+// (loopback trafigi surec trafik sayaclarina katilmaz) ve port gati yoktur —
+// Docker gomulu DNS sorgunun hedef portunu DNAT ile degistirir, o yuzden
+// karar parseDNSNames'e birakilir.
+func (e *AttrEngine) attributeDNS(pkt gopacket.Packet, full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
+	nl := pkt.NetworkLayer()
+	if nl == nil {
+		return
+	}
+	var srcIP, dstIP string
+	switch l := nl.(type) {
+	case *layers.IPv4:
+		srcIP, dstIP = l.SrcIP.String(), l.DstIP.String()
+	case *layers.IPv6:
+		srcIP, dstIP = l.SrcIP.String(), l.DstIP.String()
+	default:
+		return
+	}
+	udp, ok := pkt.TransportLayer().(*layers.UDP)
+	if !ok {
+		return
+	}
+	e.sniffDNS(srcIP, uint16(udp.SrcPort), dstIP, uint16(udp.DstPort), udp.Payload, full, index)
+}
+
+// sniffDNS, bir UDP payload'ini DNS mesaji olarak cozmeye calisir; alan adi
+// cikarsa surece atfedip kaydeder. Surec atfi best-effort'tur: DNS soketleri
+// milisaniyelik oldugu icin /proc/net/udp anligina cogu zaman yakalanmaz —
+// o durumda alan adi bos surecle (yalnizca domain gorunurlugu) kaydedilir.
+func (e *AttrEngine) sniffDNS(srcIP string, sport uint16, dstIP string, dport uint16, payload []byte,
+	full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
+	if len(payload) < 12 {
+		return
+	}
+	names, isResp := parseDNSNames(payload)
+	if len(names) == 0 {
+		return
+	}
+	info, _ := lookupDNSProc(srcIP, sport, dstIP, dport, full, index)
+	for _, dom := range names {
+		k := dnsKey{pid: info.PID, process: info.Process, domain: dom}
+		a := e.dns[k]
+		if a == nil {
+			if len(e.dns) >= 4000 {
+				continue
+			}
+			a = &dnsAgg{}
+			e.dns[k] = a
+		}
+		if isResp {
+			a.responses++
+		} else {
+			a.queries++
+		}
+	}
+}
+
+// lookupProc, bir 5'linin iki yonunu de deneyerek (once tam anahtar, sonra
+// yalnizca port) soket→surec eslemesini bulur.
+func lookupProc(proto, srcIP string, sport uint16, dstIP string, dport uint16,
+	full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) (ProcInfoAlias, bool) {
+	if info, ok := full[proctraffic.Key{Proto: proto, LocalIP: srcIP, LocalPort: sport, RemoteIP: dstIP, RemotePort: dport}]; ok {
+		return info, true
+	}
+	if info, ok := full[proctraffic.Key{Proto: proto, LocalIP: dstIP, LocalPort: dport, RemoteIP: srcIP, RemotePort: sport}]; ok {
+		return info, true
+	}
+	if info, ok := index[portKey{proto: proto, lp: sport, rp: dport}]; ok {
+		return info, true
+	}
+	if info, ok := index[portKey{proto: proto, lp: dport, rp: sport}]; ok {
+		return info, true
+	}
+	return ProcInfoAlias{}, false
+}
+
+// lookupDNSProc, bir DNS paketini (bir tarafi 53) surece esler. Once normal
+// lookupProc; tutmazsa baglantisiz UDP soketi varsayimiyla 53-olmayan
+// (efemer) tarafi YALNIZCA yerel porttan eslestirir. musl libc (Alpine/
+// BusyBox) resolver'i UDP soketini connect() etmez → /proc/net/udp'de uzak
+// port 0 kalir ve 4'lu esleme hicbir zaman tutmaz; glibc connect() ettigi
+// icin orada lookupProc zaten yeter.
+func lookupDNSProc(srcIP string, sport uint16, dstIP string, dport uint16,
+	full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) (ProcInfoAlias, bool) {
+	if info, ok := lookupProc("udp", srcIP, sport, dstIP, dport, full, index); ok {
+		return info, true
+	}
+	ephem := sport
+	if sport == 53 {
+		ephem = dport
+	}
+	if info, ok := index[portKey{proto: "udp", lp: ephem, rp: 0}]; ok && (info.Process != "" || info.PID != 0) {
+		return info, true
+	}
+	return ProcInfoAlias{}, false
 }
 
 // Deltas, son gonderimden bu yana surec bazli trafik farklarini dondurur.
