@@ -227,6 +227,10 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
 
+Uyumluluk/Yönetim CRUD akışları çok-alanlı `useDialog().form()` TUI dialog'unu
+kullanır (art arda native `prompt()` zincirleri kaldırıldı); `ComplianceSubNav`
+ve `AdminPageShell` ikincil şeritleri `TabBar` diliyle çizilir.
+
 Her sayfa **yalnızca kendi ihtiyacı olan uçları** kendi `useEffect`'inde
 çeker (genelde 5–20 sn aralıklı `setInterval` ile); ortak bir global store
 yok. Kendi polling'i olmayan birkaç bileşen (`DevicesCard`, `TopologyCard`,

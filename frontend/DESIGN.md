@@ -87,11 +87,10 @@ components:
 
 # Design System: bazNTMS Dashboard
 
-> **Durum (2026-09-06):** Faz 17 TUI dönüşümü **tamamlandı** — izleme yüzeyinin
-> tamamı (kabuk, Pano, Agent/Cihaz/Topoloji/Uyarılar/Raporlar + tüm kartlar)
-> bu dile taşındı. **Kalan:** Uyumluluk/ISMS (`/uyumluluk/*`) ve Yönetim
-> (`/yonetim/*`) sayfaları Faz 18'de dönüştürülecek — o sayfalar hâlâ eski
-> "NOC panosu" dilinde ve `Card.tsx` alias'ını kullanıyor (Faz 18 sonunda silinir).
+> **Durum (2026-09-06):** TUI dönüşümü **tamamlandı** (Faz 17 izleme yüzeyi +
+> Faz 18 Uyumluluk/ISMS + Yönetim). Tüm sayfalar bu dilde; `Card.tsx` silindi
+> (tek konteyner `Panel`), tüm native `prompt/confirm` `useDialog()`'a taşındı
+> (çok-alanlı `form()` dahil), tüm `slate-*`/`dim-aa` tokenlere göç etti.
 
 ## Overview
 
