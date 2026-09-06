@@ -212,6 +212,25 @@ kaldırıldı.
 `overflow-x-auto` + `min-width` ile yatay kaydırmaya geçer. `TabBar` de dar
 ekranda yatay kaydırır.
 
+### Responsive
+
+**Sayfa asla yatay kaymaz** — `<main>` `overflow-x-hidden`; taşabilen içerik
+(veri tabloları, SVG diyagramlar) kendi `overflow-x-auto` kutusunda kayar.
+
+- **Breakpoint:** Tailwind `sm` (640px). Altı = "mobil". Kart-içi yerleşim için
+  viewport yerine `@container` sorgusu tercih edilir (AlertsCard ayar formu).
+- **Grid kuralı:** Çok kolonlu her grid **`grid-cols-1` tabanıyla** başlar
+  (`grid grid-cols-1 … sm:grid-cols-N`). Yalın `grid` + sadece `sm:grid-cols-*`
+  mobilde `auto` track'lerin genişlemesine → taşmaya yol açar.
+- **TuiHeader:** mobilde filo şeridi (RX/TX/PPS/EVT/ALRT/agent) üst satırdan ayrı
+  bir yatay-kaydırma satırına iner; üst satır marka + WS + saat + F10 ile sade
+  kalır. Kimlik badge `md+`.
+- **Meter:** çubuk kısalabilir (`min-w-0` + `overflow-hidden`) — dar ekranda boş
+  `·` kuyruğu kırpılır, dolu segment + değer korunur.
+- **Panel:** box-title `┤ ├` aksanı `sm+`; başlık sağ slotu `overflow-x-auto`.
+- **TuiTable:** dar ekranda `overflow-x-auto` kutusunda yatay kayar (kart-görünüm
+  dönüşümü henüz yok — ileride).
+
 ## Shapes & Borders
 
 Köşeler **tamamen kare** — `* { border-radius: 0 !important }` global kuralı
