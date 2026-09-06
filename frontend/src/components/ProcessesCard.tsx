@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatBytes } from '../lib/format'
+import { RangeTabs } from './RangeTabs'
+import { TuiTable } from './TuiTable'
+import type { TuiColumn } from './TuiTable'
 
 interface ProcessUsage {
   process: string
@@ -13,11 +16,11 @@ const RANGES = [
   { label: '15 dk', minutes: 15 },
   { label: '1 saat', minutes: 60 },
   { label: '6 saat', minutes: 360 },
-]
+] as const
 
 export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
   const [rows, setRows] = useState<ProcessUsage[]>([])
-  const [minutes, setMinutes] = useState(60)
+  const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -44,79 +47,57 @@ export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
     }
   }, [minutes, agentId])
 
-  const max = Math.max(1, ...rows.map((r) => r.total))
+  const max = useMemo(() => Math.max(1, ...rows.map((r) => r.total)), [rows])
+
+  const cols: TuiColumn<ProcessUsage>[] = [
+    { key: 'process', header: 'Süreç', sortable: true, render: (r) => <span className="text-ink-hi">{r.process || 'bilinmeyen'}</span> },
+    { key: 'bytes_in', header: 'İndirme', align: 'right', sortable: true, sortValue: (r) => r.bytes_in, render: (r) => <span className="text-rx">{formatBytes(r.bytes_in)}</span> },
+    { key: 'bytes_out', header: 'Gönderme', align: 'right', sortable: true, sortValue: (r) => r.bytes_out, render: (r) => <span className="text-tx">{formatBytes(r.bytes_out)}</span> },
+    {
+      key: 'total',
+      header: 'Toplam',
+      width: '34%',
+      sortable: true,
+      sortValue: (r) => r.total,
+      render: (r) => (
+        <span className="flex items-center gap-2">
+          <span className="h-1.5 flex-1 bg-panel-2">
+            <span className="block h-full bg-emerald-500" style={{ width: `${Math.max(2, (r.total / max) * 100)}%` }} />
+          </span>
+          <span className="w-16 shrink-0 text-right">{formatBytes(r.total)}</span>
+        </span>
+      ),
+    },
+    { key: 'agent_count', header: 'Agent', align: 'right', sortable: true, sortValue: (r) => r.agent_count, render: (r) => <span className="text-tui-dim">{r.agent_count}</span> },
+  ]
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-slate-700/80 p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r.minutes}
-              onClick={() => setMinutes(r.minutes)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                minutes === r.minutes ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto text-[11px] text-slate-500">
-          nethogs yöntemi: pcap + soket→PID eşlemesi · agent'ta -pcap açık olmalı
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <RangeTabs ranges={RANGES} value={minutes} onChange={setMinutes} />
+        <span className="ml-auto font-mono text-[10px] text-tui-dim">
+          nethogs yöntemi: pcap + soket→PID · agent'ta -pcap açık olmalı
         </span>
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center text-sm text-slate-600">Yükleniyor…</p>
+        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-600">
-          Henüz süreç trafiği yok — agent'ları <code className="text-slate-400">-pcap</code> ile çalıştırın ve
-          hub'da <code className="text-slate-400">-agent-pcap</code> politikasını açın.
+        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
+          Henüz süreç trafiği yok — agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın ve
+          hub'da <code className="text-tui-dim">-agent-pcap</code> politikasını açın.
         </p>
       ) : (
-        <div className="max-h-80 overflow-y-auto pr-1">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-                <th className="pb-2 font-medium">#</th>
-                <th className="pb-2 font-medium">Süreç</th>
-                <th className="pb-2 text-right font-medium">İndirme</th>
-                <th className="pb-2 text-right font-medium">Gönderme</th>
-                <th className="pb-2 pl-4 font-medium" style={{ width: '34%' }}>
-                  Toplam
-                </th>
-                <th className="pb-2 text-right font-medium">Agent</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {rows.map((r, i) => (
-                <tr key={r.process} className="hover:bg-slate-800/30">
-                  <td className="py-1.5 font-mono text-xs text-slate-600">{i + 1}</td>
-                  <td className="py-1.5 pr-3 font-medium text-slate-200">
-                    <span className="block max-w-[220px] truncate" title={r.process}>
-                      {r.process || 'bilinmeyen'}
-                    </span>
-                  </td>
-                  <td className="py-1.5 text-right font-mono text-xs text-cyan-300/90">{formatBytes(r.bytes_in)}</td>
-                  <td className="py-1.5 text-right font-mono text-xs text-violet-300/90">{formatBytes(r.bytes_out)}</td>
-                  <td className="py-1.5 pl-4">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
-                        <div
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{ width: `${Math.max(2, (r.total / max) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="w-20 text-right font-mono text-xs text-slate-300">{formatBytes(r.total)}</span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 text-right font-mono text-xs text-slate-500">{r.agent_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TuiTable
+          columns={cols}
+          rows={rows}
+          getKey={(r) => r.process}
+          filterText={(r) => r.process}
+          filterLabel="Süreç filtrele…"
+          initialSort={{ key: 'total', dir: 'desc' }}
+          scrollClass="max-h-80"
+          className="border-0"
+        />
       )}
     </div>
   )
