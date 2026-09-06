@@ -55,7 +55,7 @@ function statusColor(status: string) {
   if (status === 'up') return 'text-emerald-400'
   if (status === 'down') return 'text-rose-400'
   if (status === 'connecting') return 'text-amber-400'
-  return 'text-dim-aa'
+  return 'text-tui-dim'
 }
 
 function fmtAgo(ts: number) {
@@ -93,12 +93,12 @@ function ResourceSparkline({ rows }: { rows: ResourceRow[] }) {
     ['disk', '#64748b', (r) => r.disk_pct],
   ]
   return (
-    <div className="min-w-40 flex-1 rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-      <div className="mb-1 flex items-center gap-2.5 text-[9px] uppercase tracking-wider text-dim-aa">
+    <div className="min-w-40 flex-1 border border-rule bg-panel px-3 py-2">
+      <div className="mb-1 flex items-center gap-2.5 text-[9px] uppercase tracking-wider text-tui-dim">
         <span>son {Math.round(span / 60)} dk trendi</span>
         {series.map(([label, color]) => (
           <span key={label} className="flex items-center gap-1">
-            <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: color }} />
+            <span className="inline-block size-1.5 " style={{ backgroundColor: color }} />
             {label}
           </span>
         ))}
@@ -126,13 +126,13 @@ function Gauge({ label, pct }: { label: string; pct: number }) {
   // amber eşikleri DESIGN.md'nin belgelediği -400 tonlarına taşındı
   const color = clamped > 85 ? 'bg-rose-400' : clamped > 60 ? 'bg-amber-400' : 'bg-emerald-400'
   return (
-    <div className="min-w-40 flex-1 rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+    <div className="min-w-40 flex-1 border border-rule bg-panel px-3 py-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-dim-aa">{label}</span>
-        <span className="font-mono text-sm text-slate-200">{pct.toFixed(0)}%</span>
+        <span className="text-[10px] uppercase tracking-wider text-tui-dim">{label}</span>
+        <span className="font-mono text-sm text-ink-hi">{pct.toFixed(0)}%</span>
       </div>
-      <div className="mt-1.5 h-1.5 rounded bg-slate-800">
-        <div className={`h-1.5 rounded ${color}`} style={{ width: `${clamped}%` }} />
+      <div className="mt-1.5 h-1.5 bg-panel-2">
+        <div className={`h-1.5 ${color}`} style={{ width: `${clamped}%` }} />
       </div>
     </div>
   )
@@ -178,7 +178,7 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
     return () => window.clearInterval(id)
   }, [load])
 
-  if (!loaded) return <p className="mt-2 text-xs text-dim-aa">yükleniyor…</p>
+  if (!loaded) return <p className="mt-2 text-xs text-tui-dim">yükleniyor…</p>
 
   const last = resources.length > 0 ? resources[resources.length - 1] : null
   const latestSdwan = new Map<string, SDWANRow>()
@@ -189,8 +189,8 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
   }
 
   return (
-    <div className="mt-2 space-y-3 rounded-md border border-orange-500/20 bg-slate-950/40 p-3">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-orange-300/80">
+    <div className="mt-2 space-y-3 border border-orange-500/20 bg-ground p-3">
+      <p className="font-mono text-[10px] uppercase tracking-wider text-orange-300">
         fortigate rest api · canlı veri
       </p>
       {pollError && (
@@ -204,13 +204,13 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
             <Gauge label="cpu" pct={last.cpu_pct} />
             <Gauge label="bellek" pct={last.mem_pct} />
             <Gauge label="disk" pct={last.disk_pct} />
-            <div className="min-w-40 flex-1 rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-              <span className="text-[10px] uppercase tracking-wider text-dim-aa">oturum</span>
-              <div className="font-mono text-sm text-slate-200">{last.sessions.toLocaleString('tr-TR')}</div>
+            <div className="min-w-40 flex-1 border border-rule bg-panel px-3 py-2">
+              <span className="text-[10px] uppercase tracking-wider text-tui-dim">oturum</span>
+              <div className="font-mono text-sm text-ink-hi">{last.sessions.toLocaleString('tr-TR')}</div>
             </div>
           </>
         ) : (
-          <p className="text-xs text-dim-aa">kaynak verisi bekleniyor (ilk poll sonrası görünür)</p>
+          <p className="text-xs text-tui-dim">kaynak verisi bekleniyor (ilk poll sonrası görünür)</p>
         )}
       </div>
 
@@ -224,11 +224,11 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
       {/* vpn */}
       {vpn.length > 0 && (
         <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wider text-dim-aa">vpn tünelleri / kullanıcıları</p>
-          <div className="overflow-x-auto rounded border border-slate-800">
+          <p className="mb-1 text-[10px] uppercase tracking-wider text-tui-dim">vpn tünelleri / kullanıcıları</p>
+          <div className="overflow-x-auto border border-rule">
             <table className="w-full min-w-[720px] text-xs">
-              <thead className="bg-slate-900/80">
-                <tr className="text-left text-[10px] uppercase text-dim-aa">
+              <thead className="bg-panel">
+                <tr className="text-left text-[10px] uppercase text-tui-dim">
                   <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">Tür</th><th className="px-2 py-1">Ad</th>
                   <th className="px-2 py-1">Peer</th><th className="px-2 py-1">Durum</th>
                   <th className="px-2 py-1">Uptime</th>
@@ -238,16 +238,16 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
               </thead>
               <tbody>
                 {vpn.map((v, i) => (
-                  <tr key={i} className="border-t border-slate-800/60">
-                    <td className="px-2 py-1 font-mono text-dim-aa">{v.vdom || 'root'}</td>
-                    <td className="px-2 py-1 font-mono text-slate-400">{v.kind}</td>
-                    <td className="px-2 py-1 font-mono text-slate-300">{v.name}</td>
-                    <td className="px-2 py-1 font-mono text-dim-aa">{v.peer || '-'}</td>
+                  <tr key={i} className="border-t border-rule">
+                    <td className="px-2 py-1 font-mono text-tui-dim">{v.vdom || 'root'}</td>
+                    <td className="px-2 py-1 font-mono text-tui-dim">{v.kind}</td>
+                    <td className="px-2 py-1 font-mono text-ink">{v.name}</td>
+                    <td className="px-2 py-1 font-mono text-tui-dim">{v.peer || '-'}</td>
                     <td className={`px-2 py-1 font-mono text-[10px] ${statusColor(v.status)}`}>{v.status}</td>
-                    <td className="px-2 py-1 font-mono text-dim-aa">{fmtUptime(v.uptime)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-cyan-300/90">{formatBits(v.rx_bytes * 8)}</td>
+                    <td className="px-2 py-1 font-mono text-tui-dim">{fmtUptime(v.uptime)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-rx">{formatBits(v.rx_bytes * 8)}</td>
                     <td className="px-2 py-1 text-right font-mono text-violet-300/90">{formatBits(v.tx_bytes * 8)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[10px] text-dim-aa">{fmtAgo(v.ts)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-[10px] text-tui-dim">{fmtAgo(v.ts)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -259,11 +259,11 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
       {/* sd-wan */}
       {latestSdwan.size > 0 && (
         <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wider text-dim-aa">sd-wan sağlık kontrolleri (son 30 dk)</p>
-          <div className="overflow-x-auto rounded border border-slate-800">
+          <p className="mb-1 text-[10px] uppercase tracking-wider text-tui-dim">sd-wan sağlık kontrolleri (son 30 dk)</p>
+          <div className="overflow-x-auto border border-rule">
             <table className="w-full min-w-[560px] text-xs">
-              <thead className="bg-slate-900/80">
-                <tr className="text-left text-[10px] uppercase text-dim-aa">
+              <thead className="bg-panel">
+                <tr className="text-left text-[10px] uppercase text-tui-dim">
                   <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">Health-Check</th><th className="px-2 py-1">Member</th>
                   <th className="px-2 py-1 text-right">Gecikme</th><th className="px-2 py-1 text-right">Jitter</th>
                   <th className="px-2 py-1 text-right">Kayıp</th><th className="px-2 py-1">Durum</th>
@@ -271,13 +271,13 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
               </thead>
               <tbody>
                 {[...latestSdwan.values()].map((w, i) => (
-                  <tr key={i} className="border-t border-slate-800/60">
-                    <td className="px-2 py-1 font-mono text-dim-aa">{w.vdom || 'root'}</td>
-                    <td className="px-2 py-1 font-mono text-slate-400">{w.health_check}</td>
-                    <td className="px-2 py-1 font-mono text-slate-300">{w.member}</td>
-                    <td className="px-2 py-1 text-right font-mono text-slate-300">{w.latency_ms.toFixed(1)} ms</td>
-                    <td className="px-2 py-1 text-right font-mono text-slate-400">{w.jitter_ms.toFixed(1)} ms</td>
-                    <td className="px-2 py-1 text-right font-mono text-slate-400">{w.packet_loss_pct.toFixed(1)}%</td>
+                  <tr key={i} className="border-t border-rule">
+                    <td className="px-2 py-1 font-mono text-tui-dim">{w.vdom || 'root'}</td>
+                    <td className="px-2 py-1 font-mono text-tui-dim">{w.health_check}</td>
+                    <td className="px-2 py-1 font-mono text-ink">{w.member}</td>
+                    <td className="px-2 py-1 text-right font-mono text-ink">{w.latency_ms.toFixed(1)} ms</td>
+                    <td className="px-2 py-1 text-right font-mono text-tui-dim">{w.jitter_ms.toFixed(1)} ms</td>
+                    <td className="px-2 py-1 text-right font-mono text-tui-dim">{w.packet_loss_pct.toFixed(1)}%</td>
                     <td className={`px-2 py-1 font-mono text-[10px] ${statusColor(w.state)}`}>{w.state}</td>
                   </tr>
                 ))}
@@ -290,11 +290,11 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
       {/* politika hit'leri */}
       {policies.length > 0 && (
         <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wider text-dim-aa">en aktif politika hit'leri (son 3 sa)</p>
-          <div className="overflow-x-auto rounded border border-slate-800">
+          <p className="mb-1 text-[10px] uppercase tracking-wider text-tui-dim">en aktif politika hit'leri (son 3 sa)</p>
+          <div className="overflow-x-auto border border-rule">
             <table className="w-full min-w-[520px] text-xs">
-              <thead className="bg-slate-900/80">
-                <tr className="text-left text-[10px] uppercase text-dim-aa">
+              <thead className="bg-panel">
+                <tr className="text-left text-[10px] uppercase text-tui-dim">
                   <th className="px-2 py-1">VDOM</th><th className="px-2 py-1">ID</th><th className="px-2 py-1">Politika</th>
                   <th className="px-2 py-1">Aksiyon</th>
                   <th className="px-2 py-1 text-right">Hit Δ</th><th className="px-2 py-1 text-right">Bayt Δ</th>
@@ -302,15 +302,15 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
               </thead>
               <tbody>
                 {policies.map((p) => (
-                  <tr key={`${p.vdom}-${p.policy_id}`} className="border-t border-slate-800/60">
-                    <td className="px-2 py-1 font-mono text-dim-aa">{p.vdom || 'root'}</td>
-                    <td className="px-2 py-1 font-mono text-dim-aa">{p.policy_id}</td>
-                    <td className="px-2 py-1 font-mono text-slate-300">{p.name}</td>
+                  <tr key={`${p.vdom}-${p.policy_id}`} className="border-t border-rule">
+                    <td className="px-2 py-1 font-mono text-tui-dim">{p.vdom || 'root'}</td>
+                    <td className="px-2 py-1 font-mono text-tui-dim">{p.policy_id}</td>
+                    <td className="px-2 py-1 font-mono text-ink">{p.name}</td>
                     <td className="px-2 py-1">
-                      <span className={`font-mono text-[10px] ${p.action === 'accept' ? 'text-emerald-400' : 'text-rose-400/80'}`}>{p.action}</span>
+                      <span className={`font-mono text-[10px] ${p.action === 'accept' ? 'text-emerald-400' : 'text-rose-400'}`}>{p.action}</span>
                     </td>
-                    <td className="px-2 py-1 text-right font-mono text-cyan-300/90">{p.hits.toLocaleString('tr-TR')}</td>
-                    <td className="px-2 py-1 text-right font-mono text-slate-400">{formatBits(p.bytes * 8)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-rx">{p.hits.toLocaleString('tr-TR')}</td>
+                    <td className="px-2 py-1 text-right font-mono text-tui-dim">{formatBits(p.bytes * 8)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -320,7 +320,7 @@ export function FortiPanel({ deviceId }: { deviceId: number }) {
       )}
 
       {vpn.length === 0 && latestSdwan.size === 0 && policies.length === 0 && !last && (
-        <p className="text-xs text-dim-aa">
+        <p className="text-xs text-tui-dim">
           FortiGate verisi henüz yok — poll tamamlandığında bu panel dolacak (arayüzler sekmesi SNMP ile aynı uçtan izlenir).
         </p>
       )}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { SEV_NAMES, SEV_STYLES } from '../lib/syslogSeverity'
-import { Card } from '../components/Card'
+import { Panel } from '../components/Panel'
 import { FortiPanel } from '../components/FortiPanel'
 import { StatusPill, type StatusTone } from '../components/StatusPill'
 
@@ -201,7 +201,7 @@ export function DeviceDetailPage() {
   // gelebilir — bu yüzden bildirim, aşağıdaki üç dönüş yolunun (notFound /
   // yükleniyor / ana içerik) hepsinde ayrı ayrı, en üstte gösteriliyor
   const sessionBanner = sessionExpired && (
-    <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+    <p className="border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
       ⚠ Oturum sona ermiş olabilir — veriler güncellenmiyor. Sayfayı yenileyip tekrar giriş yapın.
     </p>
   )
@@ -210,8 +210,8 @@ export function DeviceDetailPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
         {sessionBanner}
-        <p className="py-16 text-center text-sm text-dim-aa">
-          Cihaz bulunamadı. <Link to="/cihazlar" className="text-cyan-400 hover:underline">Cihaz listesine dön</Link>
+        <p className="py-16 text-center text-sm text-tui-dim">
+          Cihaz bulunamadı. <Link to="/cihazlar" className="text-rx hover:underline">Cihaz listesine dön</Link>
         </p>
       </div>
     )
@@ -221,7 +221,7 @@ export function DeviceDetailPage() {
     return (
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
         {sessionBanner}
-        <p className="py-16 text-center text-sm text-dim-aa">Yükleniyor…</p>
+        <p className="py-16 text-center text-sm text-tui-dim">Yükleniyor…</p>
       </div>
     )
   }
@@ -240,7 +240,7 @@ export function DeviceDetailPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 px-4 py-5">
       <div className="flex items-center gap-2">
-        <Link to="/cihazlar" className="text-xs text-dim-aa hover:text-cyan-400">
+        <Link to="/cihazlar" className="text-xs text-tui-dim hover:text-rx">
           ← Cihazlar
         </Link>
       </div>
@@ -250,58 +250,58 @@ export function DeviceDetailPage() {
       {/* başlık */}
       <div className="flex flex-wrap items-center gap-3">
         <StatusPill tone={HEALTH_META[healthStatus].tone} label={HEALTH_META[healthStatus].label} />
-        <h1 className="font-mono text-xl font-bold text-slate-100">{device.name}</h1>
-        <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-xs uppercase text-slate-400">{device.kind}</span>
+        <h1 className="text-[13px] font-bold uppercase tracking-[0.04em] text-ink-hi">{device.name}</h1>
+        <span className="bg-panel-2 px-2 py-0.5 font-mono text-xs uppercase text-tui-dim">{device.kind}</span>
         {device.vendor === 'fortigate' ? (
-          <span className="rounded border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 font-mono text-xs uppercase text-orange-300">
+          <span className="border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 font-mono text-xs uppercase text-orange-300">
             fortigate rest api
           </span>
         ) : (
-          <span className="rounded border border-slate-700 px-2 py-0.5 font-mono text-xs uppercase text-dim-aa">
+          <span className="border border-rule-hi px-2 py-0.5 font-mono text-xs uppercase text-tui-dim">
             snmp v{device.snmp_version === 3 ? '3' : '2c'}
           </span>
         )}
       </div>
 
       {device.last_error && (
-        <p className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-mono text-xs text-rose-400">
+        <p className="border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-mono text-xs text-rose-400">
           ⚠ {device.last_error}
         </p>
       )}
 
       {/* özet şeridi */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Host</p>
-          <p className="mt-1.5 truncate font-mono text-sm text-slate-200">{device.host}</p>
+        <div className="border border-rule bg-panel p-3.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">Host</p>
+          <p className="mt-1.5 truncate font-mono text-sm text-ink-hi">{device.host}</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Sistem Adı</p>
-          <p className="mt-1.5 truncate font-mono text-sm text-slate-200" title={device.sys_descr}>
+        <div className="border border-rule bg-panel p-3.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">Sistem Adı</p>
+          <p className="mt-1.5 truncate font-mono text-sm text-ink-hi" title={device.sys_descr}>
             {device.sys_name || '—'}
           </p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Poll Aralığı</p>
-          <p className="mt-1.5 font-mono text-sm text-slate-200">{device.poll_seconds} sn</p>
+        <div className="border border-rule bg-panel p-3.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">Poll Aralığı</p>
+          <p className="mt-1.5 font-mono text-sm text-ink-hi">{device.poll_seconds} sn</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Son Poll</p>
-          <p className="mt-1.5 font-mono text-sm text-slate-200">{relTime(device.last_poll)}</p>
+        <div className="border border-rule bg-panel p-3.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">Son Poll</p>
+          <p className="mt-1.5 font-mono text-sm text-ink-hi">{relTime(device.last_poll)}</p>
         </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Eklenme</p>
-          <p className="mt-1.5 font-mono text-sm text-slate-200">{relDate(device.added_at)}</p>
+        <div className="border border-rule bg-panel p-3.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">Eklenme</p>
+          <p className="mt-1.5 font-mono text-sm text-ink-hi">{relDate(device.added_at)}</p>
         </div>
         {device.vendor === 'fortigate' && (
           <>
-            <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">API URL</p>
-              <p className="mt-1.5 truncate font-mono text-sm text-slate-200" title={device.api_url}>{device.api_url || '—'}</p>
+            <div className="border border-rule bg-panel p-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">API URL</p>
+              <p className="mt-1.5 truncate font-mono text-sm text-ink-hi" title={device.api_url}>{device.api_url || '—'}</p>
             </div>
-            <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">VDOM · TLS</p>
-              <p className="mt-1.5 font-mono text-sm text-slate-200">
+            <div className="border border-rule bg-panel p-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-tui-dim">VDOM · TLS</p>
+              <p className="mt-1.5 font-mono text-sm text-ink-hi">
                 {device.vdom || 'root'} · {device.api_verify_tls ? 'doğrulanıyor' : 'atlanıyor'}
               </p>
             </div>
@@ -311,20 +311,20 @@ export function DeviceDetailPage() {
 
       {/* fortigate derin panel */}
       {device.vendor === 'fortigate' && (
-        <Card title="FortiGate Detayı" right={<span className="text-xs text-dim-aa">REST API · canlı</span>}>
+        <Panel title="FortiGate Detayı" right={<span className="text-xs text-tui-dim">REST API · canlı</span>}>
           <FortiPanel deviceId={device.id} />
-        </Card>
+        </Panel>
       )}
 
       {/* arayüzler */}
-      <Card title="Arayüzler" right={<span className="text-xs text-dim-aa">{ifaces.length} arayüz</span>}>
+      <Panel title="Arayüzler" right={<span className="text-xs text-tui-dim">{ifaces.length} arayüz</span>}>
         {ifaces.length === 0 ? (
-          <p className="py-6 text-center text-sm text-dim-aa">Henüz arayüz verisi yok.</p>
+          <p className="py-6 text-center text-sm text-tui-dim">Henüz arayüz verisi yok.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-800/60">
+          <div className="overflow-x-auto border border-rule">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900/95">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-dim-aa">
+              <thead className="sticky top-0">
+                <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                   <th scope="col" className="px-3 py-2 font-medium">Arayüz</th>
                   <th scope="col" className="px-3 py-2 font-medium">Durum</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Hız</th>
@@ -337,30 +337,30 @@ export function DeviceDetailPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-rule">
                 {ifaces.map((i) => (
-                  <tr key={i.if_index} className="hover:bg-slate-800/30">
+                  <tr key={i.if_index} className="hover:bg-panel-2/40">
                     <td className="px-3 py-1.5">
-                      <span className="font-mono text-slate-300">{i.name || `if${i.if_index}`}</span>
-                      {i.alias && <span className="ml-2 text-[11px] text-dim-aa">{i.alias}</span>}
+                      <span className="font-mono text-ink">{i.name || `if${i.if_index}`}</span>
+                      {i.alias && <span className="ml-2 text-[11px] text-tui-dim">{i.alias}</span>}
                     </td>
                     <td className="px-3 py-1.5">
-                      <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-dim-aa'}`}>
+                      <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-tui-dim'}`}>
                         {i.oper_status === 1 ? 'up' : 'down'}
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-dim-aa">
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-tui-dim">
                       {i.speed > 0 ? formatBits(i.speed) : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-cyan-300/90">{formatBits(i.rx_bps)}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-violet-300/90">{formatBits(i.tx_bps)}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-[11px] text-dim-aa">
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-rx">{formatBits(i.rx_bps)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-tx">{formatBits(i.tx_bps)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-[11px] text-tui-dim">
                       {formatBytes(i.rx_bytes)}/{formatBytes(i.tx_bytes)}
                     </td>
-                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_errors + i.out_errors > 0 ? 'text-amber-400/90' : 'text-dim-aa'}`}>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_errors + i.out_errors > 0 ? 'text-amber-400' : 'text-tui-dim'}`}>
                       {i.in_errors}/{i.out_errors}
                     </td>
-                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_discards + i.out_discards > 0 ? 'text-amber-400/90' : 'text-dim-aa'}`}>
+                    <td className={`px-3 py-1.5 text-right font-mono text-xs ${i.in_discards + i.out_discards > 0 ? 'text-amber-400' : 'text-tui-dim'}`}>
                       {i.in_discards}/{i.out_discards}
                     </td>
                   </tr>
@@ -369,12 +369,12 @@ export function DeviceDetailPage() {
             </table>
           </div>
         )}
-      </Card>
+      </Panel>
 
       {/* netflow */}
-      <Card title="NetFlow v5 Akışları" right={<span className="text-xs text-dim-aa">son 15 dk · bu cihaz · {formatNum(deviceFlows.length)}</span>}>
+      <Panel title="NetFlow v5 Akışları" right={<span className="text-xs text-tui-dim">son 15 dk · bu cihaz · {formatNum(deviceFlows.length)}</span>}>
         {deviceFlows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-dim-aa">Bu cihazdan akış yok.</p>
+          <p className="py-6 text-center text-sm text-tui-dim">Bu cihazdan akış yok.</p>
         ) : (
           <>
             {deviceFlows.length > 100 && (
@@ -382,10 +382,10 @@ export function DeviceDetailPage() {
                 ilk 100 / {formatNum(deviceFlows.length)} akış gösteriliyor
               </p>
             )}
-            <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800/60">
+            <div className="max-h-72 overflow-y-auto border border-rule">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-slate-900/95">
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-dim-aa">
+                <thead className="sticky top-0 bg-panel">
+                  <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                     <th scope="col" className="px-3 py-1.5 font-medium">Saat</th>
                     <th scope="col" className="px-3 py-1.5 font-medium">Akış</th>
                     <th scope="col" className="px-3 py-1.5 font-medium">Protokol</th>
@@ -393,20 +393,20 @@ export function DeviceDetailPage() {
                     <th scope="col" className="px-3 py-1.5 text-right font-medium">Octet</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-rule">
                   {deviceFlows.slice(0, 100).map((f, i) => (
-                    <tr key={i} className="hover:bg-slate-800/30">
-                      <td className="px-3 py-1.5 font-mono text-[11px] text-dim-aa">
+                    <tr key={i} className="hover:bg-panel-2/40">
+                      <td className="px-3 py-1.5 font-mono text-[11px] text-tui-dim">
                         {f.ts ? new Date(f.ts * 1000).toLocaleTimeString('tr-TR') : '—'}
                       </td>
-                      <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
+                      <td className="px-3 py-1.5 font-mono text-xs text-ink">
                         {f.src}:{f.src_port} → {f.dst}:{f.dst_port}
                       </td>
                       <td className="px-3 py-1.5">
-                        <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-400">{f.proto}</span>
+                        <span className="bg-panel-2 px-1.5 py-0.5 font-mono text-[10px] uppercase text-tui-dim">{f.proto}</span>
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-400">{f.packets}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-xs text-emerald-300/90">{formatBytes(f.octets)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-tui-dim">{f.packets}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-xs text-emerald-400">{formatBytes(f.octets)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -414,27 +414,27 @@ export function DeviceDetailPage() {
             </div>
           </>
         )}
-      </Card>
+      </Panel>
 
       {/* syslog */}
-      <Card title="Syslog Olayları" right={<span className="text-xs text-dim-aa">bu cihaz · {formatNum(deviceSyslog.length)}</span>}>
+      <Panel title="Syslog Olayları" right={<span className="text-xs text-tui-dim">bu cihaz · {formatNum(deviceSyslog.length)}</span>}>
         {deviceSyslog.length === 0 ? (
-          <p className="py-6 text-center text-sm text-dim-aa">Bu cihazdan syslog olayı yok.</p>
+          <p className="py-6 text-center text-sm text-tui-dim">Bu cihazdan syslog olayı yok.</p>
         ) : (
           <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
             {deviceSyslog.map((e) => (
-              <li key={e.id} className="flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] hover:bg-slate-800/30">
-                <span className="text-dim-aa">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
-                <span className={`rounded px-1 text-[10px] ring-1 ${SEV_STYLES[e.severity]}`}>{SEV_NAMES[e.severity]}</span>
-                <span className="truncate text-slate-300">
-                  {e.tag && <span className="text-dim-aa">{e.tag}: </span>}
+              <li key={e.id} className="flex items-baseline gap-2 px-2 py-1 font-mono text-[11px] hover:bg-panel-2/40">
+                <span className="text-tui-dim">{new Date(e.ts * 1000).toLocaleTimeString('tr-TR')}</span>
+                <span className={`px-1 text-[10px] ${SEV_STYLES[e.severity]}`}>{SEV_NAMES[e.severity]}</span>
+                <span className="truncate text-ink">
+                  {e.tag && <span className="text-tui-dim">{e.tag}: </span>}
                   {e.message}
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </Panel>
     </div>
   )
 }
