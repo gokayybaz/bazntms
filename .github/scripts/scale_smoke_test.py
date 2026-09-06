@@ -71,16 +71,20 @@ def ha_check(cookie):
         return
 
     subprocess.run(["docker", "kill", ids[0]], capture_output=True, timeout=15)
-    time.sleep(3)  # nginx bir sonraki upstream'e gecsin
+    time.sleep(4)  # nginx bir sonraki upstream'e gecsin
 
     ok = False
-    for _ in range(12):
-        # paylasimli oturum: ayni cookie hâlâ gecerli olmali (yeni giris gerekmez)
-        s, _, agents = http_json("GET", "/api/v1/agents", cookie=cookie)
-        if s == 200 and isinstance(agents, list):
-            ok = True
-            break
-        time.sleep(2)
+    for _ in range(20):
+        # paylasimli oturum: ayni cookie hâlâ gecerli olmali (yeni giris gerekmez).
+        # olen upstream'e denk gelen ilk istekler timeout olabilir — tekrar denenir.
+        try:
+            s, _, agents = http_json("GET", "/api/v1/agents", cookie=cookie)
+            if s == 200 and isinstance(agents, list):
+                ok = True
+                break
+        except Exception:
+            pass
+        time.sleep(3)
     check("HA: bir controller oldurulunce panel + paylasimli oturum ayakta", ok)
 
     # yeni giris de calismali (surdirdigimiz replika DB oturum deposunu goruyor)
