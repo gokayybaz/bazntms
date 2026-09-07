@@ -211,7 +211,7 @@ func (g *GitHubSyncer) download(ctx context.Context, a ghAsset, dest string) (st
 		return "", 0, err
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(resp.Body, 1<<31))
