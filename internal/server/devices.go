@@ -79,12 +79,28 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.Name == "" || req.Host == "" {
-		http.Error(w, "name ve host zorunlu", http.StatusBadRequest)
+	if req.Name == "" {
+		http.Error(w, "name zorunlu", http.StatusBadRequest)
 		return
 	}
 	if req.Kind == "" {
 		req.Kind = "other"
+	}
+	// host'suz kayıt = "yönetilmeyen" topoloji düğümü (Canlı Akış gruplama için
+	// switch/AP). SNMP/API yok → poll edilmez (Enabled=false). Yalnızca ağ
+	// donanımı türleri için.
+	unmanaged := req.Host == ""
+	if unmanaged {
+		switch req.Kind {
+		case "switch", "ap", "router", "firewall", "other":
+		default:
+			http.Error(w, "host'suz cihaz yalnızca switch/ap/router/firewall/other olabilir", http.StatusBadRequest)
+			return
+		}
+		if req.Vendor == "fortigate" {
+			http.Error(w, "fortigate için host zorunlu", http.StatusBadRequest)
+			return
+		}
 	}
 	if req.Vendor == "" {
 		req.Vendor = "snmp"
@@ -141,7 +157,7 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		V3PrivProto: req.V3PrivProto, V3PrivPass: req.V3PrivPass,
 		APIURL: req.APIURL, APIToken: req.APIToken,
 		APIVerifyTLS: req.APIVerifyTLS, VDOM: req.VDOM,
-		PollSeconds: req.PollSeconds, Enabled: true,
+		PollSeconds: req.PollSeconds, Enabled: !unmanaged,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -168,6 +184,47 @@ func (s *Server) handleDeviceDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("cihaz silindi", "device_id", id)
 	s.audit(r, identityFromCtx(r), "device.delete", fmt.Sprintf("device:%d", id), "")
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handleDeviceSetUplink, cihazın üst cihazını (switch → router zinciri) atar
+// veya kaldırır. Gövde: {"device_id": <id>} veya {"device_id": null}.
+func (s *Server) handleDeviceSetUplink(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if !s.deviceInScope(r, id) {
+		http.Error(w, "cihaz bulunamadı", http.StatusNotFound)
+		return
+	}
+	var body struct {
+		DeviceID *int64 `json:"device_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "geçersiz istek gövdesi", http.StatusBadRequest)
+		return
+	}
+	if body.DeviceID != nil {
+		if *body.DeviceID == id {
+			http.Error(w, "cihaz kendine bağlanamaz", http.StatusBadRequest)
+			return
+		}
+		if !s.deviceInScope(r, *body.DeviceID) {
+			http.Error(w, "üst cihaz bulunamadı", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.store.SetDeviceUplink(id, body.DeviceID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	detail := "kaldırıldı"
+	if body.DeviceID != nil {
+		detail = fmt.Sprintf("device:%d", *body.DeviceID)
+	}
+	s.audit(r, identityFromCtx(r), "device.uplink", fmt.Sprintf("device:%d", id), detail)
 	writeJSON(w, map[string]any{"ok": true})
 }
 

@@ -29,6 +29,23 @@ function Harness() {
       >
         ask-form
       </button>
+      <button
+        onClick={async () =>
+          setOut(
+            JSON.stringify(
+              await form({
+                title: 'SNMP',
+                fields: [
+                  { key: 'host', label: 'Host' },
+                  { key: 'community', label: 'Community', type: 'password' },
+                ],
+              }),
+            ),
+          )
+        }
+      >
+        ask-secret
+      </button>
       <output>{out}</output>
     </div>
   )
@@ -90,6 +107,17 @@ describe('useDialog', () => {
     await user.click(screen.getByText('ask-form'))
     await user.click(screen.getByRole('button', { name: 'İptal' }))
     expect(screen.getByRole('status').textContent).toBe('null')
+  })
+
+  it('form password alanı type="password" input üretir ve değeri toplar', async () => {
+    const { user } = renderHarness()
+    await user.click(screen.getByText('ask-secret'))
+    const pw = document.querySelector('input[type="password"]') as HTMLInputElement
+    expect(pw).toBeTruthy()
+    await user.type(screen.getByRole('textbox'), '10.0.0.2')
+    await user.type(pw, 's3cret')
+    await user.click(screen.getByRole('button', { name: 'Kaydet' }))
+    expect(screen.getByRole('status').textContent).toContain('"community":"s3cret"')
   })
 
   it('danger onay butonu rose reverse-video sınıfı taşır', async () => {

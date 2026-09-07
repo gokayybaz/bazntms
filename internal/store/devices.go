@@ -32,6 +32,10 @@ type Device struct {
 	AddedAt      int64  `json:"added_at"`
 	LastPoll     int64  `json:"last_poll"`
 	LastError    string `json:"last_error,omitempty"`
+	// UplinkDeviceID, bu cihazın bağlı olduğu üst cihaz (switch → router
+	// zinciri). nil = doğrudan router/internet. Canlı Akış şeması için;
+	// şimdilik yalnız API'den atanır.
+	UplinkDeviceID *int64 `json:"uplink_device_id,omitempty"`
 }
 
 type DeviceIface struct {
@@ -87,7 +91,7 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 func (s *sqlStore) ListDevices(site string) ([]Device, error) {
 	q := `SELECT id, name, host, kind, site, vendor, snmp_version, community, v3_user, v3_auth_proto,
 		v3_auth_pass, v3_priv_proto, v3_priv_pass, api_url, api_token_enc, api_verify_tls, vdom,
-		poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error
+		poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error, uplink_device_id
 		FROM devices`
 	args := []any{}
 	if site != "" {
@@ -103,12 +107,14 @@ func (s *sqlStore) ListDevices(site string) ([]Device, error) {
 	out := []Device{}
 	for rows.Next() {
 		var d Device
+		var uplink sql.NullInt64
 		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.Site, &d.Vendor, &d.SNMPVersion, &d.Community, &d.V3User,
 			&d.V3AuthProto, &d.V3AuthPass, &d.V3PrivProto, &d.V3PrivPass, &d.APIURL, &d.APIToken,
 			&d.APIVerifyTLS, &d.VDOM, &d.PollSeconds, &d.Enabled,
-			&d.SysName, &d.SysDescr, &d.AddedAt, &d.LastPoll, &d.LastError); err != nil {
+			&d.SysName, &d.SysDescr, &d.AddedAt, &d.LastPoll, &d.LastError, &uplink); err != nil {
 			return nil, err
 		}
+		d.UplinkDeviceID = i64ptr(uplink)
 		out = append(out, d)
 	}
 	return out, rows.Err()
@@ -129,6 +135,10 @@ func (s *sqlStore) DeviceByID(id int64) (*Device, error) {
 
 func (s *sqlStore) DeleteDevice(id int64) error {
 	for _, q := range []string{
+		// önce uplink referanslarını temizle (FK yok): bu cihazı işaret eden
+		// agent'lar "Doğrudan"a, alt cihazlar köke düşer.
+		`UPDATE agents SET uplink_device_id = NULL WHERE uplink_device_id = ?`,
+		`UPDATE devices SET uplink_device_id = NULL WHERE uplink_device_id = ?`,
 		`DELETE FROM devices WHERE id = ?`,
 		`DELETE FROM device_iface_samples WHERE device_id = ?`,
 	} {
@@ -137,6 +147,13 @@ func (s *sqlStore) DeleteDevice(id int64) error {
 		}
 	}
 	return nil
+}
+
+// SetDeviceUplink, cihazın üst cihazını (switch → router zinciri) atar; uplink
+// nil ise bağı kaldırır.
+func (s *sqlStore) SetDeviceUplink(deviceID int64, uplink *int64) error {
+	_, err := s.db.Exec(s.q(`UPDATE devices SET uplink_device_id = ? WHERE id = ?`), nullI64(uplink), deviceID)
+	return err
 }
 
 func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error {

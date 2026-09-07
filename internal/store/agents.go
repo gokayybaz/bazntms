@@ -26,6 +26,10 @@ type Agent struct {
 	// MachineID, agent'ın kararlı makine kimliği hash'i (C3, Faz 13). Boş
 	// olabilir (eski agent / kimlik alınamadı) — o zaman her hello yeni satır.
 	MachineID string `json:"-"`
+	// UplinkDeviceID, agent'ın bağlı olduğu erişim katmanı cihazı (switch/AP).
+	// Canlı Akış şeması agent'ları bu alana göre gruplar. nil = "Doğrudan"
+	// (router'a doğrudan bağlı). Yönetici manuel atar (SNMP keşfi değil).
+	UplinkDeviceID *int64 `json:"uplink_device_id,omitempty"`
 }
 
 func TokenHash(token string) string {
@@ -169,7 +173,7 @@ type AgentWithRates struct {
 // verimler. site bos degilse yalnizca o sitenin agent'lari doner (Faz 5.1
 // site scope).
 func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error) {
-	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip
+	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id
 		FROM agents`
 	args := []any{}
 	if site != "" {
@@ -186,9 +190,11 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 	now := time.Now().Unix()
 	for rows.Next() {
 		var a AgentWithRates
-		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP); err != nil {
+		var uplink sql.NullInt64
+		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink); err != nil {
 			return nil, err
 		}
+		a.UplinkDeviceID = i64ptr(uplink)
 		a.Online = now-a.LastSeen <= int64(onlineWindow.Seconds())
 		out = append(out, a)
 	}
@@ -349,14 +355,24 @@ func (s *sqlStore) AgentHistory(agentID int64, since time.Time) ([]Bucket, error
 }
 
 func (s *sqlStore) AgentByID(id int64) (*Agent, error) {
-	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip
+	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id
 		FROM agents WHERE id = ?`), id)
 	var a Agent
-	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP)
+	var uplink sql.NullInt64
+	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink)
 	if err != nil {
 		return nil, err
 	}
+	a.UplinkDeviceID = i64ptr(uplink)
 	return &a, nil
+}
+
+// SetAgentUplink, agent'ın erişim katmanı cihazını (switch/AP) atar; deviceID
+// nil ise bağı kaldırır ("Doğrudan"). Cihazın varlığı/türü/site'ı çağıran
+// katmanda (handler) doğrulanır.
+func (s *sqlStore) SetAgentUplink(agentID int64, deviceID *int64) error {
+	_, err := s.db.Exec(s.q(`UPDATE agents SET uplink_device_id = ? WHERE id = ?`), nullI64(deviceID), agentID)
+	return err
 }
 
 func (s *sqlStore) RenameAgent(id int64, name string) error {

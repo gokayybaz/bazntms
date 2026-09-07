@@ -212,6 +212,22 @@ kaldırıldı.
 `overflow-x-auto` + `min-width` ile yatay kaydırmaya geçer. `TabBar` de dar
 ekranda yatay kaydırır.
 
+**FullscreenCard:** canlı görselleri (Canlı Akış, Coğrafi) kabuğun üstüne
+tam ekran açar — `F4` (FnKeyBar'a düşer) + sağ üst düğme, `Esc` kapatır.
+`editable` verilirse ikinci düğme `F3` "Düzenle" — çocuğa render-prop ile
+`(full, editing)` bayrakları geçer; diyagram kendi ölçeğini/etkileşimini seçer.
+**TrafficFlowDiagram** kalabalık filoda (>~22 online) agent düğümlerini tek
+uzun sütun yerine 2–4 sütuna paketler (`buildScene`), 'dot' detayına iner ve
+paket tavanını/hızını filo büyüklüğüyle ölçekler; tam ekranda sahne genişler
+ve SVG `preserveAspectRatio="xMidYMid meet"` ile viewport'a tam oturur.
+En az bir agent'ta `uplinkId` (switch/AP cihazı) varsa **gruplu düzene**
+geçer (`buildGroupedScene`): agent bandı dikeyde uplink gruplarına bölünür,
+her grubun sağ kenarında bir switch/AP düğümü olur, o grubun okları o düğüm
+üzerinden router'a akar. Uplink'siz agent'lar "Doğrudan" grubunda kalır.
+Düzenleme modunda (`editable`) agent düğümüne tıklama uplink seçimi
+(`useDialog().form()`), switch düğümüne tıklama silme, "+ Switch / AP" düğmesi
+cihaz ekleme açar — hepsi `/api/v1/agents/{id}/uplink` + `/api/v1/devices`.
+
 ### Responsive
 
 **Sayfa asla yatay kaymaz** — `<main>` `overflow-x-hidden`; taşabilen içerik

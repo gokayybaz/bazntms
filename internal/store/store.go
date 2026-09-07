@@ -127,6 +127,23 @@ func btoi(b bool) int {
 	return 0
 }
 
+// nullI64, nullable INTEGER kolonuna yazarken *int64 → driver değeri.
+func nullI64(p *int64) sql.NullInt64 {
+	if p == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *p, Valid: true}
+}
+
+// i64ptr, nullable INTEGER kolonundan okurken sql.NullInt64 → *int64.
+func i64ptr(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Int64
+	return &v
+}
+
 func (s *sqlStore) Close() error { return s.db.Close() }
 
 func (s *sqlStore) Ping() error { return s.db.Ping() }

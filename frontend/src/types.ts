@@ -33,6 +33,8 @@ export interface AgentWithRates {
   online: boolean
   rates: AgentRate[]
   conns: number
+  /** bağlı olduğu erişim katmanı cihazı (switch/AP) — Canlı Akış gruplama */
+  uplink_device_id?: number
 }
 
 export interface AlertEvent {

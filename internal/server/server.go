@@ -47,7 +47,11 @@ type Server struct {
 	// multiSite (çoklu-saha / MSP modu, S14.B1): site sert bir yetki sınırıdır
 	// — agent kaydı için site-bağlı enroll token zorunlu, enroll token üretimi
 	// site ister. Bkz. docs/DEPLOYMENT-MODEL.md.
-	multiSite      bool
+	multiSite bool
+	// publicURL, panelin dış adresi (-public-url). Agent kurulum sihirbazı
+	// enroll komutundaki hub adresi için bunu tercih eder — panel bir tünel/
+	// reverse-proxy arkasından localhost'ta açılmış olabilir.
+	publicURL      string
 	vault          *vault.Vault
 	agentCA        *pki.CA // nil ise mTLS kapali (enroll CSR imzalamaz, client-cert auth yok)
 	enrollAttempts *enrollAttemptLimiter
@@ -159,6 +163,11 @@ func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
 // SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
 func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
 
+// SetPublicURL, panelin dış adresini (-public-url) kaydeder — agent kurulum
+// sihirbazı enroll komutundaki hub adresi için `window.location.origin` yerine
+// bunu kullanır (panel bir tünel/proxy arkasından localhost'ta açılmış olabilir).
+func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/") }
+
 // SetWSOrigins, WebSocket handshake için izin verilen origin host'larını
 // ayarlar (B5 — CSWSH savunması). localhost/127.0.0.1/[::1] her zaman eklenir.
 // Boş liste → tüm origin'ler kabul (bugünkü davranış) + uyarı logu.
@@ -213,11 +222,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents/{id}/history", s.handleAgentHistory)
 	mux.Handle("DELETE /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentDelete)))
 	mux.Handle("PATCH /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentRename)))
+	mux.Handle("PUT /api/v1/agents/{id}/uplink", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentSetUplink)))
 
 	// cihazlar ve ag cihazi verileri (Faz 3; ekleme/silme = netops+)
 	mux.HandleFunc("GET /api/v1/devices", s.handleDevicesList)
 	mux.Handle("POST /api/v1/devices", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceAdd)))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceDelete)))
+	mux.Handle("PUT /api/v1/devices/{id}/uplink", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceSetUplink)))
 	mux.HandleFunc("GET /api/v1/devices/{id}/interfaces", s.handleDeviceIfaces)
 	mux.HandleFunc("GET /api/v1/devices/{id}/resources", s.handleDeviceResources)
 	mux.HandleFunc("GET /api/v1/devices/{id}/vpn", s.handleDeviceVPN)

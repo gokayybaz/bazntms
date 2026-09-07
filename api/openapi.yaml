@@ -165,6 +165,7 @@ paths:
                   authenticated: { type: boolean }
                   oidc: { type: boolean }
                   multi_site: { type: boolean, description: "çoklu-saha (MSP) modu — site sert yetki sınırı (S14.B1)" }
+                  public_url: { type: string, description: "-public-url (agent kurulum sihirbazı enroll hub adresi); boş = origin kullan" }
                   role: { type: string }
                   site: { type: string }
                   username: { type: string }
@@ -356,6 +357,28 @@ paths:
       responses:
         "200": { description: Güncellendi }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/agents/{id}/uplink:
+    put:
+      tags: [fleet]
+      summary: Agent'ın erişim katmanı cihazını (switch/AP) ata/kaldır (yetki:agents)
+      description: Canlı Akış şeması agent'ları uplink cihazına göre gruplar.
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: integer
+                  nullable: true
+                  description: switch/ap/router/firewall türünde cihaz id'si; null = Doğrudan
+      responses:
+        "200": { description: Güncellendi }
+        "400": { description: Geçersiz cihaz / tür / saha }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/agents/{id}/history:
     get:
       tags: [fleet]
@@ -486,6 +509,27 @@ paths:
       responses:
         "200": { description: Silindi }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/devices/{id}/uplink:
+    put:
+      tags: [devices]
+      summary: Cihazın üst cihazını (switch → router zinciri) ata/kaldır (yetki:devices)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id:
+                  type: integer
+                  nullable: true
+                  description: üst cihaz id'si; null = köke bağlı
+      responses:
+        "200": { description: Güncellendi }
+        "400": { description: Geçersiz üst cihaz }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/devices/{id}/interfaces:
     get:
       tags: [devices]
@@ -1001,12 +1045,13 @@ components:
         sys_descr: { type: string }
         last_poll: { type: integer }
         last_error: { type: string }
+        uplink_device_id: { type: integer, nullable: true, description: "üst cihaz (switch → router zinciri)" }
     DeviceCreate:
       type: object
-      required: [name, host, kind]
+      required: [name, kind]
       properties:
         name: { type: string }
-        host: { type: string }
+        host: { type: string, description: "boş → yönetilmeyen topoloji düğümü (switch/AP gruplama), SNMP poll edilmez" }
         kind: { type: string, enum: [switch, router, firewall, ap, server, other] }
         site: { type: string }
         vendor: { type: string, description: "boş = jenerik SNMP; 'fortigate' = FortiOS REST" }

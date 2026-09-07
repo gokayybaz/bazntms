@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatBytes, formatNum } from '../lib/format'
 
 interface GeoCountry {
@@ -39,7 +39,7 @@ const RANGES = [
   { label: '24 saat', minutes: 1440 },
 ]
 
-export function GeoMapCard() {
+export function GeoMapCard({ fill = false }: { fill?: boolean }) {
   const [rows, setRows] = useState<GeoCountry[]>([])
   const [minutes, setMinutes] = useState(60)
   const [loaded, setLoaded] = useState(false)
@@ -63,24 +63,28 @@ export function GeoMapCard() {
     setTip(null)
   }
 
+  const loadedRef = useRef(false)
   useEffect(() => {
     let stop = false
+    let tries = 0
     const load = async () => {
+      tries++
       try {
         const res = await fetch(`/api/v1/geo?minutes=${minutes}`)
-        if (res.status === 401) return
-        if (!res.ok) {
-          if (!stop) setFetchError(true)
-          return
-        }
+        if (!res.ok) throw new Error(String(res.status))
         const data = await res.json()
         if (!stop) {
+          loadedRef.current = true
           setRows(Array.isArray(data) ? data : [])
           setLoaded(true)
           setFetchError(false)
         }
       } catch {
-        if (!stop) setFetchError(true)
+        if (stop) return
+        setFetchError(true)
+        // ilk veri henüz gelmediyse hızlanan yeniden deneme (400ms → 2s) —
+        // hub yeniden başlarken geçici 401/502 "Yükleniyor…" ekranında takmasın
+        if (!loadedRef.current && tries < 25) window.setTimeout(load, Math.min(2_000, 400 * tries))
       }
     }
     load()
@@ -155,7 +159,12 @@ export function GeoMapCard() {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[560px]" role="group" aria-label="Uzak trafiğin ülke bazlı dünya haritası">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className={fill ? 'mx-auto block w-full max-w-[1500px]' : 'w-full min-w-[560px]'}
+            role="group"
+            aria-label="Uzak trafiğin ülke bazlı dünya haritası"
+          >
             <g aria-hidden="true">
               <rect x={0} y={0} width={W} height={H} fill="#0a0d13" />
               {/* graticule */}

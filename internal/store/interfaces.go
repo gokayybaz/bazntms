@@ -99,6 +99,9 @@ type AgentStore interface {
 	// cascade ile siler (S13.7); silinen sayısını döndürür. offlineFor <= 0 → no-op.
 	PruneOfflineAgents(offlineFor time.Duration) (int, error)
 	RenameAgent(id int64, name string) error
+	// SetAgentUplink, agent'ı bir erişim katmanı cihazına (switch/AP) bağlar;
+	// deviceID nil → "Doğrudan". Canlı Akış gruplama.
+	SetAgentUplink(agentID int64, deviceID *int64) error
 
 	SaveProcessTraffic(agentID int64, ts int64, samples []telemetry.ProcessTrafficSample) error
 	TopProcessTraffic(since time.Time, agentID int64, limit int, site string) ([]ProcessTrafficUsage, error)
@@ -118,6 +121,9 @@ type DeviceStore interface {
 	ListDevices(site string) ([]Device, error)
 	DeviceByID(id int64) (*Device, error)
 	DeleteDevice(id int64) error
+	// SetDeviceUplink, cihazın üst cihazını (switch → router zinciri) atar;
+	// uplink nil → köke bağlı.
+	SetDeviceUplink(deviceID int64, uplink *int64) error
 	UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error
 	SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error
 	LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)

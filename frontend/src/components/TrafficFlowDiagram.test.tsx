@@ -1,6 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TrafficFlowDiagram, type DiagramAgent, type TrafficEvent } from './TrafficFlowDiagram'
+import {
+  TrafficFlowDiagram,
+  type DiagramAgent,
+  type DiagramDevice,
+  type TrafficEvent,
+} from './TrafficFlowDiagram'
 
 function mockReducedMotion(matches: boolean) {
   vi.stubGlobal(
@@ -63,10 +68,72 @@ describe('TrafficFlowDiagram', () => {
     expect(screen.getByText('22 aktif · 8 çevrimdışı gizli')).toBeInTheDocument()
   })
 
+  it('kalabalık filoyu birden çok sütuna paketler (yükseklik sınırlı kalır)', () => {
+    const many: DiagramAgent[] = Array.from({ length: 90 }, (_, i) => ({
+      name: `edge-${String(i).padStart(2, '0')}`,
+      online: true,
+    }))
+    render(<TrafficFlowDiagram events={[]} agents={many} />)
+    // 90 online / perCol 22 → 3 sütun; footer bunu belirtir
+    expect(screen.getByText(/90 aktif · 3 sütun/)).toBeInTheDocument()
+    // ilk ve son agent yine düğüm olarak var (dot detayı da <text> üretir)
+    expect(screen.getAllByText(/edge-00/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/edge-89/).length).toBeGreaterThan(0)
+  })
+
   it('agent listesi boşken hata vermeden render olur', () => {
     render(<TrafficFlowDiagram events={[]} agents={[]} />)
     expect(screen.getByText('İNTERNET')).toBeInTheDocument()
     expect(screen.getByText('aktif agent yok')).toBeInTheDocument()
+  })
+
+  const DEVICES: DiagramDevice[] = [
+    { id: 7, name: 'kat1-sw', kind: 'switch', online: true },
+    { id: 9, name: 'kat2-ap', kind: 'ap', online: false },
+  ]
+  const GROUPED_AGENTS: DiagramAgent[] = [
+    { name: 'ag-1', online: true, uplinkId: 7 },
+    { name: 'ag-2', online: true, uplinkId: 7 },
+    { name: 'ag-3', online: true, uplinkId: 9 },
+    { name: 'ag-4', online: true }, // uplink yok → Doğrudan
+  ]
+
+  it('uplink atanmış agent’lar gruplanır, atanmamışlar Doğrudan grubuna düşer', () => {
+    render(<TrafficFlowDiagram events={[]} agents={GROUPED_AGENTS} devices={DEVICES} />)
+    // grup başlıkları (switch/AP adı) + Doğrudan
+    expect(screen.getAllByText(/kat1-sw/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/kat2-ap/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Doğrudan/).length).toBeGreaterThan(0)
+    // footer "N grup"
+    expect(screen.getByText(/4 aktif · 3 grup/)).toBeInTheDocument()
+    // agent'lar yine düğüm
+    expect(screen.getAllByText(/ag-1/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/ag-4/).length).toBeGreaterThan(0)
+  })
+
+  it('bilinmeyen uplinkId gruplama tetiklemez (düz düzen)', () => {
+    render(<TrafficFlowDiagram events={[]} agents={[{ name: 'x', online: true, uplinkId: 999 }]} devices={DEVICES} />)
+    expect(screen.queryByText(/grup/)).not.toBeInTheDocument()
+  })
+
+  it('editable: agent düğümü tıklanınca onAgentClick çağrılır, + Switch/AP görünür', () => {
+    const onAgentClick = vi.fn()
+    const onAddGroup = vi.fn()
+    render(
+      <TrafficFlowDiagram
+        events={[]}
+        agents={GROUPED_AGENTS}
+        devices={DEVICES}
+        editable
+        onAgentClick={onAgentClick}
+        onAddGroup={onAddGroup}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Switch / AP ekle' }))
+    expect(onAddGroup).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'ag-1' }))
+    expect(onAgentClick).toHaveBeenCalledWith('ag-1')
   })
 
   it('ilk dolu partiden sonra gelen yeni olay "giden" sayacına işlenir', () => {

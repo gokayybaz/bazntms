@@ -22,7 +22,7 @@ export interface PromptOptions extends ConfirmOptions {
 export interface FormField {
   key: string
   label: string
-  type?: 'text' | 'number' | 'textarea' | 'select'
+  type?: 'text' | 'number' | 'password' | 'textarea' | 'select'
   defaultValue?: string
   options?: string[]
   placeholder?: string
@@ -156,7 +156,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                     ) : (
                       <input
                         autoFocus={i === 0}
-                        type={f.type === 'number' ? 'number' : 'text'}
+                        type={f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text'}
                         value={formVals[f.key] ?? ''}
                         onChange={(e) => setFormVals((v) => ({ ...v, [f.key]: e.target.value }))}
                         placeholder={f.placeholder}

@@ -594,6 +594,61 @@ func (s *Server) handleAgentRename(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "name": name})
 }
 
+// handleAgentSetUplink, agent'ı bir erişim katmanı cihazına (switch/AP) bağlar
+// veya bağı kaldırır — Canlı Akış gruplama (yönetici manuel atar). Gövde:
+// {"device_id": <id>} veya {"device_id": null}.
+func (s *Server) handleAgentSetUplink(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		DeviceID *int64 `json:"device_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "geçersiz istek gövdesi", http.StatusBadRequest)
+		return
+	}
+	a, err := s.store.AgentByID(id)
+	if err != nil || !s.agentInScope(r, a) {
+		http.Error(w, "agent bulunamadı", http.StatusNotFound)
+		return
+	}
+	if body.DeviceID != nil {
+		d, err := s.store.DeviceByID(*body.DeviceID)
+		if err != nil {
+			http.Error(w, "cihaz bulunamadı", http.StatusBadRequest)
+			return
+		}
+		switch d.Kind {
+		case "switch", "ap", "router", "firewall":
+		default:
+			http.Error(w, "uplink yalnızca switch/ap/router/firewall türü olabilir", http.StatusBadRequest)
+			return
+		}
+		if scope := SiteScope(identityFromCtx(r)); scope != "" && d.Site != scope {
+			http.Error(w, "cihaz bu sahada değil", http.StatusBadRequest)
+			return
+		}
+		if a.Site != "" && d.Site != "" && a.Site != d.Site {
+			http.Error(w, "agent ve cihaz farklı sahalarda", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.store.SetAgentUplink(id, body.DeviceID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	detail := "kaldırıldı"
+	if body.DeviceID != nil {
+		detail = fmt.Sprintf("device:%d", *body.DeviceID)
+	}
+	slog.Info("agent uplink atandı", "agent_id", id, "uplink", detail)
+	s.audit(r, identityFromCtx(r), "agent.uplink", fmt.Sprintf("agent:%d", id), detail)
+	writeJSON(w, map[string]any{"ok": true})
+}
+
 // maxProtocolVersion, desteklenen en yuksek agent protokol surumu.
 const maxProtocolVersion = 1
 

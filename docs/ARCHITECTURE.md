@@ -221,7 +221,7 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 | `/` | Dashboard (`Overview` bileşeni) — meter bandı + log-tail + filo/topoloji/cihazlar | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
-| `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id` |
+| `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
 | `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
 | `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
