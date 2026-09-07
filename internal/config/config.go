@@ -108,7 +108,8 @@ type AgentConfig struct {
 		PCAPDir         string `koanf:"pcap_dir"`       // PCAP kayit dizini
 	} `koanf:"collect"`
 	Update struct {
-		Enabled       bool   `koanf:"enabled"`        // imza dogrulamali otomatik guncelleme (Faz 7.3)
+		Enabled       bool   `koanf:"enabled"`        // (eski) — otomatik guncelleme artik varsayilan ACIK
+		Disabled      bool   `koanf:"disabled"`       // otomatik guncellemeyi kapat (-update-disabled esdegeri)
 		Channel       string `koanf:"channel"`        // stable | beta
 		PublicKey     string `koanf:"public_key"`     // hex ed25519; bos = yalnizca sha256
 		IntervalHours int    `koanf:"interval_hours"` // 0 → 6 saat

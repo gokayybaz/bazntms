@@ -204,6 +204,19 @@
       </InstallUISequence>
     </UI>
 
+    <!-- Servis kurtarma (SCM recovery): servis SERVICE_STOPPED bildirmeden
+         cikarsa (cokme VEYA self-update sonrasi exitAfterUpdate → exit 1)
+         SCM asagidaki action'lari calistirir: 5sn / 10sn / 30sn sonra
+         restart, sayac 1 gunde sifirlanir. Unix'te bunu systemd
+         Restart=always / launchd KeepAlive / docker --restart yapar;
+         Windows SCM yalnizca acikca yapilandirilirsa. Bozuk config'de
+         sonsuz dongu OLMAZ: o yolda agent svcHandler uzerinden duzgun
+         STOP bildirir (exit yerine), failure action tetiklenmez.
+         Return='ignore': sc.exe hatasi MSI'i asla dusurmez. -->
+    <CustomAction Id='ConfigAgentRecovery' Directory='INSTALLFOLDER'
+                  ExeCommand='&quot;[SystemFolder]sc.exe&quot; failure bazntms-agent reset= 86400 actions= restart/5000/restart/10000/restart/30000'
+                  Execute='deferred' Impersonate='no' Return='ignore' />
+
     <!-- Servisi HUBURL doluysa (sihirbazda girildiyse) otomatik baslat.
          Return='ignore': sc.exe basarisiz olsa/gecikse bile MSI kurulumu
          ASLA bundan dolayi basarisiz saymaz (1920 riski yok) — en kotu
@@ -212,6 +225,7 @@
                   ExeCommand='&quot;[SystemFolder]sc.exe&quot; start bazntms-agent'
                   Execute='deferred' Impersonate='no' Return='ignore' />
     <InstallExecuteSequence>
+      <Custom Action='ConfigAgentRecovery' After='InstallServices' Condition='NOT REMOVE' />
       <Custom Action='StartAgentService' After='StartServices' Condition='HUBURL' />
     </InstallExecuteSequence>
   </Package>

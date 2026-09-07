@@ -28,12 +28,15 @@ collect:
   pcap_record: false
   pcap_dir: /var/lib/bazntms/captures
 
-# otomatik guncelleme: hub -updates-dir ile baslatilmali
+# otomatik guncelleme — VARSAYILAN ACIK. Hub, GitHub release'lerinden
+# yeni agent binary'lerini kendi guncelleme kanalina senkron eder; agent
+# her interval_hours'ta sorgular, yukselme varsa indirip SHA-256 dogrular
+# ve kendini degistirir (supervisor yeniden baslatir).
 # update:
-#   enabled: true
-#   channel: stable
-#   public_key: "<ed25519-hex>"
+#   disabled: false          # true → bu agent'ta otomatik guncelleme kapali
+#   channel: stable          # stable | beta
 #   interval_hours: 6
+#   public_key: "<ed25519-hex>"   # yalnizca imzali kanal (bazntmsctl update sign) kullaniyorsaniz
 
 log:
   level: info

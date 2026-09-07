@@ -6,6 +6,8 @@
 
 package main
 
+import "os"
+
 func serviceMode() bool { return false }
 
 func runService(_ func(stop chan struct{}) error) error {
@@ -13,3 +15,8 @@ func runService(_ func(stop chan struct{}) error) error {
 }
 
 func platformValue(string) string { return "" }
+
+// exitAfterUpdate, self-update sonrasi sureci sonlandirir. Unix'te supervisor
+// (systemd Restart=always / launchd KeepAlive / docker --restart) temiz
+// cikista yeniden baslatir → exit 0.
+func exitAfterUpdate() { os.Exit(0) }

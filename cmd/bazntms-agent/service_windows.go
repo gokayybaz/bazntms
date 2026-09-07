@@ -9,6 +9,7 @@
 package main
 
 import (
+	"os"
 	"sync"
 
 	"golang.org/x/sys/windows/registry"
@@ -46,6 +47,19 @@ func platformValue(name string) string {
 // runService, agent'i servis olarak kaydeder ve SCM isteklerini isler.
 func runService(run func(stop chan struct{}) error) error {
 	return svc.Run(serviceName, &svcHandler{run: run})
+}
+
+// exitAfterUpdate, self-update sonrasi sureci NON-ZERO ile ve SCM'e
+// SERVICE_STOPPED bildirmeden sonlandirir → SCM bunu "beklenmedik
+// sonlanma" sayar ve MSI'da yapilandirilmis failure-action'i (restart)
+// tetikler. Unix supervisor'larinin aksine Windows SCM temiz cikista
+// yeniden baslatmaz; bkz. deploy/msi/bazntms-agent.wxs ConfigAgentRecovery.
+// Servis disi (interaktif) calisiyorsa 0 yeterli.
+func exitAfterUpdate() {
+	if serviceMode() {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 type svcHandler struct {

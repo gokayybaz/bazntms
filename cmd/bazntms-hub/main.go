@@ -37,6 +37,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/server"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/syslogd"
+	"github.com/gokayybaz/bazntms/internal/update"
 	"github.com/gokayybaz/bazntms/internal/vault"
 	"github.com/gokayybaz/bazntms/internal/version"
 	"github.com/gokayybaz/bazntms/web"
@@ -81,7 +82,9 @@ func main() {
 	flowExporter := fl.String("flow-exporter", "", "NetFlow/sFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	iocFile := fl.String("ioc-file", "", "Tehdit istihbarati domain kara listesi (IOC) — eslesen L7/DNS trafigi 'ioc' uyarisi uretir. hosts/AdBlock/duz metin formatlari; mtime degisince otomatik yeniden yuklenir")
-	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos = kapali; icerik: bazntmsctl update sign)")
+	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos: -update-github-repo doluysa 'updates', degilse kapali)")
+	updateRepo := fl.String("update-github-repo", "gokayybaz/bazntms", "Agent binary'lerini cekecek GitHub deposu (owner/name); bos = GitHub senkronu kapali, yalnizca -updates-dir icerigi (bazntmsctl update sign) sunulur")
+	updateSyncInterval := fl.Duration("update-github-interval", 30*time.Minute, "GitHub release yoklama araligi")
 	complianceOn := fl.Bool("compliance", false, "5651 log imzalama motoru: hash-zincir + Merkle checkpoint + gunluk muhur")
 	tsaURL := fl.String("tsa-url", "", "RFC 3161 zaman damgasi servisi (TSA) adresi")
 	complianceKey := fl.String("compliance-key", "compliance.key", "Manifest imza anahtari (ed25519 PEM; yoksa uretilir)")
@@ -348,9 +351,25 @@ func main() {
 		}
 		slog.Info("mTLS aktif", "ca_dir", *tlsDir, "operator_cert", *tlsCert != "")
 	}
-	if *updatesDir != "" {
-		srv.SetUpdatesDir(*updatesDir)
-		slog.Info("agent guncelleme kanali aktif", "dir", *updatesDir)
+	// Agent guncelleme kanali. -update-github-repo doluysa (varsayilan)
+	// hub, deponun en son release'ini periyodik cekip -updates-dir'e
+	// manifest + binary olarak yazar; agent'lar bugunku gibi yalnizca
+	// hub'dan indirir. Repo bos ise yalnizca elle hazirlanmis
+	// (bazntmsctl update sign) dizin sunulur.
+	updDir := *updatesDir
+	if updDir == "" && *updateRepo != "" {
+		updDir = "updates"
+	}
+	if updDir != "" {
+		srv.SetUpdatesDir(updDir)
+		if *updateRepo != "" {
+			syncer := update.NewGitHubSyncer(*updateRepo, updDir, os.Getenv("GITHUB_TOKEN"))
+			go syncer.Run(ctx, *updateSyncInterval)
+			slog.Info("agent guncelleme: GitHub release senkronu aktif",
+				"repo", *updateRepo, "dir", updDir, "interval", *updateSyncInterval)
+		} else {
+			slog.Info("agent guncelleme kanali aktif (statik dizin)", "dir", updDir)
+		}
 	}
 
 	// 5651 uyumlu loglama (Faz 9)

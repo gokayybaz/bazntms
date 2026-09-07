@@ -24,6 +24,9 @@
 | `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
+| `-update-github-repo` | `gokayybaz/bazntms` | Agent binary'lerini çekecek GitHub deposu (`owner/name`). Hub bu deponun **en son release'ini** `-update-github-interval`'da bir yoklar, yeni sürümde `bazntms-agent-*` asset'lerini `-updates-dir`'e indirir, SHA-256 hesaplar, `manifest.json` yazar → agent'lar otomatik günceller. **Boş** = GitHub senkronu kapalı; yalnızca elle hazırlanmış (`bazntmsctl update sign`) `-updates-dir` içeriği sunulur. Rate-limit için `GITHUB_TOKEN` ortam değişkeni okunur |
+| `-update-github-interval` | `30m` | GitHub release yoklama aralığı |
+| `-updates-dir` | — (repo doluysa `updates`) | Agent güncelleme kanalı dizini (`<dir>/<channel>/manifest.json` + binary'ler). Boş bırakılırsa `-update-github-repo` doluyken `updates`, değilse kanal kapalı. Bkz. [UPGRADE-RUNBOOK.md](UPGRADE-RUNBOOK.md) §2 |
 | `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
 | `-enroll-token` | — | **Bootstrap** agent enrollment token'ı. Boşsa rastgele üretilip loglanır. Yalnızca ilk kurulum için — sızarsa hub'ı yeniden başlatmadan iptal edilemez. Kalıcı token'lar: panel > Yönetim > Agent Ekle (bkz. aşağıda) |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |

@@ -42,7 +42,8 @@ func main() {
 	recordDir := fl.String("record-dir", "captures", "PCAP kayit dizini")
 	logLevel := fl.String("log-level", "", "log seviyesi (config'i override eder)")
 	logFormat := fl.String("log-format", "", "log formati: json|text")
-	updateEnabled := fl.Bool("update-enabled", false, "otomatik guncelleme (imza dogrulamali)")
+	updateEnabled := fl.Bool("update-enabled", true, "otomatik guncelleme (hub guncelleme kanalindan; SHA-256 + varsa ed25519)")
+	updateDisabled := fl.Bool("update-disabled", false, "otomatik guncellemeyi kapat (update.disabled config esdegeri)")
 	updateChannel := fl.String("update-channel", "stable", "guncelleme kanali: stable|beta")
 	updateKey := fl.String("update-key", "", "ed25519 public key (hex); bos ise yalnizca sha256 dogrulanir")
 	updateInterval := fl.Int("update-interval", 6, "guncelleme kontrol araligi (saat)")
@@ -265,9 +266,20 @@ func main() {
 
 		// otomatik guncelleme (Faz 7.3): periyodik manifest kontrolu; yukselme
 		// varsa indir + dogrula + binary'yi degistir + cik (supervisor yeniden
-		// baslatir: systemd/launchd/k8s restartPolicy:Always)
-		if !*updateEnabled {
-			*updateEnabled = cfg.Update.Enabled
+		// baslatir: systemd Restart=always / launchd KeepAlive / docker
+		// --restart / Windows SCM failure-action — bkz. exitAfterUpdate).
+		//
+		// Varsayilan ACIK (Faz 16 sonrasi). Kapatmak icin: -update-disabled
+		// veya config `update: {disabled: true}`. -update-enabled=false de
+		// acikca verilirse saygi gosterilir.
+		updateOn := true
+		fl.Visit(func(f *flag.Flag) {
+			if f.Name == "update-enabled" {
+				updateOn = *updateEnabled
+			}
+		})
+		if *updateDisabled || cfg.Update.Disabled {
+			updateOn = false
 		}
 		if *updateChannel == "stable" && cfg.Update.Channel != "" {
 			*updateChannel = cfg.Update.Channel
@@ -279,7 +291,7 @@ func main() {
 			*updateInterval = cfg.Update.IntervalHours
 		}
 		var updateTicker *time.Ticker
-		if *updateEnabled {
+		if updateOn {
 			updateTicker = time.NewTicker(time.Duration(*updateInterval) * time.Hour)
 			defer updateTicker.Stop()
 			slog.Info("otomatik guncelleme aktif", "channel", *updateChannel,
@@ -295,7 +307,7 @@ func main() {
 					if applied {
 						slog.Info("guncelleme kuruldu, yeniden baslatiliyor", "channel", *updateChannel)
 						update.CleanupOld(os.Args[0])
-						os.Exit(0)
+						exitAfterUpdate()
 					}
 				}
 			}()
