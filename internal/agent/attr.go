@@ -111,6 +111,9 @@ func (e *AttrEngine) Stop() {
 	}
 }
 
+// Method, AttrSource arayüzü için: bu arka uç pcap tabanlıdır.
+func (e *AttrEngine) Method() string { return "pcap" }
+
 func (e *AttrEngine) loop() {
 	defer close(e.doneCh)
 

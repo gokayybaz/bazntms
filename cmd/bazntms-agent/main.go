@@ -191,7 +191,7 @@ func main() {
 			slog.Info("pcap cihazi cozuldu", "arayuz", attrIface, "cihaz", dev)
 			attrIface = dev
 		}
-		var attrEng *agent.AttrEngine
+		var attrEng agent.AttrSource
 		attrTried := false // bu politika-acik doneminde NewAttrEngine denendi mi
 		attrOffLogged := false
 		defer func() {
