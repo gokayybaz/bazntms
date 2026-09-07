@@ -13,8 +13,16 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
+## [0.4.0] — 2026-09-07
+
 Faz 20 — süreç atfı çekirdek düzeyine taşındı. Linux'ta **eBPF**, Windows'ta
 **ETW** ile süreç trafiği + DNS; **Windows'ta artık Npcap gerekmez**.
+
+> Her iki arka uç da gerçek makinede canlı doğrulandı. Windows ETW ilk canlı
+> testte üç hatayla çıkmadı — hepsi bu sürümde düzeltildi:
+> `TRACE_LOGFILE_HEADER` struct'ında eksik 16 baytlık union alanı (ETW
+> callback'i hiç çağrılmıyordu), Kernel-Network keyword maskesi (0x10/0x20),
+> TCP recv uzak-uç ayrıştırması + multicast/loopback eleme.
 
 ### Eklendi
 - **eBPF atıf motoru (Linux).** Kernel ≥ 5.8 + BTF olan makinelerde `collect.method`
@@ -323,7 +331,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/gokayybaz/bazntms/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/gokayybaz/bazntms/compare/v0.3.0...v0.3.1
