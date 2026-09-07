@@ -93,7 +93,9 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.12.2
+          # v2.12.2 (Go 1.26 ile derli) `setup-go` "stable" = Go 1.27 altında
+          # go/types'ta panik atıyor (initFiles). Go 1.27 ile derlenmiş sürüm.
+          version: v2.13.2
 
   helm:
     name: Helm chart (lint + kubeconform)
