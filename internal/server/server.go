@@ -25,6 +25,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/vault"
+	"github.com/gokayybaz/bazntms/internal/version"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
@@ -380,7 +381,13 @@ func (s *Server) observe(next http.Handler) http.Handler {
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"status": "ok"})
+	// version alanı: sürüm/yükseltme doğrulaması için (kimlik doğrulamasız —
+	// yalnızca binary sürümü, sır değil). Bkz. docs/RELEASE-RUNBOOK.md.
+	writeJSON(w, map[string]any{
+		"status":           "ok",
+		"version":          version.Version,
+		"protocol_version": version.ProtocolVersion,
+	})
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {

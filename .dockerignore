@@ -1,0 +1,33 @@
+# Konteyner build context'inden çıkarılanlar (Faz 19 S19.3).
+# Build'in ihtiyacı olanlar: go.mod/sum, *.go, internal/ cmd/ pkg/ api/,
+# frontend/ (ui aşaması npm ci ile node_modules'ı kendi kurar).
+
+.git
+.github
+.claude
+.impeccable
+.wix
+
+**/node_modules
+web/dist
+docs-site/build
+docs-site/.docusaurus
+
+# yerel derleme çıktıları / veri / sırlar
+/bazntms
+/bazntms-agent
+/bazntms-hub
+/bazntmsctl
+/bazntms-loadgen
+*.exe
+*.db
+*.db-wal
+*.db-shm
+captures/
+*.pcap
+/vault.key
+/pki/
+*.state.json
+*.state.json.*
+bazntms-agent.state.*
+geoip/*.mmdb

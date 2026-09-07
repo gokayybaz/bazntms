@@ -1,27 +1,32 @@
-# bazntms-hub imajı (Faz 4.4). Build context repo köküdür:
+# bazntms-hub imajı. Build context repo köküdür:
 #   docker build -f deploy/Dockerfile.hub -t ghcr.io/gokayybaz/bazntms-hub:local .
 #
 # 3 aşama: frontend (vite) → hub (cgo + libpcap) → minimal çalışma imajı.
+# Yayın: .github/workflows/release.yml `images` job'u (ghcr.io, amd64+arm64,
+# dinamik OCI etiketleri docker/metadata-action'dan). Temel imajlar digest'e
+# sabitlenir — Trivy imaj taraması (S19.4) CVE bulunca digest'i tazeleyin
+# (`docker buildx imagetools inspect <img:tag>`).
 
-FROM node:22-alpine AS ui
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS ui
 WORKDIR /ui
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-alpine@sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628 AS build
 WORKDIR /src
 RUN apk add --no-cache gcc musl-dev libpcap-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=ui /web/dist web/dist
+ARG VERSION=container
 RUN CGO_ENABLED=1 go build -trimpath \
-    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=container" \
+    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=${VERSION}" \
     -o /out/bazntms-hub ./cmd/bazntms-hub
 
-FROM alpine:3.20
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 RUN apk add --no-cache ca-certificates libpcap tzdata \
     && addgroup -S bazntms && adduser -S -G bazntms -H bazntms \
     && mkdir -p /data/pki && chown -R bazntms:bazntms /data
@@ -37,4 +42,12 @@ COPY --from=build /out/bazntms-hub /usr/local/bin/bazntms-hub
 WORKDIR /data
 USER bazntms
 EXPOSE 8080 2055/udp 5514/udp
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+# OCI etiketleri: statik alanlar burada; source/revision/version/created
+# release.yml'de docker/metadata-action ile eklenir.
+LABEL org.opencontainers.image.title="bazntms-hub" \
+      org.opencontainers.image.description="bazNTMS hub — ağ trafiği izleme merkezi (ingest + panel + uyarı + rapor)" \
+      org.opencontainers.image.source="https://github.com/gokayybaz/bazntms" \
+      org.opencontainers.image.licenses="MIT"
 ENTRYPOINT ["bazntms-hub"]

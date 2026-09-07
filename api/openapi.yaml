@@ -89,10 +89,19 @@ paths:
   /healthz:
     get:
       tags: [meta]
-      summary: Canlılık probu
+      summary: Canlılık probu (+ binary sürümü)
       security: []
       responses:
-        "200": { description: Süreç ayakta }
+        "200":
+          description: Süreç ayakta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, description: "internal/version.Version — sürüm/yükseltme doğrulaması" }
+                  protocol_version: { type: integer }
   /readyz:
     get:
       tags: [meta]

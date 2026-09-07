@@ -25,8 +25,8 @@ mv /usr/local/bin/bazntms-hub.new /usr/local/bin/bazntms-hub
 systemctl start bazntms-hub
 
 # 4. Doğrula
-curl -s localhost:8080/healthz && curl -s localhost:8080/readyz
-curl -s localhost:8080/api/v1/version   # sürüm yükseldi mi?
+curl -s localhost:8080/readyz                    # {"status":"ready"}
+curl -s localhost:8080/healthz | jq .version     # sürüm yükseldi mi?
 ```
 
 Notlar:
@@ -113,6 +113,6 @@ helm upgrade bazntms deploy/helm/bazntms \
 2. Veri tabanı yedeği (pg) veya SQLite dosya kopyası alın
 3. `vault.key` yedeği yerinde mi doğrulayın
 4. Pilot bir agent/CI ortamında yeni sürümü deneyin
-5. Hub'ı güncelleyin → `/healthz` + `/readyz` + `/api/v1/version`
+5. Hub'ı güncelleyin → `/readyz` "ready" + `/healthz` `.version` yeni sürüm
 6. Fleet'i güncelleyin (kanal veya paket) → `/api/v1/agents` sürüm dağılımı
 7. `/api/v1/audit/verify` ile denetim zinciri bütünlüğünü onaylayın

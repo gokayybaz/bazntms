@@ -86,11 +86,20 @@ git push origin vX.Y.Z
    darwin runner'da `.pkg`.
 2. **packages** — nfpm ile deb + rpm (amd64 + arm64).
 3. **msi** — WiX v4.0.5 ile `bazntms-agent-amd64.msi`.
-4. **supply-chain** — SBOM (`syft`, SPDX), Trivy fs taraması (CRITICAL bloklar),
+4. **images** — `ghcr.io/gokayybaz/bazntms-{hub,agent}` çok-mimari (amd64+arm64),
+   etiketler: `X.Y.Z`, `X.Y`, `sha-<kısa>`, kararlı sürümde `latest`
+   (`docker/metadata-action`); temel imajlar digest'e sabit. Yalnız `v*`
+   etiketinde push edilir (`workflow_dispatch` = derle, push etme).
+5. **supply-chain** — SBOM (`syft`, SPDX), Trivy fs taraması (CRITICAL bloklar),
    `cosign sign-blob` (keyless) → her artefakt için `.sig` + `.bundle`.
-5. **release** — `gh release create --generate-notes`, tüm artefaktları yükler.
+6. **release** — `gh release create --generate-notes`, tüm artefaktları yükler.
 
-Süre ~15-25 dk. `gh run watch` ile izleyin.
+Süre ~20-35 dk (arm64 imajları QEMU'da yavaş; gha cache ısınınca düşer).
+`gh run watch` ile izleyin.
+
+> **İlk yayında bir kez:** ghcr paketleri özel oluşur. GitHub → Packages →
+> `bazntms-hub` / `bazntms-agent` → Package settings → **Change visibility →
+> Public** (yoksa `helm install` / `docker pull` için pull secret gerekir).
 
 ## 4) Etiketten sonra — doğrulama
 
@@ -106,6 +115,15 @@ Beklenen artefakt matrisi (eksikse ilgili job'a bakın):
 | Agent binary | `bazntms-agent-*` (5 hedef) |
 | Paketler | `bazntms-agent-{amd64,arm64}.{deb,rpm,pkg}`, `bazntms-agent-amd64.msi` |
 | Tedarik zinciri | her binary/paket için `.sig` + `.bundle`, `bazntms-sbom.spdx.json` |
+| Konteyner imajı | GitHub release'de değil — `ghcr.io/.../bazntms-{hub,agent}:X.Y.Z` (`docker buildx imagetools inspect` ile 2 mimari doğrulanır) |
+
+Konteyner imajı sürümü:
+
+```bash
+docker run --rm ghcr.io/gokayybaz/bazntms-hub:X.Y.Z -version   # "bazntms-hub vX.Y.Z …"
+# veya çalışan bir hub'da:
+curl -s localhost:8080/healthz | jq '{version, protocol_version}'
+```
 
 İmza doğrula (herhangi bir artefakt):
 
@@ -153,8 +171,8 @@ gerisi çalışır ve artefaktları workflow artifact'ı olarak bırakır.
 
 ## 7) Faz 19'da eklenecek (henüz pipeline'da yok)
 
-- Konteyner imajları `ghcr.io/gokayybaz/bazntms-{hub,agent}` (S19.3) — bugün
-  Helm chart `values.yaml` var olmayan imaja bakıyor.
-- Helm chart OCI push + `helm lint`/`kubeconform` kapısı (S19.5–S19.6).
+- Trivy **imaj** taraması (bugün yalnız fs) + CRITICAL gate (S19.4).
+- Helm chart OCI push + `helm lint`/`kubeconform` kapısı; `Chart.yaml`
+  version/appVersion'ın tag'den türetilmesi (S19.5–S19.6).
 - SLSA build provenance attestation'ları (S19.7).
 - İmzalı update manifest'i (ed25519) varsayılan (S19.8).

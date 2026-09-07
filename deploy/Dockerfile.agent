@@ -1,21 +1,25 @@
-# bazntms-agent imajı (Faz 7.1): k8s DaemonSet ile uç node'larda çalışır.
+# bazntms-agent imajı: k8s DaemonSet ile uç node'larda çalışır.
 # Build context repo köküdür:
 #   docker build -f deploy/Dockerfile.agent -t ghcr.io/gokayybaz/bazntms-agent:local .
+#
+# Yayın: .github/workflows/release.yml `images` job'u (ghcr.io, amd64+arm64).
+# Temel imajlar digest'e sabitlenir — Trivy (S19.4) CVE bulunca tazeleyin.
 #
 # Not: konteyner içinde paket yakalama (PCAP) yalnızca host network +
 # NET_RAW/NET_ADMIN yetkileriyle çalışır; DaemonSet values'a bakın.
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-alpine@sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628 AS build
 WORKDIR /src
 RUN apk add --no-cache gcc musl-dev libpcap-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+ARG VERSION=container
 RUN CGO_ENABLED=1 go build -trimpath \
-    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=container" \
+    -ldflags "-s -w -X github.com/gokayybaz/bazntms/internal/version.Version=${VERSION}" \
     -o /out/bazntms-agent ./cmd/bazntms-agent
 
-FROM alpine:3.20
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 RUN apk add --no-cache ca-certificates libpcap tzdata
 COPY --from=build /out/bazntms-agent /usr/local/bin/bazntms-agent
 # Kasıtlı olarak root: setcap (cap_net_raw/cap_net_admin) + non-root exec
@@ -27,4 +31,8 @@ COPY --from=build /out/bazntms-agent /usr/local/bin/bazntms-agent
 # degerlendirme notlari). Root olmadan calistirmak istenirse compose'a
 # `cap_add: [NET_RAW, NET_ADMIN]` eklenip Dockerfile'a setcap + USER
 # adimlari geri konabilir.
+LABEL org.opencontainers.image.title="bazntms-agent" \
+      org.opencontainers.image.description="bazNTMS agent — uç node telemetri toplayıcı (bağlantı/PID/DNS/L7, opsiyonel PCAP)" \
+      org.opencontainers.image.source="https://github.com/gokayybaz/bazntms" \
+      org.opencontainers.image.licenses="MIT"
 ENTRYPOINT ["bazntms-agent"]
