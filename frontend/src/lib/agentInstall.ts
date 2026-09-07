@@ -74,11 +74,15 @@ export const OS_OPTIONS: OSOption[] = [
   {
     id: 'windows',
     label: 'Windows (.msi)',
-    note: 'Yönetici PowerShell. MSI özellikleriyle sessiz kurulum — servis otomatik başlar.',
+    note: 'Yönetici olarak açılmış PowerShell (cmd.exe DEĞİL). Proxy arkasındaysanız önce: $env:HTTPS_PROXY="http://proxy:port". MSI özellikleriyle sessiz kurulum — servis otomatik başlar.',
     command: (p) =>
       [
-        `curl.exe -fsSL -o "$env:TEMP\\bazntms-agent.msi" ${REL}/bazntms-agent-amd64.msi`,
-        `msiexec /i "$env:TEMP\\bazntms-agent.msi" /qn HUBURL=${p.hubUrl} ENROLLTOKEN=${p.token}${p.site ? ` SITE=${p.site}` : ''}`,
+        // -fsSL yerine -fL --retry: -s (silent) indirme hatasını gizliyordu,
+        // kullanıcıya "hiçbir şey olmadı" gibi görünüyor. $msi tek yerde
+        // tanımlı ve msiexec'te tırnaklı (kullanıcı adında boşluk olsa bile).
+        '$msi = "$env:TEMP\\bazntms-agent.msi"',
+        `curl.exe -fL --retry 3 -o $msi "${REL}/bazntms-agent-amd64.msi"`,
+        `msiexec /i "$msi" /qn HUBURL=${p.hubUrl} ENROLLTOKEN=${p.token}${p.site ? ` SITE=${p.site}` : ''}`,
       ].join('\n'),
   },
   {
