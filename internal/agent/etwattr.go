@@ -69,6 +69,8 @@ func newEtwAttrSource(_ AttrConfig) (*etwAttrSource, error) {
 		names:  map[uint32]string{},
 		doneCh: make(chan struct{}),
 	}
+	slog.Info("ETW atıf motoru aktif — süreç trafiği + DNS",
+		"not", "L7 (SNI/Host) ETW'de yok; gerekiyorsa -collect-method=pcap + Npcap")
 	go func() {
 		defer close(e.doneCh)
 		sess.Process(etwWanted, e.onEvent)

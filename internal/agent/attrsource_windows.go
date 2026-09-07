@@ -8,24 +8,16 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// etwBackendBuilt, "auto" modunun ETW arka ucunu seçip seçmeyeceği. Consumer
-// S20.8'de geldi; DNS (S20.9) henüz ETW tarafında boş döner ve session yaşam
-// döngüsü Windows VM'de doğrulanmadı — bu yüzden "auto" hâlâ pcap kullanır,
-// ETW yalnız `-collect-method=etw` ile açıkça seçilir. S20.10'da true olur.
-var etwBackendBuilt = false
-
 // platformAttrCaps, Windows'ta ETW atıf motorunun kullanılabilirliğini ölçer.
-// ETW Kernel-Network sağlayıcısı yükseltilmiş (SYSTEM / yönetici) süreç ister;
-// agent normalde SYSTEM servis olarak çalışır.
+// ETW Kernel-Network + DNS-Client sağlayıcıları yükseltilmiş (SYSTEM / yönetici)
+// süreç ister; agent normalde SYSTEM servis olarak çalışır. Yükseltilmemişse
+// "auto" pcap'e (Npcap kuruluysa) düşer. ETW modunda L7 (SNI/Host) yoktur —
+// payload gerektirir, `-collect-method=pcap` + Npcap ile alınır.
 func platformAttrCaps() attrCaps {
 	c := attrCaps{pcap: true}
-	elevated := windowsElevated()
-	switch {
-	case elevated && etwBackendBuilt:
+	if windowsElevated() {
 		c.etw = true
-	case elevated:
-		// yükseltilmiş ama arka uç henüz derlenmedi — sessiz (geçici, S20.10)
-	default:
+	} else {
 		c.note = "ETW atlandı: süreç yükseltilmemiş (SYSTEM / yönetici gerekir)"
 	}
 	return c
