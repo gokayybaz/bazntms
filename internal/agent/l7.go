@@ -4,9 +4,75 @@ import (
 	"bytes"
 	"encoding/binary"
 	"strings"
+	"sync"
 
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
+
+// l7Tracker, giden TCP payload'larından çıkarılan SNI/Host adlarını süreçlere
+// atfeder ve delta üretir. Kendi kilidi vardır; pcapAttrSource (tam yakalama)
+// ve ebpfAttrSource (dar-filtreli yardımcı pcap handle — S20.7) ortak kullanır.
+type l7Tracker struct {
+	mu   sync.Mutex
+	agg  map[l7Key]*l7Agg
+	sent map[l7Key]uint64
+}
+
+func newL7Tracker() *l7Tracker {
+	return &l7Tracker{agg: map[l7Key]*l7Agg{}, sent: map[l7Key]uint64{}}
+}
+
+// observe, giden bir TCP payload'ında SNI/Host varsa sürece atfeder.
+func (t *l7Tracker) observe(pid int32, process, remoteIP string, payload []byte, length uint64) {
+	if host, kind := sniffL7(payload); host != "" {
+		t.record(pid, process, remoteIP, host, kind, length)
+	}
+}
+
+// record, önceden çıkarılmış bir (host, kind)'i sürece atfeder — çağıran
+// tarafın payload'ı bir kez ayrıştırdığı yerlerde (l7Helper) kullanılır.
+func (t *l7Tracker) record(pid int32, process, remoteIP, host, kind string, length uint64) {
+	k := l7Key{pid: pid, process: process, kind: kind, host: host, remoteIP: remoteIP}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	a := t.agg[k]
+	if a == nil {
+		if len(t.agg) >= 4000 {
+			return
+		}
+		a = &l7Agg{}
+		t.agg[k] = a
+	}
+	a.bytes += length
+	a.count++
+}
+
+// deltas, son çağrıdan bu yana süreç bazlı SNI/Host farklarını döndürür.
+func (t *l7Tracker) deltas() []telemetry.L7Sample {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]telemetry.L7Sample, 0, len(t.agg))
+	for k, a := range t.agg {
+		d := delta(a.count, t.sent[k])
+		if d == 0 {
+			continue
+		}
+		t.sent[k] = a.count
+		out = append(out, telemetry.L7Sample{
+			PID:      k.pid,
+			Process:  k.process,
+			Kind:     k.kind,
+			Host:     k.host,
+			RemoteIP: k.remoteIP,
+			Bytes:    a.bytes,
+			Count:    d,
+		})
+	}
+	if len(out) > 500 {
+		out = out[:500]
+	}
+	return out
+}
 
 // sniffL7, giden bir TCP payload'inda TLS ClientHello SNI'sini veya HTTP istek
 // satirindaki Host'u arar. Bulursa (host, "tls"|"http") doner. Basit ve
@@ -135,29 +201,4 @@ func sanitizeHost(h string) string {
 
 // L7Deltas, son gonderimden bu yana surec bazli uygulama (SNI/Host) farklarini
 // dondurur.
-func (e *pcapAttrSource) L7Deltas() []telemetry.L7Sample {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	out := make([]telemetry.L7Sample, 0, len(e.l7))
-	for k, a := range e.l7 {
-		last := e.l7Sent[k]
-		d := delta(a.count, last)
-		if d == 0 {
-			continue
-		}
-		e.l7Sent[k] = a.count
-		out = append(out, telemetry.L7Sample{
-			PID:      k.pid,
-			Process:  k.process,
-			Kind:     k.kind,
-			Host:     k.host,
-			RemoteIP: k.remoteIP,
-			Bytes:    a.bytes,
-			Count:    d,
-		})
-	}
-	if len(out) > 500 {
-		out = out[:500]
-	}
-	return out
-}
+func (e *pcapAttrSource) L7Deltas() []telemetry.L7Sample { return e.l7.deltas() }

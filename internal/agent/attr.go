@@ -29,8 +29,7 @@ type pcapAttrSource struct {
 	localIPs map[string]struct{}
 	totals   map[attrKey][2]uint64 // [in, out] kumulatif
 	lastSent map[attrKey][2]uint64
-	l7       map[l7Key]*l7Agg // surec × (tls/http) × host kumulatif
-	l7Sent   map[l7Key]uint64
+	l7       *l7Tracker         // surec × (tls/http) × host — kendi kilidi
 	dns      map[dnsKey]*dnsAgg // surec × domain — sorgu/yanit kumulatif
 	dnsSent  map[dnsKey][2]uint64
 
@@ -81,8 +80,7 @@ func newPcapAttrSource(iface string) (*pcapAttrSource, error) {
 		localIPs: proctraffic.LocalIPs(),
 		totals:   map[attrKey][2]uint64{},
 		lastSent: map[attrKey][2]uint64{},
-		l7:       map[l7Key]*l7Agg{},
-		l7Sent:   map[l7Key]uint64{},
+		l7:       newL7Tracker(),
 		dns:      map[dnsKey]*dnsAgg{},
 		dnsSent:  map[dnsKey][2]uint64{},
 		stopCh:   make(chan struct{}),
@@ -241,20 +239,7 @@ func (e *pcapAttrSource) attribute(pkt gopacket.Packet, full map[proctraffic.Key
 
 	// L7 uygulama gorunurlugu: giden TCP istegde SNI / HTTP Host cikar
 	if srcLocal && proto == "tcp" && len(payload) > 0 {
-		if host, kind := sniffL7(payload); host != "" {
-			k := l7Key{pid: info.PID, process: info.Process, kind: kind, host: host, remoteIP: dstIP}
-			a := e.l7[k]
-			if a == nil {
-				if len(e.l7) < 4000 {
-					a = &l7Agg{}
-					e.l7[k] = a
-				}
-			}
-			if a != nil {
-				a.bytes += length
-				a.count++
-			}
-		}
+		e.l7.observe(info.PID, info.Process, dstIP, payload, length)
 	}
 
 	key := attrKey{pid: info.PID, process: info.Process, proto: proto, remoteIP: dstIP, port: dport}

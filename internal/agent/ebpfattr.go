@@ -24,6 +24,8 @@ const ebpfDrainInterval = 2500 * time.Millisecond
 // henüz boş döner — pcap arka ucundan farkı budur (bilinçli degrade).
 type ebpfAttrSource struct {
 	eng *bpf.Engine
+	l7  *l7Tracker // her zaman kurulu; l7h nil ise boş kalır
+	l7h *l7Helper  // dar-filtreli yardımcı pcap handle (nil olabilir)
 
 	mu      sync.Mutex
 	pending map[attrKey]*[2]uint64 // [in, out] — Deltas'a dek birikir
@@ -37,13 +39,14 @@ type ebpfAttrSource struct {
 
 var _ AttrSource = (*ebpfAttrSource)(nil)
 
-func newEbpfAttrSource(_ AttrConfig) (*ebpfAttrSource, error) {
+func newEbpfAttrSource(cfg AttrConfig) (*ebpfAttrSource, error) {
 	eng, err := bpf.Load()
 	if err != nil {
 		return nil, err
 	}
 	e := &ebpfAttrSource{
 		eng:       eng,
+		l7:        newL7Tracker(),
 		pending:   map[attrKey]*[2]uint64{},
 		dns:       map[dnsKey]*dnsAgg{},
 		dnsSent:   map[dnsKey][2]uint64{},
@@ -51,6 +54,18 @@ func newEbpfAttrSource(_ AttrConfig) (*ebpfAttrSource, error) {
 		doneCh:    make(chan struct{}),
 		dnsDoneCh: make(chan struct{}),
 	}
+
+	// L7 (SNI/Host) eBPF'te görünmez — payload gerektirir. İstenirse dar
+	// filtreli bir yardımcı pcap handle açılır (CAP_NET_RAW ister); açılamazsa
+	// L7 sessiz boş kalır, sayım + DNS aksamaz.
+	if h, herr := newL7Helper(cfg.Iface, e.l7); herr != nil {
+		slog.Info("eBPF modunda L7 (SNI/Host) devre dışı — yardımcı pcap handle açılamadı",
+			"err", herr, "cozum", "CAP_NET_RAW verin veya -collect-method=pcap kullanın")
+	} else {
+		e.l7h = h
+		slog.Debug("eBPF modunda L7 yardımcı pcap handle aktif", "iface", cfg.Iface)
+	}
+
 	go e.drainLoop()
 	if eng.DNSAvailable() {
 		go e.dnsLoop()
@@ -177,8 +192,9 @@ func (e *ebpfAttrSource) Deltas() []telemetry.ProcessTrafficSample {
 	return out
 }
 
-// L7Deltas — eBPF payload görmez; S20.7'de dar-filtreli yardımcı pcap handle.
-func (e *ebpfAttrSource) L7Deltas() []telemetry.L7Sample { return nil }
+// L7Deltas, yardımcı pcap handle'ından çıkarılan SNI/Host farklarını döndürür
+// (handle açılamadıysa boş).
+func (e *ebpfAttrSource) L7Deltas() []telemetry.L7Sample { return e.l7.deltas() }
 
 // DNSDeltas, son çağrıdan bu yana süreç bazlı DNS farklarını döndürür.
 // eBPF yalnız yanıtları yakalar (bkz. attr.c) → sorgu/yanıt ayrımı yaklaşık,
@@ -213,6 +229,9 @@ func (e *ebpfAttrSource) Method() string { return "ebpf" }
 func (e *ebpfAttrSource) Stop() {
 	close(e.stopCh)
 	<-e.doneCh // drainLoop haritayı kullanır — önce onu bekle
+	if e.l7h != nil {
+		e.l7h.Stop()
+	}
 	if err := e.eng.Close(); err != nil {
 		slog.Debug("eBPF motoru kapatılırken hata", "err", err)
 	}

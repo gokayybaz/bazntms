@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -10,9 +11,10 @@ import (
 	"time"
 )
 
-// nonLoopbackIPv4, makinenin ilk loopback-olmayan IPv4'ünü döndürür (Docker'da
-// eth0). eBPF bayt sayımı loopback'i atladığından test bunun üzerinden gider.
-func nonLoopbackIPv4(t *testing.T) string {
+// nonLoopbackIface, makinenin ilk loopback-olmayan IPv4 arayüzünü (ad, IP)
+// döndürür (Docker'da eth0). eBPF bayt sayımı loopback'i atladığından testler
+// bunun üzerinden gider.
+func nonLoopbackIface(t *testing.T) (name, ip string) {
 	t.Helper()
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -26,13 +28,13 @@ func nonLoopbackIPv4(t *testing.T) string {
 		for _, a := range addrs {
 			if ipn, ok := a.(*net.IPNet); ok {
 				if v4 := ipn.IP.To4(); v4 != nil {
-					return v4.String()
+					return ifi.Name, v4.String()
 				}
 			}
 		}
 	}
 	t.Skip("loopback-olmayan IPv4 arayüz yok")
-	return ""
+	return "", ""
 }
 
 // TestEBPFAttrSourceCounting, canlı kernele programları yükler, loopback-olmayan
@@ -52,7 +54,7 @@ func TestEBPFAttrSourceCounting(t *testing.T) {
 	}
 	defer src.Stop()
 
-	host := nonLoopbackIPv4(t)
+	_, host := nonLoopbackIface(t)
 	ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		t.Fatal(err)
@@ -165,4 +167,64 @@ func TestEBPFAttrSourceDNS(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("eBPF DNS: %q ringbuf üzerinden görülmedi", domain)
+}
+
+// TestEBPFAttrSourceL7, eBPF modundaki dar-filtreli yardımcı pcap handle'ın
+// HTTP Host'u çıkarıp L7Deltas'a yansıttığını doğrular.
+func TestEBPFAttrSourceL7(t *testing.T) {
+	if testing.Short() {
+		t.Skip("kısa mod")
+	}
+	if os.Geteuid() != 0 {
+		t.Skip("root gerektirir")
+	}
+	_, host := nonLoopbackIface(t)
+
+	// "any" pseudo-device — aynı-host trafiği tek bir fiziksel arayüzde
+	// görünmeyebilir; üretimde autoIface() somut fiziksel arayüz verir.
+	src, err := newEbpfAttrSource(AttrConfig{Iface: "any"})
+	if err != nil {
+		t.Skipf("eBPF yüklenemedi: %v", err)
+	}
+	defer src.Stop()
+	if src.l7h == nil {
+		t.Fatal("L7 yardımcı handle açılmadı (root + geçerli arayüz verildi)")
+	}
+
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, "8080"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		c, e := ln.Accept()
+		if e != nil {
+			return
+		}
+		_, _ = io.Copy(io.Discard, c)
+		_ = c.Close()
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const wantHost = "probe.l7.bazntms.test"
+	if _, err := fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: x\r\n\r\n", wantHost); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	_ = conn.Close()
+
+	deadline := time.Now().Add(6 * time.Second) // helper refresh + pending retry
+	for time.Now().Before(deadline) {
+		for _, d := range src.L7Deltas() {
+			if d.Host == wantHost && d.Kind == "http" {
+				t.Logf("eBPF L7: host=%s kind=%s proc=%q remote=%s", d.Host, d.Kind, d.Process, d.RemoteIP)
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("eBPF L7: %q yardımcı handle üzerinden görülmedi", wantHost)
 }

@@ -71,6 +71,38 @@ func TestHTTPHost(t *testing.T) {
 	}
 }
 
+func TestL7Tracker(t *testing.T) {
+	tr := newL7Tracker()
+	tr.observe(42, "curl", "1.2.3.4", clientHelloWithSNI("api.github.com"), 517)
+	tr.observe(42, "curl", "1.2.3.4", clientHelloWithSNI("api.github.com"), 200)
+	tr.observe(9, "app", "5.6.7.8", []byte("GET / HTTP/1.1\r\nHost: shop.example.com\r\n\r\n"), 80)
+	tr.observe(1, "x", "9.9.9.9", []byte("not a request"), 10) // eşleşmez
+
+	d := tr.deltas()
+	if len(d) != 2 {
+		t.Fatalf("2 L7 örneği beklenirdi: %+v", d)
+	}
+	byHost := map[string]telemetryL7{}
+	for _, s := range d {
+		byHost[s.Host] = telemetryL7{count: s.Count, bytes: s.Bytes, kind: s.Kind}
+	}
+	if g := byHost["api.github.com"]; g.count != 2 || g.bytes != 717 || g.kind != "tls" {
+		t.Fatalf("api.github.com: %+v", g)
+	}
+	if g := byHost["shop.example.com"]; g.count != 1 || g.kind != "http" {
+		t.Fatalf("shop.example.com: %+v", g)
+	}
+	// aynı verilerle ikinci çağrı → boş (delta 0)
+	if d := tr.deltas(); len(d) != 0 {
+		t.Fatalf("ikinci deltas boş olmalıydı: %+v", d)
+	}
+}
+
+type telemetryL7 struct {
+	count, bytes uint64
+	kind         string
+}
+
 func TestSanitizeHostRejectsGarbage(t *testing.T) {
 	for _, bad := range []string{"", "localhost", "no-dot", "has space.com", "a/b.com", string(make([]byte, 300))} {
 		if h := sanitizeHost(bad); h != "" {

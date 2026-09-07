@@ -8,16 +8,11 @@ import (
 	"strings"
 )
 
-// ebpfBackendBuilt, "auto" modunun eBPF arka ucunu seçip seçmeyeceği. Yükleyici
-// S20.5'te geldi ama L7 (S20.7) + DNS (S20.6) henüz eBPF tarafında boş döner —
-// bu yüzden "auto" hâlâ pcap kullanır; eBPF yalnız `-collect-method=ebpf` ile
-// açıkça seçilir. S20.7 kapanışında true olur.
-var ebpfBackendBuilt = false
-
 // platformAttrCaps, Linux'ta eBPF atıf motorunun kullanılabilirliğini ölçer:
 // kernel ≥ 5.8, CONFIG_DEBUG_INFO_BTF (/sys/kernel/btf/vmlinux) ve effective
 // CAP_BPF / CAP_SYS_ADMIN (veya root). Yanlış-negatif zararsızdır — seçici
-// pcap'e düşer.
+// pcap'e düşer. eBPF modunda L7 (SNI/Host) için CAP_NET_RAW da gerekir; yoksa
+// yalnız L7 paneli boş kalır (sayım + DNS çalışır).
 func platformAttrCaps() attrCaps {
 	env := linuxCapEnv{
 		osRelease:  readFileTrim("/proc/sys/kernel/osrelease"),
@@ -25,14 +20,10 @@ func platformAttrCaps() attrCaps {
 		euid:       os.Geteuid(),
 		procStatus: readFileTrim("/proc/self/status"),
 	}
-	ok, reason := linuxEBPFEnvOK(env)
 	c := attrCaps{pcap: true}
-	switch {
-	case ok && ebpfBackendBuilt:
+	if ok, reason := linuxEBPFEnvOK(env); ok {
 		c.ebpf = true
-	case ok:
-		// ortam uygun ama arka uç henüz derlenmedi — sessiz (geçici, S20.5)
-	default:
+	} else {
 		c.note = reason
 	}
 	return c
