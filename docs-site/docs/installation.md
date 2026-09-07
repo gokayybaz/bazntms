@@ -43,12 +43,19 @@ docker compose -f deploy/docker-compose.scale.yml --profile loadgen up -d loadge
 
 ## Kubernetes
 
+Yayınlanmış chart (OCI, ghcr.io) — `--version` sürüm etiketidir (`v` yok):
+
 ```bash
-helm install bazntms deploy/helm/bazntms \
+helm install bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 0.3.3 \
   --set config.database.path="postgres://..." \
   --set config.nats.url="nats://..." \
   --set auth.existingSecret=bazntms-auth
 ```
+
+Hub imajı `ghcr.io/gokayybaz/bazntms-hub`, agent DaemonSet (`--set
+agent.enabled=true`) `ghcr.io/gokayybaz/bazntms-agent` — ikisi de amd64 + arm64,
+Chart `appVersion`'a sabitlenir. Depodan kurmak için chart yolunu
+`deploy/helm/bazntms` verin.
 
 ## Windows (MSI)
 

@@ -101,10 +101,10 @@ sudo dpkg -i bazntms-agent-amd64.deb     # veya: rpm -U bazntms-agent-amd64.rpm
 ## 4) K8s / Container
 
 ```bash
-helm upgrade bazntms deploy/helm/bazntms \
-  --set image.tag=v0.2.0 \
+# Chart appVersion imaj etiketini de taşır — yeni chart sürümü = yeni imajlar
+helm upgrade bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 0.3.3 \
   --reuse-values
-# DaemonSet agent'ları da günceller (agent.image.tag aynıysa pod'lar yeniden kurulur)
+# DaemonSet agent'ları da günceller (agent.enabled=true ise pod'lar yeniden kurulur)
 ```
 
 ## 5) Sürüm Atlama Kontrol Listesi

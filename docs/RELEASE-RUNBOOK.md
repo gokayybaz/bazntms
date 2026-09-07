@@ -95,17 +95,24 @@ git push origin vX.Y.Z
    (`docker/metadata-action`); temel imajlar digest'e sabit. Tarama/duman
    push'u kapıya alır — kirli/çökük imaj ghcr'a çıkmaz. Yalnız `v*` etiketinde
    push (`workflow_dispatch` = derle+tara, push etme).
-5. **supply-chain** — SBOM (`syft`, SPDX), Trivy **fs** taraması (Go bağımlılık
-   ağacı; imaj taraması 4. adımda), `cosign sign-blob` (keyless) → her artefakt
+5. **chart** — `helm package` → (etikette) `helm push` `oci://ghcr.io/
+   gokayybaz/charts/bazntms` (sürüm `Chart.yaml`'dan, preflight zorlar).
+6. **supply-chain** — SBOM (`syft`, SPDX), Trivy **fs** taraması (Go bağımlılık
+   ağacı; imaj taraması 4. adımda), **SLSA build provenance**
+   (`actions/attest-build-provenance` — binary + paketler; imaj provenance'ı
+   4. adımda registry'ye yazılır), `cosign sign-blob` (keyless) → her artefakt
    için `.sig` + `.bundle`.
-6. **release** — `gh release create --generate-notes`, tüm artefaktları yükler.
+7. **release** — `gh release create --generate-notes` + üretilen notların
+   altına `.github/release-footer.md`'den doğrulama bölümü; tüm artefaktları
+   yükler.
 
 Süre ~20-35 dk (arm64 imajları QEMU'da yavaş; gha cache ısınınca düşer).
 `gh run watch` ile izleyin.
 
-> **İlk yayında bir kez:** ghcr paketleri özel oluşur. GitHub → Packages →
-> `bazntms-hub` / `bazntms-agent` → Package settings → **Change visibility →
-> Public** (yoksa `helm install` / `docker pull` için pull secret gerekir).
+> **İlk yayında bir kez:** ghcr paketleri (`bazntms-hub`, `bazntms-agent`,
+> `charts/bazntms`) özel oluşur. GitHub → Packages → her biri → Package
+> settings → **Change visibility → Public** (yoksa `helm install` / `docker
+> pull` için pull secret gerekir).
 
 ## 4) Etiketten sonra — doğrulama
 
@@ -121,7 +128,9 @@ Beklenen artefakt matrisi (eksikse ilgili job'a bakın):
 | Agent binary | `bazntms-agent-*` (5 hedef) |
 | Paketler | `bazntms-agent-{amd64,arm64}.{deb,rpm,pkg}`, `bazntms-agent-amd64.msi` |
 | Tedarik zinciri | her binary/paket için `.sig` + `.bundle`, `bazntms-sbom.spdx.json` |
-| Konteyner imajı | GitHub release'de değil — `ghcr.io/.../bazntms-{hub,agent}:X.Y.Z` (`docker buildx imagetools inspect` ile 2 mimari doğrulanır) |
+| Konteyner imajı | GitHub release'de değil — `ghcr.io/.../bazntms-{hub,agent}:X.Y.Z` (`docker buildx imagetools inspect` ile 2 mimari) |
+| Helm chart | `oci://ghcr.io/gokayybaz/charts/bazntms` sürüm `X.Y.Z` |
+| Provenance | her binary + imaj için SLSA attestation (`gh attestation verify`) |
 
 Konteyner imajı sürümü:
 
@@ -131,7 +140,8 @@ docker run --rm ghcr.io/gokayybaz/bazntms-hub:X.Y.Z -version   # "bazntms-hub vX
 curl -s localhost:8080/healthz | jq '{version, protocol_version}'
 ```
 
-İmza doğrula (herhangi bir artefakt):
+İmza + provenance doğrula (herhangi bir artefakt) — bu komutlar release
+notlarının altına da eklenir (`.github/release-footer.md`):
 
 ```bash
 cosign verify-blob \
@@ -139,6 +149,10 @@ cosign verify-blob \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle bazntms-agent-linux-amd64.bundle \
   bazntms-agent-linux-amd64
+
+gh attestation verify bazntms-agent-linux-amd64 --repo gokayybaz/bazntms
+gh attestation verify oci://ghcr.io/gokayybaz/bazntms-hub:X.Y.Z --repo gokayybaz/bazntms
+helm pull oci://ghcr.io/gokayybaz/charts/bazntms --version X.Y.Z
 ```
 
 Otomatik güncelleme: hub'ın `GitHubSyncer`'ı en son (draft/prerelease olmayan)
@@ -177,7 +191,5 @@ gerisi çalışır ve artefaktları workflow artifact'ı olarak bırakır.
 
 ## 7) Faz 19'da eklenecek (henüz pipeline'da yok)
 
-- Helm chart OCI push + `helm lint`/`kubeconform` kapısı; `Chart.yaml`
-  version/appVersion'ın tag'den türetilmesi (S19.5–S19.6).
-- SLSA build provenance attestation'ları (S19.7).
-- İmzalı update manifest'i (ed25519) varsayılan (S19.8).
+- İmzalı update manifest'i (ed25519) varsayılan — bugün `GitHubSyncer`
+  imzasız üretiyor; agent yalnız SHA-256 doğruluyor (S19.8).

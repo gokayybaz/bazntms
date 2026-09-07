@@ -192,7 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # ghcr push
+      packages: write     # ghcr push
+      id-token: write      # provenance attestation
+      attestations: write  # SLSA build provenance
     strategy:
       fail-fast: false
       matrix:
@@ -255,6 +257,7 @@ jobs:
         run: .github/scripts/image_smoke_test.sh bazntms-hub:scan ${{ github.ref_name }}
 
       - name: Derle + (yalnız etikette) push
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -268,13 +271,44 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
+      - name: İmaj build provenance (SLSA)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/bazntms-${{ matrix.component }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  chart:
+    name: Helm chart (paketle + OCI push)
+    needs: preflight
+    if: ${{ always() && needs.preflight.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # oci://ghcr.io/<owner>/charts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: Paketle
+        run: helm package deploy/helm/bazntms -d dist
+      - name: OCI push (yalnız etikette)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io -u '${{ github.actor }}' --password-stdin
+          helm push dist/bazntms-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+
   supply-chain:
-    name: Supply chain (SBOM, scan, sign)
+    name: Supply chain (SBOM, scan, sign, provenance)
     needs: [build, packages, msi, images]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # cosign keyless imza
+      id-token: write     # cosign keyless imza + attestation
+      attestations: write # SLSA build provenance
     steps:
       - uses: actions/checkout@v4
 
@@ -298,6 +332,19 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
+      # SLSA build provenance — cosign imzasından ÖNCE ki .sig/.bundle
+      # dosyaları özneye girmesin. Yalnız binary + paketler (SBOM hariç).
+      - name: Build provenance (binary + paketler)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            bazntms-linux-*
+            bazntms-darwin-*
+            bazntms-windows-*
+            bazntms-agent-*
+            bazntmsctl-*
+
       - name: Cosign keyless imzasi
         uses: sigstore/cosign-installer@v3
 
@@ -319,9 +366,10 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, supply-chain]
+    needs: [build, supply-chain, chart]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4 # .github/release-footer.md için
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -329,12 +377,21 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          V: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           # not: glob bazntms-sbom.spdx.json'i da kapsar; dosyayi ikinci kez
           # acikca vermek ayni asset'i iki kez yuklemeye calisir ve cakilir
           # bazntmsctl-* "bazntms-" prefix'i icermedigi icin ayri verilmeli
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "$V" \
             bazntms-* bazntmsctl-* \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "bazNTMS ${GITHUB_REF_NAME}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "bazNTMS $V" \
             --generate-notes
+          # üretilen commit listesinin altına doğrulama talimatları
+          body=$(gh release view "$V" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          footer=$(sed -e "s|__REPO__|$GITHUB_REPOSITORY|g" \
+                       -e "s|__OWNER__|$OWNER|g" \
+                       -e "s|__V__|${V#v}|g" .github/release-footer.md)
+          printf '%s\n\n%s\n' "$body" "$footer" > /tmp/notes.md
+          gh release edit "$V" --repo "$GITHUB_REPOSITORY" --notes-file /tmp/notes.md
