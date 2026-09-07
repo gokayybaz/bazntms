@@ -1,7 +1,11 @@
 # 0007 — Süreç-atıf arka uçları: eBPF / ETW / pcap (Faz 20)
 
-**Tarih:** 2026-09-07 · **Durum:** kabul edildi (kod tarafı; ETW oturum yaşam
-döngüsü canlı Windows'ta doğrulanacak — RELEASE-RUNBOOK §2b)
+**Tarih:** 2026-09-07 · **Durum:** kabul edildi ve **canlı doğrulandı** — Linux
+eBPF (scale compose), Windows ETW (gerçek makine, `attr_method=etw`, süreç +
+DNS panelleri dolu). Doğrulama sırasında bulunan 3 hata düzeltildi:
+`traceLogfileHeader` eksik union alanı (callback hiç çağrılmıyordu),
+Kernel-Network keyword maskesi (0x10/0x20, 0xF değil), TCP recv uzak-uç
+ayrıştırması. Bkz. commit `6e89910`, `434ccb1`, `d0764d6`.
 
 ## Sorun
 
@@ -81,6 +85,16 @@ sessiz boş, sayım + DNS aksamaz). ETW modunda L7 **yoktur** —
 `-collect-method=pcap` + Npcap gerekir. Standart-dışı portlar (9443 vb.)
 yardımcı handle filtresinde yok — kabul edilmiş sınır.
 
+**Sonuç (2026-09-07 canlı doğrulama):** "Npcap bağımlılığını kaldır" hedefi
+**kısmen** karşılandı — çekirdek görünürlük (süreç trafiği + per-süreç DNS)
+Windows'ta Npcap'siz çalışıyor, ama ayrı **L7/SNI paneli Npcap gerektirmeye
+devam ediyor**. Per-süreç DNS pratikte uygulama görünürlüğünün büyük kısmını
+verdiği için varsayılan dağıtım önerisi "tam özellik = Npcap kur" olarak
+kalıyor; ETW `collect.method=auto` fallback'i Npcap'siz kurulumlarda çekirdeği
+korur. ETW ile kısmi L7 (`Microsoft-Windows-WinINet`/`WinHTTP`/`Schannel` —
+OS HTTP yığını app'leri kapsar, Chromium/Firefox/Electron hariç) mümkün ama
+descope edildi (ayrı faz).
+
 ### 5. eBPF DNS: yalnız yanıtlar
 
 `skb_consume_udp`'de (recv) yakalanır; yanıt soru bölümünü taşıdığından her
@@ -96,7 +110,7 @@ notarization + `com.apple.developer.networking` entitlement maliyeti var →
 
 ## Kalan
 
-- ETW oturum/attach yaşam döngüsü canlı Windows'ta doğrulanmalı (port
-  endian, `win:IPv4` bayt sırası — RELEASE-RUNBOOK §2b kontrol listesi).
+- ETW ile kısmi L7 (`WinINet`/`WinHTTP`/`Schannel` sağlayıcıları) — OS HTTP
+  yığını app'leri için Npcap'siz SNI/Host; tarayıcılar yine Npcap ister.
 - eBPF L7 (`uprobe/SSL_write` ile şifresiz SNI), Windows NDIS-PacketCapture
   ile L7/`-record` paritesi (20-F), macOS ES (20-G) — ayrı fazlar.

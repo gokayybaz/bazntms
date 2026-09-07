@@ -79,6 +79,12 @@ git push origin main
 > testlerini (`etwparse_test.go`, `attrcaps_test.go`, `TestETWLayout`) ve Linux
 > canlı eBPF dumanını (`ebpf-smoke` job) kapsar; oturum/attach yaşam döngüsü
 > gerçek makinede doğrulanmalıdır.
+>
+> **2026-09-07 durumu:** her iki arka uç da bir kez canlı doğrulandı (Linux
+> eBPF scale compose'da, Windows ETW gerçek makinede). ETW callback'i çalışan
+> struct düzeni artık `checkLayout()`'ta kritik ofset denetimleriyle kilitli.
+> Port/endian doğru çıktı (443/53). Aşağıdaki liste sonraki değişikliklerde
+> regresyon kontrolü için.
 
 ### Linux eBPF (kernel ≥ 5.8, BTF'li)
 
@@ -108,11 +114,15 @@ sudo ./bazntms-agent -collect-method=ebpf -pcap -hub-url http://localhost:8080 -
 - [ ] **Npcap KURULU DEĞİL** → süreç trafiği + DNS yine akıyor (ETW pcap'e bağlı değil)
 - [ ] `-collect-method=pcap` + Npcap yok → "Npcap kurulu degil" ipucu; `-record` aynı ipucu
 - [ ] Yükseltilmemiş kullanıcı → log "ETW atlandı: süreç yükseltilmemiş", `yöntem=pcap` (veya Npcap yoksa temel telemetri)
-- [ ] Port/adres doğru yönde: giden bağlantı `uzak = daddr:dport`; port `ntohs` uygulanmış (443, 53 gibi görünüyor — 47873 değil)
+- [ ] Port/adres doğru yönde: **TCP** hem send hem recv `uzak = daddr:dport`;
+      **UDP** send=daddr, recv=saddr. Port big-endian (443/53 — 47873 değil).
+      Uzak IP host'un kendi IP'si veya multicast (`224.*`/`239.*`/`ff0x::`)
+      **görünmemeli** — `usableRemote()` eler.
 
-> **Port yön/endian notu:** `kernelNetFlow` ham UserData'yı big-endian port +
-> `win:IPv4` bayt-sırası varsayımıyla çözer. İlk Windows doğrulamasında port
-> ters çıkarsa `etwparse.go`'da `binary.BigEndian` → `LittleEndian` çevir.
+> **Port yön/endian notu (doğrulandı):** `kernelNetFlow` ham UserData'yı
+> big-endian port + `win:IPv4` bayt-sırası varsayımıyla çözer — 2026-09-07
+> canlı testte doğru (443/53). Ters çıkarsa `etwparse.go`'da `binary.BigEndian`
+> → `LittleEndian` çevir.
 
 ## 3) Etiketi kes
 
