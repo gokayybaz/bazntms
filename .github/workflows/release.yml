@@ -22,12 +22,13 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
+          base="${tag%%-*}"   # v0.3.3-rc1 → 0.3.3 (rc/beta prova aynı sürümü paylaşır)
           for k in version appVersion; do
             got=$(sed -n -E "s/^$k: *\"?([^\"]+)\"?.*/\1/p" deploy/helm/bazntms/Chart.yaml)
-            [ "$got" = "$tag" ] || { echo "::error::Chart.yaml $k='$got' ama etiket='$tag' — RELEASE-RUNBOOK §2"; exit 1; }
+            [ "$got" = "$base" ] || { echo "::error::Chart.yaml $k='$got' ama etiket='$base' — RELEASE-RUNBOOK §2"; exit 1; }
           done
-          grep -q "^## \[$tag\]" CHANGELOG.md || { echo "::error::CHANGELOG.md'de '## [$tag]' bölümü yok"; exit 1; }
-          echo "sürüm alanları tutarlı: $tag"
+          grep -q "^## \[$base\]" CHANGELOG.md || { echo "::error::CHANGELOG.md'de '## [$base]' bölümü yok"; exit 1; }
+          echo "sürüm alanları tutarlı: $base (etiket $tag)"
 
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
