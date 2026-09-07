@@ -2,15 +2,32 @@
 
 package agent
 
-import "fmt"
+import (
+	"fmt"
 
-// platformAttrCaps, Windows atıf yeteneklerini ölçer.
-//
-// S20.3'te ETW için gerçek kontrol eklenecek: süreç yükseltilmiş mi
-// (SYSTEM / yönetici). Şimdilik yalnızca pcap kullanılabilir sayılır →
-// "auto" bugünkü davranışı (Npcap varsa pcap) korur.
+	"golang.org/x/sys/windows"
+)
+
+// etwBackendBuilt, ETW atıf arka ucunun bu derlemede mevcut olup olmadığı.
+// S20.10'da gerçek implementasyon eklenince true olur; o zamana dek "auto"
+// modu yükseltilmiş süreçte bile pcap kullanır.
+var etwBackendBuilt = false
+
+// platformAttrCaps, Windows'ta ETW atıf motorunun kullanılabilirliğini ölçer.
+// ETW Kernel-Network sağlayıcısı yükseltilmiş (SYSTEM / yönetici) süreç ister;
+// agent normalde SYSTEM servis olarak çalışır.
 func platformAttrCaps() attrCaps {
-	return attrCaps{pcap: true}
+	c := attrCaps{pcap: true}
+	elevated := windowsElevated()
+	switch {
+	case elevated && etwBackendBuilt:
+		c.etw = true
+	case elevated:
+		// yükseltilmiş ama arka uç henüz derlenmedi — sessiz (geçici, S20.10)
+	default:
+		c.note = "ETW atlandı: süreç yükseltilmemiş (SYSTEM / yönetici gerekir)"
+	}
+	return c
 }
 
 func platformBuildAttrSource(method string, cfg AttrConfig) (AttrSource, error) {
@@ -26,4 +43,19 @@ func platformBuildAttrSource(method string, cfg AttrConfig) (AttrSource, error) 
 	default:
 		return nil, fmt.Errorf("windows'ta %q atıf yöntemi desteklenmiyor", method)
 	}
+}
+
+// windowsElevated, sürecin ETW kernel oturumu açabilecek yetkide olup
+// olmadığını söyler: UAC-yükseltilmiş veya LocalSystem (S-1-5-18).
+func windowsElevated() bool {
+	tok := windows.GetCurrentProcessToken()
+	if tok.IsElevated() {
+		return true
+	}
+	// SYSTEM servisi UAC'ye tabi değildir; bazı yapılandırmalarda IsElevated
+	// false döner — kullanıcı SID'ini doğrudan kontrol et.
+	if u, err := tok.GetTokenUser(); err == nil && u.User.Sid != nil {
+		return u.User.Sid.String() == "S-1-5-18"
+	}
+	return false
 }
