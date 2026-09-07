@@ -95,6 +95,37 @@ jobs:
         with:
           version: v2.12.2
 
+  helm:
+    name: Helm chart (lint + kubeconform)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: kubeconform kur
+        run: |
+          curl -sSL -o kc.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf kc.tar.gz && sudo install kubeconform /usr/local/bin/
+
+      - name: helm lint
+        run: helm lint deploy/helm/bazntms
+
+      # varsayılan (yalnız hub) + her şey açık (agent DaemonSet + Ingress):
+      # ikisi de şema-geçerli k8s manifesti üretmeli
+      - name: helm template + kubeconform
+        run: |
+          set -euo pipefail
+          KV=1.29.0
+          helm template rel deploy/helm/bazntms \
+            | kubeconform -strict -summary -kubernetes-version "$KV"
+          helm template rel deploy/helm/bazntms \
+            --set agent.enabled=true --set ingress.enabled=true --set auth.password=x \
+            | kubeconform -strict -summary -kubernetes-version "$KV"
+
   db-upgrade-test:
     # Faz 13 S13.4: bir onceki release'in semasiyla olusturulan bir DB'yi
     # HEAD binary'si hatasiz yukseltiyor mu? Onceki tag'i bir git worktree'ye

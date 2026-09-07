@@ -1,8 +1,14 @@
 apiVersion: v2
 name: bazntms
-description: bazNTMS — hub + agent ag trafigi izleme platformu (hub Deployment'i)
+description: bazNTMS — hub + agent ağ trafiği izleme platformu (hub Deployment + opsiyonel agent DaemonSet)
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+# version + appVersion release'de etiketten türetilir (RELEASE-RUNBOOK §2);
+# release.yml preflight'ı bunu `vX.Y.Z` ile eşleşmeye zorlar. İlk çalışan
+# chart sürümü 0.3.3 (ghcr imajları o sürümle yayına giriyor — bkz. S19.3).
+version: 0.3.3
+appVersion: "0.3.3"
+home: https://github.com/gokayybaz/bazntms
+sources:
+  - https://github.com/gokayybaz/bazntms
 maintainers:
   - name: gokayybaz

@@ -52,12 +52,18 @@ Sürüm-eşitleme — bu yerlerin **hepsi** aynı `X.Y.Z`'yi göstermeli:
 
 ```bash
 # Chart sürümünü ayarla + CHANGELOG'u kes → tek "release" commit'i
-sed -i '' -E "s/^(version|appVersion): .*/\1: X.Y.Z/" deploy/helm/bazntms/Chart.yaml
+V=X.Y.Z
+sed -i '' -E "s/^version: .*/version: $V/;         s/^appVersion: .*/appVersion: \"$V\"/" \
+  deploy/helm/bazntms/Chart.yaml
 $EDITOR CHANGELOG.md
 git add CHANGELOG.md deploy/helm/bazntms/Chart.yaml
-git commit -m "release: vX.Y.Z"
+git commit -m "release: v$V"
 git push origin main
 ```
+
+> CI `helm` job'u her push'ta `helm lint` + `helm template | kubeconform`
+> (varsayılan + agent/ingress açık) çalıştırır; `release.yml` preflight ise
+> etiket ile `Chart.yaml` + `CHANGELOG` eşleşmesini zorlar.
 
 ## 3) Etiketi kes
 
@@ -74,6 +80,9 @@ git push origin vX.Y.Z
 
 `release.yml` (`push: tags: ['v*']`) şunları sırayla yapar:
 
+0. **preflight** (yalnız etiket) — `Chart.yaml` `version`/`appVersion` ve
+   `CHANGELOG.md`'de `## [X.Y.Z]` bölümü etiketle eşleşiyor mu. §2'deki bump
+   adımı atlandıysa release burada durur.
 1. **build** (5 hedef: linux/darwin/windows × amd64/arm64) — frontend + 3 binary
    (`bazntms`, `bazntms-agent`, `bazntmsctl`), `-trimpath`, sürüm ldflags;
    darwin runner'da `.pkg`.

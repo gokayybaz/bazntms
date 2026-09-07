@@ -9,8 +9,31 @@ permissions:
   contents: write
 
 jobs:
+  # Etiket sürümü ile depo içindeki sürüm alanları tutarlı mı — maintainer
+  # RELEASE-RUNBOOK §2'deki bump adımını atladıysa release burada durur
+  # (workflow_dispatch'te atlanır; skip'lenen job needs'i bloklamaz).
+  preflight:
+    name: Sürüm tutarlılığı
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chart.yaml + CHANGELOG etiketle eşleşiyor mu
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          for k in version appVersion; do
+            got=$(sed -n -E "s/^$k: *\"?([^\"]+)\"?.*/\1/p" deploy/helm/bazntms/Chart.yaml)
+            [ "$got" = "$tag" ] || { echo "::error::Chart.yaml $k='$got' ama etiket='$tag' — RELEASE-RUNBOOK §2"; exit 1; }
+          done
+          grep -q "^## \[$tag\]" CHANGELOG.md || { echo "::error::CHANGELOG.md'de '## [$tag]' bölümü yok"; exit 1; }
+          echo "sürüm alanları tutarlı: $tag"
+
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: preflight
+    # preflight tag'de çalışır (fail → burada dur), dispatch'te skip'lenir (devam)
+    if: ${{ always() && needs.preflight.result != 'failure' }}
     strategy:
       fail-fast: false
       matrix:
