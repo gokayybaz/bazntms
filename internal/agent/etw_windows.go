@@ -243,12 +243,27 @@ type etwSession struct {
 	stopped       atomic.Bool
 }
 
-func startETWSession(name string, provider windows.GUID, matchAnyKeyword uint64) (*etwSession, error) {
+// etwProvider, oturuma etkinleştirilecek bir sağlayıcı.
+type etwProvider struct {
+	GUID     windows.GUID
+	Keywords uint64 // MatchAnyKeyword
+}
+
+// etwEvent, ProcessTrace callback'inden tüketiciye geçen olay (UserData kopyası
+// callback dışında geçerlidir).
+type etwEvent struct {
+	Provider windows.GUID
+	ID       uint16
+	PID      uint32
+	Data     []byte
+}
+
+func startETWSession(name string, providers ...etwProvider) (*etwSession, error) {
 	if err := checkLayout(); err != nil {
 		return nil, err
 	}
 	s := &etwSession{name: name}
-	if err := s.start(provider, matchAnyKeyword); err != nil {
+	if err := s.start(providers); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -271,7 +286,7 @@ func (s *etwSession) newProps() (*eventTraceProperties, []byte) {
 	return p, buf
 }
 
-func (s *etwSession) start(provider windows.GUID, matchAnyKeyword uint64) error {
+func (s *etwSession) start(providers []etwProvider) error {
 	name16, err := windows.UTF16PtrFromString(s.name)
 	if err != nil {
 		return err
@@ -298,29 +313,31 @@ func (s *etwSession) start(provider windows.GUID, matchAnyKeyword uint64) error 
 		return fmt.Errorf("StartTraceW: %w", windows.Errno(r))
 	}
 
-	params := enableTraceParameters{Version: 2}
-	r, _, _ = procEnableTrace2.Call(
-		uintptr(s.sessionHandle),
-		uintptr(unsafe.Pointer(&provider)),
-		eventControlEnableProvider,
-		traceLevelVerbose,
-		uintptr(matchAnyKeyword),
-		0, // MatchAllKeyword
-		0, // Timeout
-		uintptr(unsafe.Pointer(&params)),
-	)
-	if r != 0 {
-		s.controlStop()
-		return fmt.Errorf("EnableTraceEx2: %w", windows.Errno(r))
+	for i := range providers {
+		guid := providers[i].GUID
+		params := enableTraceParameters{Version: 2}
+		r, _, _ = procEnableTrace2.Call(
+			uintptr(s.sessionHandle),
+			uintptr(unsafe.Pointer(&guid)),
+			eventControlEnableProvider,
+			traceLevelVerbose,
+			uintptr(providers[i].Keywords),
+			0, // MatchAllKeyword
+			0, // Timeout
+			uintptr(unsafe.Pointer(&params)),
+		)
+		if r != 0 {
+			s.controlStop()
+			return fmt.Errorf("EnableTraceEx2(%v): %w", guid, windows.Errno(r))
+		}
 	}
 	return nil
 }
 
 // Process, ProcessTrace ile olay pompasını çalıştırır — Stop() çağrılana kadar
-// bloke eder. cb her Kernel-Network olayı için (event id, UserData kopyası,
-// header PID) ile çağrılır; kopya callback dışında geçersizdir, bu yüzden
-// alınır.
-func (s *etwSession) Process(cb func(id uint16, userData []byte, headerPID uint32)) {
+// bloke eder. wanted(id) true dönen her olay için cb, olayın kopyasıyla
+// çağrılır (kopya callback dışında geçerlidir).
+func (s *etwSession) Process(wanted func(id uint16) bool, cb func(etwEvent)) {
 	name16, _ := windows.UTF16PtrFromString(s.name)
 
 	logfile := &eventTraceLogfileW{
@@ -333,7 +350,7 @@ func (s *etwSession) Process(cb func(id uint16, userData []byte, headerPID uint3
 			return 0
 		}
 		id := rec.EventHeader.EventDescriptor.Id
-		if !kernelNetWanted(id) {
+		if !wanted(id) {
 			return 0
 		}
 		var blob []byte
@@ -341,7 +358,12 @@ func (s *etwSession) Process(cb func(id uint16, userData []byte, headerPID uint3
 			blob = make([]byte, n)
 			copy(blob, unsafe.Slice(rec.UserData, n))
 		}
-		cb(id, blob, rec.EventHeader.ProcessId)
+		cb(etwEvent{
+			Provider: rec.EventHeader.ProviderId,
+			ID:       id,
+			PID:      rec.EventHeader.ProcessId,
+			Data:     blob,
+		})
 		return 0
 	}
 	s.cbPtr = windows.NewCallback(goCB)
