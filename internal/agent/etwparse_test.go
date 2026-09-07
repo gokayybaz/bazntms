@@ -29,19 +29,26 @@ func TestKernelNetFlowV4(t *testing.T) {
 		t.Fatalf("send key: %+v", k)
 	}
 
-	// TCP recv (id 11): uzak uç = saddr:sport
+	// TCP recv (id 11): bağlantı-yönelimli — peer yine daddr:dport (canlı ETW
+	// verisiyle doğrulandı), yalnız bayt yönü in.
 	k, out, in, ok = kernelNetFlow(11, blob, 9999)
 	if !ok || in != 1460 || out != 0 {
 		t.Fatalf("recv: ok=%v out=%d in=%d", ok, out, in)
 	}
-	if k.remoteIP != "192.168.1.5" || k.port != 51000 {
+	if k.remoteIP != "93.184.216.34" || k.port != 443 {
 		t.Fatalf("recv key: %+v", k)
 	}
 
-	// UDP send (id 42)
+	// UDP send (id 42): peer = daddr:dport
 	k, _, _, ok = kernelNetFlow(42, buildKernelNetV4(7, 64, "8.8.8.8", "10.0.0.2", 53, 40000), 0)
 	if !ok || k.proto != "udp" || k.remoteIP != "8.8.8.8" || k.port != 53 {
 		t.Fatalf("udp send: %+v ok=%v", k, ok)
+	}
+
+	// UDP recv (id 43): paket-yönelimli — peer = saddr:sport (uçlar ters)
+	k, _, in, ok = kernelNetFlow(43, buildKernelNetV4(7, 64, "10.0.0.2", "8.8.8.8", 40000, 53), 0)
+	if !ok || in != 64 || k.proto != "udp" || k.remoteIP != "8.8.8.8" || k.port != 53 {
+		t.Fatalf("udp recv: %+v in=%d ok=%v", k, in, ok)
 	}
 
 	// header PID fallback (UserData PID = 0)
@@ -60,6 +67,27 @@ func TestKernelNetFlowV4(t *testing.T) {
 	if _, _, _, ok := kernelNetFlow(10, buildKernelNetV4(1, 0, "1.1.1.1", "2.2.2.2", 1, 2), 0); ok {
 		t.Fatal("sıfır boyut atlanmalı")
 	}
+
+	// loopback uzak uç → elenir (eBPF ile aynı: yerel IPC atfı kirletmesin)
+	if _, _, _, ok := kernelNetFlow(10, buildKernelNetV4(1, 100, "127.0.0.1", "127.0.0.1", 443, 5000), 0); ok {
+		t.Fatal("v4 loopback send atlanmalı")
+	}
+	if _, _, _, ok := kernelNetFlow(11, buildKernelNetV4(1, 100, "127.0.0.53", "10.0.0.1", 53, 40000), 0); ok {
+		t.Fatal("v4 TCP recv loopback (daddr) atlanmalı")
+	}
+	if _, _, _, ok := kernelNetFlow(43, buildKernelNetV4(1, 100, "10.0.0.1", "127.0.0.53", 40000, 53), 0); ok {
+		t.Fatal("v4 UDP recv loopback (saddr) atlanmalı")
+	}
+
+	// mDNS: kendi çok-noktalı paketimiz geri döner → recv olayında saddr=biz,
+	// daddr=224.0.0.251. İki uçtan biri multicast ise elenir.
+	if _, _, _, ok := kernelNetFlow(43, buildKernelNetV4(1, 883, "224.0.0.251", "192.168.1.33", 5353, 5353), 0); ok {
+		t.Fatal("mDNS multicast (daddr) atlanmalı")
+	}
+	// SSDP send → daddr=239.255.255.250
+	if _, _, _, ok := kernelNetFlow(42, buildKernelNetV4(1, 200, "239.255.255.250", "192.168.1.33", 1900, 55000), 0); ok {
+		t.Fatal("SSDP multicast atlanmalı")
+	}
 }
 
 func TestKernelNetFlowV6(t *testing.T) {
@@ -71,13 +99,27 @@ func TestKernelNetFlowV6(t *testing.T) {
 	binary.BigEndian.PutUint16(b[40:42], 443)
 	binary.BigEndian.PutUint16(b[42:44], 60000)
 
-	k, out, _, ok := kernelNetFlow(26, b, 0) // TCP send v6
+	k, out, _, ok := kernelNetFlow(26, b, 0) // TCP send v6 → daddr:dport
 	if !ok || out != 200 || k.remoteIP != "2606:4700:4700::1111" || k.port != 443 {
 		t.Fatalf("v6 send: %+v out=%d ok=%v", k, out, ok)
 	}
-	k, _, in, ok := kernelNetFlow(59, b, 0) // UDP recv v6
+	k, _, in, ok := kernelNetFlow(27, b, 0) // TCP recv v6 → yine daddr:dport
+	if !ok || in != 200 || k.remoteIP != "2606:4700:4700::1111" || k.port != 443 {
+		t.Fatalf("v6 tcp recv: %+v in=%d ok=%v", k, in, ok)
+	}
+	k, _, in, ok = kernelNetFlow(59, b, 0) // UDP recv v6 → saddr:sport
 	if !ok || in != 200 || k.proto != "udp" || k.remoteIP != "fe80::1" || k.port != 60000 {
 		t.Fatalf("v6 udp recv: %+v in=%d ok=%v", k, in, ok)
+	}
+
+	// ::1 loopback → elenir
+	lb := make([]byte, 44)
+	binary.LittleEndian.PutUint32(lb[4:8], 100)
+	copy(lb[8:24], net.ParseIP("::1"))
+	copy(lb[24:40], net.ParseIP("::1"))
+	binary.BigEndian.PutUint16(lb[40:42], 443)
+	if _, _, _, ok := kernelNetFlow(26, lb, 0); ok {
+		t.Fatal("v6 ::1 loopback atlanmalı")
 	}
 }
 

@@ -41,7 +41,14 @@ func kernelNetWanted(id uint16) bool { _, ok := etwKernelNetIDs[id]; return ok }
 //	v4:  PID(4) size(4) daddr(4) saddr(4) dport(2be) sport(2be) …
 //	v6:  PID(4) size(4) daddr(16) saddr(16) dport(2be) sport(2be) …
 //
-// send olayında uzak uç = daddr:dport, recv'de saddr:sport.
+// Uzak uç seçimi (canlı ETW verisiyle doğrulandı):
+//   - TCP (10/11/26/27): bağlantı-yönelimli — peer HER ZAMAN daddr:dport'ta,
+//     send de recv de. (İstemci-taraflı bağlantılar için; server soketinde
+//     yanılabilir ama endpoint ajanında baskın durum giden bağlantıdır.)
+//   - UDP send (42/58): peer = daddr:dport
+//   - UDP recv (43/59): peer = saddr:sport (paket-yönelimli, uçlar ters)
+//
+// Bayt yönü (in/out) her durumda send/recv'e göre.
 func kernelNetFlow(id uint16, data []byte, headerPID uint32) (k etwFlowKey, out, in uint64, ok bool) {
 	sh, wanted := etwKernelNetIDs[id]
 	if !wanted {
@@ -82,15 +89,38 @@ func kernelNetFlow(id uint16, data []byte, headerPID uint32) (k etwFlowKey, out,
 		proto = "udp"
 	}
 
-	if sh.send {
+	// Loopback / multicast / broadcast trafiği atlanır — "uzak host" kavramı
+	// yok. Multicast'te (mDNS 224.0.0.251, SSDP 239.255.255.250, LLMNR, ff0x::)
+	// paket kendine geri dönerse recv olayının saddr'ı bizim IP'miz olur; iki
+	// ucu da kontrol et. eBPF arka ucu da loopback'i eler.
+	if !usableRemote(dIP) || !usableRemote(sIP) {
+		return etwFlowKey{}, 0, 0, false
+	}
+
+	// TCP → daima daddr:dport; UDP → send'de daddr, recv'de saddr.
+	useDst := !sh.udp || sh.send
+	if useDst {
 		k = etwFlowKey{pid: pid, proto: proto, remoteIP: dIP.String(), port: dPort}
-		out = uint64(size)
 	} else {
 		k = etwFlowKey{pid: pid, proto: proto, remoteIP: sIP.String(), port: sPort}
+	}
+	if sh.send {
+		out = uint64(size)
+	} else {
 		in = uint64(size)
 	}
 	ok = k.remoteIP != "" && k.remoteIP != "<nil>"
 	return
+}
+
+// usableRemote, bir IP'nin süreç atfında anlamlı bir "uzak uç" olup olmadığı.
+// nil / loopback / belirsiz (0.0.0.0, ::) / broadcast / her tür multicast → hayır.
+func usableRemote(ip net.IP) bool {
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() ||
+		ip.IsMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsLinkLocalMulticast() {
+		return false
+	}
+	return !ip.Equal(net.IPv4bcast)
 }
 
 // DNS-Client: 3006 = sorgu başladı, 3008 = sorgu tamamlandı. İkisinde de
