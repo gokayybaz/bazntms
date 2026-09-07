@@ -1,31 +1,47 @@
 # Sorun Giderme
 
-## Yakalama başlamıyor
+## Süreç trafiği / DNS / L7 panelleri boş
 
-### "activate en0: Permission Denied (root/admin yetkisi gerekli olabilir)"
+Bu üç panel agent'ın **süreç-atıf motorundan** gelir. Yöntem `collect.method`
+ile seçilir (`auto` varsayılan) ve `/api/v1/agents` yanıtındaki `attr_method`
+alanında + agent detay sayfasındaki rozet'te görünür.
 
-Paket yakalama ayrıcalıklı bir işlemdir:
+| Platform | `auto` sırası | Gereksinim |
+|----------|--------------|-----------|
+| Linux    | **eBPF** → pcap | eBPF: kernel ≥ 5.8 + `/sys/kernel/btf/vmlinux` + `CAP_BPF`/`CAP_SYS_ADMIN` (veya root). pcap: `CAP_NET_RAW` + `libpcap` |
+| Windows  | **ETW** → pcap | ETW: yükseltilmiş süreç (SYSTEM servis veya yönetici). pcap: [Npcap](https://npcap.com) |
+| macOS    | pcap | `sudo` (`/dev/bpf*` root dışında kapalı) |
 
-- **macOS**: `sudo ./bazntms ...` ile çalıştırın. Xcode Command Line Tools kurulu olmalı
-  (`xcode-select --install`). `/dev/bpf*` aygıtları root dışında kapalıdır.
-- **Linux**: `sudo` ile çalıştırın ya da kalıcı yetki verin:
-  ```bash
-  sudo setcap cap_net_raw+ep ./bazntms
-  ```
-  Derleme için `libpcap-dev` (Debian/Ubuntu) veya `libpcap-devel` (RHEL) gerekir.
-- **Windows**: [Npcap](https://npcap.com) kurulu olmalı ve uygulama **yönetici
-  olarak** başlatılmalı — ama yalnızca gerçekten paket yakalıyorsanız: hub
-  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener; agent
-  binary bayrağı `-pcap` varsayılanı kapalı olsa da **paketlenmiş kurulumlar
-  (MSI / .pkg / deb / rpm) `agent.yml`'e `collect.pcap: true` yazar** — yani
-  paket bazlı süreç trafiği + DNS + L7 görünürlüğü varsayılan açıktır (hub
-  tarafında `-agent-pcap` politikası da açıksa fiilen başlar). Npcap kurulu
-  değilse uygulama çökmez, sadece atıf başlamaz (`agent.log`'da WARN).
-  **Derleme için Npcap SDK/mingw-w64 GEREKMEZ** — `gopacket/pcap`, Windows'ta
-  cgo kullanmaz; `wpcap.dll`'i yalnızca yakalama fiilen başladığında
-  (syscall ile) çalışma zamanında yükler. Düz `go build -o bazntms.exe
-  ./cmd/bazntms-hub` yeterlidir.
-- **WSL2**: yakalama sanal ağda kalır; gerçek trafik için native Windows kullanın.
+Kontrol listesi:
+
+1. **Agent `collect.pcap: true` mi?** Paketlenmiş kurulumlar (deb/rpm/MSI/.pkg)
+   `agent.yml`'e yazar; elle kurdıysanız `collect.pcap: true` ekleyin (veya `-pcap`).
+   Kapalıysa motor hiç başlamaz — `agent.log`: `derin toplama kapali`.
+2. **Hub politikası açık mı?** Hub `-agent-pcap` ile başlatılmalı; kapalıysa
+   `agent.log`: `PCAP politikasi hub tarafinda kapali`.
+3. **`agent.log`'da hangi yöntem seçildi?** `süreç atfı aktif  yöntem=ebpf`
+   gibi bir satır olmalı. `yöntem=pcap` ise eBPF/ETW ortamı uygun değildir —
+   aynı log satırındaki `not=` alanı nedeni söyler (`kernel 5.4 < 5.8` vb.).
+4. **eBPF yüklenmedi:** `eBPF nesnesi yüklenemedi` → kernel < 5.8 ya da BTF yok
+   (`CONFIG_DEBUG_INFO_BTF=y` gerekir; RHEL/Debian ≥ 11 var, bazı minimal
+   imajlarda yok). Seçici otomatik pcap'e düşer.
+5. **Windows ETW başlamadı:** yükseltilmemiş süreç → `ETW atlandı: süreç
+   yükseltilmemiş`. Servis olarak kurulduysa SYSTEM'dir; elle çalıştırıyorsanız
+   "Yönetici olarak çalıştır".
+
+### Windows'ta Npcap gerekli mi?
+
+**Süreç trafiği + DNS için hayır** — ETW çekirdek sağlayıcılarıyla toplanır.
+Npcap yalnız şunlar için gerekir:
+
+- **L7 (SNI/Host) paneli** — payload gerektirir, ETW taşımaz. `-collect-method=pcap`
+  + Npcap ile alınır (o zaman süreç trafiği + DNS de pcap'ten gelir).
+- **Ham `-record`** (paket dökümü)
+- **Tek-makine hub yakalaması** (`bazntms-hub -capture=true` navbar'da; ölçek
+  modunda kapalı)
+
+Npcap kurulu değilken agent çökmesez — ETW ile çalışmaya devam eder.
+**Derleme için Npcap SDK / mingw-w64 GEREKMEZ** (Windows agent `CGO_ENABLED=0`).
 
 ### Arayüz listesi boş / seçilen arayüz trafik göstermiyor
 
@@ -34,7 +50,7 @@ Paket yakalama ayrıcalıklı bir işlemdir:
 
 ### "Error opening adapter" / "dosya adı veya birim etiketi söz dizimi hatalı" (Windows)
 
-Npcap **kurulu** ama süreç atfı / L7 başlamıyor:
+`-collect-method=pcap` seçildi, Npcap **kurulu** ama başlamıyor:
 
 ```
 WARN surec atfi baslatilamadi — telemetri surecek  iface=Ethernet  err="Error opening adapter: ..."

@@ -281,54 +281,56 @@ GeoIP kaynağı yoksa uç boş liste döner, kart "veri yok" durumuna düşer.
 
 ## Süreç Bazlı Trafik Atfı
 
-`pkg/proctraffic` + `internal/agent/attr.go`: **nethogs yöntemi** — agent pcap
-ile paket yakalar (yalnızca başlıklar, snaplen 600), 4'lü çifti donemlik
-soket-tablosu → PID eşlemesiyle süreçe çevirir ve delta üretir.
+Agent, "hangi süreç nereye ne kadar veri gönderdi + hangi domain'e baktı"
+sorusunu üç değiştirilebilir arka uçtan biriyle yanıtlar. Ortak arayüz
+`internal/agent/attrsource.go` `AttrSource` (`Deltas` / `L7Deltas` / `DNSDeltas`
+/ `Stop` / `Method`); seçici `newAttrSource(cfg, caps)` platform + `collect.method`
++ çalışma-zamanı yeteneğine göre birini kurar ve eskisine **zarif düşer**.
+Aktif yöntem her telemetri batch'inde `attr_method` ile hub'a bildirilir.
 
-**L7 uygulama görünürlüğü** (`internal/agent/l7.go`): aynı yakalama akışında,
-giden TCP payload'ında TLS ClientHello **SNI**'si (`server_name` uzantısı) ve
-HTTP istek satırındaki **Host** başlığı çıkarılıp sürece atfedilir → `l7`
-telemetri alanı → `l7_endpoints` tablosu → `GET /api/v1/l7`. snaplen 128 →
-600'e çıkarıldı (ClientHello 128'i aşar). İmza tabanlı DPI değil — yalnızca
+| Arka uç | Platform | Yöntem | Gereksinim |
+|---------|----------|--------|-----------|
+| **eBPF** | Linux | `internal/agent/bpf/` — CO-RE **fentry** (`tcp/udp_sendmsg`, `tcp_cleanup_rbuf`, `skb_consume_udp`) → `LRU_HASH` map; DNS = udp/53 payload → `RINGBUF` | kernel ≥ 5.8 + BTF + `CAP_BPF`/`CAP_SYS_ADMIN` |
+| **ETW** | Windows | `internal/agent/etw_windows.go` — elle sarılmış advapi32 tüketicisi; `Microsoft-Windows-Kernel-Network` (bayt) + `Microsoft-Windows-DNS-Client` 3006/3008 (DNS) | yükseltilmiş süreç (SYSTEM / yönetici) |
+| **pcap** | Linux / macOS / Windows | `internal/agent/attr.go` — **nethogs yöntemi**: pcap ile başlık yakala (snaplen 600), 4'lü çifti dönemlik soket-tablosu → PID eşlemesiyle sürece çevir | `CAP_NET_RAW` / Npcap + libpcap |
+
+`auto` tercih sırası: Linux `eBPF → pcap`, Windows `ETW → pcap`, macOS `pcap`.
+eBPF/ETW **paket yakalamaz** — çekirdeğin soket katmanına bağlanır; her *paket*
+yerine her *send/recv işlemi* başına çalışır → belirgin şekilde ucuz, byte
+sayımı offload'dan (GRO/LRO) etkilenmez, `CAP_NET_RAW` gerekmez.
+
+**L7 uygulama görünürlüğü** (`internal/agent/l7.go`, `l7Tracker`): giden TCP
+payload'ında TLS ClientHello **SNI**'si ve HTTP **Host** başlığı çıkarılıp
+sürece atfedilir → `l7_endpoints` tablosu → `GET /api/v1/l7`. Payload
+gerektirdiği için **yalnız pcap tabanlıdır**: pcap arka ucunda ana handle'dan,
+eBPF modunda ise dar filtreli bir yardımcı pcap handle'dan (`l7helper.go`,
+`tcp and dst port 443/80/8443/8080 and tcp-push`); ETW modunda **yoktur**
+(`-collect-method=pcap` + Npcap gerekir). İmza tabanlı DPI değil — yalnızca
 açıkça görünen alan adı.
 
-**DNS görünürlüğü** (`internal/agent/dns.go`): yine aynı akışta, UDP/53 sorgu/
-yanıtlarındaki alan adları (ters arama / `.local` / noktasız hariç) sürece
-atfedilir → `dns` telemetri alanı → `agent_dns` tablosu → `GET /api/v1/dns` +
-fleet raporundaki "DNS Görünürlüğü" bölümü (`internal/report`, önceden yalnızca
-hub yerel yakalamasında vardı, çoklu-hub'da boştu).
+**DNS görünürlüğü** (`internal/agent/dns.go` — ortak `parseDNSNames` +
+`keepDomain` filtresi, ters arama / `.local` / noktasız hariç → `agent_dns`
+tablosu):
+- **eBPF:** `skb_consume_udp` içinde soket DNS taşıyorsa (uzak port 53 **veya**
+  v4 loopback hedef) skb payload'ı ringbuf'a; **yanıtlar** yakalanır (soru
+  bölümü domain'i taşır). systemd-resolved (127.0.0.53) / Docker gömülü DNS
+  (127.0.0.11) **native** görünür — pcap'in eski loopback-handle hack'i
+  (`loopback.go`) eBPF modunda hiç açılmaz.
+- **ETW:** `DNS-Client` 3006 (sorgu) + 3008 (yanıt) → q/r ayrımı tam.
+- **pcap:** ana handle (loopback-dışı arayüz) + ayrı bir `udp` loopback handle
+  (`loopback.go`, best-effort; Windows'ta Npcap loopback adaptörü gerekir).
+  Süreç atfı best-effort — DNS UDP soketleri milisaniyelik olduğundan
+  `/proc/net/udp` anlığına çoğu zaman yakalanmaz (domain kaydı süreç atfından
+  bağımsız).
 
-Ana atıf handle'ı loopback-*olmayan* tek bir arayüzü dinler; oysa
-`systemd-resolved` (127.0.0.53), `dnsmasq`/Pi-hole, Docker gömülü DNS
-(127.0.0.11) gibi **stub-resolver**'lara giden sorgular `lo` üzerinden gider ve
-o handle'da hiç görünmez. Bu yüzden `AttrEngine` ayrıca loopback cihazında
-`udp` BPF filtresiyle ikinci bir handle açar (`internal/agent/loopback.go`,
-best-effort — açılamazsa yalnızca DNS görünürlüğü kısıtlanır, telemetri akmaya
-devam eder). Filtre `port 53` değil sade `udp`: Docker gömülü DNS, konteyner-içi
-iptables ile sorgunun hedef portunu 53'ten rastgele bir porta DNAT eder — port
-filtresi sorguyu kaçırırdı; DNS olmayan paketleri `parseDNSNames` eler.
-Loopback paketleri `attributeDNS` → `sniffDNS` yolundan geçer: süreç trafik
-sayaçlarına (`e.totals`) yazılmaz, yalnızca alan adı kaydı düşer.
+pcap arka ucunda soket→PID kaynağı (`pkg/proctraffic`): Linux `/proc/net/*`
+inode ↔ `/proc/[pid]/fd`, macOS `lsof -F`, Windows `netstat -ano` + gopsutil.
+eBPF/ETW'de PID doğrudan çekirdek olayından gelir (`bpf_get_current_pid_tgid` /
+`EventHeader.ProcessId`), süreç adı `comm` / gopsutil ile.
 
-**Süreç atfı DNS'te best-effort:** DNS UDP soketleri milisaniyelik olduğundan
-3 sn'lik `/proc/net/udp` anlığına çoğu zaman yakalanmaz — alan adı o durumda
-boş süreçle kaydedilir (domain görünürlüğü süreç atfından bağımsız). `musl`
-libc (Alpine/BusyBox) resolver'ı UDP soketini `connect()` etmediği için
-(`glibc` eder) `lookupDNSProc` ayrıca 53-olmayan tarafı yalnızca yerel porttan
-eşleştirmeyi dener. Windows'ta ayrı bir Npcap loopback adaptörü gerekir; yoksa
-bu handle açılmaz.
-
-| Platform | Soket→PID kaynağı |
-|----------|-------------------|
-| Linux    | `/proc/net/*` inode ↔ `/proc/[pid]/fd` (root: tüm süreçler) |
-| macOS    | `lsof -F pcnt` (root: tüm süreçler) |
-| Windows  | `netstat -ano` + gopsutil süreç adları |
-
-Hub politikası (`-agent-pcap`) + agent isteği (`-pcap`) ikisi de açıkken çalışır;
-izin yoksa atıf devre dışı kalır, temel telemetri aksamaz. Ham PCAP kaydı
-(`-record`) da aynı politika kapısıyla agent'ta yerel olarak döner.
-Planlanan: eBPF (Linux) ve ETW (Windows) sağlayıcılar aynı arayüzün arkasına
-eklenerek daha hassas sayım sağlanır.
+Hub politikası (`-agent-pcap`) + agent isteği (`-pcap` / `collect.pcap`) ikisi
+de açıkken çalışır; hiçbir arka uç kurulamazsa atıf devre dışı kalır, temel
+telemetri aksamaz. Ham PCAP kaydı (`-record`) her zaman pcap ister.
 
 ## Veri akışı özeti
 

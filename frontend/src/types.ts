@@ -35,6 +35,8 @@ export interface AgentWithRates {
   conns: number
   /** bağlı olduğu erişim katmanı cihazı (switch/AP) — Canlı Akış gruplama */
   uplink_device_id?: number
+  /** süreç-atıf arka ucu: ebpf | pcap | etw | off (boş = eski agent) */
+  attr_method?: string
 }
 
 export interface AlertEvent {

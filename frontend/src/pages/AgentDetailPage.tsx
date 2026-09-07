@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { AgentWithRates, Bucket } from '../types'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
@@ -29,6 +30,13 @@ const RANGES = [
 
 // silme onayı bekleme süresi (ms) — DevicesCard.tsx'teki iki-aşamalı silme deseni
 const DELETE_CONFIRM_MS = 4000
+
+// AttrMethodBadge — agent'ın aktif süreç-atıf arka ucu (Faz 20).
+// ebpf/etw/pcap = aktif (cyan), off = kapalı (slate), boş = eski agent.
+function AttrMethodBadge({ method }: { method?: string }) {
+  if (!method) return <span className="text-tui-dim">—</span>
+  return <StatusPill tone={method === 'off' ? 'slate' : 'cyan'} label={method} dot={false} />
+}
 
 function relTime(unix: number): string {
   if (!unix) return '—'
@@ -322,14 +330,15 @@ export function AgentDetailPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.6fr]">
         <Panel title="Özet">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
-            {[
+            {([
               ['IP', agent.remote_ip || '—'],
               ['Sürüm', `${agent.version || '—'} · pv${agent.protocol_version}`],
+              ['Atıf', <AttrMethodBadge key="am" method={agent.attr_method} />],
               ['Bağlantı', formatNum(agent.conns)],
               ['Arayüz', String(agent.rates?.length ?? 0)],
               ['İlk Görülme', relTime(agent.first_seen)],
               ['Son Görülme', relTime(agent.last_seen)],
-            ].map(([k, v]) => (
+            ] as [string, ReactNode][]).map(([k, v]) => (
               <div key={k} className="min-w-0">
                 <dt className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">{k}</dt>
                 <dd className="truncate text-ink-hi">{v}</dd>

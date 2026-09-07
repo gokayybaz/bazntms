@@ -72,6 +72,48 @@ git push origin main
 > (varsayılan + agent/ingress açık) çalıştırır; `release.yml` preflight ise
 > etiket ile `Chart.yaml` + `CHANGELOG` eşleşmesini zorlar.
 
+## 2b) Platform atıf motoru — elle doğrulama
+
+> **Yalnızca `internal/agent/bpf/`, `etw_windows.go`, `etwattr.go`, `attrsource_*.go`
+> veya `l7helper.go` bu sürümde değiştiyse çalıştır.** CI yalnız saf ayrıştırma
+> testlerini (`etwparse_test.go`, `attrcaps_test.go`, `TestETWLayout`) ve Linux
+> canlı eBPF dumanını (`ebpf-smoke` job) kapsar; oturum/attach yaşam döngüsü
+> gerçek makinede doğrulanmalıdır.
+
+### Linux eBPF (kernel ≥ 5.8, BTF'li)
+
+```bash
+sudo ./bazntms-agent -collect-method=ebpf -pcap -hub-url http://localhost:8080 -enroll-token <t>
+# log: "süreç atfı aktif  yöntem=ebpf"
+```
+- [ ] `/agentlar/:id` → süreç trafiği paneli doluyor (byte'lar `nethogs`/`nload` ile ~uyumlu)
+- [ ] DNS paneli doluyor — `resolvectl query example.com` (systemd-resolved, 127.0.0.53) sonrası domain görünüyor
+- [ ] L7 paneli: `curl https://example.com` sonrası SNI görünüyor (yardımcı pcap handle)
+- [ ] `CAP_NET_RAW` düşür (`-collect-method=ebpf`, `setcap cap_bpf,cap_perfmon=ep`) → sayım + DNS sürüyor, L7 boş + 1× INFO
+- [ ] kernel < 5.8 veya `/sys/kernel/btf/vmlinux` yok → log "eBPF atlandı: …", `yöntem=pcap`
+
+### Windows ETW (yükseltilmiş / SYSTEM)
+
+```powershell
+# Yönetici PowerShell
+.\bazntms-agent.exe -collect-method=etw -pcap -hub-url http://localhost:8080 -enroll-token <t>
+```
+- [ ] `go test -run TestETWLayout ./internal/agent/` yeşil (struct düzeni ABI ile uyumlu)
+- [ ] log: "ETW atıf motoru aktif — süreç trafiği + DNS"
+- [ ] `logman query -ets` çıktısında `bazNTMS-Attr` oturumu var
+- [ ] Süreç trafiği paneli doluyor (byte'lar Resource Monitor ile ~uyumlu); TCP + UDP, v4 + v6
+- [ ] DNS paneli doluyor — `Resolve-DnsName example.com` sonrası domain görünüyor
+- [ ] Agent'ı durdur → `logman query -ets` artık `bazNTMS-Attr` göstermiyor (temiz `Stop`)
+- [ ] Agent'ı çökert + yeniden başlat → "already exists" hatası yok (yetim oturum temizleniyor)
+- [ ] **Npcap KURULU DEĞİL** → süreç trafiği + DNS yine akıyor (ETW pcap'e bağlı değil)
+- [ ] `-collect-method=pcap` + Npcap yok → "Npcap kurulu degil" ipucu; `-record` aynı ipucu
+- [ ] Yükseltilmemiş kullanıcı → log "ETW atlandı: süreç yükseltilmemiş", `yöntem=pcap` (veya Npcap yoksa temel telemetri)
+- [ ] Port/adres doğru yönde: giden bağlantı `uzak = daddr:dport`; port `ntohs` uygulanmış (443, 53 gibi görünüyor — 47873 değil)
+
+> **Port yön/endian notu:** `kernelNetFlow` ham UserData'yı big-endian port +
+> `win:IPv4` bayt-sırası varsayımıyla çözer. İlk Windows doğrulamasında port
+> ters çıkarsa `etwparse.go`'da `binary.BigEndian` → `LittleEndian` çevir.
+
 ## 3) Etiketi kes
 
 Yorumlu (annotated) etiket — mesaj gövdesi sürümün özetidir (GitHub sürüm

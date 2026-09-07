@@ -23,14 +23,22 @@ agent:
 
 collect:
   interval_seconds: 30
-  # derin toplama: paket yakalama ile surec bazli trafik + DNS + L7 (SNI/Host)
-  # gorunurlugu. Bu uc panel yalnizca bu acikken dolar. Servis root/admin
-  # olarak calisir (pcap izni var); hub tarafinda da `-agent-pcap` politikasi
-  # acik olmali — yani bu tek basina zorla yakalama baslatmaz, izin verir.
+  # derin toplama: surec bazli trafik + DNS + L7 (SNI/Host) gorunurlugu.
+  # Bu paneller yalnizca bu acikken dolar; hub tarafinda da `-agent-pcap`
+  # politikasi acik olmali (tek basina zorla baslatmaz, izin verir).
   pcap: true
-  # auto: ilk yonlendirilebilir arayuz. Windows'ta friendly ad ("Ethernet")
-  # otomatik \Device\NPF_{GUID} adina cevrilir; elle vermek isterseniz de
-  # NPF adini verin (PowerShell: Get-NetAdapter | Select Name,InterfaceGuid).
+  # atif arka ucu:
+  #   auto (varsayilan) — Linux: eBPF (kernel >= 5.8 + BTF) -> pcap
+  #                       Windows: ETW (SYSTEM/yonetici) -> pcap
+  #                       macOS: pcap
+  #   ebpf | etw | pcap  — zorla (kurulamazsa hata, dusme yok)
+  #   off               — atfi tamamen kapat
+  # eBPF/ETW cekirdek duzeyinde toplar: CAP_NET_RAW / Npcap gerekmez.
+  # L7 (SNI/Host) payload gerektirir → yalnizca pcap; ETW modunda yoktur
+  # (gerekiyorsa method: pcap + Npcap).
+  method: auto
+  # yalnizca method pcap iken kullanilir. auto: ilk yonlendirilebilir arayuz;
+  # Windows'ta friendly ad ("Ethernet") otomatik \Device\NPF_{GUID}'a cevrilir.
   pcap_interface: auto
   # ham PCAP kaydi (hub politikasi da acik olmali)
   pcap_record: false

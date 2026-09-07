@@ -311,10 +311,12 @@ jobs:
           govulncheck ./...
 
   windows:
-    # gopacket/pcap Windows'ta cgo KULLANMAZ (wpcap.dll'i syscall ile
-    # calisma zamaninda dinamik yukler) ve repoda baska hic cgo kodu yok
-    # — bu yuzden msys2/mingw toolchain ve Npcap SDK burada da (release.yml
-    # icin zaten kaldirilmisti, bkz. commit 977ed64) gereksizdi.
+    # CGO_ENABLED=0: gopacket/pcap Windows'ta cgo KULLANMAZ (wpcap.dll'i
+    # runtime'da syscall ile yukler) ve ETW tuketicisi (etw_windows.go)
+    # de saf Go advapi32 syscall'lari — repoda hic cgo yok. msys2/mingw
+    # toolchain, Npcap SDK gerekmez. Bu job go vet + go test; struct
+    # duzeni TestETWLayout ile GERCEK Windows arac zincirinde dogrulanir
+    # (ETW oturum yasam dongusu elle, bkz. RELEASE-RUNBOOK §2b).
     name: Test (windows)
     runs-on: windows-latest
     steps:

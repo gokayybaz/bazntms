@@ -95,6 +95,8 @@ collect:
   # derin toplama (surec trafigi + DNS + L7 gorunurlugu). LaunchDaemon root
   # calisir; hub tarafinda -agent-pcap politikasi da acik olmali.
   pcap: true
+  # atif arka ucu: auto | ebpf | etw | pcap | off (macOS'ta yalniz pcap).
+  method: auto
   pcap_interface: auto
   pcap_record: false
   pcap_dir: /var/lib/bazntms/captures

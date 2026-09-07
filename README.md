@@ -99,11 +99,17 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 
 ### Gereksinimler
 
-| Platform | Çalıştırma | Derleme |
-|----------|-----------|---------|
-| macOS    | `sudo` (BPF erişimi) | Xcode CLT |
-| Linux    | `sudo` veya `setcap cap_net_raw+ep` | `libpcap-dev` |
-| Windows  | [Npcap](https://npcap.com) + yönetici | (gerek yok — `gopacket/pcap` Windows'ta cgo kullanmaz) |
+| Platform | Süreç atfı (agent) | Çalıştırma | Derleme |
+|----------|-------------------|-----------|---------|
+| Linux    | **eBPF** (kernel ≥ 5.8 + BTF) → pcap | `CAP_BPF`/`CAP_PERFMON`, eskisi `sudo` / `cap_net_raw` | `libpcap-dev` |
+| Windows  | **ETW** (SYSTEM / yönetici) → pcap | yükseltilmiş süreç | (gerek yok) |
+| macOS    | pcap | `sudo` (BPF erişimi) | Xcode CLT |
+
+> Agent Linux'ta eBPF, Windows'ta ETW ile **çekirdek düzeyinde** süreç trafiği +
+> DNS toplar — Windows'ta **Npcap gerekmez**. [Npcap](https://npcap.com) yalnız
+> L7 (SNI/Host) görünürlüğü, ham `-record` veya tek-makine hub yakalaması için
+> lazım; kernel/BTF yoksa Linux otomatik pcap'e düşer. `collect.method` ile
+> zorlanır (`auto` | `ebpf` | `pcap` | `etw` | `off`).
 
 - Go **1.22+** (yeni `http.ServeMux` kalıpları için)
 - Node.js **18+** (yalnızca frontend derlemek için)
@@ -120,7 +126,7 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | İç tasarım: yakalama döngüsü, collector, uyarı motoru, veri şeması |
 | [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | Varlıklar, güven sınırları, sınır başına tehditler ve karşı önlemler |
 | [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md) | Dağıtım senaryosu kararı (tek-kurum / MSP çoklu-saha) ve izolasyon modeli |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | İzin hataları, Npcap, AI sorunları, sık karşılaşılan durumlar |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | İzin hataları, atıf motoru (eBPF/ETW/pcap), Npcap, AI sorunları |
 | [CHANGELOG.md](CHANGELOG.md) | Sürüm başına başlıklar + kırıcı / yükseltme notları |
 | [docs/UPGRADE-RUNBOOK.md](docs/UPGRADE-RUNBOOK.md) | Sürüm atlama: hub / agent / DB / K8s güncelleme adımları |
 | [docs/RELEASE-RUNBOOK.md](docs/RELEASE-RUNBOOK.md) | Bakımcı: sürüm etiketi kesme + pipeline + doğrulama |

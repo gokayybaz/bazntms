@@ -69,12 +69,11 @@ jobs:
           npm install
           npm run build
 
-      # gopacket/pcap Windows'ta cgo KULLANMAZ (wpcap.dll'i syscall ile
-      # calisma zamaninda dinamik yukler, bkz. pcap_windows.go) ve repoda
-      # baska hic cgo kodu yok (modernc.org/sqlite de saf Go) — bu yuzden
-      # Windows derlemesi Npcap SDK/mingw toolchain GEREKTIRMEZ. Npcap'in
-      # KENDISI yalnizca calisma zamaninda, agent `-pcap` bayragiyla
-      # baslatilirsa (surec bazli trafik atfi) gerekir — bkz. docs/TROUBLESHOOTING.md
+      # Windows: CGO_ENABLED=0. gopacket/pcap cgo kullanmaz (wpcap.dll runtime
+      # syscall), ETW tuketicisi saf Go advapi32 syscall, modernc.org/sqlite
+      # saf Go — Npcap SDK / mingw toolchain GEREKMEZ. Calisma zamaninda:
+      # surec trafigi + DNS Windows'ta ETW ile Npcap'siz toplanir; Npcap
+      # yalnizca L7 (SNI/Host) veya ham -record icin gerekir.
       - name: Build binaries
         env:
           CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}

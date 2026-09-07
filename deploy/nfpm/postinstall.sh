@@ -83,6 +83,9 @@ collect:
   # derin toplama (surec trafigi + DNS + L7 gorunurlugu). Servis root
   # calisir; hub tarafinda -agent-pcap politikasi da acik olmali.
   pcap: true
+  # atif arka ucu: auto (Linux eBPF / Windows ETW -> pcap) | ebpf | etw
+  # | pcap | off. eBPF/ETW cekirdek duzeyinde toplar (CAP_NET_RAW/Npcap yok).
+  method: auto
   pcap_interface: auto
   pcap_record: false
   pcap_dir: /var/lib/bazntms/captures
