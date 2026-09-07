@@ -121,6 +121,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: bazntms-*   # *.dockerbuild vb. yabancı artifact'ları alma
           merge-multiple: true
 
       - name: Install tooling (nfpm)
@@ -160,6 +161,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: bazntms-*   # *.dockerbuild vb. yabancı artifact'ları alma
           merge-multiple: true
 
       # v6/v7'de "Open Source Maintenance Fee" EULA'si zorunlu kilindigi
@@ -191,6 +193,11 @@ jobs:
     name: Konteyner imajı — derle/tara/push (${{ matrix.component }})
     needs: build
     runs-on: ubuntu-latest
+    # docker/build-push-action'ın her çağrıda yüklediği *.dockerbuild metadata
+    # artifact'ını kapat — sonraki job'ların `download-artifact` (merge-multiple)
+    # adımı onları da çekmeye çalışıp düşüyor.
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     permissions:
       contents: read
       packages: write     # ghcr push
@@ -322,6 +329,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: env.SEED != ''
         with:
+          pattern: bazntms-*
           merge-multiple: true
       - uses: sigstore/cosign-installer@v3
         if: env.SEED != ''
@@ -361,6 +369,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: bazntms-*   # *.dockerbuild vb. yabancı artifact'ları alma
           merge-multiple: true
 
       - name: SBOM (syft, SPDX)
@@ -419,6 +428,7 @@ jobs:
       - uses: actions/checkout@v4 # .github/release-footer.md için
       - uses: actions/download-artifact@v4
         with:
+          pattern: bazntms-*   # *.dockerbuild vb. yabancı artifact'ları alma
           merge-multiple: true
 
       - name: Create release
