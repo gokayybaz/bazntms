@@ -88,6 +88,9 @@ type AgentStore interface {
 	RegisterOrReuseAgent(a Agent, offlineBefore int64) (id int64, reused bool, err error)
 	AgentByTokenHash(hash string) (*Agent, error)
 	TouchAgent(id int64, version string, protoVersion int, remoteIP string) error
+	// SetAgentAttrMethod, agent'ın bildirdiği aktif süreç-atıf arka ucunu
+	// ("ebpf"|"pcap"|"etw"|"off") kaydeder. Boş = değiştirme (eski agent).
+	SetAgentAttrMethod(id int64, method string) error
 	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
 	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
 	ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error)

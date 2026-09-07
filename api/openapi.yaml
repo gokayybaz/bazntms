@@ -1029,6 +1029,7 @@ components:
         last_seen: { type: integer }
         version: { type: string }
         remote_ip: { type: string }
+        attr_method: { type: string, description: "süreç-atıf arka ucu: ebpf | pcap | etw | off (boş = eski agent)" }
         conns: { type: integer }
         rates:
           type: array

@@ -64,8 +64,17 @@ type portKey struct {
 	rp    uint16
 }
 
-// newPcapAttrSource, verilen arayuzde atf yakalamasini baslatir.
+// newPcapAttrSource, verilen arayuzde atf yakalamasini baslatir. Windows'ta
+// friendly arayuz adi (\Device\NPF_{GUID} degil "Ethernet" gibi) once pcap
+// cihaz adina cevrilir — bu adim yalniz pcap arka ucu kuruldugunda calisir,
+// yani ETW/eBPF varsayilaninda Npcap hic aranmaz.
 func newPcapAttrSource(iface string) (*pcapAttrSource, error) {
+	if dev, rerr := ResolvePcapDevice(iface); rerr != nil {
+		slog.Debug("pcap cihazi cozulemedi, ham arayuz adi denenecek", "iface", iface, "err", rerr)
+	} else if dev != iface {
+		slog.Info("pcap cihazi cozuldu", "arayuz", iface, "cihaz", dev)
+		iface = dev
+	}
 	handle, err := pcap.OpenLive(iface, attrSnapLen, false, time.Second)
 	if err != nil {
 		return nil, err

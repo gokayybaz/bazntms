@@ -331,6 +331,59 @@ func TestTelemetryUpdatesAgentVersion(t *testing.T) {
 	}
 }
 
+// TestTelemetryReportsAttrMethod, agent'in batch'te bildirdigi süreç-atıf
+// arka ucunun (Faz 20) hub'a ulaşıp /api/v1/agents yanıtında göründüğünü
+// doğrular. Boş = eski agent → mevcut değer korunur.
+func TestTelemetryReportsAttrMethod(t *testing.T) {
+	ts := newTestServerWithEnroll(t)
+	id, token := enrollAgent(t, ts, "agent-attr")
+
+	send := func(method string) {
+		b := map[string]any{"interfaces": []map[string]any{{"name": "eth0"}}}
+		if method != "" {
+			b["attr_method"] = method
+		}
+		body, _ := json.Marshal(b)
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/agent/telemetry", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("telemetri: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("telemetri 200 beklenirdi: %d", resp.StatusCode)
+		}
+	}
+	method := func() string {
+		resp := apiReq(t, http.MethodGet, ts.URL+"/api/v1/agents", nil)
+		defer resp.Body.Close()
+		var list []struct {
+			ID         int64  `json:"id"`
+			AttrMethod string `json:"attr_method"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+			t.Fatalf("liste: %v", err)
+		}
+		for _, a := range list {
+			if a.ID == id {
+				return a.AttrMethod
+			}
+		}
+		t.Fatalf("agent %d yok", id)
+		return ""
+	}
+
+	send("ebpf")
+	if got := method(); got != "ebpf" {
+		t.Fatalf("attr_method ebpf beklenirdi: %q", got)
+	}
+	send("") // eski agent → koru
+	if got := method(); got != "ebpf" {
+		t.Fatalf("boş attr_method mevcut değeri korumalıydı: %q", got)
+	}
+}
+
 // TestAgentLifecycle, enroll → telemetri → list → detail → history → rename
 // → delete akisinin ucdan uca dogru calistigini dogrular (Faz 8 UI'daki
 // agent yonetimi butonlarinin arkasindaki tam yol).

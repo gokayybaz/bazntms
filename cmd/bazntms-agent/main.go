@@ -189,14 +189,8 @@ func main() {
 			attrIface = autoIface()
 		}
 		// Windows'ta friendly arayuz adini (\Device\NPF_{GUID}) pcap cihaz
-		// adina cevir — friendly ad OpenLive'a dogrudan verilince
-		// "Error opening adapter" (hata 123). Linux/macOS'ta no-op.
-		if dev, rerr := agent.ResolvePcapDevice(attrIface); rerr != nil {
-			slog.Debug("pcap cihazi cozulemedi, ham arayuz adi denenecek", "iface", attrIface, "err", rerr)
-		} else if dev != attrIface {
-			slog.Info("pcap cihazi cozuldu", "arayuz", attrIface, "cihaz", dev)
-			attrIface = dev
-		}
+		// adina cevirmek newPcapAttrSource icine tasindi (yalniz pcap arka ucu
+		// secilince Npcap'e dokunulsun; ETW/eBPF varsayilaninda hic aranmasin).
 		var attrEng agent.AttrSource
 		attrTried := false // bu politika-acik doneminde atif arka ucu denendi mi
 		attrOffLogged := false
@@ -350,7 +344,9 @@ func main() {
 				return nil
 			case <-timer.C:
 				batch := client.Collect()
+				batch.AttrMethod = "off"
 				if attrEng != nil {
+					batch.AttrMethod = attrEng.Method()
 					batch.ProcessTraffic = attrEng.Deltas()
 					batch.L7 = attrEng.L7Deltas()
 					batch.DNS = attrEng.DNSDeltas()
@@ -432,7 +428,7 @@ func pcapErrHint(err error) string {
 	msg := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(msg, "wpcap.dll"):
-		return "Npcap kurulu degil gibi gorunuyor — https://npcap.com adresinden indirip kurun (yonetici olarak calistirin), sonra agent servisini yeniden baslatin"
+		return "pcap arka ucu icin Npcap gerekir (https://npcap.com). Sürec trafigi + DNS ETW ile Npcap'siz calisir (-collect-method=etw / auto); Npcap yalniz L7 (SNI/Host) ve ham -record icin lazim"
 	case strings.Contains(msg, "error opening adapter"),
 		strings.Contains(msg, "system cannot find the device"),
 		strings.Contains(msg, "birim etiketi"):

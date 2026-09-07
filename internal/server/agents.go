@@ -367,6 +367,11 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.TouchAgent(agent.ID, ver, batch.ProtocolVersion, ip); err != nil {
 		slog.Error("agent touch hatasi", "agent_id", agent.ID, "err", err)
 	}
+	if batch.AttrMethod != "" {
+		if err := s.store.SetAgentAttrMethod(agent.ID, batch.AttrMethod); err != nil {
+			slog.Error("agent attr_method kaydi hatasi", "agent_id", agent.ID, "err", err)
+		}
+	}
 	if len(batch.ProcessTraffic) > 0 {
 		if err := s.store.SaveProcessTraffic(agent.ID, ts, batch.ProcessTraffic); err != nil {
 			slog.Error("surec trafik kaydi hatasi", "agent_id", agent.ID, "err", err)

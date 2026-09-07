@@ -172,6 +172,43 @@ func TestRegisterOrReuseAgent(t *testing.T) {
 // TestTouchAgentVersionGuard, TouchAgent'in dolu surum/protokol degerini
 // yazdigini, bos "" / 0 gelince mevcut degeri KORUDUGUNU dogrular (surum
 // tasimayan eski agent hub'daki bilgiyi silmemeli).
+func TestSetAgentAttrMethod(t *testing.T) {
+	st := openTest(t)
+	id, err := st.RegisterAgent(Agent{Name: "a", TokenHash: TokenHash("t")})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// yeni agent → boş
+	if a, _ := st.AgentByID(id); a.AttrMethod != "" {
+		t.Fatalf("başlangıçta boş beklenirdi: %q", a.AttrMethod)
+	}
+	// bildir → yazılır, hem AgentByID hem ListAgents okur
+	if err := st.SetAgentAttrMethod(id, "ebpf"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if a, _ := st.AgentByID(id); a.AttrMethod != "ebpf" {
+		t.Fatalf("AgentByID: %q", a.AttrMethod)
+	}
+	agents, _ := st.ListAgents(time.Minute, "")
+	if len(agents) != 1 || agents[0].AttrMethod != "ebpf" {
+		t.Fatalf("ListAgents: %+v", agents)
+	}
+	// "off" da geçerli bir değer — saklanır
+	if err := st.SetAgentAttrMethod(id, "off"); err != nil {
+		t.Fatalf("set off: %v", err)
+	}
+	if a, _ := st.AgentByID(id); a.AttrMethod != "off" {
+		t.Fatalf("off yazılmalıydı: %q", a.AttrMethod)
+	}
+	// boş string → değiştirme (eski agent)
+	if err := st.SetAgentAttrMethod(id, ""); err != nil {
+		t.Fatalf("set empty: %v", err)
+	}
+	if a, _ := st.AgentByID(id); a.AttrMethod != "off" {
+		t.Fatalf("boş string mevcut değeri korumalıydı: %q", a.AttrMethod)
+	}
+}
+
 func TestTouchAgentVersionGuard(t *testing.T) {
 	st := openTest(t)
 	id, err := st.RegisterAgent(Agent{Name: "a", TokenHash: TokenHash("t"), Version: "0.1.0", ProtocolVersion: 1})

@@ -30,6 +30,9 @@ type Agent struct {
 	// Canlı Akış şeması agent'ları bu alana göre gruplar. nil = "Doğrudan"
 	// (router'a doğrudan bağlı). Yönetici manuel atar (SNMP keşfi değil).
 	UplinkDeviceID *int64 `json:"uplink_device_id,omitempty"`
+	// AttrMethod, agent'ın en son bildirdiği aktif süreç-atıf arka ucu:
+	// "ebpf" | "pcap" | "etw" | "off". Boş = henüz bildirmedi / eski agent.
+	AttrMethod string `json:"attr_method,omitempty"`
 }
 
 func TokenHash(token string) string {
@@ -106,6 +109,15 @@ func (s *sqlStore) TouchAgent(id int64, version string, protoVersion int, remote
 	return err
 }
 
+// SetAgentAttrMethod, agent'ın bildirdiği süreç-atıf arka ucunu kaydeder.
+// Boş string = değiştirme (alan taşımayan eski agent).
+func (s *sqlStore) SetAgentAttrMethod(id int64, method string) error {
+	_, err := s.db.Exec(
+		s.q(`UPDATE agents SET attr_method = COALESCE(NULLIF(?, ''), attr_method) WHERE id = ?`),
+		method, id)
+	return err
+}
+
 func (s *sqlStore) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -173,7 +185,7 @@ type AgentWithRates struct {
 // verimler. site bos degilse yalnizca o sitenin agent'lari doner (Faz 5.1
 // site scope).
 func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error) {
-	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id
+	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method
 		FROM agents`
 	args := []any{}
 	if site != "" {
@@ -191,10 +203,12 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 	for rows.Next() {
 		var a AgentWithRates
 		var uplink sql.NullInt64
-		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink); err != nil {
+		var attrMethod sql.NullString
+		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod); err != nil {
 			return nil, err
 		}
 		a.UplinkDeviceID = i64ptr(uplink)
+		a.AttrMethod = attrMethod.String
 		a.Online = now-a.LastSeen <= int64(onlineWindow.Seconds())
 		out = append(out, a)
 	}
@@ -355,15 +369,17 @@ func (s *sqlStore) AgentHistory(agentID int64, since time.Time) ([]Bucket, error
 }
 
 func (s *sqlStore) AgentByID(id int64) (*Agent, error) {
-	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id
+	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method
 		FROM agents WHERE id = ?`), id)
 	var a Agent
 	var uplink sql.NullInt64
-	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink)
+	var attrMethod sql.NullString
+	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod)
 	if err != nil {
 		return nil, err
 	}
 	a.UplinkDeviceID = i64ptr(uplink)
+	a.AttrMethod = attrMethod.String
 	return &a, nil
 }
 
