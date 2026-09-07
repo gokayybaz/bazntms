@@ -38,6 +38,12 @@ linters:
       excludes:
         # errcheck zaten kapsıyor, çift raporlama olmasın.
         - G104
+        # G103 (unsafe kullanımı): yalnız internal/agent/etw_windows.go —
+        # advapi32 ETW syscall'larını elle sarmak için zorunlu (Windows SDK
+        # struct düzenleri + LazyProc.Call). Struct boyutları checkLayout() ile
+        # çalışma anında doğrulanır; ETW buffer'ı (UserData) yalnız callback
+        # içinde okunur. GPL/cgo alternatif kütüphaneler reddedildi (bkz. 0007).
+        - G103
         # G115 (int overflow dönüşümü): ~26 bulgu, hepsi sınırlı-değer
         # alanlarında (port 0-65535, paket sayaçları, PID, SNMP counter).
         # gosec statik olarak sınırı kanıtlayamıyor; pratikte taşma yok.

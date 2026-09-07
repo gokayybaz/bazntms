@@ -8,9 +8,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// etwBackendBuilt, ETW atıf arka ucunun bu derlemede mevcut olup olmadığı.
-// S20.10'da gerçek implementasyon eklenince true olur; o zamana dek "auto"
-// modu yükseltilmiş süreçte bile pcap kullanır.
+// etwBackendBuilt, "auto" modunun ETW arka ucunu seçip seçmeyeceği. Consumer
+// S20.8'de geldi; DNS (S20.9) henüz ETW tarafında boş döner ve session yaşam
+// döngüsü Windows VM'de doğrulanmadı — bu yüzden "auto" hâlâ pcap kullanır,
+// ETW yalnız `-collect-method=etw` ile açıkça seçilir. S20.10'da true olur.
 var etwBackendBuilt = false
 
 // platformAttrCaps, Windows'ta ETW atıf motorunun kullanılabilirliğini ölçer.
@@ -39,7 +40,11 @@ func platformBuildAttrSource(method string, cfg AttrConfig) (AttrSource, error) 
 		}
 		return src, nil
 	case "etw":
-		return nil, fmt.Errorf("ETW atıf arka ucu henüz uygulanmadı (S20.10)")
+		src, err := newEtwAttrSource(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return src, nil
 	default:
 		return nil, fmt.Errorf("windows'ta %q atıf yöntemi desteklenmiyor", method)
 	}
