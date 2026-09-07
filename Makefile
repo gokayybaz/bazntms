@@ -4,7 +4,7 @@ AGENT=./cmd/bazntms-agent
 CTL=./cmd/bazntmsctl
 PORT?=8080
 
-.PHONY: all frontend backend agent ctl dev clean cross-mac cross-linux
+.PHONY: all frontend backend agent ctl dev clean cross-mac cross-linux generate-bpf generate-bpf-vmlinux
 
 all: frontend backend agent ctl
 
@@ -37,6 +37,27 @@ test:
 clean:
 	rm -f $(BINARY) bazntms-agent bazntmsctl $(BINARY).exe
 	rm -rf web/dist
+
+# Faz 20: eBPF atıf motoru (internal/agent/bpf). Üretilen attrprog_bpfel.{go,o}
+# + vmlinux.h repoya commit'lidir → normal `go build` clang GEREKTİRMEZ.
+# Bu hedef yalnızca attr.c değişince çalıştırılır; sabit araç zinciri
+# (golang:1.26-bookworm + clang-14) taşınabilirlik için Docker'da koşar.
+# CI `ebpf-generate` işi çıktının güncelliğini aynı zincirle doğrular.
+generate-bpf:
+	docker run --rm -v $(CURDIR):/src -w /src golang:1.26-bookworm bash -c '\
+		set -e; apt-get update -qq; apt-get install -y -qq clang-14 llvm libbpf-dev; \
+		cd internal/agent/bpf && BPF2GO_CC=clang-14 go generate ./...; \
+		chown -R $(shell id -u):$(shell id -g) .'
+
+# vmlinux.h'i çalışan çekirdeğin BTF'inden tazele — nadiren gerekir (CO-RE
+# alan ofsetlerini yükleme anında taşır; kernel tipi önemli değil). Sonra
+# `make generate-bpf` çalıştırıp ikisini birlikte commit'leyin.
+generate-bpf-vmlinux:
+	docker run --rm --privileged -v /sys/kernel/btf:/sys/kernel/btf:ro \
+		-v $(CURDIR):/src -w /src debian:bookworm bash -c '\
+		apt-get update -qq && apt-get install -y -qq bpftool && \
+		bpftool btf dump file /sys/kernel/btf/vmlinux format c > internal/agent/bpf/vmlinux.h && \
+		chown $(shell id -u):$(shell id -g) internal/agent/bpf/vmlinux.h'
 
 # Not: cross derleme icin hedef platformda libpcap/Npcap gerekir.
 # Linux/macOS: CGO + libpcap; Windows: Npcap SDK + mingw-w64.

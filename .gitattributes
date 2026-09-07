@@ -1,0 +1,5 @@
+# Faz 20 — eBPF atıf motoru üretilmiş çıktıları. `make generate-bpf` ile
+# yeniden üretilir; elle düzenlenmez. Diff/dil istatistiklerinden çıkarılır.
+internal/agent/bpf/vmlinux.h        linguist-generated=true -diff
+internal/agent/bpf/attrprog_bpfel.go linguist-generated=true
+internal/agent/bpf/attrprog_bpfel.o  binary

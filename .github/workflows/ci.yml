@@ -97,6 +97,30 @@ jobs:
           # go/types'ta panik atıyor (initFiles). Go 1.27 ile derlenmiş sürüm.
           version: v2.13.2
 
+  ebpf-generate:
+    # Faz 20 S20.4: internal/agent/bpf/attrprog_bpfel.{go,o} committed'dir →
+    # `go build` clang gerektirmez. Bu iş, commit'lenen çıktının attr.c +
+    # vmlinux.h ile güncel olduğunu SABİT araç zinciriyle doğrular (make
+    # generate-bpf ile aynı imaj + clang-14 → byte-tekrarlanabilir .o).
+    name: eBPF üretim güncelliği
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: go generate (sabit araç zinciri)
+        run: |
+          docker run --rm -v "$PWD":/src -w /src \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            golang:1.26-bookworm bash -c '
+              set -e
+              apt-get update -qq
+              apt-get install -y -qq clang-14 llvm libbpf-dev
+              cd internal/agent/bpf && BPF2GO_CC=clang-14 go generate ./...
+              chown -R "$HOST_UID:$HOST_GID" .'
+
+      - name: drift kontrolü
+        run: git diff --exit-code -- internal/agent/bpf/
+
   helm:
     name: Helm chart (lint + kubeconform)
     runs-on: ubuntu-latest
