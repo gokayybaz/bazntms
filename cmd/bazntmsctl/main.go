@@ -6,6 +6,8 @@
 //	bazntmsctl update keygen -out DIR      → ed25519 güncelleme anahtar çifti üretir
 //	bazntmsctl update sign -key SEED -out DIR -version vX -channel stable FILE...
 //	                                       → binary'leri hash'ler/imzalar, manifest.json üretir
+//	bazntmsctl update verify -pubkey HEX [manifest.json]
+//	                                       → manifest imzalarını (+ yanındaki binary'lerin SHA256'sını) doğrular
 package main
 
 import (
@@ -65,6 +67,8 @@ Komutlar:
   update keygen -out DIR             ed25519 güncelleme anahtar çifti üretir
   update sign -key SEED -out DIR -version vX.y.z -channel stable FILE...
                                      güncelleme dosyalarını imzalar ve manifest üretir
+  update verify -pubkey HEX [manifest.json]
+                                     update manifest imzasını (+ yanındaki binary sha256) doğrular
   verify -bundle FILE [-pubkey KEY]  5651 delil paketini offline doğrular
                                      (zincir + Merkle + TSA token + manifest imzası)
 `)
@@ -238,9 +242,71 @@ func cmdUpdate(args []string) error {
 		return cmdUpdateKeygen(args[1:])
 	case "sign":
 		return cmdUpdateSign(args[1:])
+	case "verify":
+		return cmdUpdateVerify(args[1:])
 	default:
 		usage()
 		os.Exit(2)
+	}
+	return nil
+}
+
+// cmdUpdateVerify, bir update manifest'inin ed25519 imzalarını (ve manifest'in
+// yanında duran binary'lerin SHA256'sını) verilen public key ile doğrular.
+// pubkey hex bir dize ya da hex içeren bir dosya yolu olabilir (keygen'in
+// public.hex'i / agent -update-key değeri).
+func cmdUpdateVerify(args []string) error {
+	fs := flag.NewFlagSet("verify", flag.ExitOnError)
+	pub := fs.String("pubkey", "", "ed25519 public key (hex) veya hex içeren dosya yolu (zorunlu)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	manifestPath := "manifest.json"
+	if rest := fs.Args(); len(rest) > 0 {
+		manifestPath = rest[0]
+	}
+	pk := strings.TrimSpace(*pub)
+	if pk == "" {
+		return fmt.Errorf("-pubkey zorunlu")
+	}
+	if fi, err := os.Stat(pk); err == nil && !fi.IsDir() {
+		b, rErr := os.ReadFile(pk)
+		if rErr != nil {
+			return rErr
+		}
+		pk = strings.TrimSpace(string(b))
+	}
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	m, err := update.ParseManifest(raw)
+	if err != nil {
+		return err
+	}
+	if err := update.VerifyManifest(m, pk); err != nil {
+		return fmt.Errorf("imza doğrulaması BAŞARISIZ: %w", err)
+	}
+	fmt.Printf("✔ manifest imzası geçerli — kanal=%s sürüm=%s (%d dosya)\n", m.Channel, m.Version, len(m.Files))
+	base := filepath.Dir(manifestPath)
+	checked := 0
+	for _, f := range m.Files {
+		p := filepath.Join(base, f.Name)
+		if _, sErr := os.Stat(p); sErr != nil {
+			continue
+		}
+		sum, size, hErr := update.FileSHA256(p)
+		if hErr != nil {
+			return hErr
+		}
+		if size != f.Size || !strings.EqualFold(sum, f.SHA256) {
+			return fmt.Errorf("%s: yerel dosya SHA256/boyut manifest ile uyuşmuyor", f.Name)
+		}
+		fmt.Printf("  ✔ %s (%s/%s, SHA256 + boyut eşleşti)\n", f.Name, f.OS, f.Arch)
+		checked++
+	}
+	if checked == 0 {
+		fmt.Println("  (binary dosyaları manifest'in yanında yok — yalnızca imzalar doğrulandı)")
 	}
 	return nil
 }

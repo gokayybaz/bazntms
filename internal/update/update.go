@@ -151,6 +151,25 @@ func VerifySignature(sha256Hex, sigHex, publicKeyHex string) error {
 	return nil
 }
 
+// VerifyManifest, manifest'teki HER dosyanin ed25519 imzasini publicKeyHex ile
+// dogrular (imza = SHA256 hex metni uzerinde). Imzasiz dosya veya bos anahtar
+// hata verir. `bazntmsctl update verify` ve pipeline-imzali manifest tuketimi
+// bunu kullanir.
+func VerifyManifest(m *Manifest, publicKeyHex string) error {
+	if publicKeyHex == "" {
+		return fmt.Errorf("public key yok")
+	}
+	if len(m.Files) == 0 {
+		return fmt.Errorf("manifest bos")
+	}
+	for _, f := range m.Files {
+		if err := VerifySignature(f.SHA256, f.Signature, publicKeyHex); err != nil {
+			return fmt.Errorf("%s: %w", f.Name, err)
+		}
+	}
+	return nil
+}
+
 // VerifyFile, indirilen dosyanin ozet + imza dogrulamasini yapar.
 func VerifyFile(path string, mf ManifestFile, publicKeyHex string) error {
 	sum, size, err := FileSHA256(path)

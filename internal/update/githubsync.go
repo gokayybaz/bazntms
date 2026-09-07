@@ -6,11 +6,13 @@ package update
 // agent'lara sunar (internal/server/updates.go); agent tarafı akışı
 // değişmez (manifest → sürüm karşılaştır → indir → SHA-256 → atomik değişim).
 //
-// İmza (ed25519) YOK: güven zinciri "GitHub HTTPS + hub→agent pinli TLS".
-// Agent zaten hub'a tam güvenir (config, yakalama politikası, mTLS CA). Ek
-// tedarik-zinciri imzası isteyen kurulumlar `bazntmsctl update sign` ile
-// üretilmiş bir dizini -update-github-repo='' vererek statik sunmaya devam
-// edebilir.
+// İmza (ed25519): varsayılan YOK — güven zinciri "GitHub HTTPS + hub→agent
+// pinli TLS" (agent zaten hub'a tam güvenir: config, yakalama politikası,
+// mTLS CA). OPT-IN: release'te pipeline-imzalı bir `manifest.json` asset'i
+// varsa (release.yml, `UPDATE_SIGNING_SEED` secret'ı ile `bazntmsctl update
+// sign`) syncer onun imzalarını geçirir ve indirilen binary'lerin SHA256'sını
+// imzalı manifest'e karşı doğrular. Tam statik/air-gapped kanal için
+// -update-github-repo='' + elle hazırlanmış -updates-dir.
 
 import (
 	"context"
@@ -126,6 +128,21 @@ func (g *GitHubSyncer) SyncOnce(ctx context.Context) (changed bool, version stri
 		assets[a.Name] = a
 	}
 
+	// Release'te pipeline-imzalı bir manifest.json varsa (bazntmsctl update sign,
+	// release.yml opt-in) imzaları oradan al; yoksa imzasız manifest üret
+	// (bugünkü davranış — güven: GitHub HTTPS + hub→agent pinli TLS).
+	var signed *Manifest
+	if a, ok := assets["manifest.json"]; ok {
+		if raw, derr := g.getBody(ctx, a.BrowserDownloadURL); derr != nil {
+			slog.Warn("release manifest.json indirilemedi, imzasız üretilecek", "err", derr)
+		} else if sm, perr := ParseManifest(raw); perr != nil || CompareVersions(sm.Version, ver) != 0 {
+			slog.Warn("release manifest.json kullanılamadı, imzasız üretilecek", "version", ver, "err", perr)
+		} else {
+			signed = sm
+			slog.Info("pipeline-imzalı update manifest kullanılıyor", "version", ver)
+		}
+	}
+
 	m := Manifest{Channel: g.Channel, Version: ver, CreatedAt: time.Now().Unix()}
 	for _, t := range ghTargets {
 		a, ok := assets[t.Asset]
@@ -138,10 +155,15 @@ func (g *GitHubSyncer) SyncOnce(ctx context.Context) (changed bool, version stri
 		if derr != nil {
 			return false, "", fmt.Errorf("%s indirilemedi: %w", t.Asset, derr)
 		}
-		m.Files = append(m.Files, ManifestFile{
-			Name: t.Asset, OS: t.OS, Arch: t.Arch, Version: ver,
-			SHA256: sum, Size: size,
-		})
+		mf := ManifestFile{Name: t.Asset, OS: t.OS, Arch: t.Arch, Version: ver, SHA256: sum, Size: size}
+		if signed != nil {
+			sf := signed.FindFile(t.OS, t.Arch)
+			if sf == nil || !strings.EqualFold(sf.SHA256, sum) || sf.Size != size {
+				return false, "", fmt.Errorf("%s: imzalı manifest ile SHA256/boyut uyuşmuyor — release kurcalanmış olabilir", t.Asset)
+			}
+			mf.Signature = sf.Signature
+		}
+		m.Files = append(m.Files, mf)
 	}
 	if len(m.Files) == 0 {
 		return false, "", fmt.Errorf("release %s içinde tanıdık agent asset'i yok", ver)
@@ -159,6 +181,19 @@ func (g *GitHubSyncer) SyncOnce(ctx context.Context) (changed bool, version stri
 		return false, "", err
 	}
 	return true, ver, nil
+}
+
+// getBody, küçük bir asset'i (manifest.json) belleğe indirir.
+func (g *GitHubSyncer) getBody(ctx context.Context, url string) ([]byte, error) {
+	resp, err := g.get(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
 // download, asset'i dest'e atomik yazar (temp + rename) ve SHA-256'sını döner.

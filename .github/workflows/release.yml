@@ -301,6 +301,52 @@ jobs:
             | helm registry login ghcr.io -u '${{ github.actor }}' --password-stdin
           helm push dist/bazntms-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
+  # Opt-in: UPDATE_SIGNING_SEED secret'ı tanımlıysa agent update manifest'ini
+  # ed25519 ile imzalar (bazntmsctl update sign) → release'e manifest.json
+  # asset'i olarak eklenir → hub GitHubSyncer imzaları geçirir. Secret yoksa
+  # imzasız kanal (bugünkü davranış, sıfır regresyon). Bkz. RELEASE-RUNBOOK §7.
+  update-signing:
+    name: İmzalı update manifest (opt-in)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # cosign
+    env:
+      SEED: ${{ secrets.UPDATE_SIGNING_SEED }}
+    steps:
+      - name: Secret yoksa atla
+        if: env.SEED == ''
+        run: echo "UPDATE_SIGNING_SEED tanımlı değil — imzasız update kanalı (RELEASE-RUNBOOK §7)."
+      - uses: actions/download-artifact@v4
+        if: env.SEED != ''
+        with:
+          merge-multiple: true
+      - uses: sigstore/cosign-installer@v3
+        if: env.SEED != ''
+      - name: Manifest imzala
+        if: env.SEED != ''
+        env:
+          V: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          chmod +x bazntmsctl-linux-amd64
+          umask 077; printf '%s' "$SEED" > seed.key
+          ./bazntmsctl-linux-amd64 update sign -key seed.key -out ch -version "$V" -channel stable \
+            bazntms-agent-linux-amd64 bazntms-agent-linux-arm64 \
+            bazntms-agent-darwin-amd64 bazntms-agent-darwin-arm64 bazntms-agent-windows-amd64.exe
+          rm -f seed.key
+          cp ch/manifest.json manifest.json
+          cosign sign-blob --yes --output-signature manifest.json.sig --bundle manifest.json.bundle manifest.json
+      - uses: actions/upload-artifact@v4
+        if: env.SEED != ''
+        with:
+          name: bazntms-update-manifest
+          path: |
+            manifest.json
+            manifest.json.sig
+            manifest.json.bundle
+
   supply-chain:
     name: Supply chain (SBOM, scan, sign, provenance)
     needs: [build, packages, msi, images]
@@ -366,7 +412,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, supply-chain, chart]
+    needs: [build, supply-chain, chart, update-signing]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # .github/release-footer.md için
@@ -383,8 +429,10 @@ jobs:
           # not: glob bazntms-sbom.spdx.json'i da kapsar; dosyayi ikinci kez
           # acikca vermek ayni asset'i iki kez yuklemeye calisir ve cakilir
           # bazntmsctl-* "bazntms-" prefix'i icermedigi icin ayri verilmeli
+          extra=()
+          [ -f manifest.json ] && extra+=(manifest.json manifest.json.sig manifest.json.bundle)
           gh release create "$V" \
-            bazntms-* bazntmsctl-* \
+            bazntms-* bazntmsctl-* "${extra[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "bazNTMS $V" \
             --generate-notes

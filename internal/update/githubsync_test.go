@@ -2,6 +2,8 @@ package update
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -99,6 +101,70 @@ func TestGitHubSyncerSyncOnce(t *testing.T) {
 	if err != nil || changed {
 		t.Fatalf("ikinci SyncOnce changed=%v err=%v, beklenen false/nil", changed, err)
 	}
+}
+
+// TestGitHubSyncerSignedManifest, release'te pipeline-imzalı manifest.json
+// varsa syncer'ın imzaları geçirdiğini + SHA256'yı ona karşı doğruladığını,
+// ve manifest'in kurcalandığı durumda SyncOnce'ın reddettiğini test eder.
+func TestGitHubSyncerSignedManifest(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	linuxBin := []byte("imzalı kanal — linux amd64 binary")
+	sum := sha256.Sum256(linuxBin)
+	sumHex := hex.EncodeToString(sum[:])
+
+	signedManifest := func(sha string) []byte {
+		m := Manifest{Channel: "stable", Version: "v3.1.0", Files: []ManifestFile{{
+			Name: "bazntms-agent-linux-amd64", OS: "linux", Arch: "amd64", Version: "v3.1.0",
+			SHA256: sha, Size: int64(len(linuxBin)),
+			Signature: hex.EncodeToString(ed25519.Sign(priv, []byte(sha))),
+		}}}
+		b, _ := json.Marshal(&m)
+		return b
+	}
+
+	t.Run("geçerli imza geçirilir", func(t *testing.T) {
+		srv := fakeGitHub(t, "v3.1.0", map[string][]byte{
+			"bazntms-agent-linux-amd64": linuxBin,
+			"manifest.json":             signedManifest(sumHex),
+		})
+		defer srv.Close()
+		oldBase := apiBase
+		apiBase = srv.URL
+		defer func() { apiBase = oldBase }()
+
+		dir := t.TempDir()
+		g := NewGitHubSyncer("acme/widget", dir, "")
+		g.HTTP = srv.Client()
+		if _, _, err := g.SyncOnce(context.Background()); err != nil {
+			t.Fatalf("SyncOnce: %v", err)
+		}
+		raw, _ := os.ReadFile(filepath.Join(dir, "stable", "manifest.json"))
+		m, err := ParseManifest(raw)
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if err := VerifyManifest(m, hex.EncodeToString(pub)); err != nil {
+			t.Fatalf("üretilen manifest imzası doğrulanmadı: %v", err)
+		}
+	})
+
+	t.Run("kurcalanmış manifest reddedilir", func(t *testing.T) {
+		bad := sha256.Sum256([]byte("başka bir şey"))
+		srv := fakeGitHub(t, "v3.1.0", map[string][]byte{
+			"bazntms-agent-linux-amd64": linuxBin,
+			"manifest.json":             signedManifest(hex.EncodeToString(bad[:])),
+		})
+		defer srv.Close()
+		oldBase := apiBase
+		apiBase = srv.URL
+		defer func() { apiBase = oldBase }()
+
+		g := NewGitHubSyncer("acme/widget", t.TempDir(), "")
+		g.HTTP = srv.Client()
+		if _, _, err := g.SyncOnce(context.Background()); err == nil {
+			t.Fatal("SHA256 uyuşmazlığında hata beklenirdi")
+		}
+	})
 }
 
 func TestGitHubSyncerSizeMismatch(t *testing.T) {

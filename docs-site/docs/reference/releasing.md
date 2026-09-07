@@ -104,6 +104,10 @@ git push origin vX.Y.Z
    push (`workflow_dispatch` = derle+tara, push etme).
 5. **chart** — `helm package` → (etikette) `helm push` `oci://ghcr.io/
    gokayybaz/charts/bazntms` (sürüm `Chart.yaml`'dan, preflight zorlar).
+5b. **update-signing** — `UPDATE_SIGNING_SEED` secret'ı tanımlıysa
+   `bazntmsctl update sign` ile agent update manifest'ini ed25519 imzalar,
+   `manifest.json` (+ cosign `.sig`/`.bundle`) release asset'i olur; hub
+   `GitHubSyncer` imzaları geçirir. Secret yoksa: imzasız kanal (§7).
 6. **supply-chain** — SBOM (`syft`, SPDX), Trivy **fs** taraması (Go bağımlılık
    ağacı; imaj taraması 4. adımda), **SLSA build provenance**
    (`actions/attest-build-provenance` — binary + paketler; imaj provenance'ı
@@ -196,7 +200,28 @@ gerisi çalışır ve artefaktları workflow artifact'ı olarak bırakır.
 - Şema zaten migrate olduysa geri alma yoktur — etkilenen kurulumlar yedekten
   restore (bkz. DR-RUNBOOK).
 
-## 7) Faz 19'da eklenecek (henüz pipeline'da yok)
+## 7) İmzalı agent auto-update kanalı (opt-in)
 
-- İmzalı update manifest'i (ed25519) varsayılan — bugün `GitHubSyncer`
-  imzasız üretiyor; agent yalnız SHA-256 doğruluyor (S19.8).
+Varsayılan: `GitHubSyncer` imzasız manifest üretir (güven: GitHub HTTPS +
+hub→agent pinli TLS; agent zaten hub'a tam güvenir). Ek ed25519 tedarik-zinciri
+imzası — özellikle "hub GitHub'a çıkamıyor" veya "release'i kim üretti kanıtı
+gerek" senaryoları — için:
+
+```bash
+# 1. Anahtar çifti (imzalama makinesinde, bir kez)
+bazntmsctl update keygen -out keys
+#   → keys/seed.key (GİZLİ)  +  keys/public.hex (agent'lara dağıtılır)
+
+# 2. Seed'i repo secret'ı yap — bundan sonraki her release manifest'i imzalar
+gh secret set UPDATE_SIGNING_SEED < keys/seed.key
+
+# 3. Agent'lara public key: agent.yml → update.public_key: <hex>  (veya -update-key)
+#    Bu ayar dolu agent imzayı ZORUNLU kılar — imzasız/yanlış sürüme çıkmaz.
+
+# 4. Doğrula (herhangi bir makinede, release asset'leriyle)
+bazntmsctl update verify -pubkey keys/public.hex manifest.json
+```
+
+Rotasyon: yeni çift üret → `UPDATE_SIGNING_SEED`'i güncelle → tüm agent'lara
+yeni `public_key`'i dağıt. Geçiş penceresi için agent'larda `public_key`'i
+geçici boş bırakıp (yalnız SHA-256) yeni anahtar yayıldıktan sonra doldurun.
