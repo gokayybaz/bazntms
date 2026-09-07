@@ -79,12 +79,16 @@ git push origin vX.Y.Z
    darwin runner'da `.pkg`.
 2. **packages** — nfpm ile deb + rpm (amd64 + arm64).
 3. **msi** — WiX v4.0.5 ile `bazntms-agent-amd64.msi`.
-4. **images** — `ghcr.io/gokayybaz/bazntms-{hub,agent}` çok-mimari (amd64+arm64),
-   etiketler: `X.Y.Z`, `X.Y`, `sha-<kısa>`, kararlı sürümde `latest`
-   (`docker/metadata-action`); temel imajlar digest'e sabit. Yalnız `v*`
-   etiketinde push edilir (`workflow_dispatch` = derle, push etme).
-5. **supply-chain** — SBOM (`syft`, SPDX), Trivy fs taraması (CRITICAL bloklar),
-   `cosign sign-blob` (keyless) → her artefakt için `.sig` + `.bundle`.
+4. **images** — her bileşen için: yerel amd64 imaj → **Trivy imaj taraması**
+   (CRITICAL bloklar) → (hub) `image_smoke_test.sh` → sonra çok-mimari
+   (amd64+arm64) derle + push `ghcr.io/gokayybaz/bazntms-{hub,agent}`.
+   Etiketler `X.Y.Z` / `X.Y` / `sha-<kısa>` / kararlıda `latest`
+   (`docker/metadata-action`); temel imajlar digest'e sabit. Tarama/duman
+   push'u kapıya alır — kirli/çökük imaj ghcr'a çıkmaz. Yalnız `v*` etiketinde
+   push (`workflow_dispatch` = derle+tara, push etme).
+5. **supply-chain** — SBOM (`syft`, SPDX), Trivy **fs** taraması (Go bağımlılık
+   ağacı; imaj taraması 4. adımda), `cosign sign-blob` (keyless) → her artefakt
+   için `.sig` + `.bundle`.
 6. **release** — `gh release create --generate-notes`, tüm artefaktları yükler.
 
 Süre ~20-35 dk (arm64 imajları QEMU'da yavaş; gha cache ısınınca düşer).
@@ -164,7 +168,6 @@ gerisi çalışır ve artefaktları workflow artifact'ı olarak bırakır.
 
 ## 7) Faz 19'da eklenecek (henüz pipeline'da yok)
 
-- Trivy **imaj** taraması (bugün yalnız fs) + CRITICAL gate (S19.4).
 - Helm chart OCI push + `helm lint`/`kubeconform` kapısı; `Chart.yaml`
   version/appVersion'ın tag'den türetilmesi (S19.5–S19.6).
 - SLSA build provenance attestation'ları (S19.7).
