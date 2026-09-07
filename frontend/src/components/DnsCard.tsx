@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { formatNum } from '../lib/format'
+import { usePolledJson } from '../lib/usePolledJson'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -19,33 +20,12 @@ const RANGES = [
 ] as const
 
 export function DnsCard({ agentId }: { agentId?: number } = {}) {
-  const [rows, setRows] = useState<DnsRow[]>([])
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    let stop = false
-    const load = async () => {
-      try {
-        const agentParam = agentId ? `&agent_id=${agentId}` : ''
-        const res = await fetch(`/api/v1/dns?minutes=${minutes}&limit=30${agentParam}`)
-        if (res.status === 401) return
-        const data = await res.json()
-        if (!stop) {
-          setRows(Array.isArray(data) ? data : [])
-          setLoaded(true)
-        }
-      } catch {
-        /* yoksay */
-      }
-    }
-    load()
-    const id = window.setInterval(load, 15_000)
-    return () => {
-      stop = true
-      window.clearInterval(id)
-    }
-  }, [minutes, agentId])
+  const { data, loaded } = usePolledJson<DnsRow[]>(
+    `/api/v1/dns?minutes=${minutes}&limit=30${agentId ? `&agent_id=${agentId}` : ''}`,
+    15_000,
+  )
+  const rows = useMemo(() => (Array.isArray(data) ? data : []), [data])
 
   const maxHits = useMemo(() => Math.max(1, ...rows.map((r) => r.queries + r.responses)), [rows])
 
@@ -82,8 +62,11 @@ export function DnsCard({ agentId }: { agentId?: number } = {}) {
       {!loaded ? (
         <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
-          Henüz DNS görünürlüğü verisi yok — agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın.
+        <p className="mx-auto max-w-md py-8 text-center font-mono text-[11px] leading-relaxed text-tui-dim">
+          Henüz DNS görünürlüğü verisi yok. Agent'ta <code className="text-tui-dim">collect.pcap</code> ve
+          hub'da <code className="text-tui-dim">-agent-pcap</code> açık olmalı. Süreç trafiği doluyor ama
+          DNS boşsa: sorgular yakalanan arayüzden geçmiyordur — DoH/DoT (şifreli DNS) ya da
+          VPN/Tailscale MagicDNS (ayrı <code className="text-tui-dim">utun</code> arayüzü) bunun tipik nedenidir.
         </p>
       ) : (
         <TuiTable

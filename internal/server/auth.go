@@ -422,6 +422,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		"authenticated": ident != nil,
 		"oidc":          s.oidc.Enabled(),
 		"multi_site":    s.multiSite,
+		"public_url":    s.publicURL, // agent kurulum sihirbazı için (boş = origin kullan)
 	}
 	if ident != nil {
 		resp["username"] = ident.Username

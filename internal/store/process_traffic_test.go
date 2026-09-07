@@ -11,16 +11,22 @@ func TestProcessTraffic(t *testing.T) {
 	st := openTest(t)
 	now := time.Now().Unix()
 
+	// Prune yetim (agent'sız) satırları süpürür — bu test için agent kaydı şart
+	aid, err := st.RegisterAgent(Agent{Name: "proc-agent", TokenHash: TokenHash("p")})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
 	samples := []telemetry.ProcessTrafficSample{
 		{PID: 100, Process: "chrome", Proto: "tcp", RemoteIP: "1.2.3.4", Port: 443, BytesIn: 900, BytesOut: 100},
 		{PID: 100, Process: "chrome", Proto: "tcp", RemoteIP: "1.2.3.4", Port: 443, BytesIn: 50, BytesOut: 0},
 		{PID: 200, Process: "spotify", Proto: "tcp", RemoteIP: "5.6.7.8", Port: 443, BytesIn: 300, BytesOut: 400},
 	}
-	if err := st.SaveProcessTraffic(1, now, samples); err != nil {
+	if err := st.SaveProcessTraffic(aid, now, samples); err != nil {
 		t.Fatalf("kayit: %v", err)
 	}
 	// bos delta kaydedilmez
-	if err := st.SaveProcessTraffic(1, now, []telemetry.ProcessTrafficSample{{PID: 1, Process: "idle"}}); err != nil {
+	if err := st.SaveProcessTraffic(aid, now, []telemetry.ProcessTrafficSample{{PID: 1, Process: "idle"}}); err != nil {
 		t.Fatalf("bos kayit: %v", err)
 	}
 
@@ -39,11 +45,11 @@ func TestProcessTraffic(t *testing.T) {
 	}
 
 	// agent filtresi
-	byAgent, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 1, 10, "")
+	byAgent, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), aid, 10, "")
 	if len(byAgent) != 2 {
-		t.Fatalf("agent 1 filtresi: %d", len(byAgent))
+		t.Fatalf("agent filtresi: %d", len(byAgent))
 	}
-	byAgent2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), 2, 10, "")
+	byAgent2, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), aid+999, 10, "")
 	if len(byAgent2) != 0 {
 		t.Fatalf("olmayan agent icin bos donmeliydi: %d", len(byAgent2))
 	}

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { formatBytes } from '../lib/format'
+import { usePolledJson } from '../lib/usePolledJson'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -19,33 +20,12 @@ const RANGES = [
 ] as const
 
 export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
-  const [rows, setRows] = useState<ProcessUsage[]>([])
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    let stop = false
-    const load = async () => {
-      try {
-        const agentParam = agentId ? `&agent_id=${agentId}` : ''
-        const res = await fetch(`/api/v1/processes?minutes=${minutes}&limit=20${agentParam}`)
-        if (res.status === 401) return
-        const data = await res.json()
-        if (!stop) {
-          setRows(data)
-          setLoaded(true)
-        }
-      } catch {
-        /* yoksay */
-      }
-    }
-    load()
-    const id = window.setInterval(load, 15_000)
-    return () => {
-      stop = true
-      window.clearInterval(id)
-    }
-  }, [minutes, agentId])
+  const { data, loaded } = usePolledJson<ProcessUsage[]>(
+    `/api/v1/processes?minutes=${minutes}&limit=20${agentId ? `&agent_id=${agentId}` : ''}`,
+    15_000,
+  )
+  const rows = useMemo(() => (Array.isArray(data) ? data : []), [data])
 
   const max = useMemo(() => Math.max(1, ...rows.map((r) => r.total)), [rows])
 

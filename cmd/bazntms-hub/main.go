@@ -298,6 +298,9 @@ func main() {
 		srv.SetWSOrigins(wsHosts)
 		slog.Info("WS origin izin listesi aktif", "host_sayisi", len(wsHosts)+3)
 	}
+	if *publicURL != "" {
+		srv.SetPublicURL(*publicURL) // agent kurulum sihirbazı bunu enroll hub adresi olarak kullanır
+	}
 	srv.SetMultiSite(*multiSite)
 	if *multiSite {
 		slog.Info("coklu-saha (MSP) modu aktif — site sert yetki siniri, site-bagli enroll token zorunlu")

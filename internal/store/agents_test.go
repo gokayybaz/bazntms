@@ -334,3 +334,91 @@ func TestAgentHistoryCounterReset(t *testing.T) {
 		}
 	}
 }
+
+// TestAgentUplink, Canlı Akış gruplama: agent'a switch/AP ata, oku, kaldır;
+// cihaz silinince referans NULL'lanır.
+func TestAgentUplink(t *testing.T) {
+	st := openTest(t)
+
+	sw, err := st.AddDevice(Device{Name: "kat1-sw", Kind: "switch", PollSeconds: 60})
+	if err != nil {
+		t.Fatalf("add device: %v", err)
+	}
+	id, err := st.RegisterAgent(Agent{Name: "loadgen-0001", TokenHash: TokenHash("t")})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := st.TouchAgent(id, "v1", 1, "10.0.0.9"); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+
+	// başlangıçta uplink yok
+	if a, _ := st.AgentByID(id); a.UplinkDeviceID != nil {
+		t.Fatalf("yeni agent uplink'siz olmalı: %v", *a.UplinkDeviceID)
+	}
+
+	// ata
+	if err := st.SetAgentUplink(id, &sw); err != nil {
+		t.Fatalf("set uplink: %v", err)
+	}
+	a, err := st.AgentByID(id)
+	if err != nil || a.UplinkDeviceID == nil || *a.UplinkDeviceID != sw {
+		t.Fatalf("uplink atanmadı: %+v", a)
+	}
+	agents, _ := st.ListAgents(time.Hour, "")
+	if len(agents) != 1 || agents[0].UplinkDeviceID == nil || *agents[0].UplinkDeviceID != sw {
+		t.Fatalf("ListAgents uplink taşımıyor: %+v", agents)
+	}
+
+	// kaldır
+	if err := st.SetAgentUplink(id, nil); err != nil {
+		t.Fatalf("clear uplink: %v", err)
+	}
+	if a, _ := st.AgentByID(id); a.UplinkDeviceID != nil {
+		t.Fatalf("uplink kaldırılmadı: %v", *a.UplinkDeviceID)
+	}
+
+	// yeniden ata, sonra cihazı sil → referans NULL
+	if err := st.SetAgentUplink(id, &sw); err != nil {
+		t.Fatalf("re-set: %v", err)
+	}
+	if err := st.DeleteDevice(sw); err != nil {
+		t.Fatalf("delete device: %v", err)
+	}
+	if a, _ := st.AgentByID(id); a.UplinkDeviceID != nil {
+		t.Fatalf("cihaz silinince uplink NULL olmalı: %v", *a.UplinkDeviceID)
+	}
+}
+
+// TestPruneSweepsOrphanConns, agent silinmiş ama agent_conn_latest satırları
+// kalmışsa (eski sürüm / farklı yol) Prune'un onları süpürdüğünü doğrular.
+func TestPruneSweepsOrphanConns(t *testing.T) {
+	st := openTest(t)
+
+	id, _ := st.RegisterAgent(Agent{Name: "ws-1", TokenHash: TokenHash("t")})
+	if err := st.ReplaceConnLatest(id, []telemetry.ConnectionSample{
+		{Proto: "tcp", LocalAddr: "10.0.0.1:5000", RemoteAddr: "1.1.1.1:443", Status: "ESTABLISHED"},
+	}); err != nil {
+		t.Fatalf("conn: %v", err)
+	}
+	// canlı agent'ın bağlantısı Prune'da korunur
+	if err := st.Prune(time.Hour); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if conns := st.LatestAgentConnections(id); len(conns) != 1 {
+		t.Fatalf("canlı agent bağlantısı silinmemeli: %d", len(conns))
+	}
+
+	// agent'ı elle (cascade'siz) sil → yetim satır oluştur
+	if _, err := st.(*sqlStore).db.Exec(`DELETE FROM agents WHERE id = $1`, id); err != nil {
+		if _, err2 := st.(*sqlStore).db.Exec(`DELETE FROM agents WHERE id = ?`, id); err2 != nil {
+			t.Fatalf("elle sil: %v / %v", err, err2)
+		}
+	}
+	if err := st.Prune(time.Hour); err != nil {
+		t.Fatalf("prune2: %v", err)
+	}
+	if conns := st.LatestAgentConnections(id); len(conns) != 0 {
+		t.Fatalf("yetim bağlantı süpürülmedi: %d", len(conns))
+	}
+}

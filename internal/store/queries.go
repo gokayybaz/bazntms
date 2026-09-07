@@ -166,6 +166,23 @@ func (s *sqlStore) Prune(retention time.Duration) error {
 			return err
 		}
 	}
+	// yetim satır süpürme: bir agent DeleteAgent cascade'i öncesi (eski sürüm)
+	// veya farklı yoldan silinmişse geride kalan satırlar. agent_conn_latest ts
+	// bazlı prune edilmediği için orada yetimler kalıcı olur; diğerleri zamanla
+	// yaşlanır ama retention uzunsa birikir. UI/raporlar yalnızca mevcut
+	// agent'ları gösterir — bu sweep DB'yi de aynı tutar. Yeni agent id'leri
+	// monoton arttığı için yanlış agent'a bağlanma riski yok.
+	for _, q := range []string{
+		`DELETE FROM agent_conn_latest WHERE agent_id NOT IN (SELECT id FROM agents)`,
+		`DELETE FROM agent_iface_samples WHERE agent_id NOT IN (SELECT id FROM agents)`,
+		`DELETE FROM process_traffic WHERE agent_id NOT IN (SELECT id FROM agents)`,
+		`DELETE FROM l7_endpoints WHERE agent_id NOT IN (SELECT id FROM agents)`,
+		`DELETE FROM agent_dns WHERE agent_id NOT IN (SELECT id FROM agents)`,
+	} {
+		if _, err := s.db.Exec(q); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

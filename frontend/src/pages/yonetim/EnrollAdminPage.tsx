@@ -5,9 +5,11 @@ import { EnrollWizard } from '../../components/EnrollWizard'
 export function EnrollAdminPage({
   lockedSite = '',
   multiSite = false,
+  publicUrl = '',
 }: {
   lockedSite?: string
   multiSite?: boolean
+  publicUrl?: string
 }) {
   return (
     <AdminPageShell
@@ -21,7 +23,7 @@ export function EnrollAdminPage({
       }
     >
       <Panel title="Yeni Agent Sihirbazı">
-        <EnrollWizard lockedSite={lockedSite} multiSite={multiSite} />
+        <EnrollWizard lockedSite={lockedSite} multiSite={multiSite} publicUrl={publicUrl} />
       </Panel>
     </AdminPageShell>
   )

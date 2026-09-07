@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { formatBytes, formatNum } from '../lib/format'
+import { usePolledJson } from '../lib/usePolledJson'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -20,33 +21,12 @@ const RANGES = [
 ] as const
 
 export function L7Card({ agentId }: { agentId?: number } = {}) {
-  const [rows, setRows] = useState<L7Row[]>([])
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    let stop = false
-    const load = async () => {
-      try {
-        const agentParam = agentId ? `&agent_id=${agentId}` : ''
-        const res = await fetch(`/api/v1/l7?minutes=${minutes}&limit=30${agentParam}`)
-        if (res.status === 401) return
-        const data = await res.json()
-        if (!stop) {
-          setRows(Array.isArray(data) ? data : [])
-          setLoaded(true)
-        }
-      } catch {
-        /* yoksay */
-      }
-    }
-    load()
-    const id = window.setInterval(load, 15_000)
-    return () => {
-      stop = true
-      window.clearInterval(id)
-    }
-  }, [minutes, agentId])
+  const { data, loaded } = usePolledJson<L7Row[]>(
+    `/api/v1/l7?minutes=${minutes}&limit=30${agentId ? `&agent_id=${agentId}` : ''}`,
+    15_000,
+  )
+  const rows = useMemo(() => (Array.isArray(data) ? data : []), [data])
 
   const maxHits = useMemo(() => Math.max(1, ...rows.map((r) => r.hits)), [rows])
 

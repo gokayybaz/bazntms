@@ -19,8 +19,19 @@ const inputCls =
 
 // lockedSite dolu ise (site-admin) enroll token o sahaya sabit. multiSite ise
 // (çoklu-saha modu) site zorunlu — statik/site'siz token agent kaydında reddedilir.
-export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSite?: string; multiSite?: boolean }) {
-  const hubUrl = window.location.origin
+export function EnrollWizard({
+  lockedSite = '',
+  multiSite = false,
+  publicUrl = '',
+}: {
+  lockedSite?: string
+  multiSite?: boolean
+  publicUrl?: string
+}) {
+  // enroll komutundaki hub adresi: -public-url varsa onu kullan (panel bir
+  // tünel/proxy arkasından localhost'ta açılmış olabilir); yoksa tarayıcı origin'i.
+  const hubUrl = publicUrl || window.location.origin
+  const hubIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(hubUrl)
 
   const [tokens, setTokens] = useState<EnrollToken[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -185,6 +196,13 @@ export function EnrollWizard({ lockedSite = '', multiSite = false }: { lockedSit
             ))}
           </div>
           <p className="text-[11px] text-tui-dim">{os.note}</p>
+          {hubIsLocal && (
+            <p className="border border-amber-400/40 bg-amber-400/10 px-2.5 py-1.5 font-mono text-[11px] text-amber-300">
+              ⚠ Hub adresi <code>{hubUrl}</code> — yalnızca aynı makinede çalışır. Uzak bir makineye
+              agent kuruyorsanız komuttaki adresi hub'a erişilebilir bir IP/host ile değiştirin
+              (veya hub'ı <code>-public-url https://…</code> ile başlatın).
+            </p>
+          )}
           <div className="border border-rule-hi bg-ground">
             <div className="flex items-center justify-between border-b border-rule px-3 py-1.5">
               <span className="font-mono text-[10px] uppercase tracking-wider text-tui-dim">{os.label}</span>

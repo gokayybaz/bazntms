@@ -101,8 +101,12 @@ export function TuiTable<Row>({
   }, [view, selKey, getKey])
 
   useEffect(() => {
+    // yalnızca kullanıcı satır seçtiyse (j/k/ok) kaydır — türetilmiş varsayılan
+    // seçim (selKey == null) sayfa açılışında tabloyu görünüme kaydırıp
+    // "ortadan başlıyor" hissi veriyordu
+    if (selKey == null) return
     selRowRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selIndex])
+  }, [selIndex, selKey])
 
   const moveTo = useCallback(
     (i: number) => {
