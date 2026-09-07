@@ -13,7 +13,47 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
-_Sonraki sürüm için._
+Faz 20 — süreç atfı çekirdek düzeyine taşındı. Linux'ta **eBPF**, Windows'ta
+**ETW** ile süreç trafiği + DNS; **Windows'ta artık Npcap gerekmez**.
+
+### Eklendi
+- **eBPF atıf motoru (Linux).** Kernel ≥ 5.8 + BTF olan makinelerde `collect.method`
+  varsayılanı (`auto`) artık paket yakalamak yerine çekirdeğin soket katmanına
+  CO-RE fentry ile bağlanır: her paket yerine her send/recv işleminde çalışır →
+  belirgin şekilde ucuz, byte sayımı NIC offload'ından etkilenmez, **`CAP_NET_RAW`
+  gerekmez** (`CAP_BPF`/`CAP_PERFMON` yeter). DNS `systemd-resolved` (127.0.0.53)
+  ve Docker gömülü DNS (127.0.0.11) için native görünür.
+- **ETW atıf motoru (Windows).** Yükseltilmiş (SYSTEM servis / yönetici) süreçte
+  `Microsoft-Windows-Kernel-Network` + `Microsoft-Windows-DNS-Client` sağlayıcıları
+  ile süreç trafiği + DNS — **Npcap kurulmadan**. Saf Go (yeni bağımlılık yok).
+- **`collect.method`** agent config alanı + `-collect-method` bayrağı:
+  `auto` | `ebpf` | `pcap` | `etw` | `off`. `auto` platforma göre en iyi arka
+  ucu seçer ve kurulamayanı pcap'e düşürür; her düşüş loglanır.
+- **`attr_method`** — agent aktif atıf arka ucunu her telemetri batch'inde
+  bildirir; `/api/v1/agents` yanıtında ve agent detay sayfasındaki "Atıf"
+  rozetinde görünür.
+
+### Değiştirildi
+- **Windows agent Npcap'siz çalışır.** `auto`/`etw` modunda süreç trafiği + DNS
+  ETW ile toplanır. **Npcap yalnız şunlar için gerekir:** L7 (SNI/Host) paneli,
+  ham `-record`, tek-makine hub yakalaması — bunlar `-collect-method=pcap` ister.
+- L7 (SNI/Host): pcap arka ucunda ana handle'dan; eBPF modunda dar filtreli bir
+  yardımcı pcap handle'dan (`CAP_NET_RAW` ister, yoksa L7 boş kalır — sayım + DNS
+  aksamaz); **ETW modunda yoktur**.
+
+### Şema
+- `0007_attr_method` — `agents.attr_method TEXT` (agent'ın bildirdiği atıf arka ucu).
+
+### Kırıcı / yükseltme
+- **Windows'ta L7 (SNI/Host) paneli ve `-record`**, agent `auto`/`etw` modundaysa
+  ve Npcap kurulu değilse **boş kalır**. Eskisi gibi çalışması için agent'a
+  `collect.method: pcap` verin (Npcap gerekir) — ya da yalnız süreç trafiği +
+  DNS yeterliyse hiçbir şey yapmayın (ETW ile gelir).
+
+### Karar kaydı
+- [`docs/decisions/0007-attr-backends.md`](docs/decisions/0007-attr-backends.md) —
+  arka uç arayüzü, fentry/CO-RE, ETW'nin elle yazılması (GPL/cgo kütüphaneler
+  reddedildi), L7'nin pcap-gated kalması.
 
 ## [0.3.3] — 2026-09-07
 
