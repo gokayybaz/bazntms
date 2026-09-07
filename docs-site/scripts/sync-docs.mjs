@@ -6,8 +6,10 @@
 //   docs/CONFIGURATION.md  → docs/reference/configuration.md
 //   docs/ARCHITECTURE.md   → docs/reference/architecture.md
 //   docs/UPGRADE-RUNBOOK.md → docs/reference/upgrading.md
+//   docs/RELEASE-RUNBOOK.md → docs/reference/releasing.md
 //   docs/DR-RUNBOOK.md     → docs/reference/dr.md
 //   docs/TROUBLESHOOTING.md → docs/reference/troubleshooting.md
+//   CHANGELOG.md (kök)     → docs/reference/changelog.md
 //
 // Kaynak dosyalar GitHub'da sürümlenir; site her build'de güncel içerik alır.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -19,26 +21,30 @@ const root = join(here, '..', '..');
 const outDir = join(here, '..', 'docs', 'reference');
 mkdirSync(outDir, { recursive: true });
 
+// dir: kaynağın repo kökündeki dizini (varsayılan 'docs'); CHANGELOG kökte durur.
 const docs = [
   { src: 'API.md', out: 'api.md', title: 'API Referansı', pos: 10 },
   { src: 'CONFIGURATION.md', out: 'configuration.md', title: 'Yapılandırma', pos: 11 },
   { src: 'ARCHITECTURE.md', out: 'architecture.md', title: 'Mimari', pos: 12 },
   { src: 'UPGRADE-RUNBOOK.md', out: 'upgrading.md', title: 'Güncelleme (Upgrade)', pos: 13 },
-  { src: 'DR-RUNBOOK.md', out: 'dr.md', title: 'Felaket Kurtarma (DR)', pos: 14 },
-  { src: 'TROUBLESHOOTING.md', out: 'troubleshooting.md', title: 'Sorun Giderme', pos: 15 },
+  { src: 'RELEASE-RUNBOOK.md', out: 'releasing.md', title: 'Sürüm Çıkarma (Release)', pos: 14 },
+  { src: 'DR-RUNBOOK.md', out: 'dr.md', title: 'Felaket Kurtarma (DR)', pos: 15 },
+  { src: 'TROUBLESHOOTING.md', out: 'troubleshooting.md', title: 'Sorun Giderme', pos: 16 },
+  { src: 'CHANGELOG.md', dir: '.', out: 'changelog.md', title: 'Değişiklik Günlüğü', pos: 17 },
 ];
 
 let copied = 0;
 for (const d of docs) {
-  const body = readFileSync(join(root, 'docs', d.src), 'utf8');
+  const srcRel = d.dir === '.' ? d.src : `${d.dir ?? 'docs'}/${d.src}`;
+  const body = readFileSync(join(root, srcRel), 'utf8');
   const fm = [
     '---',
     `title: ${d.title}`,
     `sidebar_position: ${d.pos}`,
-    `custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/${d.src}`,
+    `custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/${srcRel}`,
     '---',
     '',
-    `> Kaynak: [\`docs/${d.src}\`](https://github.com/gokayybaz/bazntms/blob/main/docs/${d.src}) — bu sayfa her build'de otomatik senkronize edilir.`,
+    `> Kaynak: [\`${srcRel}\`](https://github.com/gokayybaz/bazntms/blob/main/${srcRel}) — bu sayfa her build'de otomatik senkronize edilir.`,
     '',
   ].join('\n');
   writeFileSync(join(outDir, d.out), fm + body);

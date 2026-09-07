@@ -170,17 +170,31 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 
 ## Frontend (`frontend/`)
 
-Vite + React + Tailwind v4 + `react-router-dom`. `useLive` hook'u WS'i
-birincil, REST yoklamasını yedek kaynak yapar (WS koparsa otomatik dönüş).
-WS tick'i alarm olayları + `fleet` özetini taşır → Dashboard stat şeridinde
-**filo rx/tx/pps ve olay hızı** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten).
-**Agent sayısı (aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden**
-gelir — canlı trafik şeması, topoloji ve alttaki filo kartları da aynı listeyi
-kullandığı için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
+Vite + React + Tailwind v4 + `react-router-dom`. **Tasarım dili htop/ncurses
+TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+düz siyah zemin, tek monospace aile, kare köşe (`*{border-radius:0}`), gölge
+yok, klavye-öncelikli. İmza bileşenler: `Meter` (htop eşik çubuğu), `TuiTable`
+(sort/`/` filtre/↑↓-jk klavye-nav kolonlu tablo), `Panel` (tek konteyner —
+eski `Card.tsx` bunun alias'ı), `Sparkline` (blok rampası), `TabBar`/`FnKeyBar`.
+Renk tokenleri `index.css` `@theme` (`--color-ground/panel/rule/ink/tui-dim/rx/tx`).
+
+`useLive` hook'u WS'i birincil, REST yoklamasını yedek kaynak yapar (WS koparsa
+otomatik dönüş). WS tick'i alarm olayları + `fleet` özetini taşır → üst
+`TuiHeader` şeridinde **filo rx/tx/pps Meter bandı + olay/uyarı sayaç + canlı
+saat** 1 sn'de güncellenir (WS yoksa 5 sn'lik REST'ten). **Agent sayısı
+(aktif/toplam) ise her zaman `/api/v1/agents` REST listesinden** gelir — canlı
+trafik şeması, topoloji ve alttaki filo tabloları da aynı listeyi kullandığı
+için "aktif agent" sayısı bu görünümlerle her zaman tutarlıdır
 (`fleet.agents_online` yalnızca ilk poll gelene kadar geçici kaynak).
-401 görülürse App login ekranına düşer; 60 sn'de bir de oturum denetimi
-yapılır. Grafikler (ThroughputChart, CompareCard, DayBars) harici grafik
-kütüphanesi olmadan, elle yazılmış SVG'dir.
+401 görülürse App TTY login ekranına düşer; 60 sn'de bir de oturum denetimi
+yapılır. Grafikler (ThroughputChart — basamaklı çizgi, gradyan yok) harici
+grafik kütüphanesi olmadan, elle yazılmış SVG'dir.
+
+**Klavye modeli** (`lib/useHotkeys.ts` + `lib/KeymapContext.tsx`): tek global
+`keydown`; `1-9` sekme değiştir, `↑↓/jk` + `Enter` liste gezinme, `/` filtre,
+`s`/`F6` sırala, `F1`/`?` yardım overlay, `F5` yenile, `F10` çıkış. Metin alanı
+odaktayken tek-harf kısayolları bastırılır. `FnKeyBar` alt şeridi aktif ekranın
+`useRegisterKeys` ile kaydettiği eylemleri çizer.
 
 Dashboard'daki **`TrafficFlowDiagram`** de aynı yaklaşımla elle yazılmış SVG
 bir sahnedir: sol sütunda **yalnızca ÇEVRİMİÇİ agent'lar** ayrı bir istemci
@@ -201,23 +215,30 @@ sessiz kalıp yalnızca hareket varken yeniden çizdirir; yön sınıflandırmas
 
 ### Sayfa yapısı (routing)
 
-`App.tsx` bir kabuk: sol sabit `Sidebar` (rota listesi) + üst `Header` (WS
-durumu, kullanıcı kimliği, çıkış — hub'ın kendi yerel yakalamasıyla ilgili
-hiçbir kontrol barındırmaz, bkz. aşağıdaki not) + `<Routes>` içinde sayfa
-gövdesi. Backend zaten SPA history-fallback sağladığı için (`server.go`:
-bilinmeyen path → `index.html`) istemci tarafı routing ek backend desteği
-gerektirmeden çalışır.
+`App.tsx` bir kabuk (`grid-rows-[auto_auto_1fr_auto]`): üst `TuiHeader` (filo
+Meter bandı + WS durumu + kimlik + saat) / `TabBar` (numaralı yatay nav, `1-9`
+tuşları) / `<main>` (kayan sayfa gövdesi, `<Routes>`) / alt `FnKeyBar`
+(bağlam F-tuşları). `KeymapProvider` + `DialogProvider` tüm kabuğu sarar.
+Sol sidebar ve ayrı header kaldırıldı (Faz 17). Backend zaten SPA
+history-fallback sağladığı için (`server.go`: bilinmeyen path → `index.html`)
+istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 
 | Rota | Sayfa | Veri kaynağı |
 |------|-------|--------------|
-| `/` | Dashboard (`Overview` bileşeni) | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) + coğrafi harita (`GET /api/v1/geo`) |
+| `/` | Dashboard (`Overview` bileşeni) — meter bandı + log-tail + filo/topoloji/cihazlar | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
+| `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
+| `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
 | `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
 | `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
 | `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
+
+Uyumluluk/Yönetim CRUD akışları çok-alanlı `useDialog().form()` TUI dialog'unu
+kullanır (art arda native `prompt()` zincirleri kaldırıldı); `ComplianceSubNav`
+ve `AdminPageShell` ikincil şeritleri `TabBar` diliyle çizilir.
 
 Her sayfa **yalnızca kendi ihtiyacı olan uçları** kendi `useEffect`'inde
 çeker (genelde 5–20 sn aralıklı `setInterval` ile); ortak bir global store
@@ -276,6 +297,26 @@ yanıtlarındaki alan adları (ters arama / `.local` / noktasız hariç) sürece
 atfedilir → `dns` telemetri alanı → `agent_dns` tablosu → `GET /api/v1/dns` +
 fleet raporundaki "DNS Görünürlüğü" bölümü (`internal/report`, önceden yalnızca
 hub yerel yakalamasında vardı, çoklu-hub'da boştu).
+
+Ana atıf handle'ı loopback-*olmayan* tek bir arayüzü dinler; oysa
+`systemd-resolved` (127.0.0.53), `dnsmasq`/Pi-hole, Docker gömülü DNS
+(127.0.0.11) gibi **stub-resolver**'lara giden sorgular `lo` üzerinden gider ve
+o handle'da hiç görünmez. Bu yüzden `AttrEngine` ayrıca loopback cihazında
+`udp` BPF filtresiyle ikinci bir handle açar (`internal/agent/loopback.go`,
+best-effort — açılamazsa yalnızca DNS görünürlüğü kısıtlanır, telemetri akmaya
+devam eder). Filtre `port 53` değil sade `udp`: Docker gömülü DNS, konteyner-içi
+iptables ile sorgunun hedef portunu 53'ten rastgele bir porta DNAT eder — port
+filtresi sorguyu kaçırırdı; DNS olmayan paketleri `parseDNSNames` eler.
+Loopback paketleri `attributeDNS` → `sniffDNS` yolundan geçer: süreç trafik
+sayaçlarına (`e.totals`) yazılmaz, yalnızca alan adı kaydı düşer.
+
+**Süreç atfı DNS'te best-effort:** DNS UDP soketleri milisaniyelik olduğundan
+3 sn'lik `/proc/net/udp` anlığına çoğu zaman yakalanmaz — alan adı o durumda
+boş süreçle kaydedilir (domain görünürlüğü süreç atfından bağımsız). `musl`
+libc (Alpine/BusyBox) resolver'ı UDP soketini `connect()` etmediği için
+(`glibc` eder) `lookupDNSProc` ayrıca 53-olmayan tarafı yalnızca yerel porttan
+eşleştirmeyi dener. Windows'ta ayrı bir Npcap loopback adaptörü gerekir; yoksa
+bu handle açılmaz.
 
 | Platform | Soket→PID kaynağı |
 |----------|-------------------|

@@ -15,16 +15,27 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/CONFIGURATI
 | `-dev` | `false` | Frontend embed'ini atla; Vite dev server ile geliştirme |
 | `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (DSN verilirse PostgreSQL/TimescaleDB modu) |
 | `-retention-hours` | `168` (7 gün) | Ham zaman-serisi saklama süresi. TimescaleDB modunda native chunk-drop retention politikası, ayrıca 15 dk'da bir `Maintainer` (capture'dan bağımsız) siler |
+| `-agent-archive-days` | `30` | Bu kadar gün çevrimdışı kalan agent'lar `Maintainer` tarafından tam cascade ile silinir (kayıt + iface/conn/process/L7/DNS/subnet/`alert_seen`). `0` = kapalı. Makine kimliği (`machine_id`) sayesinde geri dönen bir makine temiz bir kayıt olarak yeniden enroll olur |
+| `-multi-site` | `false` | Çoklu-saha (MSP) modu: `site` sert bir yetki sınırı olur. Agent kaydı **site-bağlı** enroll token ister (statik `-enroll-token` ve site'siz DB token'ları reddedilir); enroll token üretimi `site` alanı zorunlu; `site-admin` rolü yalnız kendi sahasını yönetir. Bkz. [DEPLOYMENT-MODEL.md](DEPLOYMENT-MODEL.md) |
+| `-session-store` | `memory` | Panel oturum deposu. `memory` = süreç-içi (tek controller replikası). `db` = paylaşımlı `sessions` tablosu — **birden çok controller replikası** aynı oturumları görür, biri yeniden başlasa kullanıcı düşmez, logout replikalar arası anında. Yalnızca `sha256(çerez token'ı)` saklanır. Postgres modu önerilir (A4). Bkz. [decisions/0004-shared-sessions.md](decisions/0004-shared-sessions.md) |
+| `-queue-max-age-hours` | `24` | JetStream stream mesaj yaşı sınırı. Tüketilmeyen mesajlar bu süreden sonra düşer. `MaxDeliver` (10) denemeden sonra da başarısız kalan mesaj `ingest.dead` DLQ konusuna taşınır (`bazntms_ingest_dead_total{subject}` metriği; `nats stream view` ile incelenir). (C4) |
+| `-public-url` | — | Panelin dış adresi (ör. `https://ntms.example.com`). İki yerde kullanılır: **(1)** WebSocket handshake origin izin listesi (Cross-Site WebSocket Hijacking'e karşı — `-tls-hosts` + `localhost`/`127.0.0.1`/`[::1]` de eklenir; ikisi de boşsa tüm origin'ler kabul edilir + uyarı loglanır). **(2)** OIDC `redirect_url` boşsa `<public-url>/api/auth/oidc/callback` varsayılır. (B5) |
 | `-nats` | — | NATS JetStream adresi. Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |
 | `-tls` | `false` | HTTPS + agent karşılıklı TLS (mTLS). Hub kendi CA'sını üretir, agent CSR'larını enrollment'ta imzalar. `-tls-dir`/`-tls-hosts`/`-tls-cert`/`-tls-key` |
+| `-vault-key-file` | `vault.key` | Kimlik kasası master anahtar dosyası (32 bayt hex; yoksa üretilir). `-vault-key-source=file` iken kullanılır |
+| `-vault-key-source` | `file` | Master anahtar kaynağı. `file` = `-vault-key-file`. `env` = `BAZNTMS_VAULT_MASTER_KEY` (hex/base64, 32 bayt) — **anahtar diske hiç yazılmaz**; k8s Secret / AWS Secrets Manager / GCP Secret Manager / HashiCorp Vault agent tarafından ortam değişkeni olarak enjekte edilir. (B8, [decisions/0006](decisions/0006-vault-key-provider.md)) |
 | `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
-| `-auth-password` | — | Arayüz şifresi. Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` ortam değişkeni de geçerli |
+| `-update-github-repo` | `gokayybaz/bazntms` | Agent binary'lerini çekecek GitHub deposu (`owner/name`). Hub bu deponun **en son release'ini** `-update-github-interval`'da bir yoklar, yeni sürümde `bazntms-agent-*` asset'lerini `-updates-dir`'e indirir, SHA-256 hesaplar, `manifest.json` yazar → agent'lar otomatik günceller. **Boş** = GitHub senkronu kapalı; yalnızca elle hazırlanmış (`bazntmsctl update sign`) `-updates-dir` içeriği sunulur. Rate-limit için `GITHUB_TOKEN` ortam değişkeni okunur |
+| `-update-github-interval` | `30m` | GitHub release yoklama aralığı |
+| `-updates-dir` | — (repo doluysa `updates`) | Agent güncelleme kanalı dizini (`<dir>/<channel>/manifest.json` + binary'ler). Boş bırakılırsa `-update-github-repo` doluyken `updates`, değilse kanal kapalı. Bkz. [UPGRADE-RUNBOOK.md](UPGRADE-RUNBOOK.md) §2 |
+| `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
+| `-enroll-token` | — | **Bootstrap** agent enrollment token'ı. Boşsa rastgele üretilip loglanır. Yalnızca ilk kurulum için — sızarsa hub'ı yeniden başlatmadan iptal edilemez. Kalıcı token'lar: panel > Yönetim > Agent Ekle (bkz. aşağıda) |
 | `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
 | `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
 | `-llm-model` | — | Varsayılan model. UI'dan da seçilebilir |
@@ -146,9 +157,13 @@ Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 
 ### Roller
 
-Tek-şifre modu (`-auth-password`) **admin** kimliği olarak çalışmaya devam
-eder. Kalıcı kullanıcılar `-auth-password` ile ilk girişten sonra
-`/api/v1/users` üzerinden açılır (bcrypt saklanır):
+Tek-şifre modu (`-auth-password`) bir kurulum önyükleme (bootstrap)
+mekanizmasıdır: **admin** kimliği verir ve `/api/v1/users` üzerinden ilk
+kalıcı kullanıcılar açılır (bcrypt saklanır). **Etkin bir `admin` rollü RBAC
+kullanıcısı oluşturulduğu an tek-şifre girişi otomatik olarak devre dışı
+kalır** (giriş `401` + "RBAC etkin" mesajı; hub logunda `RBAC aktif` uyarısı).
+Etkin admin kullanıcı kalmazsa (hepsi pasifleştirilirse) tek-şifre girişi
+"break-glass" olarak geri döner.
 
 | Rol | Görüntüleme | Yakalama/kayıt | AI/rapor | Cihaz yönetimi | Agent silme | Kullanıcı/token/audit |
 |---|---|---|---|---|---|---|
@@ -175,6 +190,24 @@ oidc:
 
 Giriş: `GET /api/auth/oidc/login` (arayüz oturum açma sayfasından da
 bağlanır). Grup/rol claim'i `groups` veya `roles` okunur.
+
+### Agent kaydı (enrollment) token'ları
+
+İki yol vardır:
+
+- **Bootstrap** — `-enroll-token` bayrağı (veya config `enroll_token`). Tek
+  statik sır; verilmezse rastgele üretilip loglanır. Sızarsa hub'ı yeniden
+  başlatmadan iptal edilemez. Yalnızca ilk kurulum / otomasyonsuz senaryolar
+  için.
+- **Kalıcı (DB) token'lar** — panel > **Yönetim > Agent Ekle**
+  (`POST /api/v1/enroll-tokens`). İsimli, opsiyonel site kapsamlı, opsiyonel
+  son kullanma tarihli; `DELETE /api/v1/enroll-tokens/{id}` ile hub yeniden
+  başlatılmadan iptal edilir. Agent'lar `-enroll-token`/`hub.token` alanına
+  statik sır yerine bunlardan birini verir. Üretildikten sonra düz değer bir
+  kez gösterilir (hash saklanır).
+
+Sihirbaz, hub adresini `location.origin`'den alıp seçilen işletim sistemine
+göre kopyalanabilir kurulum komutu üretir.
 
 ### Entegrasyon API token'ları
 

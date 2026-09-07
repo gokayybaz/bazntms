@@ -121,6 +121,9 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 | [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | Varlıklar, güven sınırları, sınır başına tehditler ve karşı önlemler |
 | [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md) | Dağıtım senaryosu kararı (tek-kurum / MSP çoklu-saha) ve izolasyon modeli |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | İzin hataları, Npcap, AI sorunları, sık karşılaşılan durumlar |
+| [CHANGELOG.md](CHANGELOG.md) | Sürüm başına başlıklar + kırıcı / yükseltme notları |
+| [docs/UPGRADE-RUNBOOK.md](docs/UPGRADE-RUNBOOK.md) | Sürüm atlama: hub / agent / DB / K8s güncelleme adımları |
+| [docs/RELEASE-RUNBOOK.md](docs/RELEASE-RUNBOOK.md) | Bakımcı: sürüm etiketi kesme + pipeline + doğrulama |
 | [docs/enterprise-plan.html](docs/enterprise-plan.html) | 🗺️ Enterprise yol haritası: hub + agent + cihaz entegrasyonları, ölçek hedefleri |
 
 ## Yapılandırma (özet)

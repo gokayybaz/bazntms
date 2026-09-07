@@ -37,50 +37,64 @@ curl -s localhost:8080/api/v1/version   # sürüm yükseldi mi?
 ```
 
 Notlar:
-- Şema migrasyonu `store.Open` içinde otomatiktir (`CREATE TABLE IF NOT
-  EXISTS`); geriye dönük sürüm çalıştırılacaksa yedekten restore gerekir.
+- Şema migrasyonu `store.Open` içinde otomatiktir: gömülü sıralı migrasyon
+  dosyaları (`internal/store/migrations/{sqlite,postgres}/NNNN_*.sql`),
+  uygulanmış sürümler `schema_migrations` tablosunda izlenir. Faz 13 öncesi
+  bir veritabanı ilk açılışta `0001_init` baseline olarak işaretlenir (yeniden
+  çalıştırılmaz). Geriye dönük sürüm çalıştırılacaksa yedekten restore gerekir.
+- Çoklu hub replikası aynı veritabanına karşı aynı anda başlarsa migrasyon
+  Postgres advisory lock ile sıraya alınır.
 - TimescaleDB modunda hypertable/cagg politikaları `if_not_exists` ile
   yeniden kurulur; özel işlem gerekmez.
 
-## 2) Agent Otomatik Güncelleme Kanalı (önerilen)
+## 2) Agent Otomatik Güncelleme (varsayılan — genelde hiçbir şey yapmanız gerekmez)
 
-Tek seferlik kurulum:
+**Varsayılan davranış:** hub, `-update-github-repo` (varsayılan
+`gokayybaz/bazntms`) deposunun **en son GitHub release'ini** her 30 dk'da bir
+yoklar; yeni sürümde `bazntms-agent-*` binary'lerini `-updates-dir`'e
+(`updates/`) indirir, SHA-256 hesaplar, `manifest.json` yazar. Agent'larda
+otomatik güncelleme de **varsayılan açıktır**: her 6 saatte bir hub'ın
+kanalını sorgular → sürüm yükselmişse indirir → **SHA-256** doğrular →
+binary'yi atomik değiştirir → çıkar; supervisor yeniden başlatır (systemd
+`Restart=always` / launchd `KeepAlive` / docker `--restart` / Windows SCM
+failure-action — MSI kurar).
+
+Yani **GitHub'da yeni bir release yayınlamak yeterli** — fleet ~30 dk + agent
+yoklama aralığı içinde kendini günceller. `/api/v1/agents` sürüm dağılımından
+izleyin.
+
+Kapatmak:
+
+| Kapsam | Yöntem |
+|---|---|
+| Tek agent | `-update-disabled` bayrağı **veya** `agent.yml` → `update: {disabled: true}` |
+| Hub (GitHub senkronu) | `-update-github-repo=''` — kanal yalnızca elle hazırlanmış `-updates-dir` içeriğini sunar |
+| Yoklama sıklığı | hub `-update-github-interval=1h`, agent `update.interval_hours` / `-update-interval` |
+
+### 2a) İmzalı / hava-boşluklu (air-gapped) kanal — `bazntmsctl update sign`
+
+Ek tedarik-zinciri imzası isteyen veya hub'ın GitHub'a erişemediği kurulumlar:
 
 ```bash
-# 0. bazntmsctl: `make` ile derleyin veya GitHub Release sayfasından indirin
-#    (bazntmsctl-darwin-arm64, bazntmsctl-linux-amd64, ...)
-
 # 1. İmzalama anahtarı (imzalama makinesinde, bir kez)
 bazntmsctl update keygen -out updates/keys
-# public key'i agent'lara dağıtın (config: update.public_key)
+# public key'i agent'lara dağıtın: agent.yml → update.public_key / -update-key
 
 # 2. Sürüm imzala (release binary'leri ile)
 bazntmsctl update sign -key updates/keys/seed.key \
-  -out updates/stable -version v0.2.0 \
+  -out updates/stable -version v0.3.1 \
   bazntms-agent-linux-amd64 bazntms-agent-linux-arm64 \
   bazntms-agent-windows-amd64.exe bazntms-agent-darwin-arm64
 
-# 3. Hub'da kanalı aç
-./bazntms-hub -config hub.yml   # config: updates.dir: updates/
+# 3. Hub: GitHub senkronunu kapat, statik dizini sun
+./bazntms-hub -config hub.yml -update-github-repo=''   # config: updates.dir: updates/
 ```
 
-Agent tarafı (`/etc/bazntms/agent.yml`):
-
-```yaml
-update:
-  enabled: true
-  channel: stable
-  public_key: "<ed25519-hex>"
-  interval_hours: 6
-```
-
-Davranış: agent her `interval_hours`'ta manifest'i sorgular → sürüm yükselmişse
-indirir → **SHA-256 + ed25519** doğrular → binary'yi atomik değiştirir →
-çıkıp supervisor'ın (systemd/launchd/k8s) yeniden başlatmasını bekler.
-
-Beta kanalı: `bazntmsctl update sign -out updates/beta ...` + agent'ta
-`channel: beta`. Geri alma: kanalın `manifest.json`'unu önceki sürümle
-yeniden imzalayın — agent'lar kendiliğinden "inmektedir".
+`update.public_key` dolu ise agent indirdiği her binary'de ed25519 imzasını da
+doğrular. Beta kanalı: `-out updates/beta` + agent'ta `channel: beta`. Geri
+alma: kanalın `manifest.json`'unu önceki sürümle yeniden yazın/imzalayın —
+agent `CompareVersions <= 0` görür ve düşmez (yalnızca yeni sürüme çıkar);
+gerçek downgrade için agent'ı elle eski binary ile değiştirin.
 
 ## 3) Agent Paket Yükseltmesi (manuel)
 

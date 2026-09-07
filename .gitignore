@@ -40,6 +40,9 @@ bazntms-agent.state.*
 # yerel `wix build` calistirmalari icin extension/nuget onbellegi
 .wix/
 
+# Claude Code yerel oturum ayarlari (makineye ozel izin listesi vb.)
+.claude/settings.local.json
+
 # impeccable tasarim skill'inin oturum-bazli calisma zamani onbellegi —
 # makineye/oturuma ozel mutlak yol + session id iceriyor, .impeccable/
 # config.json (paylasilan ignore kurallari) ve critique/ (kalici raporlar)

@@ -1,6 +1,6 @@
 ---
 title: Felaket Kurtarma (DR)
-sidebar_position: 14
+sidebar_position: 15
 custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/DR-RUNBOOK.md
 ---
 

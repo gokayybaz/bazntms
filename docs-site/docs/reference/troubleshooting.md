@@ -1,6 +1,6 @@
 ---
 title: Sorun Giderme
-sidebar_position: 15
+sidebar_position: 16
 custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/TROUBLESHOOTING.md
 ---
 
@@ -22,10 +22,12 @@ Paket yakalama ayrıcalıklı bir işlemdir:
   Derleme için `libpcap-dev` (Debian/Ubuntu) veya `libpcap-devel` (RHEL) gerekir.
 - **Windows**: [Npcap](https://npcap.com) kurulu olmalı ve uygulama **yönetici
   olarak** başlatılmalı — ama yalnızca gerçekten paket yakalıyorsanız: hub
-  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener, agent ise
-  varsayılan olarak yakalamaz (`-pcap=false`, yalnızca süreç bazlı trafik
-  atfı için opsiyonel). Npcap kurulu değilse uygulama çökmez, sadece
-  yakalama çalışmaz.
+  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener; agent
+  binary bayrağı `-pcap` varsayılanı kapalı olsa da **paketlenmiş kurulumlar
+  (MSI / .pkg / deb / rpm) `agent.yml`'e `collect.pcap: true` yazar** — yani
+  paket bazlı süreç trafiği + DNS + L7 görünürlüğü varsayılan açıktır (hub
+  tarafında `-agent-pcap` politikası da açıksa fiilen başlar). Npcap kurulu
+  değilse uygulama çökmez, sadece atıf başlamaz (`agent.log`'da WARN).
   **Derleme için Npcap SDK/mingw-w64 GEREKMEZ** — `gopacket/pcap`, Windows'ta
   cgo kullanmaz; `wpcap.dll`'i yalnızca yakalama fiilen başladığında
   (syscall ile) çalışma zamanında yükler. Düz `go build -o bazntms.exe
@@ -36,6 +38,35 @@ Paket yakalama ayrıcalıklı bir işlemdir:
 
 - Sadece `up` ve loopback olmayan arayüzler listelenir
 - VPN/filtre sürücüleri trafiği başka sanal arayüze taşıyabilir; doğru arayüzü seçin
+
+### "Error opening adapter" / "dosya adı veya birim etiketi söz dizimi hatalı" (Windows)
+
+Npcap **kurulu** ama süreç atfı / L7 başlamıyor:
+
+```
+WARN surec atfi baslatilamadi — telemetri surecek  iface=Ethernet  err="Error opening adapter: ..."
+```
+
+libpcap Windows'ta arayüzü `\Device\NPF_{GUID}` biçiminde ister; `Ethernet` /
+`Wi-Fi` gibi friendly ad çalışmaz (hata 123, ERROR_INVALID_NAME). Agent v0.2.3+
+`collect.pcap_interface` boş/`auto` ise friendly adı otomatik NPF adına çevirir.
+Elle vermek isterseniz:
+
+```powershell
+Get-NetAdapter | Select-Object Name, InterfaceGuid
+```
+
+sonra `C:\ProgramData\bazntms\agent.yml` (tek tırnak — YAML'da `\` literal kalır):
+
+```yaml
+collect:
+  pcap: true
+  pcap_interface: '\Device\NPF_{BULUNAN-GUID}'
+```
+
+`sc stop bazntms-agent && sc start bazntms-agent`, ardından `agent.log`'da
+`surec atfi aktif` satırını bekleyin. L7 (SNI/Host) için yakalama başladıktan
+**sonra** açılan HTTPS bağlantıları gerekir; mevcut bağlantılar sayılmaz.
 
 ## Windows MSI / servis kurulumu
 
@@ -71,6 +102,47 @@ sc start bazntms-agent
 - Servis kurulumu hata 1053 veriyorsa (zaman aşımı) binary eski bir sürüm
   olabilir; SCM dispatcher desteği v0.2.1 ile geldi — release'ten güncel MSI'ı alın.
 
+### "hata 1603" + logda `SECUREREPAIR: SecureRepair Failed` / `ProcessComponents. Return value 3`
+
+Aynı sürüm **zaten kuruluyken** `msiexec /i bazntms-agent-amd64.msi` çalıştırmak
+kurulum değil, **bakım/onarım** işlemi başlatır. Windows Installer önbelleğindeki
+orijinal paketi doğrulamaya çalışır (`SECUREREPAIR`); indirdiğiniz dosyanın adı
+önbellektekiyle uyuşmadığı için (`bazntms-agent-amd64_3.msi` gibi sayı ekli
+adlar bunun işaretidir) doğrulama başarısız olur → `ProcessComponents` geri
+döner → rollback → **1603**. Dosya bozuk değildir, kurulum eksik değildir.
+
+Doğrulama:
+
+```powershell
+Get-Package '*bazNTMS*'                                  # zaten kurulu mu?
+Get-Service bazntms-agent                                # servis kayıtlı mı?
+```
+
+**Yalnızca yeniden yapılandırmak istiyorsanız — tekrar kurmayın:** ürün zaten
+kuruludur, sadece kayıt defterini düzenleyip servisi başlatın:
+
+```powershell
+$k = 'HKLM:\SOFTWARE\bazNTMS\Agent'
+Set-ItemProperty $k hub_url      'https://hub.example.com'
+Set-ItemProperty $k enroll_token 'ent_...'
+# saha: Set-ItemProperty $k site 'ofis-a'
+Restart-Service bazntms-agent
+Get-Content C:\ProgramData\bazntms\agent.log -Tail 20
+```
+
+**Gerçekten sıfırdan kurmak istiyorsanız — önce kaldırın, sonra kurun** (`/i`
+üstüne `/i` değil):
+
+```powershell
+$p = Get-Package '*bazNTMS*'
+msiexec /x $p.FastPackageReference /qn /l*v "$env:TEMP\baz-x.log"
+msiexec /i "$env:TEMP\bazntms-agent.msi" /qn /l*v "$env:TEMP\baz-i.log" `
+  HUBURL=https://hub.example.com ENROLLTOKEN=ent_...
+```
+
+Sihirbazın verdiği güncel kurulum komutu bu kaldır-sonra-kur sırasını zaten
+uygular (S12.4 sonrası) — eski bir komut kopyaladıysanız panelden yenisini alın.
+
 ## Agent filosu
 
 ### Agent'lar sayfasında yanlış/beklenmedik IP adresi görünüyor
@@ -84,6 +156,33 @@ IP o ara katmanın (proxy/LB container'ı) kendi IP'si olarak görünür —
 gerçek agent IP'si değil. Bu alan yalnızca **gösterim** amaçlıdır; erişim
 kontrolü/rate-limit için kullanılmaz (kimlik doğrulama enroll/agent
 token'larıyla yapılır).
+
+### Agent detayında Süreçler / DNS / L7 panelleri boş
+
+Bu üç panel de tek bir agent motorundan (`internal/agent/attr.go` — pcap +
+soket→PID atfı) beslenir. Motor yalnızca **agent isteği** (`agent.yml`'de
+`collect.pcap: true` ya da `-pcap` bayrağı) **ve hub politikası**
+(`bazntms-hub -agent-pcap`) birlikte açıkken başlar.
+
+Kontrol sırası:
+
+1. `agent.log`'da başlangıçtan hemen sonra bir satır arayın:
+   - `surec atfi aktif iface=…` → motor çalışıyor, sorun trafik/atıf tarafında.
+   - `derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok` →
+     `agent.yml`'de `collect.pcap` kapalı. `true` yapıp servisi yeniden başlatın
+     (`launchctl kickstart -k system/local.bazntms.agent` / `systemctl restart
+     bazntms-agent` / `sc stop|start bazntms-agent`).
+   - `PCAP politikasi hub tarafinda kapali` → hub'ı `-agent-pcap` ile başlatın.
+   - Hiçbiri yoksa ve satır beklediğiniz gibi değilse: agent eski bir binary
+     olabilir (v0.3.3 öncesi bu tanı satırını basmaz).
+2. `.pkg` / MSI / deb / rpm **yeniden kurulumu** mevcut `agent.yml`'e dokunmaz;
+   ama dosya yoksa sihirbaz yeni bir tane üretir. v0.3.3+ paketleri
+   `collect.pcap: true` yazar, daha eskiler `false` — yeniden kurulumdan sonra
+   panellerin boşaldığını görürseniz önce bu satırı kontrol edin.
+3. Docker/Alpine agent'larında yalnızca kendi çıkış trafiği varsa (örn. yalnız
+   hub'a konuşan sentetik agent) L7 boş kalabilir: `sanitizeHost` noktasız tek
+   etiketli host adlarını (`lb` gibi) eler — gerçek FQDN hedeflerine giden
+   trafik gerekir.
 
 ## AI analizi sorunları
 
