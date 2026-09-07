@@ -106,6 +106,7 @@ type AgentConfig struct {
 		PCAPInterface   string `koanf:"pcap_interface"` // bos = otomatik secim
 		PCAPRecord      bool   `koanf:"pcap_record"`    // ham paketleri diske yaz (hub politikasi da acik olmali)
 		PCAPDir         string `koanf:"pcap_dir"`       // PCAP kayit dizini
+		Method          string `koanf:"method"`         // surec atfi arka ucu: auto|ebpf|pcap|etw|off (bos=auto)
 	} `koanf:"collect"`
 	Update struct {
 		Enabled       bool   `koanf:"enabled"`        // (eski) — otomatik guncelleme artik varsayilan ACIK

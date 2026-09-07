@@ -6,9 +6,9 @@ import (
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
-// AttrEngine, pcap olmadan da delta matematiğini dogru yapmalidir.
+// pcapAttrSource, pcap olmadan da delta matematiğini dogru yapmalidir.
 func TestAttrDeltas(t *testing.T) {
-	e := &AttrEngine{
+	e := &pcapAttrSource{
 		totals: map[attrKey][2]uint64{
 			{pid: 100, process: "chrome", proto: "tcp", remoteIP: "1.2.3.4", port: 443}: {5000, 1000},
 			{pid: 200, process: "curl", proto: "udp", remoteIP: "5.6.7.8", port: 53}:    {0, 300},
@@ -40,7 +40,7 @@ func TestAttrDeltas(t *testing.T) {
 }
 
 func TestAttrDeltaCounterReset(t *testing.T) {
-	e := &AttrEngine{
+	e := &pcapAttrSource{
 		totals:   map[attrKey][2]uint64{{pid: 1, process: "x", proto: "tcp", remoteIP: "9.9.9.9", port: 80}: {50, 0}},
 		lastSent: map[attrKey][2]uint64{{pid: 1, process: "x", proto: "tcp", remoteIP: "9.9.9.9", port: 80}: {5000, 0}},
 	}

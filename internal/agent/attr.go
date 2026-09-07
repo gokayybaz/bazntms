@@ -17,11 +17,11 @@ import (
 // satiri+Host cogu zaman 128'i asar, bu yuzden 600.
 const attrSnapLen = 600
 
-// AttrEngine, yakalanan paketleri sureclere atfeder ve donemlik delta
+// pcapAttrSource, yakalanan paketleri sureclere atfeder ve donemlik delta
 // uretir (nethogs yontemi). Ayrica TLS SNI + HTTP Host cikararak surec bazli
 // uygulama gorunurlugu (L7) toplar. Agent root/admin olarak calisirken tam
 // kapsamli; izin yoksa atif kismi olur, telemetri aksamaz.
-type AttrEngine struct {
+type pcapAttrSource struct {
 	mu       sync.Mutex
 	prov     proctraffic.Provider
 	handle   *pcap.Handle
@@ -65,8 +65,8 @@ type portKey struct {
 	rp    uint16
 }
 
-// NewAttrEngine, verilen arayuzde atf yakalamasini baslatir.
-func NewAttrEngine(iface string) (*AttrEngine, error) {
+// newPcapAttrSource, verilen arayuzde atf yakalamasini baslatir.
+func newPcapAttrSource(iface string) (*pcapAttrSource, error) {
 	handle, err := pcap.OpenLive(iface, attrSnapLen, false, time.Second)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func NewAttrEngine(iface string) (*AttrEngine, error) {
 		handle.Close()
 		return nil, err
 	}
-	e := &AttrEngine{
+	e := &pcapAttrSource{
 		prov:     proctraffic.NewProvider(),
 		handle:   handle,
 		localIPs: proctraffic.LocalIPs(),
@@ -102,7 +102,7 @@ func NewAttrEngine(iface string) (*AttrEngine, error) {
 	return e, nil
 }
 
-func (e *AttrEngine) Stop() {
+func (e *pcapAttrSource) Stop() {
 	close(e.stopCh)
 	<-e.doneCh
 	e.handle.Close()
@@ -112,9 +112,9 @@ func (e *AttrEngine) Stop() {
 }
 
 // Method, AttrSource arayüzü için: bu arka uç pcap tabanlıdır.
-func (e *AttrEngine) Method() string { return "pcap" }
+func (e *pcapAttrSource) Method() string { return "pcap" }
 
-func (e *AttrEngine) loop() {
+func (e *pcapAttrSource) loop() {
 	defer close(e.doneCh)
 
 	linkType := e.handle.LinkType()
@@ -185,7 +185,7 @@ func (e *AttrEngine) loop() {
 // ProcInfoAlias, proctraffic.ProcInfo ile ayni yapidir (import dongususuz kullanim).
 type ProcInfoAlias = proctraffic.ProcInfo
 
-func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
+func (e *pcapAttrSource) attribute(pkt gopacket.Packet, full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
 	nl := pkt.NetworkLayer()
 	if nl == nil {
 		return
@@ -276,7 +276,7 @@ func (e *AttrEngine) attribute(pkt gopacket.Packet, full map[proctraffic.Key]Pro
 // (loopback trafigi surec trafik sayaclarina katilmaz) ve port gati yoktur —
 // Docker gomulu DNS sorgunun hedef portunu DNAT ile degistirir, o yuzden
 // karar parseDNSNames'e birakilir.
-func (e *AttrEngine) attributeDNS(pkt gopacket.Packet, full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
+func (e *pcapAttrSource) attributeDNS(pkt gopacket.Packet, full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
 	nl := pkt.NetworkLayer()
 	if nl == nil {
 		return
@@ -301,7 +301,7 @@ func (e *AttrEngine) attributeDNS(pkt gopacket.Packet, full map[proctraffic.Key]
 // cikarsa surece atfedip kaydeder. Surec atfi best-effort'tur: DNS soketleri
 // milisaniyelik oldugu icin /proc/net/udp anligina cogu zaman yakalanmaz —
 // o durumda alan adi bos surecle (yalnizca domain gorunurlugu) kaydedilir.
-func (e *AttrEngine) sniffDNS(srcIP string, sport uint16, dstIP string, dport uint16, payload []byte,
+func (e *pcapAttrSource) sniffDNS(srcIP string, sport uint16, dstIP string, dport uint16, payload []byte,
 	full map[proctraffic.Key]ProcInfoAlias, index map[portKey]ProcInfoAlias) {
 	if len(payload) < 12 {
 		return
@@ -370,7 +370,7 @@ func lookupDNSProc(srcIP string, sport uint16, dstIP string, dport uint16,
 }
 
 // Deltas, son gonderimden bu yana surec bazli trafik farklarini dondurur.
-func (e *AttrEngine) Deltas() []telemetry.ProcessTrafficSample {
+func (e *pcapAttrSource) Deltas() []telemetry.ProcessTrafficSample {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

@@ -36,7 +36,7 @@ func dnsUDPPacket(t *testing.T, srcIP, dstIP string, srcPort, dstPort int, name 
 }
 
 func TestAttributeDNSLoopback(t *testing.T) {
-	e := &AttrEngine{dns: map[dnsKey]*dnsAgg{}}
+	e := &pcapAttrSource{dns: map[dnsKey]*dnsAgg{}}
 
 	// stub-resolver: uygulama 127.0.0.1:51000 → 127.0.0.53:53
 	full := map[proctraffic.Key]ProcInfoAlias{
@@ -61,7 +61,7 @@ func TestAttributeDNSLoopback(t *testing.T) {
 }
 
 func TestAttributeDNSMuslUnconnectedSocket(t *testing.T) {
-	e := &AttrEngine{dns: map[dnsKey]*dnsAgg{}}
+	e := &pcapAttrSource{dns: map[dnsKey]*dnsAgg{}}
 
 	// musl/BusyBox: soket connect() edilmez → /proc/net/udp'de uzak port 0.
 	// proctraffic snapshot'i yalnizca yerel portu bilir → index[{udp, X, 0}].
@@ -82,7 +82,7 @@ func TestAttributeDNSMuslUnconnectedSocket(t *testing.T) {
 }
 
 func TestAttributeDNSNoSocketStillRecordsDomain(t *testing.T) {
-	e := &AttrEngine{dns: map[dnsKey]*dnsAgg{}}
+	e := &pcapAttrSource{dns: map[dnsKey]*dnsAgg{}}
 	// eşleşen soket yok (kısa ömürlü nslookup) → alan adı yine de boş süreçle
 	// kaydedilmeli: domain görünürlüğü süreç atfından bağımsız.
 	pkt := dnsUDPPacket(t, "127.0.0.1", "127.0.0.11", 40000, 54262, "www.wikipedia.org", false)
@@ -94,7 +94,7 @@ func TestAttributeDNSNoSocketStillRecordsDomain(t *testing.T) {
 }
 
 func TestSniffDNSIgnoresNonDNS(t *testing.T) {
-	e := &AttrEngine{dns: map[dnsKey]*dnsAgg{}}
+	e := &pcapAttrSource{dns: map[dnsKey]*dnsAgg{}}
 	// loopback'teki DNS olmayan UDP (ör. statsd) → parseDNSNames eler
 	e.sniffDNS("127.0.0.1", 40000, "127.0.0.1", 8125, []byte("page.views:1|c\n\x00\x00"),
 		map[proctraffic.Key]ProcInfoAlias{}, map[portKey]ProcInfoAlias{})

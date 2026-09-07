@@ -135,7 +135,7 @@ func sanitizeHost(h string) string {
 
 // L7Deltas, son gonderimden bu yana surec bazli uygulama (SNI/Host) farklarini
 // dondurur.
-func (e *AttrEngine) L7Deltas() []telemetry.L7Sample {
+func (e *pcapAttrSource) L7Deltas() []telemetry.L7Sample {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	out := make([]telemetry.L7Sample, 0, len(e.l7))

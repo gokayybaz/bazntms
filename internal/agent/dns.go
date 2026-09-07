@@ -46,7 +46,7 @@ func parseDNSNames(payload []byte) (names []string, isResp bool) {
 
 // DNSDeltas, son gonderimden bu yana surec bazli DNS sorgu/yanit farklarini
 // dondurur.
-func (e *AttrEngine) DNSDeltas() []telemetry.DNSSample {
+func (e *pcapAttrSource) DNSDeltas() []telemetry.DNSSample {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	out := make([]telemetry.DNSSample, 0, len(e.dns))

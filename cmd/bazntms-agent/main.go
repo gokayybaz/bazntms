@@ -38,6 +38,7 @@ func main() {
 	hubCAFile := fl.String("hub-ca", "", "hub CA sertifikasi (PEM) — mTLS'te sunucuyu dogrulamak icin; bos ise ilk baglantida guvenilir kabul edilip pinlenir (TOFU)")
 	pcapFlag := fl.Bool("pcap", false, "surec bazli trafik atfi icin paket yakalama (config'i override eder; root/admin gerekir)")
 	pcapIface := fl.String("pcap-iface", "", "atif yakalamasi icin arayuz (bos = otomatik)")
+	collectMethod := fl.String("collect-method", "", "surec atfi arka ucu: auto|ebpf|pcap|etw|off (bos = config veya auto)")
 	recordFlag := fl.Bool("record", false, "ham paketleri diske kaydet (hub politikasi da acik olmali)")
 	recordDir := fl.String("record-dir", "captures", "PCAP kayit dizini")
 	logLevel := fl.String("log-level", "", "log seviyesi (config'i override eder)")
@@ -175,6 +176,11 @@ func main() {
 		// baslangicta client.PCAPEnabled() bayat olabilir — bu yuzden atif
 		// motoru sabit degil, asagidaki syncAttr ile dongude ac/kapat yonetilir.
 		pcapWant := *pcapFlag || cfg.Collect.PCAP
+		// atif arka ucu yontemi: flag > config > "" (seçici "auto" sayar).
+		attrMethod := firstNonEmpty(*collectMethod, cfg.Collect.Method)
+		if attrMethod == "off" {
+			pcapWant = false // "off" derin toplamayı da kapatır
+		}
 		attrIface := *pcapIface
 		if attrIface == "" {
 			attrIface = cfg.Collect.PCAPInterface
@@ -192,7 +198,7 @@ func main() {
 			attrIface = dev
 		}
 		var attrEng agent.AttrSource
-		attrTried := false // bu politika-acik doneminde NewAttrEngine denendi mi
+		attrTried := false // bu politika-acik doneminde atif arka ucu denendi mi
 		attrOffLogged := false
 		defer func() {
 			if attrEng != nil {
@@ -204,16 +210,16 @@ func main() {
 			switch {
 			case allow && attrEng == nil && !attrTried:
 				attrTried = true
-				eng, e := agent.NewAttrEngine(attrIface)
+				eng, e := agent.NewAttrSource(agent.AttrConfig{Method: attrMethod, Iface: attrIface})
 				if e != nil {
 					if hint := pcapErrHint(e); hint != "" {
-						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", attrIface, "err", e, "cozum", hint)
+						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "yontem", firstNonEmpty(attrMethod, "auto"), "iface", attrIface, "err", e, "cozum", hint)
 					} else {
-						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "iface", attrIface, "err", e)
+						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "yontem", firstNonEmpty(attrMethod, "auto"), "iface", attrIface, "err", e)
 					}
 					return
 				}
-				slog.Info("surec atfi aktif", "iface", attrIface)
+				slog.Info("surec atfi aktif", "yontem", eng.Method(), "iface", attrIface)
 				attrEng = eng
 				attrOffLogged = false
 			case !allow && attrEng != nil:
@@ -233,8 +239,12 @@ func main() {
 		// trafigi / DNS / L7 gorunurlugunun neden bos oldugu loglardan
 		// anlasilmadigi icin burada bir kez acikca belirt.
 		if !pcapWant {
-			slog.Info("derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok",
-				"cozum", "agent.yml'de collect.pcap: true yapin (veya -pcap ile baslatin); hub'da da -agent-pcap acik olmali")
+			if attrMethod == "off" {
+				slog.Info("surec atfi kapali — collect.method=off")
+			} else {
+				slog.Info("derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok",
+					"cozum", "agent.yml'de collect.pcap: true yapin (veya -pcap ile baslatin); hub'da da -agent-pcap acik olmali")
+			}
 		}
 		syncAttr()
 
