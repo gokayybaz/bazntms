@@ -7,6 +7,8 @@
 package bpf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -30,11 +33,22 @@ type Flow struct {
 	BytesIn  uint64
 }
 
-// Engine, yüklenmiş eBPF programlarını, bağlantılarını ve akış haritasını tutar.
+// Engine, yüklenmiş eBPF programlarını, bağlantılarını ve haritaları tutar.
 type Engine struct {
-	objs  attrprogObjects
-	links []link.Link
+	objs    attrprogObjects
+	links   []link.Link
+	dnsRing *ringbuf.Reader // nil olabilir — DNS görünürlüğü kısıtlı kalır
 }
+
+// DNSEvent, DNS ringbuf'ından okunan ham bir DNS mesajıdır (userspace
+// parseDNSNames'e verilir). Yalnızca yanıtlar yakalanır (bkz. attr.c).
+type DNSEvent struct {
+	PID     uint32
+	Process string
+	Payload []byte
+}
+
+var errNoDNSRing = errors.New("eBPF DNS ringbuf yok")
 
 // fentry hedefleri — kernelde bulunmayan / bağlanamayan bir program atlanır
 // (o telemetri yolu eksilir ama motor çalışır); hiçbiri bağlanamazsa hata.
@@ -75,8 +89,43 @@ func Load() (*Engine, error) {
 		_ = e.objs.Close()
 		return nil, errors.New("hiçbir eBPF fentry programı bağlanamadı")
 	}
-	slog.Debug("eBPF atıf motoru yüklendi", "bagli_program", len(e.links))
+
+	if rd, err := ringbuf.NewReader(e.objs.DnsRing); err != nil {
+		slog.Warn("eBPF DNS ringbuf açılamadı — DNS görünürlüğü kısıtlı", "err", err)
+	} else {
+		e.dnsRing = rd
+	}
+
+	slog.Debug("eBPF atıf motoru yüklendi", "bagli_program", len(e.links), "dns", e.dnsRing != nil)
 	return e, nil
+}
+
+// DNSAvailable, DNS ringbuf okuyucusunun açık olup olmadığını söyler.
+func (e *Engine) DNSAvailable() bool { return e.dnsRing != nil }
+
+// ReadDNS, bir sonraki DNS olayını bloke ederek okur. Engine kapanınca
+// ringbuf.ErrClosed döner; ringbuf hiç açılmadıysa errNoDNSRing.
+func (e *Engine) ReadDNS() (DNSEvent, error) {
+	if e.dnsRing == nil {
+		return DNSEvent{}, errNoDNSRing
+	}
+	rec, err := e.dnsRing.Read()
+	if err != nil {
+		return DNSEvent{}, err
+	}
+	var ev attrprogDnsEvent
+	if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &ev); err != nil {
+		return DNSEvent{}, fmt.Errorf("dns_event çözümlenemedi: %w", err)
+	}
+	n := int(ev.Len)
+	if n > len(ev.Data) {
+		n = len(ev.Data)
+	}
+	return DNSEvent{
+		PID:     ev.Pid,
+		Process: commString(ev.Comm),
+		Payload: append([]byte(nil), ev.Data[:n]...),
+	}, nil
 }
 
 // Flows, akış haritasını boşaltarak son okumadan bu yana biriken kayıtları
@@ -122,8 +171,13 @@ func (e *Engine) Flows() ([]Flow, error) {
 	return out, nil
 }
 
-// Close, bağlantıları ve yüklü nesneleri serbest bırakır.
+// Close, bağlantıları, ringbuf okuyucusunu ve yüklü nesneleri serbest bırakır.
+// Ringbuf okuyucusu kapanınca ReadDNS'te bloke olan çağrı ringbuf.ErrClosed
+// ile döner.
 func (e *Engine) Close() error {
+	if e.dnsRing != nil {
+		_ = e.dnsRing.Close()
+	}
 	for _, l := range e.links {
 		_ = l.Close()
 	}

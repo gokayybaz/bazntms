@@ -10,10 +10,35 @@ import (
 	"time"
 )
 
-// TestEBPFAttrSourceLoopback, canlı bir kernele eBPF programlarını yükler,
-// loopback üzerinden bilinen boyutta trafik üretir ve haritadan okunan bayt
-// sayısının ±%20 içinde olduğunu doğrular. root + BTF gerektirir; yoksa atlar.
-func TestEBPFAttrSourceLoopback(t *testing.T) {
+// nonLoopbackIPv4, makinenin ilk loopback-olmayan IPv4'ünü döndürür (Docker'da
+// eth0). eBPF bayt sayımı loopback'i atladığından test bunun üzerinden gider.
+func nonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Skipf("arayüzler okunamadı: %v", err)
+	}
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifi.Addrs()
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok {
+				if v4 := ipn.IP.To4(); v4 != nil {
+					return v4.String()
+				}
+			}
+		}
+	}
+	t.Skip("loopback-olmayan IPv4 arayüz yok")
+	return ""
+}
+
+// TestEBPFAttrSourceCounting, canlı kernele programları yükler, loopback-olmayan
+// bir IP üzerinden bilinen boyutta trafik üretir ve haritadan okunan baytın tam
+// eşleştiğini doğrular. root + BTF gerektirir; yoksa atlar.
+func TestEBPFAttrSourceCounting(t *testing.T) {
 	if testing.Short() {
 		t.Skip("kısa mod — canlı eBPF yüklemesi atlandı")
 	}
@@ -27,7 +52,8 @@ func TestEBPFAttrSourceLoopback(t *testing.T) {
 	}
 	defer src.Stop()
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	host := nonLoopbackIPv4(t)
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,12 +89,12 @@ func TestEBPFAttrSourceLoopback(t *testing.T) {
 
 	var out, in uint64
 	for _, d := range src.Deltas() {
-		if d.Proto == "tcp" && d.RemoteIP == "127.0.0.1" {
+		if d.Proto == "tcp" && d.RemoteIP == host {
 			out += d.BytesOut
 			in += d.BytesIn
 		}
 	}
-	t.Logf("eBPF loopback: out=%d in=%d (payload=%d, echo → ~2×)", out, in, payload)
+	t.Logf("eBPF sayım (%s): out=%d in=%d (payload=%d, echo → ~2×)", host, out, in, payload)
 
 	// echo: istemci payload yazar+okur, sunucu payload okur+yazar → her yön ~2×.
 	// Çok gevşek alt sınır: en az bir payload'lık.
@@ -78,4 +104,65 @@ func TestEBPFAttrSourceLoopback(t *testing.T) {
 	if in < payload {
 		t.Errorf("gelen bayt beklenenden düşük: %d < %d", in, payload)
 	}
+}
+
+// TestEBPFAttrSourceDNS, yerel bir sahte DNS değişimi üzerinden ringbuf →
+// parseDNSNames → DNSDeltas yolunu doğrular. Sahte sunucu 127.0.0.1'de dinler;
+// eBPF DNS filtresi loopback hedefi yakalar (Docker gömülü DNS senaryosu).
+func TestEBPFAttrSourceDNS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("kısa mod")
+	}
+	if os.Geteuid() != 0 {
+		t.Skip("root gerektirir")
+	}
+	src, err := newEbpfAttrSource(AttrConfig{})
+	if err != nil {
+		t.Skipf("eBPF yüklenemedi: %v", err)
+	}
+	defer src.Stop()
+
+	srv, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	const domain = "probe.bazntms.test"
+	resp := dnsPacket(t, domain, true, "1.2.3.4")
+	query := dnsPacket(t, domain, false, "")
+	go func() {
+		b := make([]byte, 512)
+		n, addr, e := srv.ReadFrom(b)
+		if e != nil || n == 0 {
+			return
+		}
+		_, _ = srv.WriteTo(resp, addr)
+	}()
+
+	c, err := net.Dial("udp", srv.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Write(query); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 512)
+	if _, err := c.Read(buf); err != nil { // yanıtı oku → skb_consume_udp tetiklenir
+		t.Fatalf("yanıt okunamadı: %v", err)
+	}
+	_ = c.Close()
+
+	// dnsLoop asenkron — ringbuf olayını işlemesi için kısa bekleme
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, d := range src.DNSDeltas() {
+			if d.Domain == domain {
+				t.Logf("eBPF DNS: %s q=%d r=%d pid=%d proc=%q", d.Domain, d.Queries, d.Responses, d.PID, d.Process)
+				return
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("eBPF DNS: %q ringbuf üzerinden görülmedi", domain)
 }

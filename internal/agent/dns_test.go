@@ -59,3 +59,22 @@ func TestParseDNSNames(t *testing.T) {
 		t.Fatalf("çöp payload'dan isim çıktı: %v", names)
 	}
 }
+
+func TestKeepDomain(t *testing.T) {
+	keep := []string{"example.com", "a.b.c.example.co.uk", "xn--nxasmq6b.example"}
+	drop := []string{"", "localhost", "host", "printer.local", "1.0.0.127.in-addr.arpa",
+		"b.a.9.ip6.arpa", "x.arpa"}
+	for _, d := range keep {
+		if !keepDomain(normalizeDomain(d)) {
+			t.Errorf("keepDomain(%q) = false, true beklenirdi", d)
+		}
+	}
+	for _, d := range drop {
+		if keepDomain(normalizeDomain(d)) {
+			t.Errorf("keepDomain(%q) = true, false beklenirdi", d)
+		}
+	}
+	if got := normalizeDomain("API.Example.COM."); got != "api.example.com" {
+		t.Errorf("normalizeDomain: %q", got)
+	}
+}

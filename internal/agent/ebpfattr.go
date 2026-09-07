@@ -3,10 +3,12 @@
 package agent
 
 import (
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/gokayybaz/bazntms/internal/agent/bpf"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
@@ -25,9 +27,12 @@ type ebpfAttrSource struct {
 
 	mu      sync.Mutex
 	pending map[attrKey]*[2]uint64 // [in, out] — Deltas'a dek birikir
+	dns     map[dnsKey]*dnsAgg     // süreç × domain — DNSDeltas'a dek birikir
+	dnsSent map[dnsKey][2]uint64
 
-	stopCh chan struct{}
-	doneCh chan struct{}
+	stopCh    chan struct{}
+	doneCh    chan struct{}
+	dnsDoneCh chan struct{} // dnsLoop çıkışı (yalnız ringbuf varsa çalışır)
 }
 
 var _ AttrSource = (*ebpfAttrSource)(nil)
@@ -38,13 +43,59 @@ func newEbpfAttrSource(_ AttrConfig) (*ebpfAttrSource, error) {
 		return nil, err
 	}
 	e := &ebpfAttrSource{
-		eng:     eng,
-		pending: map[attrKey]*[2]uint64{},
-		stopCh:  make(chan struct{}),
-		doneCh:  make(chan struct{}),
+		eng:       eng,
+		pending:   map[attrKey]*[2]uint64{},
+		dns:       map[dnsKey]*dnsAgg{},
+		dnsSent:   map[dnsKey][2]uint64{},
+		stopCh:    make(chan struct{}),
+		doneCh:    make(chan struct{}),
+		dnsDoneCh: make(chan struct{}),
 	}
 	go e.drainLoop()
+	if eng.DNSAvailable() {
+		go e.dnsLoop()
+	} else {
+		close(e.dnsDoneCh)
+	}
 	return e, nil
+}
+
+// dnsLoop, DNS ringbuf'ını bloke ederek okur; her wire mesajını parseDNSNames
+// ile çözüp süreç × domain sayaçlarına ekler. Engine.Close() ringbuf'ı
+// kapatınca ErrClosed ile çıkar.
+func (e *ebpfAttrSource) dnsLoop() {
+	defer close(e.dnsDoneCh)
+	for {
+		ev, err := e.eng.ReadDNS()
+		if err != nil {
+			if !errors.Is(err, ringbuf.ErrClosed) {
+				slog.Warn("eBPF DNS ringbuf okuma durdu", "err", err)
+			}
+			return
+		}
+		names, isResp := parseDNSNames(ev.Payload)
+		if len(names) == 0 {
+			continue
+		}
+		e.mu.Lock()
+		for _, dom := range names {
+			k := dnsKey{pid: int32(ev.PID), process: ev.Process, domain: dom}
+			a := e.dns[k]
+			if a == nil {
+				if len(e.dns) >= 4000 {
+					continue
+				}
+				a = &dnsAgg{}
+				e.dns[k] = a
+			}
+			if isResp {
+				a.responses++
+			} else {
+				a.queries++
+			}
+		}
+		e.mu.Unlock()
+	}
 }
 
 func (e *ebpfAttrSource) drainLoop() {
@@ -129,15 +180,41 @@ func (e *ebpfAttrSource) Deltas() []telemetry.ProcessTrafficSample {
 // L7Deltas — eBPF payload görmez; S20.7'de dar-filtreli yardımcı pcap handle.
 func (e *ebpfAttrSource) L7Deltas() []telemetry.L7Sample { return nil }
 
-// DNSDeltas — S20.6'da udp/53 payload'ı ringbuf ile eklenecek.
-func (e *ebpfAttrSource) DNSDeltas() []telemetry.DNSSample { return nil }
+// DNSDeltas, son çağrıdan bu yana süreç bazlı DNS farklarını döndürür.
+// eBPF yalnız yanıtları yakalar (bkz. attr.c) → sorgu/yanıt ayrımı yaklaşık,
+// domain görünürlüğü tam.
+func (e *ebpfAttrSource) DNSDeltas() []telemetry.DNSSample {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make([]telemetry.DNSSample, 0, len(e.dns))
+	for k, a := range e.dns {
+		q := delta(a.queries, e.dnsSent[k][0])
+		r := delta(a.responses, e.dnsSent[k][1])
+		if q+r == 0 {
+			continue
+		}
+		e.dnsSent[k] = [2]uint64{a.queries, a.responses}
+		out = append(out, telemetry.DNSSample{
+			PID:       k.pid,
+			Process:   k.process,
+			Domain:    k.domain,
+			Queries:   q,
+			Responses: r,
+		})
+	}
+	if len(out) > 500 {
+		out = out[:500]
+	}
+	return out
+}
 
 func (e *ebpfAttrSource) Method() string { return "ebpf" }
 
 func (e *ebpfAttrSource) Stop() {
 	close(e.stopCh)
-	<-e.doneCh
+	<-e.doneCh // drainLoop haritayı kullanır — önce onu bekle
 	if err := e.eng.Close(); err != nil {
 		slog.Debug("eBPF motoru kapatılırken hata", "err", err)
 	}
+	<-e.dnsDoneCh // Close() ringbuf'ı kapattı → dnsLoop çıkar
 }

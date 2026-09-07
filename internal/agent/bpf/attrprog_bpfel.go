@@ -13,6 +13,15 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type attrprogDnsEvent struct {
+	_    structs.HostLayout
+	Pid  uint32
+	Len  uint16
+	Comm [16]uint8
+	Data [512]uint8
+	_    [2]byte
+}
+
 type attrprogFlowKey struct {
 	_      structs.HostLayout
 	Pid    uint32
@@ -33,11 +42,13 @@ type attrprogFlowStat struct {
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
+	attrprogMapDnsRing         = "dns_ring"
 	attrprogMapFlows           = "flows"
 	attrprogProgSkbConsumeUdp  = "skb_consume_udp"
 	attrprogProgTcpCleanupRbuf = "tcp_cleanup_rbuf"
 	attrprogProgTcpSendmsg     = "tcp_sendmsg"
 	attrprogProgUdpSendmsg     = "udp_sendmsg"
+	attrprogVarUnusedDnsEvent  = "_unused_dns_event"
 )
 
 // loadAttrprog returns the embedded CollectionSpec for attrprog.
@@ -92,13 +103,15 @@ type attrprogProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type attrprogMapSpecs struct {
-	Flows *ebpf.MapSpec `ebpf:"flows"`
+	DnsRing *ebpf.MapSpec `ebpf:"dns_ring"`
+	Flows   *ebpf.MapSpec `ebpf:"flows"`
 }
 
 // attrprogVariableSpecs contains global variables before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type attrprogVariableSpecs struct {
+	UnusedDnsEvent *ebpf.VariableSpec `ebpf:"_unused_dns_event"`
 }
 
 // attrprogObjects contains all objects after they have been loaded into the kernel.
@@ -121,11 +134,13 @@ func (o *attrprogObjects) Close() error {
 //
 // It can be passed to loadAttrprogObjects or ebpf.CollectionSpec.LoadAndAssign.
 type attrprogMaps struct {
-	Flows *ebpf.Map `ebpf:"flows"`
+	DnsRing *ebpf.Map `ebpf:"dns_ring"`
+	Flows   *ebpf.Map `ebpf:"flows"`
 }
 
 func (m *attrprogMaps) Close() error {
 	return _AttrprogClose(
+		m.DnsRing,
 		m.Flows,
 	)
 }
@@ -134,6 +149,7 @@ func (m *attrprogMaps) Close() error {
 //
 // It can be passed to loadAttrprogObjects or ebpf.CollectionSpec.LoadAndAssign.
 type attrprogVariables struct {
+	UnusedDnsEvent *ebpf.Variable `ebpf:"_unused_dns_event"`
 }
 
 // attrprogPrograms contains all programs after they have been loaded into the kernel.

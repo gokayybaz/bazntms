@@ -7,4 +7,4 @@
 // CI `ebpf-generate-check` işi çıktının güncel olduğunu doğrular.
 package bpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -target bpfel -type flow_key -type flow_stat attrprog attr.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -target bpfel -type flow_key -type flow_stat -type dns_event attrprog attr.c

@@ -19,6 +19,24 @@ type dnsAgg struct {
 	responses uint64
 }
 
+// normalizeDomain, bir DNS adını küçük harfe indirip kök noktasını atar.
+func normalizeDomain(s string) string {
+	return strings.ToLower(strings.TrimSuffix(s, "."))
+}
+
+// keepDomain, normalize edilmiş bir domain adının kaydedilmeye değer olup
+// olmadığını söyler: ters arama (.in-addr.arpa / .ip6.arpa / .arpa), .local,
+// noktasız ve aşırı uzun adlar elenir. pcap, eBPF ve ETW yolları ortak kullanır.
+func keepDomain(n string) bool {
+	if n == "" || len(n) > 253 || !strings.Contains(n, ".") {
+		return false
+	}
+	return !strings.HasSuffix(n, ".in-addr.arpa") &&
+		!strings.HasSuffix(n, ".ip6.arpa") &&
+		!strings.HasSuffix(n, ".local") &&
+		!strings.HasSuffix(n, ".arpa")
+}
+
 // parseDNSNames, bir UDP/53 payload'inda sorulan domain adlarini (ters arama
 // hariç) ve mesajin yanit olup olmadigini dondurur. gopacket layers.DNS ile.
 func parseDNSNames(payload []byte) (names []string, isResp bool) {
@@ -33,13 +51,10 @@ func parseDNSNames(payload []byte) (names []string, isResp bool) {
 		return nil, false
 	}
 	for i := range d.Questions {
-		n := strings.ToLower(strings.TrimSuffix(string(d.Questions[i].Name), "."))
-		if n == "" || len(n) > 253 || !strings.Contains(n, ".") ||
-			strings.HasSuffix(n, ".in-addr.arpa") || strings.HasSuffix(n, ".ip6.arpa") ||
-			strings.HasSuffix(n, ".local") || strings.HasSuffix(n, ".arpa") {
-			continue
+		n := normalizeDomain(string(d.Questions[i].Name))
+		if keepDomain(n) {
+			names = append(names, n)
 		}
-		names = append(names, n)
 	}
 	return names, d.QR
 }
