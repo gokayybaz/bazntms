@@ -228,6 +228,14 @@ func main() {
 				attrTried = false
 			}
 		}
+		// pcapWant calisma boyunca sabit (bayrak + config'ten bir kez cozulur).
+		// Kapaliysa syncAttr() hicbir case'e girmez ve sessiz kalir — surec
+		// trafigi / DNS / L7 gorunurlugunun neden bos oldugu loglardan
+		// anlasilmadigi icin burada bir kez acikca belirt.
+		if !pcapWant {
+			slog.Info("derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok",
+				"cozum", "agent.yml'de collect.pcap: true yapin (veya -pcap ile baslatin); hub'da da -agent-pcap acik olmali")
+		}
 		syncAttr()
 
 		// ham PCAP kaydi: politika + agent istegi

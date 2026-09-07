@@ -5,9 +5,14 @@
 # alanlari (hub url/token/site) zaten soruyor.)
 
 hub:
-  # birden fazla hub: virgulle ayirin → failover sirasi (Faz 5.4)
-  url: https://hub.example.com
-  token: HUBDAN-ALDIGINIZ-ENROLL-TOKEN   # yalnizca ilk kayit icin gerekli
+  # Hub adresi ve ilk-kayit token'i. BOS BIRAKMAYIN — elle kurulumda doldurun
+  # (or. url: https://hub.example.com). Windows MSI / macOS .pkg kurulumlari bu
+  # alanlari kendi sihirbazlarinda (veya msiexec HUBURL=/ENROLLTOKEN= ozellikleri
+  # ile) doldurur; bu ornek dosyadaki bos degerler kasitlidir ki eksik yapilandirma
+  # sessizce yanlis bir adrese baglanmak yerine acik hata versin.
+  # Birden fazla hub: virgulle ayirin → failover sirasi (Faz 5.4).
+  url: ""
+  token: ""   # yalnizca ilk kayit icin gerekli
   # mTLS (hub -tls ile calisiyorsa): hub CA sertifikasini onceden pinleyin.
   # Bos birakilirsa ilk baglantida guvenilir kabul edilip otomatik pinlenir (TOFU).
   # ca_file: /etc/bazntms/hub-ca.crt
@@ -18,8 +23,11 @@ agent:
 
 collect:
   interval_seconds: 30
-  # derin toplama (paket yakalama ile surec atfi): root/admin gerekir
-  pcap: false
+  # derin toplama: paket yakalama ile surec bazli trafik + DNS + L7 (SNI/Host)
+  # gorunurlugu. Bu uc panel yalnizca bu acikken dolar. Servis root/admin
+  # olarak calisir (pcap izni var); hub tarafinda da `-agent-pcap` politikasi
+  # acik olmali — yani bu tek basina zorla yakalama baslatmaz, izin verir.
+  pcap: true
   # auto: ilk yonlendirilebilir arayuz. Windows'ta friendly ad ("Ethernet")
   # otomatik \Device\NPF_{GUID} adina cevrilir; elle vermek isterseniz de
   # NPF adini verin (PowerShell: Get-NetAdapter | Select Name,InterfaceGuid).

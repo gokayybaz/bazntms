@@ -80,7 +80,9 @@ agent:
 
 collect:
   interval_seconds: 30
-  pcap: false
+  # derin toplama (surec trafigi + DNS + L7 gorunurlugu). Servis root
+  # calisir; hub tarafinda -agent-pcap politikasi da acik olmali.
+  pcap: true
   pcap_interface: auto
   pcap_record: false
   pcap_dir: /var/lib/bazntms/captures

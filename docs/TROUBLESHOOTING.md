@@ -15,10 +15,12 @@ Paket yakalama ayrıcalıklı bir işlemdir:
   Derleme için `libpcap-dev` (Debian/Ubuntu) veya `libpcap-devel` (RHEL) gerekir.
 - **Windows**: [Npcap](https://npcap.com) kurulu olmalı ve uygulama **yönetici
   olarak** başlatılmalı — ama yalnızca gerçekten paket yakalıyorsanız: hub
-  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener, agent ise
-  varsayılan olarak yakalamaz (`-pcap=false`, yalnızca süreç bazlı trafik
-  atfı için opsiyonel). Npcap kurulu değilse uygulama çökmez, sadece
-  yakalama çalışmaz.
+  varsayılan olarak (`-capture=true`) başlangıçta yakalamayı dener; agent
+  binary bayrağı `-pcap` varsayılanı kapalı olsa da **paketlenmiş kurulumlar
+  (MSI / .pkg / deb / rpm) `agent.yml`'e `collect.pcap: true` yazar** — yani
+  paket bazlı süreç trafiği + DNS + L7 görünürlüğü varsayılan açıktır (hub
+  tarafında `-agent-pcap` politikası da açıksa fiilen başlar). Npcap kurulu
+  değilse uygulama çökmez, sadece atıf başlamaz (`agent.log`'da WARN).
   **Derleme için Npcap SDK/mingw-w64 GEREKMEZ** — `gopacket/pcap`, Windows'ta
   cgo kullanmaz; `wpcap.dll`'i yalnızca yakalama fiilen başladığında
   (syscall ile) çalışma zamanında yükler. Düz `go build -o bazntms.exe
@@ -147,6 +149,33 @@ IP o ara katmanın (proxy/LB container'ı) kendi IP'si olarak görünür —
 gerçek agent IP'si değil. Bu alan yalnızca **gösterim** amaçlıdır; erişim
 kontrolü/rate-limit için kullanılmaz (kimlik doğrulama enroll/agent
 token'larıyla yapılır).
+
+### Agent detayında Süreçler / DNS / L7 panelleri boş
+
+Bu üç panel de tek bir agent motorundan (`internal/agent/attr.go` — pcap +
+soket→PID atfı) beslenir. Motor yalnızca **agent isteği** (`agent.yml`'de
+`collect.pcap: true` ya da `-pcap` bayrağı) **ve hub politikası**
+(`bazntms-hub -agent-pcap`) birlikte açıkken başlar.
+
+Kontrol sırası:
+
+1. `agent.log`'da başlangıçtan hemen sonra bir satır arayın:
+   - `surec atfi aktif iface=…` → motor çalışıyor, sorun trafik/atıf tarafında.
+   - `derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok` →
+     `agent.yml`'de `collect.pcap` kapalı. `true` yapıp servisi yeniden başlatın
+     (`launchctl kickstart -k system/local.bazntms.agent` / `systemctl restart
+     bazntms-agent` / `sc stop|start bazntms-agent`).
+   - `PCAP politikasi hub tarafinda kapali` → hub'ı `-agent-pcap` ile başlatın.
+   - Hiçbiri yoksa ve satır beklediğiniz gibi değilse: agent eski bir binary
+     olabilir (v0.3.3 öncesi bu tanı satırını basmaz).
+2. `.pkg` / MSI / deb / rpm **yeniden kurulumu** mevcut `agent.yml`'e dokunmaz;
+   ama dosya yoksa sihirbaz yeni bir tane üretir. v0.3.3+ paketleri
+   `collect.pcap: true` yazar, daha eskiler `false` — yeniden kurulumdan sonra
+   panellerin boşaldığını görürseniz önce bu satırı kontrol edin.
+3. Docker/Alpine agent'larında yalnızca kendi çıkış trafiği varsa (örn. yalnız
+   hub'a konuşan sentetik agent) L7 boş kalabilir: `sanitizeHost` noktasız tek
+   etiketli host adlarını (`lb` gibi) eler — gerçek FQDN hedeflerine giden
+   trafik gerekir.
 
 ## AI analizi sorunları
 

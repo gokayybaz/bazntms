@@ -20,6 +20,10 @@ export interface OSOption {
   command: (p: InstallParams) => string
 }
 
+// seedYaml, paket kurulumundan ÖNCE /etc/bazntms/agent.yml'i yazar (postinstall
+// mevcut dosyaya dokunmaz, o yüzden burada yazdığımız her şey nihai config'tir).
+// collect.pcap açık olmalı — yoksa süreç trafiği / DNS / L7 panelleri boş kalır
+// (attr motoru başlamaz). Hub tarafında -agent-pcap politikası da açık olmalı.
 const seedYaml = (p: InstallParams) =>
   [
     "sudo mkdir -p /etc/bazntms",
@@ -28,6 +32,8 @@ const seedYaml = (p: InstallParams) =>
     `  url: ${p.hubUrl}`,
     `  token: ${p.token}`,
     ...(p.site ? ['agent:', `  site: ${p.site}`] : []),
+    'collect:',
+    '  pcap: true',
     'EOF',
   ].join('\n')
 
