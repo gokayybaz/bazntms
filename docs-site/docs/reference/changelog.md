@@ -20,6 +20,14 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
+_Sonraki sürüm için._
+
+## [0.3.3] — 2026-09-07
+
+Dağıtım olgunluğu — Faz 19. Konteyner imajları, imzalı chart, provenance,
+opt-in imzalı update kanalı. Ayrıca Canlı Akış uplink gruplama + `collect.pcap`
+görünürlük düzeltmesi.
+
 ### Eklendi
 - **Canlı Akış — uplink gruplama.** Yönetici `/akis` şemasında `F3` "Düzenle"
   ile agent'ları bir erişim katmanı cihazına (switch / AP) atar; şema
@@ -54,6 +62,24 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 - `Prune()` artık agent'ı silinmiş ama geride kalmış filo satırlarını
   (`agent_conn_latest` / `agent_iface_samples` / `process_traffic` /
   `l7_endpoints` / `agent_dns`) da süpürür.
+
+### Dağıtım / tedarik zinciri
+- **Konteyner imajları:** `ghcr.io/gokayybaz/bazntms-{hub,agent}` — çok-mimari
+  (amd64 + arm64), digest-sabit temel imajlar, OCI etiketleri, hub
+  `HEALTHCHECK`. Yayın öncesi Trivy imaj taraması (CRITICAL bloklar) + hub
+  duman testi push'u kapıya alır.
+- **Helm chart** artık `oci://ghcr.io/gokayybaz/charts/bazntms` olarak yayınlanır;
+  CI'da `helm lint` + `helm template | kubeconform`. `hub` `/healthz` yanıtı
+  `{version, protocol_version}` taşır (yükseltme doğrulaması).
+- **SLSA build provenance** — her binary + konteyner imajı için attestation
+  (`gh attestation verify`). Release notlarına doğrulama bölümü eklenir
+  (`cosign verify-blob`, `gh attestation verify`, `helm pull`).
+- **Opt-in imzalı agent auto-update kanalı:** `UPDATE_SIGNING_SEED` repo
+  secret'ı tanımlıysa release manifest'i ed25519 ile imzalanır; hub
+  `GitHubSyncer` imzaları geçirir ve indirdiği binary'leri imzalı manifest'e
+  karşı doğrular. `bazntmsctl update verify`. Varsayılan davranış değişmez.
+- `CHANGELOG.md` (bu dosya) + `docs/RELEASE-RUNBOOK.md`; `release.yml`
+  preflight'ı `Chart.yaml`/CHANGELOG sürümünü etiketle eşleşmeye zorlar.
 
 ### Şema
 - `0006_uplink` — `agents.uplink_device_id` + `devices.uplink_device_id`
@@ -264,7 +290,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/gokayybaz/bazntms/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/gokayybaz/bazntms/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/gokayybaz/bazntms/compare/v0.2.8...v0.3.0
