@@ -175,9 +175,14 @@ services:
       - "-site"
       - "docker-scale"
       - "-pcap" # surec bazli trafik atfi; hub politikasi (-agent-pcap) da acik olmali
+      # collect.method varsayilani auto: BTF + BPF cap varsa eBPF, yoksa pcap.
     cap_add:
-      - NET_RAW # ham soket + pcap_activate
+      - NET_RAW # pcap fallback + eBPF modunda L7 yardimci handle (SNI/Host)
       - NET_ADMIN # promiscuous mode (SIOCSIFFLAGS) icin NET_RAW yetmiyor
+      - BPF # Faz 20: eBPF program yukleme
+      - PERFMON # fentry attach + kernel BTF erisimi
+    volumes:
+      - /sys/kernel/btf:/sys/kernel/btf:ro # CO-RE icin kernel BTF (yoksa agent pcap'e duser)
     deploy:
       replicas: 2
     depends_on:
