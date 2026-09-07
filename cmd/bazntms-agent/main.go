@@ -178,8 +178,16 @@ func main() {
 		pcapWant := *pcapFlag || cfg.Collect.PCAP
 		// atif arka ucu yontemi: flag > config > "" (seçici "auto" sayar).
 		attrMethod := firstNonEmpty(*collectMethod, cfg.Collect.Method)
-		if attrMethod == "off" {
+		switch attrMethod {
+		case "off":
 			pcapWant = false // "off" derin toplamayı da kapatır
+		case "":
+			// yontem belirtilmemis — eski davranis: collect.pcap / -pcap gecerli.
+		default:
+			// Acik bir yontem (auto|ebpf|pcap|etw) = "derin toplama istiyorum".
+			// eBPF/ETW Npcap/libpcap gerektirmez; collect.pcap: true zorunlulugu
+			// kaldirildi (Faz 20). Yalniz hub politikasi (PCAPEnabled) hala kisitlar.
+			pcapWant = true
 		}
 		attrIface := *pcapIface
 		if attrIface == "" {
