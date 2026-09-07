@@ -8,9 +8,10 @@ import (
 	"strings"
 )
 
-// ebpfBackendBuilt, eBPF atıf arka ucunun bu derlemede mevcut olup olmadığı.
-// S20.5'te gerçek implementasyon eklenince true olur; o zamana dek "auto" modu
-// eBPF ortamı uygun olsa bile pcap kullanır.
+// ebpfBackendBuilt, "auto" modunun eBPF arka ucunu seçip seçmeyeceği. Yükleyici
+// S20.5'te geldi ama L7 (S20.7) + DNS (S20.6) henüz eBPF tarafında boş döner —
+// bu yüzden "auto" hâlâ pcap kullanır; eBPF yalnız `-collect-method=ebpf` ile
+// açıkça seçilir. S20.7 kapanışında true olur.
 var ebpfBackendBuilt = false
 
 // platformAttrCaps, Linux'ta eBPF atıf motorunun kullanılabilirliğini ölçer:
@@ -46,7 +47,11 @@ func platformBuildAttrSource(method string, cfg AttrConfig) (AttrSource, error) 
 		}
 		return src, nil
 	case "ebpf":
-		return nil, fmt.Errorf("eBPF atıf arka ucu henüz uygulanmadı (S20.5)")
+		src, err := newEbpfAttrSource(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return src, nil
 	default:
 		return nil, fmt.Errorf("linux'ta %q atıf yöntemi desteklenmiyor", method)
 	}

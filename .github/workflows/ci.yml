@@ -121,6 +121,25 @@ jobs:
       - name: drift kontrolü
         run: git diff --exit-code -- internal/agent/bpf/
 
+  ebpf-smoke:
+    # Faz 20 S20.5: canlı eBPF yükleme + fentry attach + akış haritası okuma.
+    # ubuntu-latest çekirdeği BTF taşır; sudo (root) fentry/CAP_BPF için yeter.
+    # Test, yükleme başarısızsa atlar (yeşil kalır) — asıl hedef regresyon ağı.
+    name: eBPF atıf (canlı yükleme)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: eBPF entegrasyon testi (root)
+        run: sudo -E "$(command -v go)" test ./internal/agent/ -run TestEBPF -v -count=1
+
   helm:
     name: Helm chart (lint + kubeconform)
     runs-on: ubuntu-latest
