@@ -93,6 +93,47 @@ sc start bazntms-agent
 - Servis kurulumu hata 1053 veriyorsa (zaman aşımı) binary eski bir sürüm
   olabilir; SCM dispatcher desteği v0.2.1 ile geldi — release'ten güncel MSI'ı alın.
 
+### "hata 1603" + logda `SECUREREPAIR: SecureRepair Failed` / `ProcessComponents. Return value 3`
+
+Aynı sürüm **zaten kuruluyken** `msiexec /i bazntms-agent-amd64.msi` çalıştırmak
+kurulum değil, **bakım/onarım** işlemi başlatır. Windows Installer önbelleğindeki
+orijinal paketi doğrulamaya çalışır (`SECUREREPAIR`); indirdiğiniz dosyanın adı
+önbellektekiyle uyuşmadığı için (`bazntms-agent-amd64_3.msi` gibi sayı ekli
+adlar bunun işaretidir) doğrulama başarısız olur → `ProcessComponents` geri
+döner → rollback → **1603**. Dosya bozuk değildir, kurulum eksik değildir.
+
+Doğrulama:
+
+```powershell
+Get-Package '*bazNTMS*'                                  # zaten kurulu mu?
+Get-Service bazntms-agent                                # servis kayıtlı mı?
+```
+
+**Yalnızca yeniden yapılandırmak istiyorsanız — tekrar kurmayın:** ürün zaten
+kuruludur, sadece kayıt defterini düzenleyip servisi başlatın:
+
+```powershell
+$k = 'HKLM:\SOFTWARE\bazNTMS\Agent'
+Set-ItemProperty $k hub_url      'https://hub.example.com'
+Set-ItemProperty $k enroll_token 'ent_...'
+# saha: Set-ItemProperty $k site 'ofis-a'
+Restart-Service bazntms-agent
+Get-Content C:\ProgramData\bazntms\agent.log -Tail 20
+```
+
+**Gerçekten sıfırdan kurmak istiyorsanız — önce kaldırın, sonra kurun** (`/i`
+üstüne `/i` değil):
+
+```powershell
+$p = Get-Package '*bazNTMS*'
+msiexec /x $p.FastPackageReference /qn /l*v "$env:TEMP\baz-x.log"
+msiexec /i "$env:TEMP\bazntms-agent.msi" /qn /l*v "$env:TEMP\baz-i.log" `
+  HUBURL=https://hub.example.com ENROLLTOKEN=ent_...
+```
+
+Sihirbazın verdiği güncel kurulum komutu bu kaldır-sonra-kur sırasını zaten
+uygular (S12.4 sonrası) — eski bir komut kopyaladıysanız panelden yenisini alın.
+
 ## Agent filosu
 
 ### Agent'lar sayfasında yanlış/beklenmedik IP adresi görünüyor

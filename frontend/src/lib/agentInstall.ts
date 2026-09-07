@@ -1,5 +1,10 @@
 // Agent kurulum komutları — S12.4 sihirbazı. Release varlıkları:
 // https://github.com/gokayybaz/bazntms/releases/latest/download/<asset>
+//
+// Her komut "sıfırdan kurulum" mantığıyla yazılır: agent zaten kuruluysa
+// önce temizlenir (paket kaldır / servis durdur / MSI uninstall), sonra
+// kurulur. Böylece aynı sürümü tekrar "kur" demek 1603 (Windows
+// SECUREREPAIR) veya "already installed" (rpm) hatası vermez.
 const REL = 'https://github.com/gokayybaz/bazntms/releases/latest/download'
 
 export interface InstallParams {
@@ -33,7 +38,9 @@ export const OS_OPTIONS: OSOption[] = [
     note: 'systemd gerektirmez — hızlı test / konteyner-dışı. Süreç ön planda çalışır.',
     command: (p) =>
       [
-        `curl -fsSL -o bazntms-agent ${REL}/bazntms-agent-linux-amd64`,
+        // çalışan bir kopya varsa dur (curl -o "Text file busy" vermesin)
+        'sudo pkill -x bazntms-agent 2>/dev/null || true',
+        `curl -fL --retry 3 -o bazntms-agent ${REL}/bazntms-agent-linux-amd64`,
         'chmod +x bazntms-agent',
         `sudo ./bazntms-agent -hub-url ${p.hubUrl} -enroll-token ${p.token}${p.site ? ` -site ${p.site}` : ''}`,
       ].join('\n'),
@@ -44,8 +51,10 @@ export const OS_OPTIONS: OSOption[] = [
     note: 'systemd servisi olarak kurulur ve otomatik başlar. Config önceden yazıldığı için sihirbaz sormaz.',
     command: (p) =>
       [
+        // varsa eski paketi tümüyle kaldır (servisi durdurur), sonra sıfırdan kur
+        'sudo dpkg -P bazntms-agent 2>/dev/null || true',
         seedYaml(p),
-        `curl -fsSL -o /tmp/bazntms-agent.deb ${REL}/bazntms-agent-amd64.deb`,
+        `curl -fL --retry 3 -o /tmp/bazntms-agent.deb ${REL}/bazntms-agent-amd64.deb`,
         'sudo dpkg -i /tmp/bazntms-agent.deb',
       ].join('\n'),
   },
@@ -55,8 +64,10 @@ export const OS_OPTIONS: OSOption[] = [
     note: 'systemd servisi olarak kurulur ve otomatik başlar.',
     command: (p) =>
       [
+        // rpm -i zaten kuruluysa hata verir → önce erase et
+        'sudo rpm -e bazntms-agent 2>/dev/null || true',
         seedYaml(p),
-        `curl -fsSL -o /tmp/bazntms-agent.rpm ${REL}/bazntms-agent-amd64.rpm`,
+        `curl -fL --retry 3 -o /tmp/bazntms-agent.rpm ${REL}/bazntms-agent-amd64.rpm`,
         'sudo rpm -i /tmp/bazntms-agent.rpm',
       ].join('\n'),
   },
@@ -66,23 +77,26 @@ export const OS_OPTIONS: OSOption[] = [
     note: 'LaunchDaemon olarak kurulur. Config önceden yazıldığı için kurulum penceresi sormaz.',
     command: (p) =>
       [
+        // varsa çalışan daemon'u boşalt (pkg postinstall yeniden yükler)
+        'sudo launchctl unload /Library/LaunchDaemons/local.bazntms.agent.plist 2>/dev/null || true',
         seedYaml(p),
-        `curl -fsSL -o /tmp/bazntms-agent.pkg ${REL}/bazntms-agent-arm64.pkg`,
+        `curl -fL --retry 3 -o /tmp/bazntms-agent.pkg ${REL}/bazntms-agent-arm64.pkg`,
         'sudo installer -pkg /tmp/bazntms-agent.pkg -target /',
       ].join('\n'),
   },
   {
     id: 'windows',
     label: 'Windows (.msi)',
-    note: 'Yönetici olarak açılmış PowerShell (cmd.exe DEĞİL). Proxy arkasındaysanız önce: $env:HTTPS_PROXY="http://proxy:port". MSI özellikleriyle sessiz kurulum — servis otomatik başlar.',
+    note: 'Yönetici olarak açılmış PowerShell (cmd.exe DEĞİL). Proxy arkasındaysanız önce: $env:HTTPS_PROXY="http://proxy:port". Zaten kuruluysa önce kaldırılır — sessiz kurulum, servis otomatik başlar.',
     command: (p) =>
       [
-        // -fsSL yerine -fL --retry: -s (silent) indirme hatasını gizliyordu,
-        // kullanıcıya "hiçbir şey olmadı" gibi görünüyor. $msi tek yerde
-        // tanımlı ve msiexec'te tırnaklı (kullanıcı adında boşluk olsa bile).
+        // -fsSL yerine -fL --retry: -s (silent) indirme hatasını gizliyordu.
         '$msi = "$env:TEMP\\bazntms-agent.msi"',
         `curl.exe -fL --retry 3 -o $msi "${REL}/bazntms-agent-amd64.msi"`,
-        `msiexec /i "$msi" /qn HUBURL=${p.hubUrl} ENROLLTOKEN=${p.token}${p.site ? ` SITE=${p.site}` : ''}`,
+        // aynı sürümü /i üstüne /i yapmak 1603/SECUREREPAIR verir → varsa önce uninstall
+        "$old = Get-Package '*bazNTMS*' -ErrorAction SilentlyContinue",
+        "if ($old) { Start-Process msiexec.exe -Wait -ArgumentList '/x', $old.FastPackageReference, '/qn', '/norestart' }",
+        `Start-Process msiexec.exe -Wait -ArgumentList '/i', $msi, '/qn', 'HUBURL=${p.hubUrl}', 'ENROLLTOKEN=${p.token}'${p.site ? `, 'SITE=${p.site}'` : ''}`,
       ].join('\n'),
   },
   {
@@ -92,6 +106,8 @@ export const OS_OPTIONS: OSOption[] = [
     command: (p) =>
       [
         'docker build -f deploy/Dockerfile.agent -t bazntms-agent https://github.com/gokayybaz/bazntms.git',
+        // aynı isimli eski konteyner varsa "run" hata verir → önce sil
+        'docker rm -f bazntms-agent 2>/dev/null || true',
         [
           'docker run -d --name bazntms-agent --restart=unless-stopped',
           '--network=host --cap-add=NET_RAW --cap-add=NET_ADMIN bazntms-agent',
