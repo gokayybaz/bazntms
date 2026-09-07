@@ -114,14 +114,21 @@ type traceLogfileHeader struct {
 	MaximumFileSize    uint32
 	LogFileMode        uint32
 	BuffersWritten     uint32
-	LoggerName         uintptr
-	LogFileName        uintptr
-	TimeZone           timeZoneInformation
-	BootTime           int64
-	PerfFreq           int64
-	StartTime          int64
-	ReservedFlags      uint32
-	BuffersLost        uint32
+	// C'de: union { GUID LogInstanceGuid; struct { ULONG StartBuffers,
+	// PointerSize, EventsLost, CpuSpeedInMHz; } }. HER İKİ dal da 16 bayt.
+	// LoggerName/LogFileName/TimeZone bu union'ın İÇİNDE değil, ARDINDAN gelen
+	// ayrı alanlar (evntrace.h). Bu 16 baytı atlamak, eventTraceLogfileW
+	// içindeki EventRecordCallback ofsetini 16 bayt kaydırır → callback hiç
+	// çağrılmaz.
+	LogInstanceGuid [16]byte
+	LoggerName      uintptr
+	LogFileName     uintptr
+	TimeZone        timeZoneInformation
+	BootTime        int64
+	PerfFreq        int64
+	StartTime       int64
+	ReservedFlags   uint32
+	BuffersLost     uint32
 }
 
 type eventTraceHeader struct {
@@ -204,8 +211,13 @@ type eventRecord struct {
 	UserContext       unsafe.Pointer
 }
 
-// checkLayout, struct boyutlarının Windows/amd64 ABI ile uyuştuğunu doğrular.
-// Uyuşmazlık → oturum açılmaz (seçici pcap'e düşer) — bellek bozulması yerine.
+// checkLayout, struct boyut/ofsetlerinin Windows/amd64 ABI ile uyuştuğunu
+// doğrular. Uyuşmazlık → oturum açılmaz (seçici pcap'e düşer) — bellek
+// bozulması yerine. Beklenen değerler evntrace.h'den elle + çalışan bir
+// referans implementasyonla (0xrawsec/golang-etw layout'u) çapraz denetlendi.
+// ÖNEMLİ: yalnız Sizeof değil, ProcessTrace'in okuduğu kritik alan ofsetlerini
+// de kontrol et — aksi halde eksik/fazla bir alan (bkz. LogInstanceGuid union)
+// toplam boyutu tesadüfen tutturursa fark edilmez.
 func checkLayout() error {
 	type want struct {
 		name string
@@ -216,13 +228,16 @@ func checkLayout() error {
 		{"eventTraceProperties", unsafe.Sizeof(eventTraceProperties{}), 120},
 		{"enableTraceParameters", unsafe.Sizeof(enableTraceParameters{}), 48},
 		{"timeZoneInformation", unsafe.Sizeof(timeZoneInformation{}), 172},
-		{"traceLogfileHeader", unsafe.Sizeof(traceLogfileHeader{}), 264},
+		{"traceLogfileHeader", unsafe.Sizeof(traceLogfileHeader{}), 280},
+		{"traceLogfileHeader.LoggerName off", unsafe.Offsetof(traceLogfileHeader{}.LoggerName), 56},
 		{"eventTrace", unsafe.Sizeof(eventTrace{}), 88},
-		{"eventTraceLogfileW", unsafe.Sizeof(eventTraceLogfileW{}), 432},
+		{"eventTraceLogfileW", unsafe.Sizeof(eventTraceLogfileW{}), 448},
 		{"eventHeader", unsafe.Sizeof(eventHeader{}), 80},
 		{"eventRecord", unsafe.Sizeof(eventRecord{}), 112},
 		{"eventRecord.UserData off", unsafe.Offsetof(eventRecord{}.UserData), 96},
-		{"logfile.EventRecordCallback off", unsafe.Offsetof(eventTraceLogfileW{}.EventRecordCallback), 408},
+		{"logfile.LogfileHeader off", unsafe.Offsetof(eventTraceLogfileW{}.LogfileHeader), 120},
+		{"logfile.EventRecordCallback off", unsafe.Offsetof(eventTraceLogfileW{}.EventRecordCallback), 424},
+		{"logfile.Context off", unsafe.Offsetof(eventTraceLogfileW{}.Context), 440},
 	} {
 		if w.got != w.exp {
 			return fmt.Errorf("ETW struct düzeni: %s = %d, beklenen %d", w.name, w.got, w.exp)
@@ -376,6 +391,8 @@ func (s *etwSession) Process(wanted func(id uint16) bool, cb func(etwEvent)) {
 	}
 	s.traceHandle = uint64(th)
 
+	// ProcessTrace, Stop()'ta CloseTrace çağrılana dek bloke eder. Anında
+	// dönüş = consumer hiç olay pompalamadı (genelde struct ABI uyuşmazlığı).
 	r, _, _ := procProcessTrace.Call(uintptr(unsafe.Pointer(&s.traceHandle)), 1, 0, 0)
 	if r != 0 && r != errCancelled {
 		slog.Warn("ETW ProcessTrace sonlandı", "err", windows.Errno(r))

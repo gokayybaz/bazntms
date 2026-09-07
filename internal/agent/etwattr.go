@@ -21,8 +21,9 @@ var kernelNetworkGUID = windows.GUID{
 	Data4: [8]byte{0x8D, 0xFD, 0x43, 0xD9, 0x79, 0x15, 0x3A, 0x88},
 }
 
-// Kernel-Network anahtar sözcükleri: TCP+UDP, IPv4+IPv6.
-const knwTCPUDPv4v6 = 0x1 | 0x2 | 0x4 | 0x8
+// Kernel-Network anahtar sözcükleri: KERNEL_NETWORK_KEYWORD_IPV4 (0x10) +
+// _IPV6 (0x20). (Manifest'te 0x1/0x2 DEĞİL — olay keyword'leri 0x...10/0x...20.)
+const knwIPv4v6 = 0x10 | 0x20
 
 // Microsoft-Windows-DNS-Client {1C95126E-7EEA-49A9-A3FE-A378B03DDB4D}
 var dnsClientGUID = windows.GUID{
@@ -56,8 +57,8 @@ type etwDNSKey struct {
 
 func newEtwAttrSource(_ AttrConfig) (*etwAttrSource, error) {
 	sess, err := startETWSession(etwSessionName,
-		etwProvider{GUID: kernelNetworkGUID, Keywords: knwTCPUDPv4v6},
-		etwProvider{GUID: dnsClientGUID, Keywords: 0xFFFFFFFFFFFFFFFF},
+		etwProvider{GUID: kernelNetworkGUID, Keywords: knwIPv4v6},
+		etwProvider{GUID: dnsClientGUID, Keywords: 0}, // 0 = tüm DNS-Client olayları
 	)
 	if err != nil {
 		return nil, err
