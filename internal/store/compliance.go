@@ -57,13 +57,38 @@ func ComplianceHash(prev string, e ComplianceLog) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// AppendComplianceLog, kaydı zincire ekler (eşzamanlı yazımda kilitli).
+// complianceChainLockKey, 5651 log hash-zincirini çoklu-replika (HA) dağıtımda
+// serileştiren Postgres advisory lock anahtarı. auditChainLockKey ile aynı
+// gerekçe (bkz. users.go): process-içi complianceMu yalnız o süreçteki
+// goroutine'leri serileştirir; 2× hub-controller aynı anda yazınca ikisi de
+// aynı son satırı `prev` olarak okuyup aynı prev_hash ile INSERT eder →
+// zincir çatallanır. Kilit ailesinden (8823001 migrate / 8823101 leader /
+// 8823201 audit / 8823301 compliance) — çakışmaz.
+const complianceChainLockKey = 8823301
+
+// AppendComplianceLog, kaydı zincire ekler. Process-içi eşzamanlı yazımlar
+// complianceMu ile, çoklu-replika (pg) yazımları transaction-scoped advisory
+// lock ile serileştirilir; oku-hesapla-yaz tek transaction içinde yapılır.
 func (s *sqlStore) AppendComplianceLog(e ComplianceLog) (int64, error) {
 	s.complianceMu.Lock()
 	defer s.complianceMu.Unlock()
 
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// pg modu: çoklu hub-controller replikasının aynı anda yazmasını serileştir.
+	// SQLite tek süreç → complianceMu yeterli, kilit no-op.
+	if s.pg {
+		if _, err := tx.Exec(s.q(`SELECT pg_advisory_xact_lock(?)`), complianceChainLockKey); err != nil {
+			return 0, err
+		}
+	}
+
 	var prev string
-	err := s.db.QueryRow(s.q(`SELECT hash FROM compliance_logs ORDER BY seq DESC LIMIT 1`)).Scan(&prev)
+	err = tx.QueryRow(s.q(`SELECT hash FROM compliance_logs ORDER BY seq DESC LIMIT 1`)).Scan(&prev)
 	if err != nil && err != sql.ErrNoRows {
 		return 0, err
 	}
@@ -71,12 +96,18 @@ func (s *sqlStore) AppendComplianceLog(e ComplianceLog) (int64, error) {
 	e.Hash = ComplianceHash(prev, e)
 
 	var seq int64
-	err = s.db.QueryRow(s.q(`INSERT INTO compliance_logs
+	err = tx.QueryRow(s.q(`INSERT INTO compliance_logs
 		(ts, source_type, source_name, src_ip, src_mac, user_id, category, message, prev_hash, hash)
 		VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING seq`),
 		e.Ts, e.SourceType, e.SourceName, e.SrcIP, e.SrcMAC, e.UserID, e.Category, e.Message,
 		e.PrevHash, e.Hash).Scan(&seq)
-	return seq, err
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return seq, nil
 }
 
 // ComplianceLogEntry, aralıktaki zincir doğrulaması için kayıt + hash.

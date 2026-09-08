@@ -96,7 +96,12 @@ olduğundan `auditMu` yeterli, kilit no-op. Test: `TestAuditChainConcurrent`
 
 Geçmiş çatallı satırlar append-only olduğu için düzeltilmez;
 `VerifyAuditChain` ilk çatal noktasında `ok=false` döndürmeye devam eder
-(canlı DB için beklenen). `AppendComplianceLog` aynı desende — ayrı iş.
+(canlı DB için beklenen).
+
+**`AppendComplianceLog` (5651 log zinciri) de aynı desende düzeltildi** (Faz
+25 kapanışı): `complianceChainLockKey = 8823301`, aynı tek-transaction +
+`pg_advisory_xact_lock` yapısı. Test: `TestComplianceChainConcurrent` (SQLite),
+`TestPostgresComplianceChainConcurrent` (2× Store instance).
 
 ## Sonuçlar
 

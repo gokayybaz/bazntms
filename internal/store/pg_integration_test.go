@@ -563,3 +563,66 @@ func TestPostgresAuditChainConcurrent(t *testing.T) {
 		t.Fatalf("%d kayit beklenirdi, dogrulanan: %d", 2*each, checked)
 	}
 }
+
+// TestPostgresComplianceChainConcurrent, TestPostgresAuditChainConcurrent'in
+// 5651 compliance_logs karsiligi: AYRI iki Store instance'i (2× hub-controller)
+// ayni anda AppendComplianceLog cagirir. complianceChainLockKey advisory lock'u
+// olmadan zincir catallanir; kilitle tek-yonlu kalir.
+func TestPostgresComplianceChainConcurrent(t *testing.T) {
+	dsn := pgContainerDSN(t, "postgres:16-alpine")
+
+	stA, err := Open(dsn)
+	if err != nil {
+		t.Fatalf("controller A: %v", err)
+	}
+	defer stA.Close()
+	stB, err := Open(dsn)
+	if err != nil {
+		t.Fatalf("controller B: %v", err)
+	}
+	defer stB.Close()
+
+	base := time.Now().Unix()
+	const each = 60
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2*each)
+	write := func(st Store, name string) {
+		defer wg.Done()
+		for i := 0; i < each; i++ {
+			if _, err := st.AppendComplianceLog(ComplianceLog{
+				Ts: base + int64(i), SourceType: "syslog", SourceName: name,
+				Category: "syslog", Message: "eszamanli test",
+			}); err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}
+	wg.Add(2)
+	go write(stA, "swA")
+	go write(stB, "swB")
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("eszamanli ekleme: %v", err)
+	}
+
+	var forks int
+	if err := stA.(*sqlStore).db.QueryRow(`
+		SELECT COUNT(*) FROM (
+			SELECT prev_hash FROM compliance_logs GROUP BY prev_hash HAVING COUNT(*) > 1
+		) f`).Scan(&forks); err != nil {
+		t.Fatalf("catal sorgu: %v", err)
+	}
+	if forks != 0 {
+		t.Fatalf("%d catal noktasi (prev_hash birden cok kayitta)", forks)
+	}
+
+	broken, checked := walkComplianceChain(t, stA, base-10, base+3600)
+	if broken != 0 {
+		t.Fatalf("zincir catallandi (seq %d)", broken)
+	}
+	if checked != 2*each {
+		t.Fatalf("%d kayit beklenirdi, dogrulanan: %d", 2*each, checked)
+	}
+}

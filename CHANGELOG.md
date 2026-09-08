@@ -44,8 +44,9 @@ açılışında otomatik uygulanır.
   v2 alanı doluyken katılır, eski kayıtlar aynen doğrulanır (ADR 0012).
   `GET /api/v1/audit` süzgeçli (actor/action/resource/ip/result/tarih);
   `AuditCard` süzgeç barı + öncesi/sonrası paneli. Migrasyon `0019`.
-  Ayrıca: `InsertAuditEvent` çoklu-replika (HA) yazımında pg advisory-lock ile
-  serileştirildi (2× controller zinciri çatallıyordu).
+  Ayrıca: `InsertAuditEvent` **ve** `AppendComplianceLog` (5651 log zinciri)
+  çoklu-replika (HA) yazımında pg advisory-lock + tek-transaction ile
+  serileştirildi (2× hub-controller hash zincirini çatallıyordu).
 - **Enrollment token sertleştirme** (25-D). `enroll_tokens` + `max_uses`
   (atomik `ConsumeEnrollToken` — eş zamanlı agent'lar son slotu paylaşamaz),
   `allowed_cidrs` (kaynak-IP kısıtı — soket peer'ine göre), `created_by`,
