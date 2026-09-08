@@ -370,8 +370,9 @@ func (m *Manager) checkAgentPorts(cfg Config, agents []store.AgentWithRates) {
 			if _, ok := set[port]; !ok {
 				continue
 			}
-			m.fire("port", a.Name+":"+fmt.Sprint(port),
-				fmt.Sprintf("Şüpheli porta bağlantı — agent %s: uzak %s (%s) — yerel %s", a.Name, c.RemoteAddr, c.Process, c.LocalAddr))
+			m.fireCtx("port", a.Name+":"+fmt.Sprint(port),
+				fmt.Sprintf("Şüpheli porta bağlantı — agent %s: uzak %s (%s) — yerel %s", a.Name, c.RemoteAddr, c.Process, c.LocalAddr),
+				fireOpts{Site: a.Site})
 		}
 	}
 }
@@ -415,8 +416,9 @@ func (m *Manager) checkAgentNewProcess(cfg Config, agents []store.AgentWithRates
 				continue
 			}
 			m.markSeen(seenKind, c.Process)
-			m.fire("proc", a.Name+":"+c.Process,
-				fmt.Sprintf("Yeni süreç ağa çıktı — agent %s: %s (pid %d)", a.Name, c.Process, c.PID))
+			m.fireCtx("proc", a.Name+":"+c.Process,
+				fmt.Sprintf("Yeni süreç ağa çıktı — agent %s: %s (pid %d)", a.Name, c.Process, c.PID),
+				fireOpts{Site: a.Site})
 		}
 	}
 }
@@ -454,8 +456,9 @@ func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates)
 		if inMbps := rx * 8 / 1e6; cfg.Bandwidth.InMbps > 0 && inMbps >= cfg.Bandwidth.InMbps {
 			c.in++
 			if c.in == need {
-				m.fire("bw", "agent-in:"+a.Name,
-					fmt.Sprintf("Agent %s: indirme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, inMbps))
+				m.fireCtx("bw", "agent-in:"+a.Name,
+					fmt.Sprintf("Agent %s: indirme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, inMbps),
+					fireOpts{Site: a.Site})
 			}
 		} else {
 			c.in = 0
@@ -463,8 +466,9 @@ func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates)
 		if outMbps := tx * 8 / 1e6; cfg.Bandwidth.OutMbps > 0 && outMbps >= cfg.Bandwidth.OutMbps {
 			c.out++
 			if c.out == need {
-				m.fire("bw", "agent-out:"+a.Name,
-					fmt.Sprintf("Agent %s: gönderme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, outMbps))
+				m.fireCtx("bw", "agent-out:"+a.Name,
+					fmt.Sprintf("Agent %s: gönderme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, outMbps),
+					fireOpts{Site: a.Site})
 			}
 		} else {
 			c.out = 0
@@ -486,11 +490,59 @@ func (m *Manager) markSeen(kind, key string) {
 	}
 }
 
-// fire, cooldown kontrolunden sonra olayi kaydeder ve bildirimleri dagitir.
-func (m *Manager) fire(kind, key, message string) {
-	cooldownKey := kind + "|" + key
+// fireOpts, fireCtx'e opsiyonel bağlam: sıfır değerleri kind'den türetilir.
+type fireOpts struct {
+	Site     string
+	Severity string // "" → severityForKind(kind)
+}
+
+// kindSeverity, uyarı türü → varsayılan önem (S22.6). S22.7 z-büyüklüğüne göre
+// dinamik yükseltme ekler.
+var kindSeverity = map[string]string{
+	"ioc":              "crit",
+	"vpn_down":         "crit",
+	"port":             "crit", // şüpheli port = güçlü sinyal
+	"bw":               "warn",
+	"anomaly":          "warn",
+	"sdwan_sla_breach": "warn",
+	"high_sessions":    "warn",
+	"sla_breach":       "crit",
+	"proc":             "info",
+	"target":           "info",
+}
+
+func severityForKind(kind string) string {
+	if s, ok := kindSeverity[kind]; ok {
+		return s
+	}
+	return "warn"
+}
+
+// fire, fireCtx'in bağlamsız kısayolu.
+func (m *Manager) fire(kind, key, message string) { m.fireCtx(kind, key, message, fireOpts{}) }
+
+// fireCtx, olayı kaydeder ve bildirir. S22.6 yaşam döngüsü: aynı (kind,key)
+// için açık bir olay varsa yeni satır yerine tekrar sayacı artırılır (sessizce
+// — bildirim seli olmasın). Açık olay yoksa cooldown yeni-olay bildirimini
+// kısar, sonra insert + Deliver.
+func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	m.mu.Lock()
 	cfg := m.cfg
+	n := m.notifier
+	m.mu.Unlock()
+
+	now := time.Now().Unix()
+	if open, err := m.st.OpenAlertEventByKey(kind, key); err != nil {
+		log.Printf("acik uyari sorgusu hatasi: %v", err)
+	} else if open != nil {
+		if err := m.st.BumpAlertEvent(open.ID, now, message); err != nil {
+			log.Printf("uyari tekrar sayaci hatasi: %v", err)
+		}
+		return
+	}
+
+	cooldownKey := kind + "|" + key
+	m.mu.Lock()
 	if t, ok := m.lastFire[cooldownKey]; ok && time.Since(t) < time.Duration(cfg.CooldownMin)*time.Minute {
 		m.mu.Unlock()
 		return
@@ -498,18 +550,23 @@ func (m *Manager) fire(kind, key, message string) {
 	m.lastFire[cooldownKey] = time.Now()
 	m.mu.Unlock()
 
-	ev := store.AlertEvent{Ts: time.Now().Unix(), Kind: kind, Key: key, Message: message}
+	sev := opt.Severity
+	if sev == "" {
+		sev = severityForKind(kind)
+	}
+	ev := store.AlertEvent{
+		Ts: now, Kind: kind, Key: key, Message: message,
+		Severity: sev, State: "firing", Site: opt.Site,
+		Count: 1, FirstTs: now, LastTs: now,
+	}
 	id, err := m.st.InsertAlertEvent(ev)
 	if err != nil {
 		log.Printf("uyari kaydi hatasi: %v", err)
 		return
 	}
 	ev.ID = id
-	log.Printf("UYARI [%s] %s", kind, message)
+	log.Printf("UYARI [%s/%s] %s", kind, sev, message)
 
-	m.mu.Lock()
-	n := m.notifier
-	m.mu.Unlock()
 	if n != nil {
 		n.Deliver(cfg.Notifiers, ev)
 	}

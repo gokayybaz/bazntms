@@ -73,6 +73,10 @@ type FleetReportStore interface {
 type AlertStore interface {
 	InsertAlertEvent(e AlertEvent) (int64, error)
 	RecentAlertEvents(limit int) ([]AlertEvent, error)
+	// yaşam döngüsü (Faz 22 S22.6): aynı (kind,key) açık olay → yeni satır
+	// yerine tekrar sayacını artır.
+	OpenAlertEventByKey(kind, key string) (*AlertEvent, error)
+	BumpAlertEvent(id, ts int64, message string) error
 	IsAlertSeen(kind, key string) (bool, error)
 	MarkAlertSeen(kind, key string) error
 	CountAlertSeen(kind string) (int, error)

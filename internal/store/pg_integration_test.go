@@ -228,8 +228,20 @@ func TestPostgresStore(t *testing.T) {
 	}
 
 	// uyarilar + config
-	if _, err := st.InsertAlertEvent(AlertEvent{Ts: now, Kind: "bw", Key: "en0", Message: "yuksek bant"}); err != nil {
+	aeID, err := st.InsertAlertEvent(AlertEvent{Ts: now, Kind: "bw", Key: "en0", Message: "yuksek bant", Severity: "warn", Site: "dc1"})
+	if err != nil {
 		t.Fatalf("uyari: %v", err)
+	}
+	// S22.6: yaşam döngüsü — open sorgu + bump (PG)
+	open, err := st.OpenAlertEventByKey("bw", "en0")
+	if err != nil || open == nil || open.ID != aeID || open.Count != 1 || open.State != "firing" || open.Site != "dc1" {
+		t.Fatalf("OpenAlertEventByKey: %v %+v", err, open)
+	}
+	if err := st.BumpAlertEvent(aeID, now+10, "hala yuksek"); err != nil {
+		t.Fatalf("BumpAlertEvent: %v", err)
+	}
+	if o, _ := st.OpenAlertEventByKey("bw", "en0"); o.Count != 2 || o.LastTs != now+10 {
+		t.Fatalf("bump sonrası: %+v", o)
 	}
 	if err := st.MarkAlertSeen("proc", "curl"); err != nil {
 		t.Fatalf("seen: %v", err)

@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -266,9 +267,10 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			direction = "düşüş"
 		}
 		unit := metricUnit(c.metric)
-		m.fire("anomaly", fmt.Sprintf("%s:%s:%s:%d", c.metric, c.dim, c.key, curBucket),
+		m.fireCtx("anomaly", fmt.Sprintf("%s:%s:%s:%d", c.metric, c.dim, c.key, curBucket),
 			fmt.Sprintf("%s: alışılmadık %s sapması (%s) — %.0f %s, bu zaman dilimi ortalaması %.0f ± %.0f %s (z=%.1f, son %d dk)",
-				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin))
+				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin),
+			fireOpts{Site: m.anomalySite(c.dim, c.key)})
 	}
 }
 
@@ -301,6 +303,22 @@ func (m *Manager) loadBaseline(dim, metric string) []store.AnomalyBaselineRow {
 		return nil
 	}
 	return rows
+}
+
+// anomalySite, bir sapmanın saha kapsamı (site-admin filtresi için).
+// dim="site" → key ; dim="agent" → agent'ın sahası ; aksi "".
+func (m *Manager) anomalySite(dim, key string) string {
+	switch dim {
+	case "site":
+		return key
+	case "agent":
+		if id, err := strconv.ParseInt(key, 10, 64); err == nil {
+			if a, err := m.st.AgentByID(id); err == nil && a != nil {
+				return a.Site
+			}
+		}
+	}
+	return ""
 }
 
 // anomalyScope, uyari mesajindaki insan-okur boyut etiketi.
