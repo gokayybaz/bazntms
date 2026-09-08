@@ -5,7 +5,7 @@ import { useHotkeys } from '../lib/useHotkeys'
 // görünür sekmelere sırayla eşlenir. Aktif sekme reverse-video. Dar ekranda
 // yatay kaydırır.
 
-type Tab = { to: string; label: string; end: boolean; govern?: boolean; admin?: boolean }
+type Tab = { to: string; label: string; end: boolean; govern?: boolean; admin?: boolean; analyze?: boolean }
 
 const TABS: Tab[] = [
   { to: '/', label: 'Pano', end: true },
@@ -16,14 +16,25 @@ const TABS: Tab[] = [
   { to: '/topoloji', label: 'Topo', end: false },
   { to: '/uyarilar', label: 'Uyarı', end: false },
   { to: '/anomali', label: 'Anomali', end: false },
+  { to: '/ai', label: 'AI', end: false, analyze: true },
   { to: '/raporlar', label: 'Rapor', end: false },
   { to: '/uyumluluk', label: 'Uyumluluk', end: false, govern: true },
   { to: '/yonetim', label: 'Yönetim', end: false, admin: true },
 ]
 
-export function TabBar({ isAdmin = false, canGovern = true }: { isAdmin?: boolean; canGovern?: boolean }) {
+export function TabBar({
+  isAdmin = false,
+  canGovern = true,
+  canAnalyze = true,
+}: {
+  isAdmin?: boolean
+  canGovern?: boolean
+  canAnalyze?: boolean
+}) {
   const navigate = useNavigate()
-  const items = TABS.filter((t) => (!t.govern || canGovern) && (!t.admin || isAdmin))
+  const items = TABS.filter(
+    (t) => (!t.govern || canGovern) && (!t.admin || isAdmin) && (!t.analyze || canAnalyze),
+  )
 
   useHotkeys(
     items.slice(0, 9).map((t, i) => ({

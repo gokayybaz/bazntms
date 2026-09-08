@@ -20,6 +20,7 @@ import { TopologyPage } from './pages/TopologyPage'
 import { AlertsPage } from './pages/AlertsPage'
 import { IncidentDetailPage } from './pages/IncidentDetailPage'
 import { AnomalyPage } from './pages/AnomalyPage'
+import { AiPage } from './pages/AiPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ComplianceOverviewPage } from './pages/ComplianceOverviewPage'
 import { RiskRegisterPage } from './pages/RiskRegisterPage'
@@ -47,6 +48,9 @@ export default function App() {
   // (saha-üstü yönetişim) yalnız global admin — S14.B (çoklu-saha).
   const isAdmin = !authRequired || identity?.role === 'admin' || identity?.role === 'site-admin'
   const canGovern = !authRequired || identity?.role === 'admin'
+  // AI analiz (Faz 26) — PermAnalyze: admin / site-admin / netops / analyst.
+  const canAnalyze =
+    !authRequired || ['admin', 'site-admin', 'netops', 'analyst'].includes(identity?.role ?? '')
   // site-admin ise yönetim formları bu sahaya kilitli; global admin ise boş.
   const lockedSite = identity?.role === 'site-admin' ? (identity.site ?? '') : ''
   const { alertEvents, fleet, connected, reconnect } = useLive(
@@ -145,7 +149,7 @@ export default function App() {
             identity={identity}
             onLogout={logout}
           />
-          <TabBar isAdmin={isAdmin} canGovern={canGovern} />
+          <TabBar isAdmin={isAdmin} canGovern={canGovern} canAnalyze={canAnalyze} />
 
           <main ref={mainRef} className="min-w-0 overflow-x-hidden overflow-y-auto">
             <Routes>
@@ -161,6 +165,7 @@ export default function App() {
               <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
               <Route path="/uyarilar/olay/:id" element={<IncidentDetailPage />} />
               <Route path="/anomali" element={<AnomalyPage />} />
+              <Route path="/ai" element={<AiPage />} />
               <Route path="/raporlar" element={<ReportsPage />} />
               <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
               <Route path="/uyumluluk/risk" element={<RiskRegisterPage />} />
