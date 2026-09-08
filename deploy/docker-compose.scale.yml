@@ -94,6 +94,7 @@ services:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
       BAZNTMS_LOG__FORMAT: json
+      BAZNTMS_DB_MAX_CONNS: "64" # Faz 21: combined ingest + devpoll havuzu doyuruyordu (32 → 64)
       AUTH_PASSWORD: demo123
     deploy:
       replicas: 2
@@ -127,6 +128,7 @@ services:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
       BAZNTMS_LOG__FORMAT: json
+      BAZNTMS_DB_MAX_CONNS: "64" # Faz 21: combined ingest + devpoll havuzu doyuruyordu (32 → 64)
     deploy:
       replicas: 2
     healthcheck:
