@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
@@ -30,6 +31,124 @@ func newTestServerWithEnroll(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
+}
+
+// TestProcessDetailEndpoint, Faz 23-A: GET /api/v1/agents/{id}/processes/{ad}
+// süreç kimliği + uzak hedefler + canlı bağlantılar + uygulama görünürlüğü +
+// zaman çizelgesini tek yanıtta döndürür; DNS/SNI verisi yokken de çalışır;
+// görülmeyen süreç 404.
+func TestProcessDetailEndpoint(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "pd.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	engine := capture.NewEngine()
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	id, err := st.RegisterAgent(store.Agent{Name: "pd-agent", TokenHash: store.TokenHash("pd")})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	now := time.Now().Unix()
+	if err := st.SaveProcessTraffic(id, now-30, []telemetry.ProcessTrafficSample{
+		{PID: 5, Process: "claude", Proto: "tcp", RemoteIP: "1.2.3.4", Port: 443, BytesIn: 800, BytesOut: 120},
+	}); err != nil {
+		t.Fatalf("pt1: %v", err)
+	}
+	if err := st.SaveProcessTraffic(id, now, []telemetry.ProcessTrafficSample{
+		{PID: 5, Process: "claude", Proto: "tcp", RemoteIP: "1.2.3.4", Port: 443, BytesIn: 2000, BytesOut: 200},
+	}); err != nil {
+		t.Fatalf("pt2: %v", err)
+	}
+	if err := st.SaveAgentDNS(id, now, []telemetry.DNSSample{
+		{PID: 5, Process: "claude", Domain: "api.anthropic.com", Queries: 3, Responses: 3},
+	}); err != nil {
+		t.Fatalf("dns: %v", err)
+	}
+	if err := st.ReplaceConnLatest(id, []telemetry.ConnectionSample{
+		{Proto: "tcp", LocalAddr: "10.0.0.9:51000", RemoteAddr: "1.2.3.4:443", Status: "ESTABLISHED", Process: "claude"},
+		{Proto: "tcp", LocalAddr: "10.0.0.9:22", RemoteAddr: "9.9.9.9:5000", Status: "ESTABLISHED", Process: "sshd"},
+	}); err != nil {
+		t.Fatalf("conn: %v", err)
+	}
+
+	resp := apiReq(t, http.MethodGet, ts.URL+"/api/v1/agents/"+fmt.Sprint(id)+"/processes/claude", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("200 beklenirdi: %d", resp.StatusCode)
+	}
+	var out struct {
+		Process struct {
+			Process string  `json:"process"`
+			Total   uint64  `json:"total"`
+			PIDs    []int64 `json:"pids"`
+			RxBps   float64 `json:"rx_bps"`
+		} `json:"process"`
+		Remotes []struct {
+			RemoteIP string `json:"remote_ip"`
+			Conns    int    `json:"conns"`
+		} `json:"remotes"`
+		Connections   []telemetry.ConnectionSample `json:"connections"`
+		AppVisibility []struct {
+			Type string `json:"type"`
+			Host string `json:"host"`
+		} `json:"app_visibility"`
+		Timeline []struct {
+			Event  string `json:"event"`
+			Target string `json:"target"`
+		} `json:"timeline"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("çözülemedi: %v", err)
+	}
+	// kova1 = 800+120, kova2 = 2000+200
+	if out.Process.Process != "claude" || out.Process.Total != 3120 {
+		t.Fatalf("özet hatalı: %+v", out.Process)
+	}
+	// anlık hız = son kova (2000 bayt in) / 30 sn
+	if out.Process.RxBps < 65 || out.Process.RxBps > 68 {
+		t.Fatalf("rx_bps ~66.7 beklenirdi: %v", out.Process.RxBps)
+	}
+	// süreç trafik tablosuyla mutabık (aynı store sorgusu)
+	top, _ := st.TopProcessTraffic(time.Now().Add(-time.Hour), id, 10, "")
+	if len(top) != 1 || top[0].Total != out.Process.Total {
+		t.Fatalf("total TopProcessTraffic ile mutabık değil: %+v vs %d", top, out.Process.Total)
+	}
+	if len(out.Remotes) != 1 || out.Remotes[0].RemoteIP != "1.2.3.4" || out.Remotes[0].Conns != 1 {
+		t.Fatalf("uzak uç / canlı bağlantı hatalı: %+v", out.Remotes)
+	}
+	if len(out.Connections) != 1 || out.Connections[0].Process != "claude" {
+		t.Fatalf("bağlantılar sürece kapsamlı değil: %+v", out.Connections)
+	}
+	if len(out.AppVisibility) != 1 || out.AppVisibility[0].Host != "api.anthropic.com" {
+		t.Fatalf("uygulama görünürlüğü hatalı: %+v", out.AppVisibility)
+	}
+	if len(out.Timeline) == 0 || out.Timeline[0].Event != "process.first_seen" {
+		t.Fatalf("zaman çizelgesi hatalı: %+v", out.Timeline)
+	}
+
+	// görülmeyen süreç → 404
+	r404 := apiReq(t, http.MethodGet, ts.URL+"/api/v1/agents/"+fmt.Sprint(id)+"/processes/yok", nil)
+	r404.Body.Close()
+	if r404.StatusCode != http.StatusNotFound {
+		t.Fatalf("görülmeyen süreç 404 beklenirdi: %d", r404.StatusCode)
+	}
+
+	// DNS/SNI olmadan da 200 (yalnız trafik olan süreç)
+	if err := st.SaveProcessTraffic(id, now, []telemetry.ProcessTrafficSample{
+		{PID: 7, Process: "raw", Proto: "udp", RemoteIP: "5.5.5.5", Port: 1234, BytesIn: 10, BytesOut: 10},
+	}); err != nil {
+		t.Fatalf("pt raw: %v", err)
+	}
+	rRaw := apiReq(t, http.MethodGet, ts.URL+"/api/v1/agents/"+fmt.Sprint(id)+"/processes/raw", nil)
+	defer rRaw.Body.Close()
+	if rRaw.StatusCode != http.StatusOK {
+		t.Fatalf("DNS/SNI'siz süreç 200 beklenirdi: %d", rRaw.StatusCode)
+	}
 }
 
 // TestTelemetryReplyCarriesPolicy, kayitli agent enrollment'i tekrarlamadigi

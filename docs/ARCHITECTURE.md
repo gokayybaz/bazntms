@@ -220,6 +220,7 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 |------|-------|--------------|
 | `/` | Dashboard (`Overview` bileşeni) — meter bandı + log-tail + filo/topoloji/cihazlar | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
+| `/agentlar/:id/surec/:ad` | Süreç detayı (Faz 23-A) — Süreç Trafiği tablosunda `Enter`; özet/uzak hedefler/canlı bağlantılar/uygulama görünürlüğü (DNS+SNI+Host)/zaman çizelgesi. `Esc` → agent | `GET /api/v1/agents/:id/processes/:ad` (tek uç, sunucu-tarafı toplama) |
 | `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
 | `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
@@ -325,6 +326,18 @@ eBPF/ETW'de PID doğrudan çekirdek olayından gelir (`bpf_get_current_pid_tgid`
 Hub politikası (`-agent-pcap`) + agent isteği (`-pcap` / `collect.pcap`) ikisi
 de açıkken çalışır; hiçbir arka uç kurulamazsa atıf devre dışı kalır, temel
 telemetri aksamaz. Ham PCAP kaydı (`-record`) her zaman pcap ister.
+
+**Süreç detayı (Faz 23-A):** `GET /api/v1/agents/:id/processes/:ad` tek bir
+sürecin (ad bazlı — PID zamanla değişir) tüm ağ etkinliğini **sunucu-tarafı
+toplayarak** tek yanıtta döndürür: kimlik/özet (ilk-son görülme, PID'ler, bayt,
+son-kova hız), uzak hedefler (`process_traffic` → `GROUP BY remote_ip,port,proto`
++ opportunistik GeoIP/ASN), canlı bağlantılar (`agent_conn_latest` süreç
+filtreli — **yaş türetilemez**, o tabloda ts yok), uygulama görünürlüğü
+(`agent_dns` ∪ `l7_endpoints`), zaman çizelgesi (ilk görülme · DNS/L7 ilk
+temas · trafik sıçraması = kova toplamı > ort.+3σ · key'inde süreç adı geçen
+`alert_events`). Yeni tablo/pipeline yok; RBAC site scope (`agentInScope`).
+Store metotları `internal/store/process_detail.go`, frontend
+`frontend/src/pages/ProcessDetailPage.tsx`.
 
 ## Veri akışı özeti
 

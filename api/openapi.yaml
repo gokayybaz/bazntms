@@ -411,6 +411,82 @@ paths:
                     out: { type: number }
                     local: { type: number }
                     pps: { type: integer }
+  /api/v1/agents/{id}/processes/{process}:
+    get:
+      tags: [fleet]
+      summary: Süreç detayı — kimlik/özet + uzak hedefler + canlı bağlantılar + uygulama görünürlüğü + zaman çizelgesi (Faz 23-A)
+      description: >
+        Tek bir sürecin (ad bazlı) tüm ağ etkinliği tek yanıtta. Yeni telemetri
+        hattı yok — process_traffic / agent_dns / l7_endpoints sunucu-tarafı
+        toplanır. RBAC site scope uygulanır; süreç `minutes` penceresinde hiç
+        görülmediyse 404.
+      parameters:
+        - { $ref: "#/components/parameters/idPath" }
+        - name: process
+          in: path
+          required: true
+          schema: { type: string }
+          description: Süreç adı (URL-encoded)
+        - { $ref: "#/components/parameters/minutes" }
+      responses:
+        "200":
+          description: Süreç detayı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  process:
+                    type: object
+                    properties:
+                      process: { type: string }
+                      pids: { type: array, items: { type: integer } }
+                      first_seen: { type: integer }
+                      last_seen: { type: integer }
+                      bytes_in: { type: integer }
+                      bytes_out: { type: integer }
+                      total: { type: integer }
+                      rx_bps: { type: number }
+                      tx_bps: { type: number }
+                  remotes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        remote_ip: { type: string }
+                        port: { type: integer }
+                        proto: { type: string }
+                        bytes_in: { type: integer }
+                        bytes_out: { type: integer }
+                        first_seen: { type: integer }
+                        last_seen: { type: integer }
+                        conns: { type: integer }
+                        country: { type: string }
+                        asn: { type: string }
+                  connections:
+                    type: array
+                    items: { type: object }
+                  app_visibility:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string, enum: [dns, tls, http] }
+                        host: { type: string }
+                        observations: { type: integer }
+                        bytes: { type: integer }
+                        first_seen: { type: integer }
+                        last_seen: { type: integer }
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ts: { type: integer }
+                        event: { type: string }
+                        target: { type: string }
+                        detail: { type: string }
+        "404": { description: Agent veya süreç bulunamadı (ya da site kapsamı dışı) }
   /api/v1/processes:
     get:
       tags: [fleet]

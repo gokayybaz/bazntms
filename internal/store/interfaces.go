@@ -160,6 +160,13 @@ type AgentStore interface {
 	TopAgentDNS(since time.Time, agentID int64, limit int, site string) ([]AgentDNSUsage, error)
 	// RecentAgentDomains, IOC eslestirmesi icin son penceredeki L7+DNS alan adlari
 	RecentAgentDomains(since time.Time) ([]AgentDomainSeen, error)
+
+	// süreç detayı / derin inceleme (Faz 23-A) — tek agent + süreç adı kapsamlı
+	// sunucu-tarafı toplamalar (yeni tablo yok).
+	ProcessSummary(agentID int64, process string, since time.Time) (ProcessSummary, error)
+	ProcessRemotes(agentID int64, process string, since time.Time, limit int) ([]ProcessRemote, error)
+	ProcessAppVisibility(agentID int64, process string, since time.Time, limit int) ([]ProcessAppObservation, error)
+	ProcessTimeline(agentID int64, agentName, process string, since time.Time, limit int) ([]ProcessTimelineEntry, error)
 }
 
 // DeviceStore, SNMP/NetFlow/syslog cihaz verisi (Faz 3) + FortiGate REST

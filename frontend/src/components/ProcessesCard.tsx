@@ -19,7 +19,7 @@ const RANGES = [
   { label: '6 saat', value: 360 },
 ] as const
 
-export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
+export function ProcessesCard({ agentId, onActivate }: { agentId?: number; onActivate?: (process: string) => void } = {}) {
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
   const { data, loaded } = usePolledJson<ProcessUsage[]>(
     `/api/v1/processes?minutes=${minutes}&limit=20${agentId ? `&agent_id=${agentId}` : ''}`,
@@ -56,7 +56,7 @@ export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <RangeTabs ranges={RANGES} value={minutes} onChange={setMinutes} />
         <span className="ml-auto font-mono text-[10px] text-tui-dim">
-          nethogs yöntemi: pcap + soket→PID · agent'ta -pcap açık olmalı
+          {onActivate ? 'Enter → süreç detayı · ' : ''}nethogs yöntemi: pcap + soket→PID · agent'ta -pcap açık olmalı
         </span>
       </div>
 
@@ -77,6 +77,7 @@ export function ProcessesCard({ agentId }: { agentId?: number } = {}) {
           initialSort={{ key: 'total', dir: 'desc' }}
           scrollClass="max-h-80"
           className="border-0"
+          onActivate={onActivate ? (r) => onActivate(r.process) : undefined}
         />
       )}
     </div>

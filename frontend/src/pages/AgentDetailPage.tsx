@@ -381,8 +381,11 @@ export function AgentDetailPage() {
         )}
       </Panel>
 
-      <Panel title="Süreç Trafiği" right={<span className="text-[10px] text-tui-dim">bu agent</span>}>
-        <ProcessesCard agentId={agent.id} />
+      <Panel title="Süreç Trafiği" right={<span className="text-[10px] text-tui-dim">bu agent · Enter → detay</span>}>
+        <ProcessesCard
+          agentId={agent.id}
+          onActivate={(process) => navigate(`/agentlar/${agent.id}/surec/${encodeURIComponent(process)}`)}
+        />
       </Panel>
       <Panel title="Uygulama Görünürlüğü" right={<span className="text-[10px] text-tui-dim">L7 · SNI + HTTP Host</span>}>
         <L7Card agentId={agent.id} />

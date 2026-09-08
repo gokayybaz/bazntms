@@ -259,6 +259,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)
 	mux.HandleFunc("GET /api/v1/agents/{id}", s.handleAgentDetail)
 	mux.HandleFunc("GET /api/v1/agents/{id}/history", s.handleAgentHistory)
+	mux.HandleFunc("GET /api/v1/agents/{id}/processes/{process}", s.handleProcessDetail)
 	mux.Handle("DELETE /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentDelete)))
 	mux.Handle("PATCH /api/v1/agents/{id}", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentRename)))
 	mux.Handle("PUT /api/v1/agents/{id}/uplink", s.requirePerm(PermManageAgents, http.HandlerFunc(s.handleAgentSetUplink)))

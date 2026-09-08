@@ -90,6 +90,7 @@ func TestSiteLeak(t *testing.T) {
 	for _, p := range []string{
 		"/api/v1/agents/" + i64(a2),
 		"/api/v1/agents/" + i64(a2) + "/history",
+		"/api/v1/agents/" + i64(a2) + "/processes/dc2-proc",
 		"/api/v1/l7?agent_id=" + i64(a2),
 		"/api/v1/dns?agent_id=" + i64(a2),
 		"/api/v1/processes?agent_id=" + i64(a2),

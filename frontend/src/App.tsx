@@ -11,6 +11,7 @@ import { LoginScreen } from './components/LoginScreen'
 import { DashboardPage } from './pages/DashboardPage'
 import { AgentsListPage } from './pages/AgentsListPage'
 import { AgentDetailPage } from './pages/AgentDetailPage'
+import { ProcessDetailPage } from './pages/ProcessDetailPage'
 import { DevicesPage } from './pages/DevicesPage'
 import { DeviceDetailPage } from './pages/DeviceDetailPage'
 import { TrafficFlowPage } from './pages/TrafficFlowPage'
@@ -150,6 +151,7 @@ export default function App() {
               <Route path="/" element={<DashboardPage refreshKey={historyRefresh} alertEvents={alertEvents} fleet={fleet} />} />
               <Route path="/agentlar" element={<AgentsListPage />} />
               <Route path="/agentlar/:id" element={<AgentDetailPage />} />
+              <Route path="/agentlar/:id/surec/:ad" element={<ProcessDetailPage />} />
               <Route path="/cihazlar" element={<DevicesPage refreshKey={historyRefresh} />} />
               <Route path="/cihazlar/:id" element={<DeviceDetailPage />} />
               <Route path="/akis" element={<TrafficFlowPage isAdmin={isAdmin} />} />

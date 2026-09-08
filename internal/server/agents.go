@@ -522,6 +522,102 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleProcessDetail, tek bir sürecin (Agent → Süreç Trafiği → Enter) tüm ağ
+// etkinliğini toplar: kimlik/özet + uzak hedefler + canlı bağlantılar +
+// uygulama görünürlüğü (DNS/SNI/Host) + zaman çizelgesi (Faz 23-A). Yeni
+// telemetri hattı yok — mevcut tablolar sunucu-tarafı toplanır. UI auth +
+// RBAC site scope (agentInScope).
+func (s *Server) handleProcessDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	agent, err := s.store.AgentByID(id)
+	if err != nil || !s.agentInScope(r, agent) {
+		http.Error(w, "agent bulunamadi", http.StatusNotFound)
+		return
+	}
+	process := r.PathValue("process")
+	if process == "" {
+		http.Error(w, "süreç adı gerekli", http.StatusBadRequest)
+		return
+	}
+	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
+	if minutes <= 0 || minutes > 60*24*7 {
+		minutes = 60
+	}
+	since := time.Now().Add(-time.Duration(minutes) * time.Minute)
+
+	summary, err := s.store.ProcessSummary(id, process, since)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if summary.FirstSeen == 0 {
+		http.Error(w, "süreç bu pencerede görülmedi", http.StatusNotFound)
+		return
+	}
+	remotes, err := s.store.ProcessRemotes(id, process, since, 50)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	app, err := s.store.ProcessAppVisibility(id, process, since, 50)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	timeline, err := s.store.ProcessTimeline(id, agent.Name, process, since, 200)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// canlı bağlantılar: son telemetri anındaki soket tablosundan süreç süzülür.
+	conns := make([]telemetry.ConnectionSample, 0)
+	for _, c := range s.store.LatestAgentConnections(id) {
+		if c.Process == process {
+			conns = append(conns, c)
+		}
+	}
+
+	// uzak uçları zenginleştir: canlı bağlantı sayısı + (varsa) GeoIP/ASN.
+	// 23-E `internal/enrich` gelene kadar opportunistik.
+	for i := range remotes {
+		for _, c := range conns {
+			if connRemoteHost(c.RemoteAddr) == remotes[i].RemoteIP {
+				remotes[i].Conns++
+			}
+		}
+		if s.geo != nil {
+			info := s.geo.Lookup(remotes[i].RemoteIP)
+			remotes[i].Country = info.Country
+			remotes[i].ASN = info.ASN
+		}
+	}
+
+	writeJSON(w, map[string]any{
+		"process":        summary,
+		"remotes":        remotes,
+		"connections":    conns,
+		"app_visibility": app,
+		"timeline":       timeline,
+	})
+}
+
+// connRemoteHost, "host:port" (veya "[v6]:port") biçimindeki uzak adresten
+// yalnız host kısmını döndürür; ayrıştıramazsa girdiyi olduğu gibi verir.
+func connRemoteHost(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
+}
+
 // handleAgentHistory, Agent Detay sayfasindaki throughput grafigi icin
 // zaman serisi dondurur (ThroughputChart ile ayni Bucket semasi).
 func (s *Server) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
