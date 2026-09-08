@@ -416,6 +416,17 @@ func newRequestID() string {
 	return hex.EncodeToString(b)
 }
 
+const requestIDCtxKey ctxKey = "request_id"
+
+// requestIDFromCtx, observe middleware'inin ürettiği X-Request-Id'yi döndürür
+// (denetim kaydı ↔ slog "http" satırı korelasyonu — Faz 25-C).
+func requestIDFromCtx(r *http.Request) string {
+	if v, ok := r.Context().Value(requestIDCtxKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
 // observe, tum isteklere request-id atar, Prometheus metriklerini gunceller
 // ve yapılandırılmış slog kaydı dusurur. /ws ve /metrics sessizdir.
 func (s *Server) observe(next http.Handler) http.Handler {
@@ -426,6 +437,7 @@ func (s *Server) observe(next http.Handler) http.Handler {
 		}
 		rid := newRequestID()
 		w.Header().Set("X-Request-Id", rid)
+		r = r.WithContext(context.WithValue(r.Context(), requestIDCtxKey, rid))
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, code: http.StatusOK}
 		next.ServeHTTP(sw, r)
@@ -658,7 +670,8 @@ func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	s.audit(r, identityFromCtx(r), "alerts.update", "", "")
+	// Faz 25-C: durum farkı (sır alanları redactAuditJSON'da maskelenir).
+	s.auditDiff(r, identityFromCtx(r), "alerts.update", "", "", cur, cfg)
 	writeJSON(w, map[string]any{"ok": true})
 }
 

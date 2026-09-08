@@ -1381,7 +1381,19 @@ paths:
     get:
       tags: [rbac]
       summary: Append-only denetim kaydı (SHA-256 zinciri) — yetki:admin
-      parameters: [ { $ref: "#/components/parameters/limit" } ]
+      description: >
+        Faz 25-C: her kayıt actor_type / request_id / user_agent / result
+        taşır; yapılandırma değişikliklerinde before_json / after_json durum
+        farkı (sır alanları "•••" maskeli). Süzgeçler parametreli.
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { name: actor, in: query, schema: { type: string }, description: "username LIKE" }
+        - { name: action, in: query, schema: { type: string }, description: "tam eşleşme veya 'user.*' öneki" }
+        - { name: resource, in: query, schema: { type: string }, description: "target LIKE" }
+        - { name: ip, in: query, schema: { type: string } }
+        - { name: result, in: query, schema: { type: string, enum: [ok, error, denied] } }
+        - { name: since, in: query, schema: { type: integer }, description: "unix ts alt sınır" }
+        - { name: until, in: query, schema: { type: integer }, description: "unix ts üst sınır" }
       responses:
         "200": { description: Denetim kaydı dizisi }
         "403": { $ref: "#/components/responses/Forbidden" }

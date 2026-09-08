@@ -5,9 +5,24 @@ import { AuditCard } from './AuditCard'
 import { auditTone } from '../lib/auditKinds'
 
 const EVENTS = [
-  { id: 3, ts: 1_700_000_200, username: 'ada', role: 'admin', action: 'user.create', target: 'user:bob', detail: 'rol: viewer', ip: '10.0.0.1', hash: 'h3' },
-  { id: 2, ts: 1_700_000_100, username: 'ada', role: 'admin', action: 'login', target: 'legacy', detail: '', ip: '10.0.0.1', hash: 'h2' },
-  { id: 1, ts: 1_700_000_000, username: '', role: '', action: 'login.failed', target: 'user:x', detail: 'hatalı', ip: '10.0.0.9', hash: 'h1' },
+  {
+    id: 3,
+    ts: 1_700_000_200,
+    username: 'ada',
+    role: 'admin',
+    action: 'user.update',
+    target: 'user:bob',
+    detail: 'rol: analyst',
+    ip: '10.0.0.1',
+    hash: 'h3',
+    actor_type: 'legacy',
+    request_id: 'req-abc',
+    result: 'ok',
+    before_json: '{"role":"viewer"}',
+    after_json: '{"role":"analyst"}',
+  },
+  { id: 2, ts: 1_700_000_100, username: 'ada', role: 'admin', action: 'login', target: 'legacy', detail: '', ip: '10.0.0.1', hash: 'h2', result: 'ok' },
+  { id: 1, ts: 1_700_000_000, username: '', role: '', action: 'login.failed', target: 'user:x', detail: 'hatalı', ip: '10.0.0.9', hash: 'h1', result: 'error' },
 ]
 
 function mockFetch(verify = { ok: true, broken_at: 0, checked: 3 }) {
@@ -40,11 +55,37 @@ describe('AuditCard', () => {
   it('zincir sağlam rozeti + olay tablosu gösterir', async () => {
     mockFetch()
     render(<AuditCard />)
-    await waitFor(() => expect(screen.getByText('user.create')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('user.update')).toBeInTheDocument())
     expect(screen.getByText('✓ zincir sağlam')).toBeInTheDocument()
     expect(screen.getByText('3 kayıt')).toBeInTheDocument()
     expect(screen.getByText('user:bob')).toBeInTheDocument()
     expect(screen.getByText('login.failed')).toBeInTheDocument()
+  })
+
+  it('satır seçince öncesi/sonrası durum farkını gösterir', async () => {
+    mockFetch()
+    render(<AuditCard />)
+    await waitFor(() => expect(screen.getByText('user.update')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('user:bob'))
+    await waitFor(() => expect(screen.getByText('req-abc')).toBeInTheDocument())
+    expect(screen.getByText(/"role": "viewer"/)).toBeInTheDocument()
+    expect(screen.getByText(/"role": "analyst"/)).toBeInTheDocument()
+  })
+
+  it('süzgeç alanı sunucu sorgusuna parametre ekler', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        urls.push(url)
+        if (url.includes('verify')) return Promise.resolve({ ok: true, json: async () => ({ ok: true, checked: 0 }) } as Response)
+        return Promise.resolve({ status: 200, ok: true, json: async () => [] } as Response)
+      }),
+    )
+    render(<AuditCard />)
+    await waitFor(() => expect(urls.some((u) => u.includes('/api/v1/audit?'))).toBe(true))
+    await userEvent.type(screen.getByLabelText('Eylem'), 'user.*')
+    await waitFor(() => expect(urls.some((u) => u.includes('action=user.'))).toBe(true))
   })
 
   it('zincir bozuksa kırık kayıt numarasını gösterir', async () => {

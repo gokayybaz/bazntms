@@ -220,6 +220,10 @@ func (s *Server) handleDeviceSetUplink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var prevUplink *int64
+	if cur, err := s.store.DeviceByID(id); err == nil && cur != nil {
+		prevUplink = cur.UplinkDeviceID
+	}
 	if err := s.store.SetDeviceUplink(id, body.DeviceID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -228,7 +232,10 @@ func (s *Server) handleDeviceSetUplink(w http.ResponseWriter, r *http.Request) {
 	if body.DeviceID != nil {
 		detail = fmt.Sprintf("device:%d", *body.DeviceID)
 	}
-	s.audit(r, identityFromCtx(r), "device.uplink", fmt.Sprintf("device:%d", id), detail)
+	// Faz 25-C: uplink ataması denetim farkı.
+	s.auditDiff(r, identityFromCtx(r), "device.uplink", fmt.Sprintf("device:%d", id), detail,
+		map[string]any{"uplink_device_id": prevUplink},
+		map[string]any{"uplink_device_id": body.DeviceID})
 	writeJSON(w, map[string]any{"ok": true})
 }
 

@@ -103,6 +103,11 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kullanıcı bulunamadı", http.StatusNotFound)
 		return
 	}
+	// Faz 25-C: denetim durum farkı için değişmeyen alan projeksiyonu.
+	auditView := func(x *store.User) map[string]any {
+		return map[string]any{"role": x.Role, "site": x.Site, "enabled": x.Enabled}
+	}
+	beforeU := auditView(u)
 	// S14.B2: saha yöneticisi yalnız kendi sahasının kullanıcısına dokunabilir.
 	if !s.scopedManageAllowed(w, r, u.Site) {
 		return
@@ -186,7 +191,11 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.audit(r, identityFromCtx(r), "user.update", "user:"+u.Username, "rol: "+u.Role)
+	detail := "rol: " + u.Role
+	if req.Password != nil {
+		detail += " (şifre sıfırlandı)"
+	}
+	s.auditDiff(r, identityFromCtx(r), "user.update", "user:"+u.Username, detail, beforeU, auditView(u))
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -439,9 +448,22 @@ func (s *Server) handleEnrollTokenDelete(w http.ResponseWriter, r *http.Request)
 // --- denetim kaydi ---
 
 func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	since, _ := strconv.ParseInt(q.Get("since"), 10, 64)
+	until, _ := strconv.ParseInt(q.Get("until"), 10, 64)
 	// S14.B2: site-admin yalnız kendi sahasının denetim olaylarını görür.
-	events, err := s.store.RecentAuditEvents(limit, SiteScope(identityFromCtx(r)))
+	events, err := s.store.QueryAuditEvents(store.AuditFilter{
+		Site:     SiteScope(identityFromCtx(r)),
+		Actor:    q.Get("actor"),
+		Action:   q.Get("action"),
+		Resource: q.Get("resource"),
+		IP:       q.Get("ip"),
+		Result:   q.Get("result"),
+		Since:    since,
+		Until:    until,
+		Limit:    limit,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

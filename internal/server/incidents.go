@@ -95,7 +95,10 @@ func (s *Server) handleIncidentAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.audit(r, ident, "incident."+action, fmt.Sprintf("incident:%d", id), in.Title)
+	// Faz 25-C: durum geçişi denetim farkı.
+	s.auditDiff(r, ident, "incident."+action, fmt.Sprintf("incident:%d", id), in.Title,
+		map[string]any{"status": in.Status, "ack_by": in.AckBy},
+		map[string]any{"status": status, "ack_by": ackBy})
 	writeJSON(w, map[string]any{"ok": true, "status": status})
 }
 

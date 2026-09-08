@@ -320,7 +320,34 @@ func requiresAuth(path string) bool {
 }
 
 // audit, denetim kaydini zincire ekler; hata olursa loglar, akisi bozmaz.
+// result varsayilan "ok"; before/after nil → durum farki yazilmaz.
 func (s *Server) audit(r *http.Request, id *Identity, action, target, detail string) {
+	s.auditEvent(r, id, action, target, detail, auditExtra{})
+}
+
+// auditDiff, islem oncesi/sonrasi durumu da yazar (Faz 25-C). before/after
+// redactAuditJSON'dan gecirilir — sir alanlari "•••" maskelenir.
+func (s *Server) auditDiff(r *http.Request, id *Identity, action, target, detail string, before, after any) {
+	s.auditEvent(r, id, action, target, detail, auditExtra{
+		result: "ok",
+		before: redactAuditJSON(before),
+		after:  redactAuditJSON(after),
+	})
+}
+
+// auditResult, sonucu acikca belirtir ("error" | "denied") — basarisiz
+// yetkilendirme / giris denemeleri icin.
+func (s *Server) auditResult(r *http.Request, id *Identity, action, target, detail, result string) {
+	s.auditEvent(r, id, action, target, detail, auditExtra{result: result})
+}
+
+type auditExtra struct {
+	result string
+	before string
+	after  string
+}
+
+func (s *Server) auditEvent(r *http.Request, id *Identity, action, target, detail string, x auditExtra) {
 	if s.store == nil {
 		return
 	}
@@ -328,14 +355,88 @@ func (s *Server) audit(r *http.Request, id *Identity, action, target, detail str
 	if ident == nil {
 		ident = &Identity{Username: "-", Role: RoleViewer, Kind: "-"}
 	}
-	_, err := s.store.InsertAuditEvent(store.AuditEvent{
+	result := x.result
+	if result == "" {
+		result = "ok"
+	}
+	actorType := ident.Kind
+	if actorType == "" {
+		actorType = "-"
+	}
+	ev := store.AuditEvent{
 		Username: ident.Username, Role: string(ident.Role), Site: ident.Site,
 		Action: action, Target: target, Detail: detail,
-		IP: clientIP(r),
-	})
-	if err != nil {
+		IP:         clientIP(r),
+		ActorType:  actorType,
+		Result:     result,
+		BeforeJSON: x.before,
+		AfterJSON:  x.after,
+	}
+	if r != nil {
+		ev.RequestID = requestIDFromCtx(r)
+		ev.UserAgent = r.UserAgent()
+	}
+	if _, err := s.store.InsertAuditEvent(ev); err != nil {
 		slog.Error("denetim kaydi yazilamadi", "action", action, "err", err)
 	}
+}
+
+// --- denetim durum farki maskeleme (Faz 25-C) ---
+
+// redactAuditJSON, bir degeri denetim kaydi icin JSON'a cevirir ve sir iceren
+// alan adlarini ("password", "token", "secret", "community", …) "•••" ile
+// maskeler. nil → "". Nesne map'e cozulup ozyinelemeli taranir.
+func redactAuditJSON(v any) string {
+	if v == nil {
+		return ""
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	var m any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return string(raw)
+	}
+	redactAuditWalk(m)
+	out, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+func redactAuditWalk(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if auditSecretKey(k) {
+				if val != nil && val != "" {
+					t[k] = secretMask
+				}
+				continue
+			}
+			redactAuditWalk(val)
+		}
+	case []any:
+		for _, val := range t {
+			redactAuditWalk(val)
+		}
+	}
+}
+
+func auditSecretKey(k string) bool {
+	k = strings.ToLower(k)
+	for _, s := range []string{
+		"password", "passwd", "secret", "token", "apikey", "api_key",
+		"passphrase", "community", "authpass", "auth_pass", "privpass",
+		"priv_pass", "credential", "private_key", "seed",
+	} {
+		if strings.Contains(k, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleLogin, sifre ile oturum acar: username verilmisse users tablosundan
@@ -363,14 +464,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			s.audit(r, ident, "login", "user:"+req.Username, "kullanici girisi")
 		} else {
-			s.audit(r, nil, "login.failed", "user:"+req.Username, "hatali kullanici girisi")
+			s.auditResult(r, nil, "login.failed", "user:"+req.Username, "hatali kullanici girisi", "error")
 		}
 	} else {
 		token, ident, ok, blocked = s.auth.Login(req.Password, ip)
 		if ok {
 			s.audit(r, ident, "login", "legacy", "tek sifre girisi (admin)")
 		} else {
-			s.audit(r, nil, "login.failed", "legacy", "hatali sifre")
+			s.auditResult(r, nil, "login.failed", "legacy", "hatali sifre", "error")
 		}
 	}
 	if !ok {

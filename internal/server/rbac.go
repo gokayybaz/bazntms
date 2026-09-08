@@ -124,7 +124,7 @@ func (s *Server) requirePerm(p Permission, next http.Handler) http.Handler {
 			return
 		}
 		if !id.Role.Allows(p) {
-			s.audit(r, id, "denied", string(r.Method)+" "+r.URL.Path, "yetki reddi: "+string(p))
+			s.auditResult(r, id, "denied", string(r.Method)+" "+r.URL.Path, "yetki reddi: "+string(p), "denied")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]any{"error": "yetkiniz yok", "required": string(p)})

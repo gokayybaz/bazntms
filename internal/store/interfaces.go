@@ -256,6 +256,7 @@ type AuthStore interface {
 	TouchEnrollToken(id int64) error
 	InsertAuditEvent(e AuditEvent) (int64, error)
 	RecentAuditEvents(limit int, site string) ([]AuditEvent, error)
+	QueryAuditEvents(f AuditFilter) ([]AuditEvent, error) // Faz 25-C — süzgeçli
 	VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error)
 
 	// paylaşımlı oturum deposu (A4, Faz 15 — -session-store=db)

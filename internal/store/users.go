@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -186,6 +187,8 @@ func (s *sqlStore) TouchAPIToken(id int64) error {
 //
 // Her kayit bir onceki kaydin hash'ini prev_hash alanina gomulur:
 //   hash = SHA-256(prev_hash | ts | username | role | action | target | detail | ip)
+// v2 (Faz 25-C): actor_type/result/request_id/user_agent/before_json/after_json
+// alanlarindan en az biri doluysa hash'e ek bir segment eklenir (asagi bkz.).
 // Zincir kopmussa (silme/değistirme) VerifyAuditChain bulur. Kayitlar
 // UPDATE/DELETE icin API tarafindan hicbir yol yoktur (append-only).
 
@@ -201,6 +204,22 @@ type AuditEvent struct {
 	IP       string `json:"ip"`
 	PrevHash string `json:"prev_hash"`
 	Hash     string `json:"hash"`
+
+	// v2 alanlari (Faz 25-C). Eski kayitlarda hepsi "" → hash zincirinde yok.
+	ActorType  string `json:"actor_type,omitempty"`  // user | legacy | token | oidc | system
+	RequestID  string `json:"request_id,omitempty"`  // X-Request-Id (log korelasyonu)
+	UserAgent  string `json:"user_agent,omitempty"`  // istemci imzasi (256'ya kirpili)
+	Result     string `json:"result,omitempty"`      // ok | error | denied
+	BeforeJSON string `json:"before_json,omitempty"` // islem oncesi durum (maskeli)
+	AfterJSON  string `json:"after_json,omitempty"`  // islem sonrasi durum (maskeli)
+}
+
+// auditV2 raporlar: v2 alanlarindan en az biri dolu mu? Doluysa auditHash
+// bu alanlari da zincire katar; degilse (tum eski kayitlar) atlar → mevcut
+// zincir birebir dogrulanmaya devam eder.
+func (e AuditEvent) auditV2() bool {
+	return e.ActorType != "" || e.Result != "" || e.RequestID != "" ||
+		e.UserAgent != "" || e.BeforeJSON != "" || e.AfterJSON != ""
 }
 
 func auditHash(prev string, e AuditEvent) string {
@@ -208,6 +227,10 @@ func auditHash(prev string, e AuditEvent) string {
 	h.Write([]byte(prev))
 	fmt.Fprintf(h, "|%d|%s|%s|%s|%s|%s|%s",
 		e.Ts, e.Username, e.Role, e.Action, e.Target, e.Detail, e.IP)
+	if e.auditV2() {
+		fmt.Fprintf(h, "|%s|%s|%s|%s|%s|%s",
+			e.ActorType, e.Result, e.RequestID, e.UserAgent, e.BeforeJSON, e.AfterJSON)
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -224,24 +247,88 @@ func (s *sqlStore) InsertAuditEvent(e AuditEvent) (int64, error) {
 	}
 	e.PrevHash = prev
 	e.Ts = time.Now().Unix()
+	if len(e.UserAgent) > 256 {
+		e.UserAgent = e.UserAgent[:256]
+	}
 	e.Hash = auditHash(prev, e)
 
 	var id int64
-	err = s.db.QueryRow(s.q(`INSERT INTO audit_events (ts, username, role, site, action, target, detail, ip, prev_hash, hash)
-		VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id`),
-		e.Ts, e.Username, e.Role, e.Site, e.Action, e.Target, e.Detail, e.IP, e.PrevHash, e.Hash).Scan(&id)
+	err = s.db.QueryRow(s.q(`INSERT INTO audit_events
+		(ts, username, role, site, action, target, detail, ip, prev_hash, hash,
+		 actor_type, request_id, user_agent, result, before_json, after_json)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		e.Ts, e.Username, e.Role, e.Site, e.Action, e.Target, e.Detail, e.IP, e.PrevHash, e.Hash,
+		e.ActorType, e.RequestID, e.UserAgent, e.Result, e.BeforeJSON, e.AfterJSON).Scan(&id)
 	return id, err
+}
+
+// AuditFilter, denetim kaydı sorgusu için isteğe bağlı süzgeçler. Boş alan
+// = süzme yok. Site RBAC kapsamı (S14.B2) çağıran tarafından set edilir.
+type AuditFilter struct {
+	Site     string // aktör sahası (site-admin kapsamı) — "" = hepsi
+	Actor    string // username LIKE
+	Action   string // action tam eşleşme veya "prefix.*"
+	Resource string // target LIKE
+	IP       string // ip tam eşleşme
+	Result   string // ok | error | denied
+	Since    int64  // ts >= (0 = sınır yok)
+	Until    int64  // ts <= (0 = sınır yok)
+	Limit    int
 }
 
 // RecentAuditEvents, son denetim olaylarini dondurur. site "" ise hepsi,
 // dolu ise yalnizca o sahanin (aktör-site) olaylari (S14.B2 — site-admin).
 func (s *sqlStore) RecentAuditEvents(limit int, site string) ([]AuditEvent, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
+	return s.QueryAuditEvents(AuditFilter{Site: site, Limit: limit})
+}
+
+// QueryAuditEvents, süzgeçli denetim kaydı sorgusu (Faz 25-C). Parametreli;
+// action "x.*" verilirse "x." önekiyle eşleşir.
+func (s *sqlStore) QueryAuditEvents(f AuditFilter) ([]AuditEvent, error) {
+	if f.Limit <= 0 || f.Limit > 1000 {
+		f.Limit = 100
 	}
-	q := `SELECT id, ts, username, role, site, action, target, detail, ip, prev_hash, hash
-		FROM audit_events WHERE (? = '' OR site = ?) ORDER BY id DESC LIMIT ?`
-	rows, err := s.db.Query(s.q(q), site, site, limit)
+	q := `SELECT id, ts, username, role, site, action, target, detail, ip, prev_hash, hash,
+		actor_type, request_id, user_agent, result, before_json, after_json
+		FROM audit_events WHERE (? = '' OR site = ?)`
+	args := []any{f.Site, f.Site}
+	if f.Actor != "" {
+		q += ` AND username LIKE ?`
+		args = append(args, "%"+f.Actor+"%")
+	}
+	if f.Action != "" {
+		if strings.HasSuffix(f.Action, ".*") {
+			q += ` AND action LIKE ?`
+			args = append(args, strings.TrimSuffix(f.Action, "*")+"%")
+		} else {
+			q += ` AND action = ?`
+			args = append(args, f.Action)
+		}
+	}
+	if f.Resource != "" {
+		q += ` AND target LIKE ?`
+		args = append(args, "%"+f.Resource+"%")
+	}
+	if f.IP != "" {
+		q += ` AND ip = ?`
+		args = append(args, f.IP)
+	}
+	if f.Result != "" {
+		q += ` AND result = ?`
+		args = append(args, f.Result)
+	}
+	if f.Since > 0 {
+		q += ` AND ts >= ?`
+		args = append(args, f.Since)
+	}
+	if f.Until > 0 {
+		q += ` AND ts <= ?`
+		args = append(args, f.Until)
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, f.Limit)
+
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +336,8 @@ func (s *sqlStore) RecentAuditEvents(limit int, site string) ([]AuditEvent, erro
 	out := []AuditEvent{}
 	for rows.Next() {
 		var e AuditEvent
-		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Site, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash); err != nil {
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Site, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash,
+			&e.ActorType, &e.RequestID, &e.UserAgent, &e.Result, &e.BeforeJSON, &e.AfterJSON); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -260,7 +348,8 @@ func (s *sqlStore) RecentAuditEvents(limit int, site string) ([]AuditEvent, erro
 // VerifyAuditChain, zinciri bastan sona dogrular; ilk bozuk kaydin ID'sini
 // dondurur (ok=false). ok=true ise bozuk kayit yoktur.
 func (s *sqlStore) VerifyAuditChain() (ok bool, brokenAt int64, checked int, err error) {
-	rows, err := s.db.Query(s.q(`SELECT id, ts, username, role, action, target, detail, ip, prev_hash, hash
+	rows, err := s.db.Query(s.q(`SELECT id, ts, username, role, action, target, detail, ip, prev_hash, hash,
+		actor_type, request_id, user_agent, result, before_json, after_json
 		FROM audit_events ORDER BY id ASC`))
 	if err != nil {
 		return false, 0, 0, err
@@ -270,7 +359,8 @@ func (s *sqlStore) VerifyAuditChain() (ok bool, brokenAt int64, checked int, err
 	prev := ""
 	for rows.Next() {
 		var e AuditEvent
-		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash); err != nil {
+		if err := rows.Scan(&e.ID, &e.Ts, &e.Username, &e.Role, &e.Action, &e.Target, &e.Detail, &e.IP, &e.PrevHash, &e.Hash,
+			&e.ActorType, &e.RequestID, &e.UserAgent, &e.Result, &e.BeforeJSON, &e.AfterJSON); err != nil {
 			return false, 0, checked, err
 		}
 		if e.PrevHash != prev || auditHash(prev, e) != e.Hash {

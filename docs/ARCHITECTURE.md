@@ -160,6 +160,15 @@ Ham NetFlow görünümü (`/api/v1/flows`, `FlowsCard`) değişmedi.
   `/api/auth/status`, OIDC ve `/api/openapi.{yaml,json}` + `/api/docs` muaf;
   statik dosyalar açık (SPA kabuğu). Sabit zamanlı şifre karşılaştırma, IP
   bazlı deneme sınırı, HttpOnly cookie + Bearer token
+- **Denetim kaydı** (`audit_events`, Faz 5.3 + **v2 Faz 25-C**): append-only
+  SHA-256 hash zinciri. v2 kayıtları `actor_type` (user/legacy/token/oidc),
+  `request_id` (observe middleware'inin `X-Request-Id`'si — slog ile
+  korelasyon), `user_agent`, `result` (ok/error/denied) ve yapılandırma
+  değişikliklerinde `before_json`/`after_json` durum farkı taşır (sır alanları
+  `redactAuditJSON` ile `•••`). Hash zinciri stabil: v2 segmenti yalnız bir
+  v2 alanı doluyken katılır → eski kayıtlar aynen doğrulanır (ADR 0012).
+  `GET /api/v1/audit` süzgeçli (`QueryAuditEvents`: actor/action/resource/ip/
+  result/tarih); `/api/v1/audit/verify` zinciri baştan sona doğrular.
 - **API sözleşmesi** (`api/openapi.yaml`, `internal/server/openapi.go`): elle
   bakımlı OpenAPI 3.1 şeması binary'ye gömülür; `/api/openapi.yaml` (ham),
   `/api/openapi.json` (yaml→json) ve `/api/docs` (tek dosya, CDN'siz gezgin)
