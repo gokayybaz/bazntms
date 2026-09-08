@@ -50,6 +50,9 @@ type Server struct {
 	// — agent kaydı için site-bağlı enroll token zorunlu, enroll token üretimi
 	// site ister. Bkz. docs/DEPLOYMENT-MODEL.md.
 	multiSite bool
+	// mockDevices (S21.2, -mock-devices): ölçek testi için vendor=mock cihaz
+	// eklemeye izin ver. Yalnız yük üreteci senaryolarında.
+	mockDevices bool
 	// publicURL, panelin dış adresi (-public-url). Agent kurulum sihirbazı
 	// enroll komutundaki hub adresi için bunu tercih eder — panel bir tünel/
 	// reverse-proxy arkasından localhost'ta açılmış olabilir.
@@ -164,6 +167,12 @@ func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
 
 // SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
 func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
+
+// SetMockDevices, ölçek testi için `vendor=mock` cihaz eklemeye izin verir
+// (S21.2 — `-mock-devices`). Kapalıyken (varsayılan) POST /api/v1/devices bu
+// vendor'ı 400 ile reddeder; sürücü seçimi (driver.For) her zaman mock'u tanır
+// ama hiçbir üretim cihazının vendor'ı "mock" olamaz.
+func (s *Server) SetMockDevices(on bool) { s.mockDevices = on }
 
 // SetPublicURL, panelin dış adresini (-public-url) kaydeder — agent kurulum
 // sihirbazı enroll komutundaki hub adresi için `window.location.origin` yerine

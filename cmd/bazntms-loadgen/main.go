@@ -102,7 +102,7 @@ var (
 
 func main() {
 	fl := flag.NewFlagSet("bazntms-loadgen", flag.ExitOnError)
-	mode := fl.String("mode", "agent", "yük türü: agent | flow | mixed")
+	mode := fl.String("mode", "agent", "yük türü: agent | flow | device | mixed")
 	hub := fl.String("hub", "http://localhost:8080", "hub adresi")
 	enroll := fl.String("token", "", "enrollment token'i (mode=agent|mixed için zorunlu)")
 	agents := fl.Int("agents", 100, "sanal agent sayisi")
@@ -110,6 +110,12 @@ func main() {
 	duration := fl.Duration("duration", 0, "test suresi (0 = Ctrl+C'ye kadar)")
 	spread := fl.Duration("spread", 30*time.Second, "agent baslangic rampasi (thundering herd onleme)")
 	site := fl.String("site", "loadgen", "sanal agent site adi")
+
+	// device modu (S21.2) — hub'a vendor=mock cihaz ekler, devpoll zamanlayıcıyı sürer
+	devUser := fl.String("user", "", "panel kullanıcı adı (mode=device; boş = legacy tek-şifre)")
+	devPassword := fl.String("password", "", "panel şifresi (mode=device — cihaz eklemek için gerekli)")
+	devDevices := fl.Int("devices", 1000, "eklenecek mock cihaz sayısı (mode=device)")
+	devPoll := fl.Int("device-poll", 60, "mock cihaz poll aralığı (saniye)")
 
 	// flow modu (S21.1) — sentetik NetFlow v5/v9 + IPFIX + sFlow UDP üreteci
 	flowTarget := fl.String("flow-target", "127.0.0.1:2055", "flow collector UDP adresi (mode=flow|mixed)")
@@ -126,8 +132,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "-token zorunlu (hub'in logladigi enroll token)")
 		os.Exit(1)
 	}
-	if *mode != "agent" && *mode != "flow" && *mode != "mixed" {
-		fmt.Fprintf(os.Stderr, "bilinmeyen -mode: %q (agent|flow|mixed)\n", *mode)
+	switch *mode {
+	case "agent", "flow", "mixed", "device":
+	default:
+		fmt.Fprintf(os.Stderr, "bilinmeyen -mode: %q (agent|flow|device|mixed)\n", *mode)
 		os.Exit(1)
 	}
 
@@ -165,6 +173,17 @@ func main() {
 				rate: *flowRate, burst: *flowBurst,
 				burstAfter: *flowBurstAfter, burstFor: *flowBurstFor,
 				exporters: *flowExporters,
+			}, st)
+		}()
+	}
+	if *mode == "device" {
+		fmt.Printf("loadgen device: %d mock cihaz, %d sn poll → %s\n", *devDevices, *devPoll, *hub)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runDeviceGen(ctx, deviceGenConfig{
+				hub: *hub, user: *devUser, password: *devPassword,
+				devices: *devDevices, pollSeconds: *devPoll,
 			}, st)
 		}()
 	}

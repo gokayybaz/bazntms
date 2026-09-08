@@ -67,6 +67,7 @@ func main() {
 	logFormat := fl.String("log-format", "", "log formati: json|text (config'i override eder)")
 	enrollToken := fl.String("enroll-token", "", "agent enrollment token'i (bos ise rastgele uretilir ve loglanir)")
 	multiSite := fl.Bool("multi-site", false, "coklu-saha (MSP) modu: site sert yetki siniri — agent kaydi site-bagli enroll token ister, site-admin rolu etkinlesir (bkz. docs/DEPLOYMENT-MODEL.md)")
+	mockDevices := fl.Bool("mock-devices", false, "olcek testi: vendor=mock cihaz eklemeye izin ver (sentetik SNMP filosu — bazntms-loadgen -mode device)")
 	sessionStore := fl.String("session-store", "memory", "panel oturum deposu: memory (tek replika) | db (paylasimli `sessions` tablosu — coklu controller replikasi icin, A4)")
 	queueMaxAgeH := fl.Int("queue-max-age-hours", 24, "JetStream stream mesaj yasi siniri (saat) — tuketilmeyen mesajlar bu sureden sonra dusurulur")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
@@ -312,6 +313,10 @@ func main() {
 	srv.SetMultiSite(*multiSite)
 	if *multiSite {
 		slog.Info("coklu-saha (MSP) modu aktif — site sert yetki siniri, site-bagli enroll token zorunlu")
+	}
+	srv.SetMockDevices(*mockDevices)
+	if *mockDevices {
+		slog.Warn("mock-devices AÇIK — vendor=mock cihaz eklenebilir (yalnizca olcek testi icin)")
 	}
 	if *sessionStore == "db" {
 		srv.UseDBSessions(ctx)

@@ -50,6 +50,8 @@ func For(d store.Device) Driver {
 	switch d.Vendor {
 	case "fortigate":
 		return &FortiDriver{}
+	case "mock":
+		return &MockDriver{} // ölçek testi — yalnız hub -mock-devices ile eklenebilir
 	default:
 		return &SNMPDriver{}
 	}

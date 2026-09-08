@@ -105,7 +105,11 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 	if req.Vendor == "" {
 		req.Vendor = "snmp"
 	}
-	if req.Vendor != "snmp" && req.Vendor != "fortigate" {
+	if req.Vendor == "mock" && !s.mockDevices {
+		http.Error(w, "vendor=mock yalnızca hub -mock-devices ile (ölçek testi)", http.StatusBadRequest)
+		return
+	}
+	if req.Vendor != "snmp" && req.Vendor != "fortigate" && req.Vendor != "mock" {
 		http.Error(w, "vendor snmp veya fortigate olmalı", http.StatusBadRequest)
 		return
 	}

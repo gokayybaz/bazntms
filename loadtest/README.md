@@ -47,6 +47,26 @@ go run ./cmd/bazntms-loadgen -mode flow -flow-target 127.0.0.1:2055 \
 Doğrulama: hub `/metrics` → `bazntms_flows_received_total{version}` hızı
 `-flow-rate`'e eşit, `bazntms_flows_dropped_total` == 0.
 
+### Cihaz poll filosu (S21.2)
+
+Hub'a `vendor=mock` cihaz ekler; hub'ın kendi `devpoll` zamanlayıcısı bu filoyu
+yoklar (mock sürücü ağ I/O yapmaz, deterministik sayaç üretir). Hub
+**`-mock-devices`** ile başlatılmalı.
+
+```bash
+# hub: mock cihaz + panel şifresi
+bazntms-hub -db postgres://... -mock-devices -auth-password <pw>
+
+# loadgen: 1000 mock cihaz, 60 sn poll
+go run ./cmd/bazntms-loadgen -mode device -hub http://localhost:8080 \
+  -password <pw> -devices 1000 -device-poll 60 -duration 30m
+```
+
+Doğrulama: hub `/metrics` → `bazntms_devpoll_cycle_duration_seconds` p95
+bütçenin %80'i (48 sn) altında; `bazntms_devpoll_inflight` sınırlı (goroutine
+sızıntısı yok); `bazntms_store_write_rows_total{table="device_iface_samples"}`
+artıyor.
+
 ## k6 Senaryosu (alternatif)
 
 Open-loop constant-arrival-rate: ritim VU sayısından bağımsız korunur.
