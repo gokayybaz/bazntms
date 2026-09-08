@@ -13,11 +13,48 @@ Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışı
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 — yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md)).
 
-## [Yayımlanmamış]
+## [1.2.0] — 2026-09-08
 
-Faz 23 — **Gözlemlenebilirlik derinliği** · Faz 24 — **Tespit & korelasyon**.
-Tümü geriye uyumlu (yeni uç / tablo / alan) → **minor**. `ProtocolVersion` 1'de
-kalır. Migrasyonlar `0015`–`0018` hub açılışında otomatik uygulanır.
+Faz 23 — **Gözlemlenebilirlik derinliği** · Faz 24 — **Tespit & korelasyon** ·
+Faz 25 — **Operasyonel olgunluk**. Tümü geriye uyumlu (yeni uç / tablo / alan)
+→ **minor**. `ProtocolVersion` 1'de kalır. Migrasyonlar `0015`–`0020` hub
+açılışında otomatik uygulanır.
+
+### ⚠ Yükseltme notu — Faz 25-D
+- `POST /api/v1/enroll-tokens` gövdesinde `expires_in_days` **atlanmış / 0**
+  artık **1 gün** demek (eskiden: süresiz). Süresiz token için `-1` gönderin.
+  Yeni token'lar ayrıca varsayılan **tek kullanımlık** (`max_uses` 1). Mevcut
+  DB token'ları migrasyonla `max_uses=0` (sınırsız) alır — davranış değişmez.
+
+### Eklendi — Faz 25 (operasyonel olgunluk)
+- **Ağ sağlık skoru** (25-A). `internal/health` — 0-100 **deterministik
+  ağırlıklı**, her kesinti açıklanabilir (agent offline / bayat telemetri /
+  cihaz offline / kritik uyarı / açık olay riski / arayüz hata+iskarta).
+  **Opak AI skoru değil.** `GET /api/v1/health` (~30 sn önbellek); panoda
+  `Ağ Sağlığı` kartı + kurumsal raporda bölüm.
+- **Kurumsal rapor v2** (25-B). `/api/report?type=enterprise` — yönetici özeti
+  (KPI ızgarası), ağ sağlık skoru, top konuşmalar (NetFlow), DNS / uygulama
+  görünürlüğü, açık olaylar (incident), **öneriler**. Öneriler `recommend()` —
+  8 eşik-tabanlı **deterministik şablon**, LLM yok; her madde bir metriğe
+  bağlı. Ek bölümler best-effort (kaynak eksik → "veri yok", 500 yok).
+- **Denetim kaydı v2** (25-C). `audit_events` + `actor_type` / `request_id`
+  (log korelasyonu) / `user_agent` / `result` (ok/error/denied) ve
+  yapılandırma değişikliklerinde `before_json` / `after_json` durum farkı
+  (sır alanları `•••` maskeli). Hash zinciri stabil — v2 segmenti yalnız bir
+  v2 alanı doluyken katılır, eski kayıtlar aynen doğrulanır (ADR 0012).
+  `GET /api/v1/audit` süzgeçli (actor/action/resource/ip/result/tarih);
+  `AuditCard` süzgeç barı + öncesi/sonrası paneli. Migrasyon `0019`.
+  Ayrıca: `InsertAuditEvent` çoklu-replika (HA) yazımında pg advisory-lock ile
+  serileştirildi (2× controller zinciri çatallıyordu).
+- **Enrollment token sertleştirme** (25-D). `enroll_tokens` + `max_uses`
+  (atomik `ConsumeEnrollToken` — eş zamanlı agent'lar son slotu paylaşamaz),
+  `allowed_cidrs` (kaynak-IP kısıtı — soket peer'ine göre), `created_by`,
+  `revoked_at`. `handleAgentHello` ayrık 4xx: 401 geçersiz/iptal/süre, 403
+  CIDR, 409 max_uses. `enroll_token.used` denetlenir. Migrasyon `0020`.
+  ADR 0013. **Bkz. yükseltme notu.**
+- **UI tutarlılık** (25-E). `PanelState` bileşeni (yükleniyor/boş/hata bandı —
+  ~70 elle varyant tekilleştirildi). `TuiTable` seçili satır klavye odağında
+  htop tarzı belirgin imleç. `HelpOverlay` güncellendi.
 
 ### Eklendi — Faz 24 (tespit & korelasyon)
 - **Normalleştirilmiş olay akışı** (24-A). `GET /api/v1/events` — ham gözlemler
