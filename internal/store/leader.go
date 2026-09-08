@@ -19,8 +19,9 @@ import (
 
 // Advisory lock anahtarları (rastgele sabitler; migrateLockKey ailesinden).
 const (
-	LeaderKeyAlerts = 8823101
-	LeaderKeyPoller = 8823102
+	LeaderKeyAlerts    = 8823101
+	LeaderKeyPoller    = 8823102
+	LeaderKeyScheduler = 8823103 // Faz 22 S22.18 — zamanlanmış işler
 )
 
 // leaderLock, liderliği tutan özel bağlantı. pg modunda conn kapanınca PG kilidi

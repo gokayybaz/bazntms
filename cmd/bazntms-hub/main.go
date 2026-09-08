@@ -37,6 +37,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/queue"
+	"github.com/gokayybaz/bazntms/internal/scheduler"
 	"github.com/gokayybaz/bazntms/internal/server"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/syslogd"
@@ -431,6 +432,17 @@ func main() {
 		defer poller.Stop()
 	} else {
 		slog.Info("snmp poller kapali (coklu replika ingest modu)")
+	}
+
+	// zamanlanmış işler (S22.18) — lider-kapılı, controller replikasında.
+	// İş türü handler'ları aşağıda kaydedilir (S22.19: rapor teslimi).
+	if *alertsOn {
+		sched := scheduler.New(st)
+		leaderSched := st.Leader(store.LeaderKeyScheduler, "scheduler")
+		go leaderSched.Run(ctx)
+		sched.SetLeaderCheck(leaderSched.IsLeader)
+		sched.Start()
+		defer sched.Stop()
 	}
 
 	// NetFlow v5/v9 + IPFIX + sFlow v5 collector — kuyruk aciksa JetStream'e gider.

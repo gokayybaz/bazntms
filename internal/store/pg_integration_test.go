@@ -329,6 +329,24 @@ func TestPostgresStore(t *testing.T) {
 		}
 	}
 
+	// S22.18: zamanlanmış işler (PG bool/int enabled + due sorgu)
+	sjID, err := st.CreateScheduledJob(ScheduledJob{Kind: "report", Spec: "daily:08:00", Payload: `{"type":"enterprise"}`, Enabled: true, NextRunTs: now - 10, CreatedTs: now})
+	if err != nil || sjID == 0 {
+		t.Fatalf("scheduled job: %v %d", err, sjID)
+	}
+	if due, _ := st.DueScheduledJobs(now); len(due) != 1 || !due[0].Enabled {
+		t.Fatalf("due job: %+v", due)
+	}
+	if err := st.MarkScheduledJobRun(sjID, now, now+86400, "ok"); err != nil {
+		t.Fatalf("mark run: %v", err)
+	}
+	if due, _ := st.DueScheduledJobs(now); len(due) != 0 {
+		t.Fatalf("koşumdan sonra due olmamalı")
+	}
+	if err := st.DeleteScheduledJob(sjID); err != nil {
+		t.Fatalf("delete job: %v", err)
+	}
+
 	// baglanti olaylari + temizlik: son ~30 saniyedeki ornekler kalir
 	// (kalan sayi saniye kaymasina bagli; 0'dan fazla, tumunden az olmali)
 	if err := st.InsertConnectionEvents([]ConnectionEvent{{Ts: now, Proto: "tcp", LocalAddr: "a", RemoteAddr: "b", Process: "chrome", Count: 3}}); err != nil {

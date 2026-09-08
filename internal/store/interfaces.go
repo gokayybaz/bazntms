@@ -23,6 +23,18 @@ type Store interface {
 	ComplianceStore
 	IsmsStore
 	ClusterStore
+	SchedulerStore
+}
+
+// SchedulerStore, hub-içi zamanlanmış işler (Faz 22 S22.18) —
+// internal/scheduler bunları lider-kapılı çalıştırır.
+type SchedulerStore interface {
+	CreateScheduledJob(j ScheduledJob) (int64, error)
+	ListScheduledJobs() ([]ScheduledJob, error)
+	DueScheduledJobs(now int64) ([]ScheduledJob, error)
+	MarkScheduledJobRun(id, ranAt, nextRun int64, status string) error
+	SetScheduledJobEnabled(id int64, enabled bool, nextRun int64) error
+	DeleteScheduledJob(id int64) error
 }
 
 // ClusterStore, çoklu replika koordinasyonu (C1, Faz 15): tek-sahipli roller
