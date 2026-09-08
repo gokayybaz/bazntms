@@ -253,7 +253,9 @@ func (s *Server) handleDeviceIfaces(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	minutes, _ := strconv.Atoi(r.URL.Query().Get("minutes"))
-	if minutes <= 0 || minutes > 60*24*7 {
+	// "en yoğun akışlar" anlık bir görünüm — üst sınır 6 saat (ölçekte daha
+	// geniş pencere milyonlarca satır sıralar; uzun dönem trendi rapor/flows_1h).
+	if minutes <= 0 || minutes > 360 {
 		minutes = 15
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

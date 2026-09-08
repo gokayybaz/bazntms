@@ -205,52 +205,66 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 		out = []AgentWithRates{}
 	}
 
-	// her agent icin arayuz verimleri: yalnizca en son iki telemetri
-	// batch'i (ayni ts'e sahip tum arayuzler tek batch olarak yazilir) —
-	// onceden "son 400 satir" (saatlerce surebilen) bir pencere ustunden
-	// ilk/son karsilastirmasi yapiliyordu; hem "canli hiz" gostergesi icin
-	// asiri bayat kaliyor hem de araya bir sayac sifirlanmasi (arayuz
-	// resetlendi/agent yeniden baslatildi) girerse uint64 alt tasmasiyla
-	// (l.rx < f.rx) devasa hatali bir deger uretiyordu.
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	// Arayuz verimleri: her agent icin YALNIZCA en son iki telemetri batch'i
+	// (ayni ts'e sahip tum arayuzler tek batch). Onceden agent basina ayri
+	// sorgu (N+1 — 5000 agent'ta ~1 sn) yapiliyordu; artik tek pencereli
+	// sorgu tum filoyu getirir. Sayac gerilemesi (arayuz/agent reset) → o
+	// tur icin oran 0 (safeDeltaU64), bir sonraki tutarli iki ornekte duzelir.
+	idx := make(map[int64]int, len(out))
 	for i := range out {
-		rows2, err := s.db.Query(s.q(`SELECT name, rx_bytes, tx_bytes, rx_packets, tx_packets, ts
-			FROM agent_iface_samples
-			WHERE agent_id = ? AND ts IN (
-				SELECT DISTINCT ts FROM agent_iface_samples WHERE agent_id = ? ORDER BY ts DESC LIMIT 2
-			) ORDER BY ts ASC`), out[i].ID, out[i].ID)
-		if err != nil {
-			continue
-		}
-		type sample struct {
-			rx, tx         uint64
-			rxPkts, txPkts uint64
-			ts             int64
-		}
-		first := map[string]sample{}
-		last := map[string]sample{}
-		var order []string
+		idx[out[i].ID] = i
+	}
+	type sample struct {
+		rx, tx, rxPkts, txPkts uint64
+		ts                     int64
+	}
+	// agent_id → arayuz adi → [ilk, son]
+	byAgent := make(map[int64]map[string][2]sample, len(out))
+	rows2, err := s.db.Query(s.q(`SELECT s.agent_id, s.name, s.rx_bytes, s.tx_bytes, s.rx_packets, s.tx_packets, s.ts
+		FROM agent_iface_samples s
+		JOIN (
+			SELECT agent_id, ts, ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY ts DESC) AS rn
+			FROM (SELECT DISTINCT agent_id, ts FROM agent_iface_samples) d
+		) t2 ON t2.agent_id = s.agent_id AND t2.ts = s.ts
+		WHERE t2.rn <= 2
+		ORDER BY s.agent_id, s.ts ASC`))
+	if err == nil {
 		for rows2.Next() {
+			var aid int64
 			var name string
 			var sm sample
-			if err := rows2.Scan(&name, &sm.rx, &sm.tx, &sm.rxPkts, &sm.txPkts, &sm.ts); err != nil {
+			if err := rows2.Scan(&aid, &name, &sm.rx, &sm.tx, &sm.rxPkts, &sm.txPkts, &sm.ts); err != nil {
 				break
 			}
-			if _, ok := first[name]; !ok {
-				first[name] = sm
-				order = append(order, name)
+			m := byAgent[aid]
+			if m == nil {
+				m = map[string][2]sample{}
+				byAgent[aid] = m
 			}
-			last[name] = sm
+			pair := m[name]
+			if pair[0].ts == 0 {
+				pair[0] = sm
+			}
+			pair[1] = sm
+			m[name] = pair
 		}
 		rows2.Close()
-
-		for _, name := range order {
-			f, l := first[name], last[name]
+	}
+	for aid, m := range byAgent {
+		i, ok := idx[aid]
+		if !ok {
+			continue
+		}
+		for name, pair := range m {
+			f, l := pair[0], pair[1]
 			if l.ts <= f.ts {
 				continue
 			}
 			dt := float64(l.ts - f.ts)
-			// sayac sifirlandiysa (l < f) o sayaç icin bu turda oran 0
-			// gosterilir — bir sonraki iki tutarli ornekte kendini duzeltir
 			out[i].Rates = append(out[i].Rates, AgentRate{
 				Name:      name,
 				RxBps:     float64(safeDeltaU64(l.rx, f.rx)) / dt,
@@ -263,9 +277,21 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 				LastSeen:  l.ts,
 			})
 		}
-		if err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM agent_conn_latest WHERE agent_id = ?`), out[i].ID).Scan(&out[i].Conns); err != nil {
-			out[i].Conns = 0
+	}
+
+	// Baglanti sayilari: tek GROUP BY (yine N+1'di).
+	if crows, err := s.db.Query(s.q(`SELECT agent_id, COUNT(*) FROM agent_conn_latest GROUP BY agent_id`)); err == nil {
+		for crows.Next() {
+			var aid int64
+			var n int
+			if err := crows.Scan(&aid, &n); err != nil {
+				break
+			}
+			if i, ok := idx[aid]; ok {
+				out[i].Conns = n
+			}
 		}
+		crows.Close()
 	}
 	return out, nil
 }
