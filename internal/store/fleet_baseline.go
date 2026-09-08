@@ -42,33 +42,42 @@ const fleetBpsDelta = `
 	WHERE ts >= ?
 	WINDOW w AS (PARTITION BY agent_id, name ORDER BY ts)`
 
-// FleetHourlyBpsStats, son 7 gunun saat-of-day filo baseline istatistiklerini
-// dondurur (HourlyBpsStats'in filo karsiligi, ayni HourStat semasi).
-func (s *sqlStore) FleetHourlyBpsStats() ([]HourStat, error) {
+// FleetBaselineDayBuckets, son `days` günün filo baseline'ini (mevsimsel kova ×
+// gün-yaşı) alt-toplamları olarak döndürür. Anomali rebuild'i (S22.2) bunları
+// EWMA gün ağırlığıyla birleştirir. Kaynak: agent arayüz telemetrisi
+// (`agent_iface_samples`) — çoklu-hub'da `samples` boş.
+func (s *sqlStore) FleetBaselineDayBuckets(days int, seasonality string) ([]BaselineDayBucket, error) {
+	if days <= 0 {
+		days = 21
+	}
 	_, offset := time.Now().Zone()
-	since := time.Now().Add(-7 * 24 * time.Hour).Unix()
-	q := fmt.Sprintf(`SELECT ((bucket + ?) %% 86400) / 3600 AS hour, COUNT(*),
-			COALESCE(AVG(bps), 0), COALESCE(AVG(bps * bps), 0)
-		FROM (
-			SELECT (ts / %d) * %d AS bucket, SUM(bit_d) * 1.0 / %d AS bps
+	now := time.Now().Unix()
+	since := now - int64(days)*86400
+	// offset/now derleme-dışı ama güvenli tamsayılar (Zone / Unix) — SQL'e
+	// gömülür ki mevsimsel ifade `l`'yi tekrar ederken `?` sırası bozulmasın;
+	// tek bağlı parametre fleetBpsDelta'nın alt sınırı (since).
+	l := fmt.Sprintf("(bts + %d)", offset)
+	inner := fmt.Sprintf(`SELECT (ts / %d) * %d AS bts, SUM(bit_d) * 1.0 / %d AS bps
 			FROM (%s) d
 			WHERE d.dt > 0 AND d.dt <= %d AND d.bit_d <= d.dt * %d
-			GROUP BY bucket
-		) b
-		GROUP BY hour ORDER BY hour`,
+			GROUP BY bts`,
 		fleetBpsBucketSecs, fleetBpsBucketSecs, fleetBpsBucketSecs, fleetBpsDelta, maxGapSecs, maxIfaceBps)
-	rows, err := s.db.Query(s.q(q), offset, since)
+	q := fmt.Sprintf(`SELECT %s AS bucket, (%d - bts) / 86400 AS day_age, COUNT(*),
+			COALESCE(SUM(bps), 0), COALESCE(SUM(bps * bps), 0)
+		FROM (%s) b
+		GROUP BY bucket, day_age`, seasonalBucketExpr(seasonality, l), now, inner)
+	rows, err := s.db.Query(s.q(q), since)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []HourStat{}
+	out := []BaselineDayBucket{}
 	for rows.Next() {
-		var h HourStat
-		if err := rows.Scan(&h.Hour, &h.Count, &h.Mean, &h.MeanSq); err != nil {
+		var b BaselineDayBucket
+		if err := rows.Scan(&b.Bucket, &b.DayAge, &b.N, &b.Sum, &b.SumSq); err != nil {
 			return nil, err
 		}
-		out = append(out, h)
+		out = append(out, b)
 	}
 	return out, rows.Err()
 }

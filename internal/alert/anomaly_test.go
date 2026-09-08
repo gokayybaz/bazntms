@@ -69,8 +69,11 @@ func TestAnomalyFires(t *testing.T) {
 		}
 	}
 
+	// bu test z-skoru sıçrama mantığını sınar, mevsimsel kovayı değil —
+	// "hourly" ile geçmiş 5 günün hepsi aynı kovaya düşer (hafta içi/sonu ayrımı yok).
 	cfg := DefaultConfig()
-	m.rebuildAnomalyBaseline() // S22.1: materyalize baseline (run() döngüsünün saatlik yaptığı iş)
+	cfg.Anomaly.Seasonality = "hourly"
+	m.rebuildAnomalyBaseline(cfg) // S22.1: materyalize baseline (run() döngüsünün saatlik yaptığı iş)
 	m.checkAnomaly(cfg)
 
 	events := m.RecentEvents(10)
@@ -103,8 +106,10 @@ func TestAnomalyFiresFromFleet(t *testing.T) {
 	// mevcut pencere: son ~5 dk ani yukselis (~800 kbit/sn — baseline'in ~100x)
 	seedIfaceRun(t, st, 1, now.Unix()-300, 12, 30, last, func(int) uint64 { return 3_000_000 })
 
-	m.rebuildAnomalyBaseline()
-	m.checkAnomaly(DefaultConfig())
+	cfg := DefaultConfig()
+	cfg.Anomaly.Seasonality = "hourly" // geçmiş 5 gün tek kovada — bkz. TestAnomalyFires
+	m.rebuildAnomalyBaseline(cfg)
+	m.checkAnomaly(cfg)
 
 	found := false
 	for _, e := range m.RecentEvents(10) {
@@ -133,7 +138,7 @@ func TestAnomalyQuietOnNormalTraffic(t *testing.T) {
 		}
 	}
 
-	m.rebuildAnomalyBaseline()
+	m.rebuildAnomalyBaseline(DefaultConfig())
 	m.checkAnomaly(DefaultConfig())
 	for _, e := range m.RecentEvents(10) {
 		if e.Kind == "anomaly" {

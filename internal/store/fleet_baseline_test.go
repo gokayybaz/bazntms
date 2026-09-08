@@ -8,7 +8,7 @@ import (
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
-// TestFleetBaseline, FleetHourlyBpsStats + FleetAvgBpsSince'in agent arayuz
+// TestFleetBaseline, FleetBaselineDayBuckets + FleetAvgBpsSince'in agent arayuz
 // telemetrisinden makul bit/sn baseline urettigini ve fiziksel olarak
 // imkansiz sayac artislarini (bozuk/sanal arayuz) eledigini dogrular.
 func TestFleetBaseline(t *testing.T) {
@@ -38,20 +38,20 @@ func TestFleetBaseline(t *testing.T) {
 		}
 	}
 
-	stats, err := st.FleetHourlyBpsStats()
+	stats, err := st.FleetBaselineDayBuckets(21, "hourly")
 	if err != nil {
-		t.Fatalf("FleetHourlyBpsStats: %v", err)
+		t.Fatalf("FleetBaselineDayBuckets: %v", err)
 	}
 	var total int64
-	for _, h := range stats {
-		total += h.Count
-		// bozuk arayuz elenmezse ortalama TB/sn mertebesine cikardi
-		if h.Mean > 50_000_000 { // 50 Mbit/sn — saglikli senaryonun ~60x ustu
-			t.Fatalf("saat %d: baseline bozuk arayuzden zehirlenmis (mean=%.0f bps)", h.Hour, h.Mean)
+	for _, b := range stats {
+		total += b.N
+		// bozuk arayuz elenmezse kova ortalamasi TB/sn mertebesine cikardi
+		if mean := b.Sum / float64(b.N); mean > 50_000_000 { // 50 Mbit/sn — saglikli senaryonun ~60x ustu
+			t.Fatalf("kova %d: baseline bozuk arayuzden zehirlenmis (mean=%.0f bps)", b.Bucket, mean)
 		}
 	}
 	if total < 120 {
-		t.Fatalf("baseline kova sayisi dusuk: %d", total)
+		t.Fatalf("baseline ornek sayisi dusuk: %d", total)
 	}
 
 	// pencere ortalamasi: yalniz saglikli arayuz → ~800 Kbit/sn civari

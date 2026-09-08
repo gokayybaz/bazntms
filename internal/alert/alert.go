@@ -215,7 +215,7 @@ func (m *Manager) run() {
 			// S22.1 — degerlendirme basina canli LAG taramasi yerine materyalize
 			// anomaly_baseline tablosu.
 			if cfg.Anomaly.Enabled && (m.tickN == 1 || m.tickN%3600 == 1) {
-				m.rebuildAnomalyBaseline()
+				m.rebuildAnomalyBaseline(cfg)
 			}
 			// anomali degerlendirmesi: 5 dakikada bir (Faz 6.2)
 			if m.tickN%300 == 1 {

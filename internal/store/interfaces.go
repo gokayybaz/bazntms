@@ -191,14 +191,17 @@ type TopologyStore interface {
 	RecentTopologyLinks(since time.Time) ([]TopologyLink, error)
 	PruneTopology(retention time.Duration) error
 	SaveAgentSubnets(agentID int64, name string, subnets []string) error
-	HourlyBpsStats() ([]HourStat, error)
 	AvgBpsSince(since time.Time) (float64, error)
-	// filo (agent telemetrisi) tabanli baseline — coklu-hub'da `samples` bos
-	FleetHourlyBpsStats() ([]HourStat, error)
+	// filo (agent telemetrisi) tabanli current-window ortalamasi — coklu-hub'da
+	// `samples` bos oldugu icin baseline karsilastirmasi buradan yapilir.
 	FleetAvgBpsSince(since time.Time) (float64, error)
 	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
-	// materyalize anomali baseline'i (Faz 22 S22.1) — lider-kapili saatlik
-	// rebuild yazar, checkAnomaly canli LAG taramasi yerine buradan okur.
+	// anomali baseline alt-toplamlari (S22.2 — mevsimsel kova × gun-yasi).
+	// rebuildAnomalyBaseline bunlari EWMA agirligiyla birlestirip
+	// SaveAnomalyBaseline ile materyalize eder; checkAnomaly LoadAnomalyBaseline
+	// ile okur (Faz 22 S22.1).
+	BaselineDayBuckets(days int, seasonality string) ([]BaselineDayBucket, error)
+	FleetBaselineDayBuckets(days int, seasonality string) ([]BaselineDayBucket, error)
 	SaveAnomalyBaseline(rows []AnomalyBaselineRow) error
 	LoadAnomalyBaseline(dim, metric string) ([]AnomalyBaselineRow, error)
 }

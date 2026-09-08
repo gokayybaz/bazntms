@@ -85,25 +85,27 @@ func TestBaselineStats(t *testing.T) {
 			t.Fatalf("ornek: %v", err)
 		}
 	}
-	stats, err := st.HourlyBpsStats()
+	stats, err := st.BaselineDayBuckets(21, "hourly")
 	if err != nil {
 		t.Fatalf("stats: %v", err)
 	}
 	if len(stats) == 0 {
 		t.Fatal("baseline bos")
 	}
-	var cur *HourStat
+	var n int64
+	var sum float64
 	h := time.Now().Hour()
-	for i := range stats {
-		if stats[i].Hour == h {
-			cur = &stats[i]
+	for _, b := range stats {
+		if b.Bucket == h {
+			n += b.N
+			sum += b.Sum
 		}
 	}
-	if cur == nil || cur.Count != 120 {
-		t.Fatalf("saatlik baseline: %+v (beklenen saat %d)", cur, h)
+	if n != 120 {
+		t.Fatalf("saatlik baseline ornek sayisi: %d (beklenen saat %d)", n, h)
 	}
-	if cur.Mean < 1499 || cur.Mean > 1501 {
-		t.Fatalf("ortalama: %v", cur.Mean)
+	if mean := sum / float64(n); mean < 1499 || mean > 1501 {
+		t.Fatalf("ortalama: %v", mean)
 	}
 
 	avg, err := st.AvgBpsSince(time.Now().Add(-time.Hour))

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
@@ -88,37 +89,39 @@ func (s *sqlStore) PruneTopology(retention time.Duration) error {
 	return err
 }
 
-// --- istatistiksel baseline (Faz 6.2) ---
+// --- istatistiksel baseline (Faz 6.2 · S22.2 mevsimsel + EWMA) ---
 //
-// Anomali motoru icin saatlik mevcut istatistikleri: std, avg(x^2)-avg(x)^2
-// olarak Go tarafinda hesaplanir (SQL sqrt yerine — SQLite uyumlulugu).
+// Anomali motorunun baseline'ı: (mevsimsel kova × gün-yaşı) alt-toplamları.
+// std, alert katmanında sqrt(Σw·x² / Σw − mean²) olarak hesaplanır (SQL sqrt
+// yerine — SQLite uyumluluğu). Kaynak: hub yerel yakalaması (`samples`);
+// çoklu-hub'da boş → FleetBaselineDayBuckets devreye girer.
 
-type HourStat struct {
-	Hour   int // 0-23, yerel saat dilimine gore
-	Count  int64
-	Mean   float64 // avg(bps_in + bps_out)
-	MeanSq float64 // avg((bps_in + bps_out)^2)
-}
-
-// HourlyBpsStats, son 7 gunun saat-of-day baseline istatistiklerini dondurur.
-func (s *sqlStore) HourlyBpsStats() ([]HourStat, error) {
+// BaselineDayBuckets, son `days` günün hub-yerel baseline'ını (mevsimsel kova ×
+// gün-yaşı) alt-toplamları olarak döndürür.
+func (s *sqlStore) BaselineDayBuckets(days int, seasonality string) ([]BaselineDayBucket, error) {
+	if days <= 0 {
+		days = 21
+	}
 	_, offset := time.Now().Zone()
-	since := time.Now().Add(-7 * 24 * time.Hour).Unix()
-	rows, err := s.db.Query(s.q(`SELECT ((ts + ?) % 86400)/3600 AS hour, COUNT(*),
-			AVG(bps_in + bps_out), AVG((bps_in + bps_out) * (bps_in + bps_out))
+	now := time.Now().Unix()
+	since := now - int64(days)*86400
+	q := fmt.Sprintf(`SELECT %s AS bucket, (%d - ts) / 86400 AS day_age, COUNT(*),
+			COALESCE(SUM(bps_in + bps_out), 0),
+			COALESCE(SUM((bps_in + bps_out) * (bps_in + bps_out)), 0)
 		FROM samples WHERE ts >= ?
-		GROUP BY hour ORDER BY hour`), offset, since)
+		GROUP BY bucket, day_age`, seasonalBucketExpr(seasonality, fmt.Sprintf("(ts + %d)", offset)), now)
+	rows, err := s.db.Query(s.q(q), since)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []HourStat{}
+	out := []BaselineDayBucket{}
 	for rows.Next() {
-		var h HourStat
-		if err := rows.Scan(&h.Hour, &h.Count, &h.Mean, &h.MeanSq); err != nil {
+		var b BaselineDayBucket
+		if err := rows.Scan(&b.Bucket, &b.DayAge, &b.N, &b.Sum, &b.SumSq); err != nil {
 			return nil, err
 		}
-		out = append(out, h)
+		out = append(out, b)
 	}
 	return out, rows.Err()
 }

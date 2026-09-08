@@ -11,6 +11,55 @@ import (
 	"time"
 )
 
+// BaselineDayBucket, bir (mevsimsel kova, gün-yaşı) alt-toplamı. Anomali
+// baseline rebuild'i (S22.2) bunları gün yaşına göre EWMA ağırlığıyla
+// birleştirir: yeni günler eskilerden ağır basar (yavaş drift'e uyum).
+type BaselineDayBucket struct {
+	Bucket int     // mevsimsel kova — SeasonalBucket ile aynı şema
+	DayAge int     // kaç gün önce (0 = son 24 saat)
+	N      int64   // örnek sayısı — MinSamples geçidi için (ağırlıksız)
+	Sum    float64 // Σ bps
+	SumSq  float64 // Σ bps²
+}
+
+// SeasonalBucket, bir zaman damgasını mevsimsel kova numarasına eşler.
+// seasonalBucketExpr (SQL) ile aynı eşlemeyi Go tarafında yapar — ikisi
+// tutarlı olmalı (rebuild SQL ile yazar, checkAnomaly Go ile okur).
+//
+//	"hourly"  → saat-of-day            (0-23)
+//	"weekday" → hafta içi/sonu × saat  (0-47; 24+ = hafta sonu)
+//	"dow"     → haftanın günü × saat   (0-167; 0=Pazar)
+func SeasonalBucket(t time.Time, seasonality string) int {
+	h := t.Hour()
+	switch seasonality {
+	case "dow":
+		return int(t.Weekday())*24 + h
+	case "weekday":
+		if wd := t.Weekday(); wd == time.Sunday || wd == time.Saturday {
+			return 24 + h
+		}
+		return h
+	default: // "hourly"
+		return h
+	}
+}
+
+// seasonalBucketExpr, SeasonalBucket'ın SQL karşılığı. l, yerel-saate
+// kaydırılmış unix saniye veren bir alt-ifade (ör. "(ts + ?)"). Epoch günü 0
+// (1970-01-01) Perşembe → haftanın günü = (gün + 4) % 7, 0=Pazar.
+func seasonalBucketExpr(seasonality, l string) string {
+	hour := "(" + l + " % 86400) / 3600"
+	dow := "((" + l + " / 86400) + 4) % 7"
+	switch seasonality {
+	case "dow":
+		return "(" + dow + ") * 24 + " + hour
+	case "weekday":
+		return hour + " + CASE WHEN (" + dow + ") IN (0, 6) THEN 24 ELSE 0 END"
+	default:
+		return hour
+	}
+}
+
 // AnomalyBaselineRow, tek bir (boyut, metrik, anahtar, kova) baseline dilimi.
 // std = sqrt(m2/n) — popülasyon varyansı (mevcut motorun AVG(x^2)-AVG(x)^2
 // hesabıyla aynı). m2, S22.2'deki EWMA/artımlı birleştirme için ikinci moment.

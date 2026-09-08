@@ -259,6 +259,15 @@ func TestPostgresStore(t *testing.T) {
 	if err != nil || len(ab) != 1 || ab[0].Bucket != 4 || ab[0].Std() != 21 {
 		t.Fatalf("anomali baseline sorgu: %v %+v", err, ab)
 	}
+	// S22.2: mevsimsel baseline alt-toplamları — alias GROUP BY + tamsayı / %
+	// PG semantiği. samples 120 satır (hepsi güncel saat) → en az 1 kova.
+	lb, err := st.BaselineDayBuckets(21, "weekday")
+	if err != nil || len(lb) == 0 {
+		t.Fatalf("BaselineDayBuckets: %v (%d satır)", err, len(lb))
+	}
+	if _, err := st.FleetBaselineDayBuckets(21, "dow"); err != nil {
+		t.Fatalf("FleetBaselineDayBuckets: %v", err)
+	}
 
 	// baglanti olaylari + temizlik: son ~30 saniyedeki ornekler kalir
 	// (kalan sayi saniye kaymasina bagli; 0'dan fazla, tumunden az olmali)
