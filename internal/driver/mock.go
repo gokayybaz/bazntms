@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -17,6 +18,20 @@ import (
 )
 
 const mockIfaces = 4
+
+// mock eşzamanlılık izleme (S21.10 testleri için): devpoll worker havuzunun
+// eşzamanlı poll sayısını gerçekten sınırladığını doğrulamak.
+var (
+	mockInflight atomic.Int64
+	mockPeak     atomic.Int64
+)
+
+// MockPeakInflight, sürecin başından beri görülen en yüksek eşzamanlı mock
+// poll sayısını döndürür. ResetMockPeak ile sıfırlanır. Yalnızca test.
+func MockPeakInflight() int64 { return mockPeak.Load() }
+
+// ResetMockPeak, tepe sayacını sıfırlar (test başında).
+func ResetMockPeak() { mockPeak.Store(0) }
 
 type mockCounters struct {
 	mu       sync.Mutex
@@ -34,6 +49,15 @@ type MockDriver struct{}
 // Poll, simüle edilmiş bir SNMP round-trip gecikmesi sonrası monoton artmış
 // sayaçlarla bir Snapshot döndürür. ctx iptal edilirse hemen döner.
 func (m *MockDriver) Poll(ctx context.Context, d store.Device, _ *vault.Vault) (Snapshot, error) {
+	n := mockInflight.Add(1)
+	for {
+		p := mockPeak.Load()
+		if n <= p || mockPeak.CompareAndSwap(p, n) {
+			break
+		}
+	}
+	defer mockInflight.Add(-1)
+
 	// gerçek SNMP poll'u ~10-500 ms sürer; zamanlayıcı yükünü anlamlı kılmak
 	// için küçük, cihaza göre deterministik bir gecikme.
 	delay := 10*time.Millisecond + time.Duration(d.ID%25)*time.Millisecond

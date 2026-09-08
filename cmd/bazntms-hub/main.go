@@ -59,6 +59,7 @@ func main() {
 	pollerOn := fl.Bool("poller", true, "SNMP cihaz poller'i (coklu replikada tek replikada acilir)")
 	pruneOn := fl.Bool("prune", true, "veritabani bakimi (eski satirlarin temizligi); coklu replikada YALNIZCA bir hub'da acik olmali")
 	pollInterval := fl.Int("poll-interval", 0, "tum cihazlar icin tek tip poll araligi (sn); 0 = per-device deger. min 5")
+	devpollConcurrency := fl.Int("devpoll-concurrency", 96, "tek poll dongusunde eszamanli yoklanan cihaz sayisi tavani (buyuk filolar icin; S21.10)")
 	pprofAddr := fl.String("pprof", "", "net/http/pprof dinleme adresi (ex: 127.0.0.1:6060); bos = kapali")
 	pprofRates := fl.Int("pprof-rates", 0, "0'dan buyukse block + mutex profillemesini acar (SetBlockProfileRate=N ns, SetMutexProfileFraction=N); yalnizca -pprof ile anlamli, kucuk ek yuk (S21.6)")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
@@ -416,6 +417,7 @@ func main() {
 
 	// cihaz SNMP poller
 	poller := devpoll.New(st, v)
+	poller.SetConcurrency(*devpollConcurrency)
 	if *pollInterval > 0 {
 		poller.SetInterval(time.Duration(*pollInterval) * time.Second)
 	}

@@ -15,6 +15,10 @@ import (
 	"github.com/gokayybaz/bazntms/internal/vault"
 )
 
+// defaultConcurrency, tek poll döngüsünde eşzamanlı yoklanan cihaz sayısı
+// tavanı (S21.10 — 1000 cihazda sınırsız goroutine yerine bounded havuz).
+const defaultConcurrency = 96
+
 // Poller, aktif cihazları takvime göre yoklar ve sonuçları kaydeder.
 type Poller struct {
 	store store.Store
@@ -24,16 +28,27 @@ type Poller struct {
 	override time.Duration
 	// isLeader, çoklu controller replikasında yalnız liderin poll etmesi için
 	// (C1, Faz 15). nil → daima poll eder.
-	isLeader func() bool
-	stop     chan struct{}
-	done     chan struct{}
+	isLeader    func() bool
+	concurrency int
+	stop        chan struct{}
+	done        chan struct{}
 }
 
 // SetLeaderCheck, poll öncesi çağrılacak liderlik denetimini bağlar.
 func (p *Poller) SetLeaderCheck(fn func() bool) { p.isLeader = fn }
 
 func New(st store.Store, v *vault.Vault) *Poller {
-	return &Poller{store: st, vault: v, stop: make(chan struct{}), done: make(chan struct{})}
+	return &Poller{store: st, vault: v, concurrency: defaultConcurrency, stop: make(chan struct{}), done: make(chan struct{})}
+}
+
+// SetConcurrency, tek poll döngüsündeki eşzamanlı yoklama tavanını ayarlar
+// (0 veya negatif → varsayılan). Büyük filolarda (1000+ cihaz) SNMP timeout
+// bütçesini poll döngüsünde tutmak için.
+func (p *Poller) SetConcurrency(n int) {
+	if n <= 0 {
+		n = defaultConcurrency
+	}
+	p.concurrency = n
 }
 
 // SetInterval, tüm cihazlar için tek tip poll aralığı dayatır (0 = per-device).
@@ -83,6 +98,12 @@ func (p *Poller) pollAll() {
 		return
 	}
 	defer metrics.ObserveDevpollCycle(time.Now())
+
+	limit := p.concurrency
+	if limit <= 0 {
+		limit = defaultConcurrency
+	}
+	sem := make(chan struct{}, limit)
 	var wg sync.WaitGroup
 	for _, d := range devices {
 		if !d.Enabled {
@@ -91,9 +112,16 @@ func (p *Poller) pollAll() {
 		if time.Since(time.Unix(d.LastPoll, 0)) < p.interval(d) {
 			continue
 		}
+		select {
+		case <-p.stop:
+			wg.Wait()
+			return
+		case sem <- struct{}{}:
+		}
 		wg.Add(1)
 		go func(d store.Device) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			p.pollDevice(d)
 		}(d)
 	}
