@@ -26,6 +26,28 @@ type Store interface {
 	SchedulerStore
 	EventStore
 	IncidentStore
+	AIStore
+}
+
+// AIStore, AI analiz altyapısı (Faz 26): sağlayıcı profilleri + kalıcı sohbet
+// oturumları. api_key_enc vault ile şifreli — server katmanı şifreler/çözer.
+// Bkz. docs/decisions/0014-ai-analysis.md.
+type AIStore interface {
+	ListAIProviders() ([]AIProvider, error)
+	AIProviderByID(id int64) (*AIProvider, error)
+	CreateAIProvider(p AIProvider) (int64, error)
+	UpdateAIProvider(p AIProvider) error
+	DeleteAIProvider(id int64) error
+
+	CreateAIConversation(c AIConversation) (int64, error)
+	ListAIConversations(f AIConversationFilter) ([]AIConversation, error)
+	AIConversationByID(id int64) (*AIConversation, []AIMessage, error)
+	AppendAIMessage(m AIMessage) (int64, error)
+	FinalizeAIMessage(id int64, content, errStr string, tokensIn, tokensOut int) error
+	SetAIConversationMeta(id int64, title, model string, providerID int64) error
+	SetAIConversationArchived(id int64, archived bool) error
+	DeleteAIConversation(id int64) error
+	PruneAIConversations(before int64) ([]int64, error)
 }
 
 // IncidentStore, olay korelasyonu (Faz 24-B) — internal/incident.Engine
