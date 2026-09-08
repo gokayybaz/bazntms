@@ -75,7 +75,23 @@ curl -H "Authorization: Bearer $TOKEN" https://hub/api/v1/audit/verify
 `ok:false` + `broken_at:X` → X ID'li kayıttan itibaren veri tabanı
 değiştirilmiş demektir; en son sağlam yedeği araştırın.
 
-## 6) Sıralı DR kontrol listesi
+## 6) Kaos testi ile doğrulanmış davranış (Faz 21 S21.14)
+
+`scripts/chaos.sh` ölçek yığınına 4 arıza enjekte eder; her koşuda hafif bir
+agent yükü altında **veri kaybı = 0** ve aşağıdaki kurtarma ölçütleri geçer:
+
+| Senaryo | Beklenen davranış | Ölçülen (Docker Desktop ölçek yığını) |
+|---|---|---|
+| Poll/uyarı lideri replikası `kill` | Hayatta kalan replika rolü advisory-lock tick'inde (≤10 sn) devralır | ~7 sn |
+| TimescaleDB `restart` | pgxpool reconnect; ingest yazımları NATS'te birikip DB dönünce boşalır; `/readyz` 200'e döner | < 60 sn |
+| NATS `stop` 60 sn | Ingest 503 döndürür; agent'lar offline disk kuyruğuna yazar; NATS dönünce replay eder; panel (`/healthz`) etkilenmez | tam replay, kayıp yok |
+| Ingest replika 2→3→2 | nginx dinamik upstream yeni replikayı alır/çıkarır; kesinti yok | — |
+
+Kesinti > agent offline kuyruk kapasitesi (100 batch × batch aralığı, vars.
+~50 dk) ise en eski batch'ler kalıcı kaybolur ve agent logunda görünür
+(`offline kuyruk dolu — en eski batch'ler atildi`).
+
+## 7) Sıralı DR kontrol listesi
 
 1. Enfrastrüktürü değil veriyi önce kurtar: PostgreSQL restore
 2. `vault.key` geri koy (cihaz secret'ları için)
