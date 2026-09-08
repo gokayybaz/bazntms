@@ -15,6 +15,7 @@ const TABS: Tab[] = [
   { to: '/cografi', label: 'Harita', end: false },
   { to: '/topoloji', label: 'Topo', end: false },
   { to: '/uyarilar', label: 'Uyarı', end: false },
+  { to: '/anomali', label: 'Anomali', end: false },
   { to: '/raporlar', label: 'Rapor', end: false },
   { to: '/uyumluluk', label: 'Uyumluluk', end: false, govern: true },
   { to: '/yonetim', label: 'Yönetim', end: false, admin: true },
