@@ -15,10 +15,35 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
-Faz 23 — **Gözlemlenebilirlik derinliği** (devam ediyor). Tümü geriye uyumlu
-(yeni uç / tablo / alan) → **minor**. `ProtocolVersion` 1'de kalır.
+Faz 23 — **Gözlemlenebilirlik derinliği** · Faz 24 — **Tespit & korelasyon**.
+Tümü geriye uyumlu (yeni uç / tablo / alan) → **minor**. `ProtocolVersion` 1'de
+kalır. Migrasyonlar `0015`–`0018` hub açılışında otomatik uygulanır.
 
-### Eklendi
+### Eklendi — Faz 24 (tespit & korelasyon)
+- **Normalleştirilmiş olay akışı** (24-A). `GET /api/v1/events` — ham gözlemler
+  (dns.query / tls.sni_observed / http.host_observed / netflow.flow /
+  syslog.received / connection.seen) uyarılardan ayrı bir okuma modelinde
+  (mevcut kaynak tablolar UNION ALL — yeni yazma hattı yok, ADR 0010).
+  `/uyarilar` → `Olay Akışı` sekmesi.
+- **Olay (incident) korelasyon motoru** (24-B/C). `internal/incident` —
+  lider-kapılı, 5 deterministik kural (yeni-süreç + yeni-hedef/ioc /
+  şüpheli-port / hedef+bant / anomali+bant / ≥N-şüpheli), risk skoru 0-100
+  açıklanabilir, dedup = correlation_key. **AI/LLM yok** (ADR 0011). Migrasyon
+  `0018` (`alert_events.agent_id` + `incidents` + `incident_evidence`).
+  `GET/POST /api/v1/incidents[/:id][/ack|investigate|resolve|close]` (denetimli).
+  `/uyarilar` → `Olaylar` sekmesi + `/uyarilar/olay/:id` detay (kanıt zaman
+  çizelgesi).
+- **Anomali metriği `l7_qps`** (24-D). TLS SNI / HTTP Host gözlem hızı —
+  endpoint-temas sıçraması ≈ alışılmadık / yeni hedef aktivitesi. `/anomali`
+  metrik seçicisine eklendi.
+- **Tehdit istihbaratı adaptörü** (24-E). Sağlayıcı-bağımsız
+  `internal/threatintel` — `Provider` arayüzü, IP + domain, itibar enum'u
+  (trusted…malicious), TTL önbellek. `-ioc-file` artık `localfile` sağlayıcısı
+  (domain + **IP** kara listesi). `GET /api/v1/threatintel?ip=&domain=`.
+  Süreç detayı hedefleri + akış drill-down'ında itibar pill'i. **Oto-blok yok**
+  — observability-first. `ioc` uyarısı itibar/kaynak taşır.
+
+### Eklendi — Faz 23 (gözlemlenebilirlik derinliği)
 - **Süreç detayı & derin inceleme** (23-A). Agent → Süreç Trafiği → `Enter` →
   tek bir sürecin (ad bazlı) tüm ağ etkinliği tek ekranda: kimlik/özet, uzak
   hedefler (ip:port/proto toplama + GeoIP/ASN), canlı bağlantılar, uygulama

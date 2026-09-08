@@ -320,12 +320,17 @@ func (s *Server) handleFlowConversationDetail(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, map[string]any{
+	resp := map[string]any{
 		"flows":    rows,
 		"actors":   actors,
 		"src_info": s.enrich.IP(src),
 		"dst_info": s.enrich.IP(dst),
-	})
+	}
+	if s.ti != nil {
+		resp["src_rep"] = s.ti.IP(src)
+		resp["dst_rep"] = s.ti.IP(dst)
+	}
+	writeJSON(w, resp)
 }
 
 func (s *Server) handleSyslogEvents(w http.ResponseWriter, r *http.Request) {

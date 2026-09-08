@@ -8,40 +8,38 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 )
 
-// IOCConfig, IOC kontrolü ayarları (config JSON'da "ioc").
+// IOCConfig, tehdit istihbaratı kontrolü ayarları (config JSON'da "ioc").
 type IOCConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
 func DefaultIOCConfig() IOCConfig { return IOCConfig{Enabled: true} }
 
-// IOCMatcher, bir alan adının (veya üst alanının) kara listede olup olmadığını
-// söyler. internal/ioc.List bunu uygular; hub'da -ioc-file verilmemişse nil.
-type IOCMatcher interface {
-	Match(domain string) (rule string, hit bool)
-	Count() int
-}
-
-// SetIOC, eşleştiriciyi takar (hub açılışında -ioc-file yüklendiyse).
-func (m *Manager) SetIOC(x IOCMatcher) {
+// SetThreatIntel, tehdit istihbaratı servisini takar (Faz 24-E — sağlayıcı-
+// bağımsız; -ioc-file verildiyse localfile sağlayıcısıyla). nil → IOC kontrolü
+// pasif.
+func (m *Manager) SetThreatIntel(ti *threatintel.Service) {
 	m.mu.Lock()
-	m.ioc = x
+	m.ti = ti
 	m.mu.Unlock()
 }
 
 // checkIOC, ~30 sn'de bir çağrılır (Manager.run). Son telemetri penceresindeki
-// L7/DNS alan adlarını IOC listesine karşı eşleştirir; eşleşme başına
+// L7/DNS alan adlarını tehdit istihbaratına sorar; suspicious/malicious başına
 // (agent, domain) anahtarıyla cooldown'a tabi bir "ioc" uyarısı üretir.
+// **Oto-blok yok** — yalnızca uyarı; incident motoru (24-B) bunu korele eder.
 func (m *Manager) checkIOC(cfg Config) {
 	if !cfg.IOC.Enabled {
 		return
 	}
 	m.mu.Lock()
-	ioc := m.ioc
+	ti := m.ti
 	m.mu.Unlock()
-	if ioc == nil || ioc.Count() == 0 {
+	if ti == nil || !ti.Enabled() {
 		return
 	}
 
@@ -51,10 +49,9 @@ func (m *Manager) checkIOC(cfg Config) {
 		slog.Debug("IOC: RecentAgentDomains hatası", "err", err)
 		return
 	}
-	slog.Debug("IOC taraması", "domain_gozlem", len(seen), "liste", ioc.Count())
 	for _, s := range seen {
-		rule, hit := ioc.Match(s.Domain)
-		if !hit {
+		ind := ti.Domain(s.Domain)
+		if !ind.Bad() {
 			continue
 		}
 		src := "TLS SNI / HTTP Host"
@@ -66,13 +63,17 @@ func (m *Manager) checkIOC(cfg Config) {
 			proc = "?"
 		}
 		match := s.Domain
-		if rule != "" && rule != s.Domain {
-			match = fmt.Sprintf("%s (kural: %s)", s.Domain, rule)
+		if ind.RawRef != "" && ind.RawRef != s.Domain {
+			match = fmt.Sprintf("%s (kural: %s)", s.Domain, ind.RawRef)
+		}
+		sev := "crit"
+		if ind.Reputation == threatintel.Suspicious {
+			sev = "warn"
 		}
 		m.fireCtx("ioc",
 			fmt.Sprintf("%d|%s", s.AgentID, s.Domain),
-			fmt.Sprintf("IOC eşleşmesi: %s — agent %s, süreç %s, kaynak %s",
-				match, s.AgentName, proc, src),
-			fireOpts{AgentID: s.AgentID})
+			fmt.Sprintf("Tehdit eşleşmesi [%s/%s]: %s — agent %s, süreç %s, kaynak %s",
+				ind.Reputation, ind.Source, match, s.AgentName, proc, src),
+			fireOpts{AgentID: s.AgentID, Severity: sev})
 	}
 }

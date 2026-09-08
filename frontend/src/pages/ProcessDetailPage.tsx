@@ -6,7 +6,7 @@ import { Panel } from '../components/Panel'
 import { RangeTabs } from '../components/RangeTabs'
 import { TuiTable } from '../components/TuiTable'
 import type { TuiColumn } from '../components/TuiTable'
-import { IpBadge } from '../lib/enrich'
+import { IpBadge, RepBadge } from '../lib/enrich'
 
 interface ProcessSummary {
   process: string
@@ -32,6 +32,7 @@ interface ProcessRemote {
   country?: string
   asn?: string
   org?: string
+  reputation?: string
 }
 interface ProcessConn {
   proto: string
@@ -151,6 +152,7 @@ export function ProcessDetailPage() {
         render: (r) => (
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="text-ink-hi">{r.remote_ip || '—'}</span>
+            <RepBadge reputation={r.reputation} />
             <IpBadge info={{ country: r.country, asn: r.asn, org: r.org, private: r.private }} />
           </span>
         ),

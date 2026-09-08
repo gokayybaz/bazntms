@@ -595,6 +595,11 @@ func (s *Server) handleProcessDetail(w http.ResponseWriter, r *http.Request) {
 		remotes[i].Country = e.Country
 		remotes[i].ASN = e.ASN
 		remotes[i].Org = e.Org
+		if !e.Private && s.ti != nil {
+			if ind := s.ti.IP(remotes[i].RemoteIP); ind.Reputation != "" && ind.Reputation != "unknown" {
+				remotes[i].Reputation = string(ind.Reputation)
+			}
+		}
 	}
 
 	writeJSON(w, map[string]any{

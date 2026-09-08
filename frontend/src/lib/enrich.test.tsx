@@ -25,3 +25,16 @@ describe('enrich helpers', () => {
     expect(screen.getByText('AI')).toBeInTheDocument()
   })
 })
+
+describe('RepBadge', () => {
+  it('malicious → kötücül pill', async () => {
+    const { RepBadge } = await import('./enrich')
+    render(<RepBadge reputation="malicious" source="localfile" />)
+    expect(screen.getByText('kötücül')).toBeInTheDocument()
+  })
+  it('unknown/neutral → hiçbir şey', async () => {
+    const { RepBadge } = await import('./enrich')
+    const { container } = render(<RepBadge reputation="unknown" />)
+    expect(container).toBeEmptyDOMElement()
+  })
+})

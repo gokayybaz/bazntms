@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
+	"github.com/gokayybaz/bazntms/internal/ioc"
 	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 )
 
 func TestAggregateGeo(t *testing.T) {
@@ -97,5 +100,63 @@ func TestEnrichEndpoint(t *testing.T) {
 	rbad.Body.Close()
 	if rbad.StatusCode != http.StatusBadRequest {
 		t.Fatalf("boş sorgu 400 beklenirdi: %d", rbad.StatusCode)
+	}
+}
+
+// TestThreatIntelEndpoint, Faz 24-E: GET /api/v1/threatintel — servis pasifken
+// bile tutarlı şema ("unknown"); localfile sağlayıcısıyla malicious.
+func TestThreatIntelEndpoint(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "ti.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	engine := capture.NewEngine()
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+
+	// pasif — endpoint yine tutarlı yanıt verir
+	ts0 := httptest.NewServer(srv.Handler())
+	r0 := apiReq(t, http.MethodGet, ts0.URL+"/api/v1/threatintel?domain=x.example", nil)
+	var out struct {
+		Domain struct {
+			Reputation string `json:"reputation"`
+		} `json:"domain"`
+		Providers []string `json:"providers"`
+	}
+	json.NewDecoder(r0.Body).Decode(&out)
+	r0.Body.Close()
+	ts0.Close()
+	if out.Domain.Reputation != "unknown" || len(out.Providers) != 0 {
+		t.Fatalf("pasif servis: %+v", out)
+	}
+
+	// aktif — localfile sağlayıcı
+	f := filepath.Join(t.TempDir(), "b.txt")
+	os.WriteFile(f, []byte("evil.example\n"), 0o644)
+	list, _ := ioc.Load(f)
+	srv.SetThreatIntel(threatintel.New(0, threatintel.NewLocalFile(list)))
+	ts1 := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts1.Close)
+
+	r1 := apiReq(t, http.MethodGet, ts1.URL+"/api/v1/threatintel?domain=sub.evil.example&ip=8.8.8.8", nil)
+	var out2 struct {
+		Domain    struct{ Reputation, Source string } `json:"domain"`
+		IP        struct{ Reputation string }         `json:"ip"`
+		Providers []string                            `json:"providers"`
+	}
+	json.NewDecoder(r1.Body).Decode(&out2)
+	r1.Body.Close()
+	if out2.Domain.Reputation != "malicious" || out2.IP.Reputation != "unknown" {
+		t.Fatalf("aktif servis: %+v", out2)
+	}
+	if len(out2.Providers) != 1 || out2.Providers[0] != "localfile" {
+		t.Fatalf("sağlayıcı listesi: %+v", out2.Providers)
+	}
+
+	rbad := apiReq(t, http.MethodGet, ts1.URL+"/api/v1/threatintel", nil)
+	rbad.Body.Close()
+	if rbad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("boş sorgu 400: %d", rbad.StatusCode)
 	}
 }

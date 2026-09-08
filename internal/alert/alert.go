@@ -13,6 +13,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/incident"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/sysmon"
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 )
 
 // Config, tum uyarı sistemi ayarlari; UI'dan duzenlenebilir ve SQLite'ta
@@ -241,7 +242,7 @@ type Manager struct {
 	tickN  int
 
 	notifier *Notifier
-	ioc      IOCMatcher // -ioc-file yüklendiyse; nil ise IOC kontrolü pasif
+	ti       *threatintel.Service // Faz 24-E — sağlayıcı-bağımsız tehdit istihbaratı; nil ise pasif
 
 	// isLeader, çoklu controller replikasında yalnız liderin değerlendirmesi
 	// için (C1, Faz 15). nil → daima lider (tek replika / dev). Lider değilken

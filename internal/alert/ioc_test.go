@@ -6,21 +6,26 @@ import (
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
-// stubMatcher, verilen domainleri (üst alan dahil) eşleştirir.
-type stubMatcher struct{ bad []string }
+// stubProvider, verilen domain/IP'leri (üst alan dahil) malicious işaretler.
+type stubProvider struct{ bad []string }
 
-func (s stubMatcher) Count() int { return len(s.bad) }
-func (s stubMatcher) Match(d string) (string, bool) {
-	d = strings.ToLower(d)
+func (stubProvider) Name() string { return "stub" }
+func (s stubProvider) Lookup(indicator, typ string) (threatintel.Indicator, bool) {
+	d := strings.ToLower(indicator)
 	for _, b := range s.bad {
 		if d == b || strings.HasSuffix(d, "."+b) {
-			return b, true
+			return threatintel.Indicator{Reputation: threatintel.Malicious, Confidence: 90, Source: "stub", RawRef: b}, true
 		}
 	}
-	return "", false
+	return threatintel.Indicator{}, false
+}
+
+func stubTI(bad ...string) *threatintel.Service {
+	return threatintel.New(time.Minute, stubProvider{bad: bad})
 }
 
 func TestCheckIOC(t *testing.T) {
@@ -48,7 +53,7 @@ func TestCheckIOC(t *testing.T) {
 		t.Fatalf("matcher yokken uyarı üretildi: %d", len(evs))
 	}
 
-	m.SetIOC(stubMatcher{bad: []string{"evil-c2.example"}})
+	m.SetThreatIntel(stubTI("evil-c2.example"))
 	m.checkIOC(cfg)
 
 	evs, _ := m.st.RecentAlertEvents(10)
@@ -77,7 +82,7 @@ func TestCheckIOCDisabled(t *testing.T) {
 	a1, _ := st.RegisterAgent(store.Agent{Name: "x", TokenHash: "h"})
 	st.SaveAgentDNS(a1, time.Now().Unix(), []telemetry.DNSSample{{Process: "p", Domain: "bad.example", Queries: 1}})
 
-	m.SetIOC(stubMatcher{bad: []string{"bad.example"}})
+	m.SetThreatIntel(stubTI("bad.example"))
 	cfg := DefaultConfig()
 	cfg.IOC.Enabled = false
 	m.checkIOC(cfg)

@@ -75,7 +75,7 @@ bir `sysmon.ListConnections()` ile:
 | `port` | kurulan bağlantının uzak portu şüpheli listede mi |
 | `proc` | `alert_seen` tablosuna karşı yeni süreç; ilk çalıştırmada taban çizgisi sessizce atılır |
 | `target` | ilk kez ≥ X MB trafik gören uzak IP; kalıcı görüldü işareti |
-| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları `-ioc-file` kara listesinde mi (`internal/ioc` — tam + üst alan eşleşmesi, mtime ile hot-reload). İmza tabanlı DPI değil; bir hash-set lookup |
+| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları tehdit istihbaratına (`internal/threatintel`, Faz 24-E — sağlayıcı-bağımsız; `-ioc-file` → `localfile` sağlayıcı, domain + **IP** kara listesi, mtime hot-reload) sorulur; suspicious/malicious → uyarı (itibar + kaynak taşır). İmza tabanlı DPI değil; **oto-blok yok** |
 | `iface_util` | SNMP arayüz verimi güvenilir hızın (ifSpeed/ifHighSpeed) `warn_pct`/`crit_pct` eşiğini `sustain_sec` boyunca aşma (Faz 23-C, `internal/alert/iface.go`). loopback/tünel atlanır |
 
 Her olay `kind|key` başına cooldown (varsayılan 10 dk) tabi tutulur; geçenler

@@ -4,8 +4,13 @@ import { usePolledJson } from '../lib/usePolledJson'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
-import { IpBadge } from '../lib/enrich'
+import { IpBadge, RepBadge } from '../lib/enrich'
 import type { IPInfo } from '../lib/enrich'
+
+interface RepInfo {
+  reputation?: string
+  source?: string
+}
 
 interface Conversation {
   src: string
@@ -41,6 +46,8 @@ interface DrillResponse {
   actors: Actor[]
   src_info?: IPInfo
   dst_info?: IPInfo
+  src_rep?: RepInfo
+  dst_rep?: RepInfo
 }
 
 const WINDOWS = [
@@ -175,8 +182,10 @@ export function TopConversationsCard() {
       {drill && (
         <div className="mt-3 border border-rule bg-panel-2/40 p-3 font-mono text-[11px]">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="text-ink-hi">
-              {drill.src} <IpBadge info={drillData?.src_info} /> ↔ {drill.dst} <IpBadge info={drillData?.dst_info} />
+            <span className="inline-flex flex-wrap items-center gap-1">
+              {drill.src} <RepBadge reputation={drillData?.src_rep?.reputation} source={drillData?.src_rep?.source} /> <IpBadge info={drillData?.src_info} />
+              <span className="mx-1">↔</span>
+              {drill.dst} <RepBadge reputation={drillData?.dst_rep?.reputation} source={drillData?.dst_rep?.source} /> <IpBadge info={drillData?.dst_info} />
             </span>
             <button type="button" onClick={() => setDrill(null)} className="ml-auto border border-rule-hi px-2 py-0.5 uppercase text-tui-dim hover:text-ink-hi">
               kapat

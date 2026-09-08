@@ -7,20 +7,23 @@ package ioc
 import (
 	"bufio"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-// List, domain kara listesi. Dosyadan yüklenir; hosts / AdBlock / düz metin
-// formatlarını kabul eder. Eşleştirme tam domain + üst alan içindir
-// (sub.evil.com, listede evil.com varsa eşleşir).
+// List, domain + IP kara listesi. Dosyadan yüklenir; hosts / AdBlock / düz metin
+// formatlarını kabul eder. Domain eşleştirmesi tam domain + üst alan içindir
+// (sub.evil.com, listede evil.com varsa eşleşir); IP eşleştirmesi tamdır
+// (Faz 24-E — `net.ParseIP` başarılı satırlar IP kümesine gider).
 type List struct {
 	path string
 
 	mu    sync.RWMutex
-	set   map[string]struct{}
+	set   map[string]struct{} // domain'ler
+	ips   map[string]struct{} // IP'ler
 	mtime time.Time
 }
 
@@ -45,10 +48,17 @@ func (l *List) reload() error {
 	defer f.Close()
 
 	set := make(map[string]struct{})
+	ips := make(map[string]struct{})
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for sc.Scan() {
-		if d := parseLine(sc.Text()); d != "" {
+		d := parseLine(sc.Text())
+		if d == "" {
+			continue
+		}
+		if ip := net.ParseIP(d); ip != nil {
+			ips[ip.String()] = struct{}{}
+		} else {
 			set[d] = struct{}{}
 		}
 	}
@@ -58,6 +68,7 @@ func (l *List) reload() error {
 
 	l.mu.Lock()
 	l.set = set
+	l.ips = ips
 	l.mtime = fi.ModTime()
 	l.mu.Unlock()
 	return nil
@@ -97,6 +108,25 @@ func (l *List) Count() int {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return len(l.set)
+}
+
+// IPCount, listedeki IP sayısı (Faz 24-E).
+func (l *List) IPCount() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return len(l.ips)
+}
+
+// MatchIP, verilen IP listede mi (tam eşleşme).
+func (l *List) MatchIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	_, ok := l.ips[ip.String()]
+	return ok
 }
 
 // Match, domain'in kendisi veya bir üst alanı listede mi? Eşleşen giriş +

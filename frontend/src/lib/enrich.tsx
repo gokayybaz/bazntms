@@ -38,6 +38,37 @@ export function IpBadge({ info, className = '' }: { info?: IPInfo | null; classN
   )
 }
 
+export type Reputation = 'trusted' | 'neutral' | 'suspicious' | 'malicious' | 'unknown'
+
+const REP_STYLE: Record<Reputation, string> = {
+  malicious: 'border-rose-500 text-rose-300 bg-rose-500/15',
+  suspicious: 'border-amber-500 text-amber-300 bg-amber-500/15',
+  trusted: 'border-emerald-500 text-emerald-300 bg-emerald-500/10',
+  neutral: 'border-rule text-tui-dim',
+  unknown: 'border-rule text-tui-dim',
+}
+const REP_LABEL: Record<Reputation, string> = {
+  malicious: 'kötücül',
+  suspicious: 'şüpheli',
+  trusted: 'güvenilir',
+  neutral: 'nötr',
+  unknown: 'bilinmiyor',
+}
+
+/** Tehdit itibarı pill'i (Faz 24-E). unknown/neutral → hiçbir şey (gürültü yok). */
+export function RepBadge({ reputation, source, className = '' }: { reputation?: string | null; source?: string; className?: string }) {
+  const r = (reputation ?? '') as Reputation
+  if (!r || r === 'unknown' || r === 'neutral') return null
+  return (
+    <span
+      className={`inline-block border px-1 font-mono text-[10px] uppercase tracking-[0.04em] ${REP_STYLE[r] ?? REP_STYLE.unknown} ${className}`}
+      title={source ? `kaynak: ${source}` : undefined}
+    >
+      {REP_LABEL[r] ?? r}
+    </span>
+  )
+}
+
 /** Bir alan adının rozeti — kayıtlı alan + (varsa) kategori. */
 export function DomainBadge({ info, className = '' }: { info?: DomainInfo | null; className?: string }) {
   if (!info || !info.registrable) return null

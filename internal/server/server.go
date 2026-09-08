@@ -26,6 +26,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 	"github.com/gokayybaz/bazntms/internal/vault"
 	"github.com/gokayybaz/bazntms/internal/version"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
@@ -40,7 +41,8 @@ type Server struct {
 	dbPath            string
 	alerts            *alert.Manager
 	geo               *geoip.Resolver
-	enrich            *enrich.Service // Faz 23-E: paylaşılan IP/alan zenginleştirme
+	enrich            *enrich.Service      // Faz 23-E: paylaşılan IP/alan zenginleştirme
+	ti                *threatintel.Service // Faz 24-E: tehdit istihbaratı (nil = pasif)
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
@@ -195,6 +197,9 @@ func (s *Server) SetEnrichCategories(path string) {
 	}
 }
 
+// SetThreatIntel, tehdit istihbaratı servisini takar (Faz 24-E).
+func (s *Server) SetThreatIntel(ti *threatintel.Service) { s.ti = ti }
+
 // SetWSOrigins, WebSocket handshake için izin verilen origin host'larını
 // ayarlar (B5 — CSWSH savunması). localhost/127.0.0.1/[::1] her zaman eklenir.
 // Boş liste → tüm origin'ler kabul (bugünkü davranış) + uyarı logu.
@@ -272,6 +277,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/dns", s.handleAgentDNS)
 	mux.HandleFunc("GET /api/v1/geo", s.handleGeo)
 	mux.HandleFunc("GET /api/v1/enrich", s.handleEnrich)
+	mux.Handle("GET /api/v1/threatintel", s.requirePerm(PermView, http.HandlerFunc(s.handleThreatIntel)))
 
 	// filo yonetimi (UI auth'u ile korunur; silme = netops+)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)

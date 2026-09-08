@@ -110,6 +110,9 @@ type ProcessRemote struct {
 	Country string `json:"country,omitempty"`
 	ASN     string `json:"asn,omitempty"`
 	Org     string `json:"org,omitempty"`
+	// Tehdit itibarı — handler `internal/threatintel` ile doldurur (24-E).
+	// "" (boş) = servis pasif / bilinmiyor.
+	Reputation string `json:"reputation,omitempty"`
 }
 
 // ProcessRemotes, sürecin uzak uç noktalarını (remote_ip,port,proto) bayt

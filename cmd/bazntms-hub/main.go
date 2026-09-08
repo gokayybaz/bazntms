@@ -43,6 +43,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/server"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/syslogd"
+	"github.com/gokayybaz/bazntms/internal/threatintel"
 	"github.com/gokayybaz/bazntms/internal/update"
 	"github.com/gokayybaz/bazntms/internal/vault"
 	"github.com/gokayybaz/bazntms/internal/version"
@@ -234,12 +235,16 @@ func main() {
 	alertCfg = alert.NormalizeConfig(alertCfg)
 	alertCfg = alert.NormalizeFortiConfig(alertCfg)
 	alerts := alert.NewManager(alertCfg, st, engine, *telemetryInterval)
+	// Faz 24-E: sağlayıcı-bağımsız tehdit istihbaratı. -ioc-file verildiyse
+	// localfile sağlayıcısıyla kurulur (domain + IP kara listesi).
+	var tiSvc *threatintel.Service
 	if *iocFile != "" {
 		if list, err := ioc.Load(*iocFile); err != nil {
 			slog.Error("IOC listesi yuklenemedi", "file", *iocFile, "err", err)
 		} else {
-			slog.Info("IOC listesi yuklendi", "file", *iocFile, "domain", list.Count())
-			alerts.SetIOC(list)
+			slog.Info("tehdit istihbaratı listesi yuklendi", "file", *iocFile, "domain", list.Count(), "ip", list.IPCount())
+			tiSvc = threatintel.New(time.Hour, threatintel.NewLocalFile(list))
+			alerts.SetThreatIntel(tiSvc)
 			go list.Watch(2*time.Minute, ctx.Done())
 		}
 	}
@@ -311,6 +316,9 @@ func main() {
 	if *domainCatFile != "" {
 		srv.SetEnrichCategories(*domainCatFile)
 		slog.Info("alan adi kategori tablosu yuklendi", "file", *domainCatFile)
+	}
+	if tiSvc != nil {
+		srv.SetThreatIntel(tiSvc)
 	}
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)

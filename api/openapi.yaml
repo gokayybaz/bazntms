@@ -485,6 +485,25 @@ paths:
         "200": { description: "{ ok: true, status }" }
         "400": { description: geçersiz eylem }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/threatintel:
+    get:
+      tags: [alerts]
+      summary: Tehdit istihbaratı — IP / alan adı itibarı (Faz 24-E)
+      description: >
+        Sağlayıcı-bağımsız (`internal/threatintel`). -ioc-file verildiyse
+        `localfile` sağlayıcısı. Reputation ∈ trusted|neutral|suspicious|
+        malicious|unknown. **Oto-blok yok** — yalnızca görünürlük. Servis
+        pasifken bile tutarlı şema ("unknown").
+      parameters:
+        - name: ip
+          in: query
+          schema: { type: string }
+        - name: domain
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { description: "{ providers: [], ip?: Indicator, domain?: Indicator }" }
+        "400": { description: ip veya domain gerekli }
   /api/v1/enrich:
     get:
       tags: [fleet]
