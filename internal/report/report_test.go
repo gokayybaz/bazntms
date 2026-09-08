@@ -184,8 +184,18 @@ func TestBuildEnterprise(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enterprise html: %v", err)
 	}
-	if !strings.Contains(string(html), "Kurumsal Rapor") || !strings.Contains(string(html), "Süreç Bazlı Trafik") {
-		t.Fatalf("enterprise HTML govdesi beklenenden farkli")
+	for _, want := range []string{"Kurumsal Rapor", "Süreç Bazlı Trafik", "Yönetici Özeti",
+		"Ağ Sağlık Skoru", "Top Konuşmalar", "DNS / Uygulama Görünürlüğü", "Açık Olaylar", "Öneriler"} {
+		if !strings.Contains(string(html), want) {
+			t.Fatalf("enterprise HTML %q bölümünü içermiyor", want)
+		}
+	}
+	// Faz 25-B: sağlık skoru + öneriler hesaplandı
+	if d.HealthScore <= 0 || d.HealthScore > 100 {
+		t.Fatalf("sağlık skoru hesaplanmadı: %d", d.HealthScore)
+	}
+	if len(d.Recommendations) == 0 {
+		t.Fatalf("öneri üretilmedi (en az 'sorun yok' olmalı)")
 	}
 	// S22.20: PDF çıktı
 	pdf, err := d.RenderEnterprisePDF()

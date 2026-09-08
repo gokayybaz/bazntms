@@ -56,9 +56,14 @@ type EnterpriseData struct {
 	HealthScore      int                `json:"health_score"`
 	HealthDeductions []health.Deduction `json:"health_deductions,omitempty"`
 
-	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
-	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
-	AlertCounts  map[string]int              `json:"alert_counts"`
+	TopEndpoints     []store.EndpointDelta       `json:"top_endpoints"`
+	TopProcesses     []store.ProcessTrafficUsage `json:"top_processes"`
+	TopConversations []store.FlowConversation    `json:"top_conversations,omitempty"` // Faz 25-B (23-B)
+	TopDNS           []store.AgentDNSUsage       `json:"top_dns,omitempty"`           // Faz 25-B — DNS görünürlüğü
+	TopL7            []store.L7Usage             `json:"top_l7,omitempty"`            // Faz 25-B — uygulama görünürlüğü
+	OpenIncidents    []store.Incident            `json:"open_incidents,omitempty"`    // Faz 25-B (24-B)
+	Recommendations  []string                    `json:"recommendations,omitempty"`   // Faz 25-B — deterministik şablon
+	AlertCounts      map[string]int              `json:"alert_counts"`
 
 	// Sites, filo-geneli raporda (site=="") saha kırılımı (S22.22).
 	Sites []SiteBreakdown `json:"sites,omitempty"`
@@ -200,6 +205,19 @@ func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, er
 	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10, site); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
+	// Faz 25-B: ek görünürlük bölümleri — hepsi best-effort (eksikse bölüm
+	// zarif düşer, rapor 500 vermez).
+	d.TopConversations, _ = st.FlowConversations(since, "pair", "octets", 10, site)
+	d.TopDNS, _ = st.TopAgentDNS(since, 0, 10, site)
+	d.TopL7, _ = st.TopL7(since, 0, 10, site)
+	if incs, err := st.RecentOpenIncidents(since); err == nil {
+		for _, in := range incs {
+			if site == "" || in.Site == site {
+				d.OpenIncidents = append(d.OpenIncidents, in)
+			}
+		}
+	}
+
 	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0
 
 	// saha kırılımı (S22.22) — yalnız filo-geneli raporda
@@ -260,6 +278,8 @@ func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, er
 			}
 		}
 	}
+
+	d.Recommendations = recommend(d) // Faz 25-B — deterministik şablon, LLM yok
 	return d, nil
 }
 
@@ -319,6 +339,18 @@ const enterpriseTpl = `<!doctype html>
   {{if .Empty}}<p style="border:1px solid var(--line); background:#fffbeb; padding:10px 12px; font-size:12px; color:var(--muted)">
     Filoda trafik/telemetri kaydı yok — agent'lar ve/veya SNMP cihazları veri gönderiyor mu kontrol edin.
   </p>{{end}}
+
+  <h2>Yönetici Özeti</h2>
+  <div class="kpi">
+    <div><span>Ağ Sağlığı</span><b style="color:{{if ge .HealthScore 85}}#15803d{{else if ge .HealthScore 60}}#b45309{{else}}#b91c1c{{end}}">{{.HealthScore}} / 100</b></div>
+    <div><span>Erişilebilirlik</span><b>{{printf "%.1f" .AgentUptime}}% agent</b></div>
+    <div><span>Açık Kritik Olay</span><b>{{len .OpenIncidents}}</b></div>
+    <div><span>Uyarı (dönem)</span><b>{{totalAlerts .AlertCounts}}</b></div>
+    <div><span>Kapasite Riski</span><b>{{if .IfaceBreach}}var{{else if gt .GrowthPct 25.0}}büyüme{{else}}—{{end}}</b></div>
+    <div><span>En Yoğun Uç</span><b>{{if .TopEndpoints}}{{(index .TopEndpoints 0).IP}}{{else}}—{{end}}</b></div>
+    <div><span>En Yoğun Süreç</span><b>{{if .TopProcesses}}{{(index .TopProcesses 0).Process}}{{else}}—{{end}}</b></div>
+    <div><span>Dönem</span><b>{{.Days}} gün</b></div>
+  </div>
 
   <h2>Ağ Sağlık Skoru</h2>
   <div class="kpi">
@@ -402,7 +434,44 @@ const enterpriseTpl = `<!doctype html>
     {{if $missing2}}<tr><td colspan="4">kayıt yok</td></tr>{{end}}
   </table>
 
-  <footer>bazNTMS kurumsal rapor motoru · kaynak: agent filosu + NetFlow + SNMP</footer>
+  <h2>Top Konuşmalar (NetFlow)</h2>
+  <table>
+    <tr><th>Uç A</th><th>Uç B</th><th class="num">Akış</th><th class="num">Paket</th><th class="num">Veri (MB)</th></tr>
+    {{range .TopConversations}}
+    <tr><td>{{.Src}}</td><td>{{.Dst}}</td>
+        <td class="num">{{.Flows}}</td><td class="num">{{.Packets}}</td>
+        <td class="num">{{printf "%.1f" (divf .Octets 1048576)}}</td></tr>
+    {{else}}<tr><td colspan="5">NetFlow verisi yok</td></tr>{{end}}
+  </table>
+
+  <h2>DNS / Uygulama Görünürlüğü</h2>
+  <table>
+    <tr><th>Alan Adı (DNS)</th><th class="num">Sorgu</th><th class="num">Agent</th></tr>
+    {{range .TopDNS}}<tr><td>{{.Domain}}</td><td class="num">{{.Queries}}</td><td class="num">{{.AgentCnt}}</td></tr>
+    {{else}}<tr><td colspan="3">süreç-atıflı DNS verisi yok (pcap gerekir)</td></tr>{{end}}
+  </table>
+  <table style="margin-top:8px">
+    <tr><th>Alan Adı (TLS SNI / HTTP Host)</th><th>Tür</th><th class="num">Gözlem</th></tr>
+    {{range .TopL7}}<tr><td>{{.Host}}</td><td>{{.Kind}}</td><td class="num">{{.Hits}}</td></tr>
+    {{else}}<tr><td colspan="3">L7 görünürlüğü yok</td></tr>{{end}}
+  </table>
+
+  <h2>Açık Olaylar (Incident)</h2>
+  <table>
+    <tr><th>#</th><th>Önem</th><th>Başlık</th><th class="num">Risk</th><th>Sebep</th></tr>
+    {{range .OpenIncidents}}
+    <tr><td>{{.ID}}</td><td>{{.Severity}}</td><td>{{.Title}}</td>
+        <td class="num">{{.RiskScore}}</td><td style="font-size:11px">{{.CorrelationReason}}</td></tr>
+    {{else}}<tr><td colspan="5">açık olay yok</td></tr>{{end}}
+  </table>
+
+  <h2>Öneriler</h2>
+  <ol style="font-size:12px; padding-left:18px; margin:8px 0">
+    {{range .Recommendations}}<li style="margin:4px 0">{{.}}</li>{{end}}
+  </ol>
+  <p style="font-size:10.5px;color:var(--muted)">Öneriler deterministik şablonlardır (eşik-tabanlı) — LLM kullanılmaz.</p>
+
+  <footer>bazNTMS kurumsal rapor motoru · kaynak: agent filosu + NetFlow + SNMP + korelasyon</footer>
 </div>
 </body>
 </html>`

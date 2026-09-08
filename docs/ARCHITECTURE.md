@@ -299,6 +299,15 @@ protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer fil
 ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
 metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
 
+Kurumsal rapor (Faz 25-B) ayrıca **yönetici özeti** (KPI ızgarası: ağ sağlık
+skoru + erişilebilirlik + açık olay + kapasite riski), **ağ sağlık skoru**
+bölümü (`internal/health`, 25-A), **top konuşmalar** (NetFlow, 23-B),
+**DNS / uygulama görünürlüğü** (süreç-atıflı DNS + TLS SNI/HTTP Host), **açık
+olaylar** (incident korelasyonu, 24-B) ve **öneriler** taşır. Öneriler
+`recommend()` — eşik-tabanlı **deterministik şablonlar**, LLM yok; her madde
+bir metriğe ve eşiğe bağlıdır. Ek bölümler best-effort doldurulur (kaynak
+eksikse bölüm zarifçe "veri yok" der, rapor 500 vermez).
+
 **Hedef zenginleştirme (`internal/enrich`, Faz 23-E):** paylaşılan `Service`
 uzak IP → `{private, country, asn, org}` (geoip.Resolver'a devreder — o zaten
 100k LRU önbellekli; RFC1918/ULA/loopback → `private=true`, lookup yok) ve alan
