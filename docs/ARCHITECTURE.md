@@ -86,6 +86,16 @@ CEF (ArcSight) / LEEF (QRadar) / JSON'a formatlanıp RFC3164 syslog (UDP/TCP)
 veya HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı) ile iletilir;
 `notifiers.siem` altından yapılandırılır.
 
+**Olay (incident) korelasyon motoru (`internal/incident`, Faz 24-B):**
+lider-kapılı (uyarı motoruyla aynı lider), ~30 sn'de bir `AlertEventsSince`'i
+agent bazında (`alert_events.agent_id` — 0018) gruplayıp 5 deterministik kurala
+uygular (yeni-süreç+yeni-hedef/ioc, +şüpheli-port, hedef+bant, anomali+bant,
+≥N-şüpheli). **AI/LLM YOK.** Dedup = `correlation_key` ("r<kural>|agent<id>") —
+anahtar başına tek açık incident; tekrar → severity **yalnız yükselir**, risk
+en yükseği tutar. Risk skoru 0-100 açıklanabilir (kural tabanı + önem + kanıt).
+Bildirim: `alerts.NotifyIncident` sentetik AlertEvent'e çevirip mevcut
+kanallardan. Bkz. `docs/decisions/0011-incident-engine.md`.
+
 **Normalleştirilmiş olay akışı (`internal/store/events.go`, Faz 24-A):**
 uyarılar (`alert_events`) ile ham gözlemler ayrılır (ADR 0010). `QueryEvents`
 mevcut kaynak tabloları (`agent_dns`, `l7_endpoints`, `flows`, `syslog_events`,
@@ -249,7 +259,7 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 | `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
 | `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer). Faz 23-D: SNMP-destekli kenarlar canlı telemetri (util → renk/durum: normal/uyarı≥%70/kritik≥%90/down), `Enter`/tık → link inspector (hız/RX/TX/kullanım/hata/iskarta), güven rozeti | `GET /api/v1/topology` (kenar `telemetry` = `local_port` ↔ `LatestDeviceIfaces` eşleşmesi; `confidence` = discovered\|inferred\|manual, `0017`) |
-| `/uyarilar` | Alt sekmeler: **Alarmlar** (yaşam döngüsü olay tablosu — kabul/çöz/not, filtre, korelasyon, bakım pencereleri + eşik/bildirim ayarları) · **Olay Akışı** (Faz 24-A — normalleştirilmiş ham gözlem akışı, uyarılardan ayrı, ADR 0010) | `GET /api/v1/alerts/{events,silences}` + `POST .../events/:id/{ack,resolve,note}` + `GET/PUT /api/alerts` · `GET /api/v1/events` |
+| `/uyarilar` | Alt sekmeler: **Alarmlar** (yaşam döngüsü tablosu + eşik/bildirim ayarları) · **Olaylar** (Faz 24-B/C — korele incident listesi + `/uyarilar/olay/:id` detay: özet/korelasyon/kanıt zaman çizelgesi/RELATED/ACTIONS; sekmede açık-sayı rozeti) · **Olay Akışı** (Faz 24-A — normalleştirilmiş ham gözlem, ADR 0010) | `GET /api/v1/alerts/{events,silences}` + `POST .../events/:id/{ack,resolve,note}` + `GET/PUT /api/alerts` · `GET /api/v1/events` · `GET /api/v1/incidents[/:id]` + `POST .../{ack,investigate,resolve,close}` |
 | `/anomali` | Anomali paneli — mevsimsel "beklenen ±2σ bant vs gerçek" grafiği (elle SVG) + aktif sapmalar (filo/saha/agent × bps/dns/proc) | `GET /api/v1/anomaly/{baseline,active}` |
 | `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite/saha kırılımı, PDF) + uyumluluk raporları · zamanlanmış teslim + arşiv · SLA hedefleri | `GET /api/report?type=…` · `GET/POST/DELETE /api/v1/reports/*` · `/api/v1/sla/targets` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |

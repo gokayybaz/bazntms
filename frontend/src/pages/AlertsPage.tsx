@@ -1,20 +1,27 @@
 import { useMemo, useState } from 'react'
 import type { AlertEvent } from '../types'
 import { formatNum } from '../lib/format'
+import { usePolledJson } from '../lib/usePolledJson'
+import type { Incident } from '../components/IncidentsPanel'
 import { AlertsCard } from '../components/AlertsCard'
 import { AlertEventsPanel } from '../components/AlertEventsPanel'
 import { EventsPanel } from '../components/EventsPanel'
+import { IncidentsPanel } from '../components/IncidentsPanel'
 import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
 import { Panel } from '../components/Panel'
 
 const SUBTABS = [
   { v: 'alarmlar', label: 'Alarmlar' },
+  { v: 'olaylar', label: 'Olaylar' },
   { v: 'akis', label: 'Olay Akışı' },
 ] as const
 type SubTab = (typeof SUBTABS)[number]['v']
 
 export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
   const [tab, setTab] = useState<SubTab>('alarmlar')
+  // açık incident sayısı → "Olaylar" sekmesinde rozet (alarm bağlamından erişim)
+  const { data: incData } = usePolledJson<{ incidents: Incident[] }>('/api/v1/incidents?status=open&limit=200', 20_000)
+  const openIncidents = incData?.incidents?.length ?? 0
   const byKind = useMemo(() => {
     const counts = new Map<string, number>()
     for (const e of alertEvents) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1)
@@ -43,6 +50,9 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
             }`}
           >
             {t.label}
+            {t.v === 'olaylar' && openIncidents > 0 && (
+              <span className={`ml-1.5 font-bold ${tab === t.v ? 'text-ground' : 'text-rose-400'}`}>{openIncidents}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -71,6 +81,10 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
             <AlertsCard events={alertEvents} />
           </Panel>
         </>
+      ) : tab === 'olaylar' ? (
+        <Panel title="Olaylar (Incident)" right={<span className="text-[10px] text-tui-dim">korele uyarı kümeleri</span>}>
+          <IncidentsPanel />
+        </Panel>
       ) : (
         <Panel title="Olay Akışı" right={<span className="text-[10px] text-tui-dim">ham gözlem · uyarı değil</span>}>
           <EventsPanel />

@@ -18,6 +18,7 @@ import { TrafficFlowPage } from './pages/TrafficFlowPage'
 import { GeoPage } from './pages/GeoPage'
 import { TopologyPage } from './pages/TopologyPage'
 import { AlertsPage } from './pages/AlertsPage'
+import { IncidentDetailPage } from './pages/IncidentDetailPage'
 import { AnomalyPage } from './pages/AnomalyPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ComplianceOverviewPage } from './pages/ComplianceOverviewPage'
@@ -158,6 +159,7 @@ export default function App() {
               <Route path="/cografi" element={<GeoPage />} />
               <Route path="/topoloji" element={<TopologyPage refreshKey={historyRefresh} />} />
               <Route path="/uyarilar" element={<AlertsPage alertEvents={alertEvents} />} />
+              <Route path="/uyarilar/olay/:id" element={<IncidentDetailPage />} />
               <Route path="/anomali" element={<AnomalyPage />} />
               <Route path="/raporlar" element={<ReportsPage />} />
               <Route path="/uyumluluk" element={<ComplianceOverviewPage refreshKey={historyRefresh} />} />
