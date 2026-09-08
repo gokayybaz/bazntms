@@ -242,6 +242,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/alerts/status", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAlertsStatus)))
 	mux.Handle("POST /api/alerts/test", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAlertsTest)))
 	mux.HandleFunc("GET /api/alerts/events", s.handleAlertEvents)
+	// normalleştirilmiş ham olay akışı (Faz 24-A) — uyarılardan ayrı (ADR 0010)
+	mux.Handle("GET /api/v1/events", s.requirePerm(PermView, http.HandlerFunc(s.handleEvents)))
 	// anomali paneli (S22.5) — düşük hassasiyetli analiz verisi, PermView.
 	mux.Handle("GET /api/v1/anomaly/baseline", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyBaseline)))
 	mux.Handle("GET /api/v1/anomaly/active", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyActive)))

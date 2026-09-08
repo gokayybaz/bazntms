@@ -1,12 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { AlertEvent } from '../types'
 import { formatNum } from '../lib/format'
 import { AlertsCard } from '../components/AlertsCard'
 import { AlertEventsPanel } from '../components/AlertEventsPanel'
+import { EventsPanel } from '../components/EventsPanel'
 import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
 import { Panel } from '../components/Panel'
 
+const SUBTABS = [
+  { v: 'alarmlar', label: 'Alarmlar' },
+  { v: 'akis', label: 'Olay Akışı' },
+] as const
+type SubTab = (typeof SUBTABS)[number]['v']
+
 export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
+  const [tab, setTab] = useState<SubTab>('alarmlar')
   const byKind = useMemo(() => {
     const counts = new Map<string, number>()
     for (const e of alertEvents) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1)
@@ -23,27 +31,51 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
         <span className="ml-auto text-[10px] text-tui-dim">{formatNum(alertEvents.length)} olay</span>
       </div>
 
-      {byKind.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {byKind.map(([kind, count]) => (
-            <span
-              key={kind}
-              className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] ${
-                KIND_STYLES[kind] ?? 'border-rule-hi text-tui-dim'
-              }`}
-            >
-              {KIND_LABELS[kind] ?? kind}
-              <span className="font-bold">{formatNum(count)}</span>
-            </span>
-          ))}
-        </div>
+      <nav className="flex flex-wrap border border-rule bg-ground text-[11px]">
+        {SUBTABS.map((t) => (
+          <button
+            key={t.v}
+            type="button"
+            onClick={() => setTab(t.v)}
+            aria-pressed={tab === t.v}
+            className={`border-r border-rule px-3 py-1 uppercase tracking-[0.04em] transition ${
+              tab === t.v ? 'bg-rx text-ground' : 'text-tui-dim hover:bg-panel-2 hover:text-ink-hi'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'alarmlar' ? (
+        <>
+          {byKind.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {byKind.map(([kind, count]) => (
+                <span
+                  key={kind}
+                  className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] ${
+                    KIND_STYLES[kind] ?? 'border-rule-hi text-tui-dim'
+                  }`}
+                >
+                  {KIND_LABELS[kind] ?? kind}
+                  <span className="font-bold">{formatNum(count)}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <AlertEventsPanel />
+
+          <Panel title="Eşikler &amp; Bildirim Kanalları" right={<span className="text-[10px] text-tui-dim">yalnız yönetici</span>}>
+            <AlertsCard events={alertEvents} />
+          </Panel>
+        </>
+      ) : (
+        <Panel title="Olay Akışı" right={<span className="text-[10px] text-tui-dim">ham gözlem · uyarı değil</span>}>
+          <EventsPanel />
+        </Panel>
       )}
-
-      <AlertEventsPanel />
-
-      <Panel title="Eşikler &amp; Bildirim Kanalları" right={<span className="text-[10px] text-tui-dim">yalnız yönetici</span>}>
-        <AlertsCard events={alertEvents} />
-      </Panel>
     </div>
   )
 }

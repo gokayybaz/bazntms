@@ -411,6 +411,38 @@ paths:
                     out: { type: number }
                     local: { type: number }
                     pps: { type: integer }
+  /api/v1/events:
+    get:
+      tags: [alerts]
+      summary: Normalleştirilmiş ham olay akışı (Faz 24-A — uyarılardan ayrı)
+      description: >
+        Bkz. docs/decisions/0010-event-model.md. Yeni tablo yok; agent_dns /
+        l7_endpoints / flows / syslog_events / connection_events üzerinde birleşik
+        okuma. Türler: dns.query, tls.sni_observed, http.host_observed,
+        netflow.flow, syslog.received, connection.seen. RBAC site scope.
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string }
+          description: virgülle ayrık tür listesi (boş = tümü)
+        - name: agent_id
+          in: query
+          schema: { type: integer }
+        - name: device
+          in: query
+          schema: { type: string }
+        - name: since_min
+          in: query
+          schema: { type: integer, default: 60 }
+        - name: before
+          in: query
+          schema: { type: integer }
+          description: ts imleci — bir önceki yanıtın "next" değeri
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200":
+          description: "{ events: [{type,source,ts,agent_id,device,process,pid,src_ip,src_port,dst_ip,dst_port,proto,domain,severity,count}], next }"
+        "404": { description: agent site kapsamı dışında }
   /api/v1/enrich:
     get:
       tags: [fleet]

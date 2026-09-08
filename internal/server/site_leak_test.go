@@ -115,7 +115,7 @@ func TestSiteLeak(t *testing.T) {
 	}
 	bodyChecks := []string{
 		"/api/v1/agents", "/api/v1/devices", "/api/v1/flows", "/api/v1/flows/conversations", "/api/v1/syslog",
-		"/api/v1/topology", "/api/v1/geo", "/api/v1/l7", "/api/v1/dns", "/api/v1/processes",
+		"/api/v1/topology", "/api/v1/geo", "/api/v1/l7", "/api/v1/dns", "/api/v1/processes", "/api/v1/events",
 		"/api/v1/users", "/api/v1/tokens", "/api/v1/enroll-tokens", "/api/v1/audit",
 	}
 	for _, p := range bodyChecks {

@@ -24,6 +24,13 @@ type Store interface {
 	IsmsStore
 	ClusterStore
 	SchedulerStore
+	EventStore
+}
+
+// EventStore, normalleştirilmiş olay akışı (Faz 24-A) — kaynak tabloların
+// üzerinde birleşik okuma modeli, yeni yazma hattı yok (ADR 0010).
+type EventStore interface {
+	QueryEvents(f EventFilter) ([]Event, int64, error)
 }
 
 // SchedulerStore, hub-içi zamanlanmış işler (Faz 22 S22.18) —

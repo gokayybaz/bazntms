@@ -71,4 +71,27 @@ describe('AlertsPage', () => {
     renderPage(events)
     expect(screen.getAllByText('yeni_bilinmeyen_tur').length).toBeGreaterThan(0)
   })
+
+  it('Olay Akışı sekmesi ham olay akışını gösterir (Faz 24-A)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/v1/events')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              events: [{ type: 'dns.query', source: 'agent', ts: Math.floor(Date.now() / 1000), agent_id: 3, process: 'curl', domain: 'example.com', count: 2 }],
+              next: 0,
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => MOCK_CONFIG } as Response)
+      }),
+    )
+    const { default: userEvent } = await import('@testing-library/user-event')
+    renderPage([])
+    await userEvent.click(screen.getByRole('button', { name: 'Olay Akışı' }))
+    expect(await screen.findByText('example.com')).toBeInTheDocument()
+    expect(screen.getByText('dns.query')).toBeInTheDocument()
+  })
 })
