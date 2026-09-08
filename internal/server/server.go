@@ -222,6 +222,10 @@ func (s *Server) Handler() http.Handler {
 	// anomali paneli (S22.5) — düşük hassasiyetli analiz verisi, PermView.
 	mux.Handle("GET /api/v1/anomaly/baseline", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyBaseline)))
 	mux.Handle("GET /api/v1/anomaly/active", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyActive)))
+	// bakım pencereleri / susturma (S22.10)
+	mux.Handle("GET /api/v1/alerts/silences", s.requirePerm(PermView, http.HandlerFunc(s.handleSilencesGet)))
+	mux.Handle("POST /api/v1/alerts/silences", s.requirePerm(PermOperate, http.HandlerFunc(s.handleSilencesPost)))
+	mux.Handle("DELETE /api/v1/alerts/silences/{id}", s.requirePerm(PermOperate, http.HandlerFunc(s.handleSilenceDelete)))
 
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
@@ -667,6 +671,101 @@ func (s *Server) handleAnomalyActive(w http.ResponseWriter, r *http.Request) {
 		devs = kept
 	}
 	writeJSON(w, map[string]any{"deviations": devs})
+}
+
+// --- bakım pencereleri (S22.10) ---
+
+func (s *Server) handleSilencesGet(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("active")
+	sl, err := s.alerts.ListSilences(q == "1" || q == "true")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		kept := sl[:0]
+		for _, x := range sl {
+			if x.MatchSite == "" || x.MatchSite == scope {
+				kept = append(kept, x)
+			}
+		}
+		sl = kept
+	}
+	writeJSON(w, map[string]any{"silences": sl})
+}
+
+func (s *Server) handleSilencesPost(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		MatchKind   string `json:"match_kind"`
+		MatchSite   string `json:"match_site"`
+		MatchKey    string `json:"match_key"`
+		Reason      string `json:"reason"`
+		StartsTs    int64  `json:"starts_ts"`
+		EndsTs      int64  `json:"ends_ts"`
+		DurationMin int    `json:"duration_min"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "geçersiz gövde", http.StatusBadRequest)
+		return
+	}
+	now := time.Now().Unix()
+	if req.StartsTs <= 0 {
+		req.StartsTs = now
+	}
+	if req.EndsTs <= 0 && req.DurationMin > 0 {
+		req.EndsTs = req.StartsTs + int64(req.DurationMin)*60
+	}
+	if req.EndsTs <= req.StartsTs {
+		http.Error(w, "bitiş zamanı başlangıçtan sonra olmalı (ends_ts veya duration_min)", http.StatusBadRequest)
+		return
+	}
+	ident := identityFromCtx(r)
+	if scope := SiteScope(ident); scope != "" {
+		req.MatchSite = scope // site-kapsamlı kimlik yalnız kendi sahasını susturabilir
+	}
+	by := ""
+	if ident != nil {
+		by = ident.Username
+	}
+	id, err := s.alerts.AddSilence(store.AlertSilence{
+		MatchKind: req.MatchKind, MatchSite: req.MatchSite, MatchKey: req.MatchKey,
+		StartsTs: req.StartsTs, EndsTs: req.EndsTs, Reason: req.Reason,
+		CreatedBy: by, CreatedTs: now,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, ident, "alert.silence.create", fmt.Sprintf("silence:%d", id), req.Reason)
+	writeJSON(w, map[string]any{"id": id})
+}
+
+func (s *Server) handleSilenceDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		// site-kapsamlı kimlik yalnız kendi sahasının susturmasını silebilir
+		all, _ := s.alerts.ListSilences(false)
+		ok := false
+		for _, x := range all {
+			if x.ID == id && (x.MatchSite == scope) {
+				ok = true
+			}
+		}
+		if !ok {
+			http.Error(w, "bulunamadı", http.StatusNotFound)
+			return
+		}
+	}
+	if err := s.alerts.DeleteSilence(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "alert.silence.delete", fmt.Sprintf("silence:%d", id), "")
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // EnrollToken, otomatik uretilen enrollment token'ini dondurur (banner logu icin).

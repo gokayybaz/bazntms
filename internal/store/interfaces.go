@@ -84,6 +84,10 @@ type AlertStore interface {
 	// korelasyon (S22.9)
 	OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error)
 	SetAlertEventGroup(id int64, groupID string) error
+	// bakım pencereleri / susturma (S22.10)
+	AddAlertSilence(sl AlertSilence) (int64, error)
+	ListAlertSilences(activeOnly bool, now int64) ([]AlertSilence, error)
+	DeleteAlertSilence(id int64) error
 	IsAlertSeen(kind, key string) (bool, error)
 	MarkAlertSeen(kind, key string) error
 	CountAlertSeen(kind string) (int, error)

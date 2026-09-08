@@ -741,6 +741,56 @@ paths:
                         z: { type: number }
                         n: { type: integer }
 
+  /api/v1/alerts/silences:
+    get:
+      tags: [alerts]
+      summary: Bakım pencereleri (susturma) listesi
+      parameters:
+        - { name: active, in: query, schema: { type: string, enum: ["1", "true"] }, description: yalnız şu an açık olanlar }
+      responses:
+        "200":
+          description: Susturma dizisi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  silences:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertSilence" }
+    post:
+      tags: [alerts]
+      summary: Bakım penceresi oluştur (PermOperate)
+      description: >
+        match_kind / match_site / match_key (alt-dize) boş = joker. Zaman:
+        ends_ts ya da duration_min. Site-kapsamlı kimlik match_site'ı kendi
+        sahasına sabitlenir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                match_kind: { type: string }
+                match_site: { type: string }
+                match_key: { type: string }
+                reason: { type: string }
+                starts_ts: { type: integer, description: "0 → şimdi" }
+                ends_ts: { type: integer }
+                duration_min: { type: integer, description: "ends_ts yoksa starts_ts + bu" }
+      responses:
+        "200": { description: "{ id }" }
+        "400": { description: "geçersiz gövde / zaman aralığı" }
+  /api/v1/alerts/silences/{id}:
+    delete:
+      tags: [alerts]
+      summary: Bakım penceresi sil (PermOperate)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: "{ ok: true }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api/report:
     get:
       tags: [reports]
@@ -1051,6 +1101,18 @@ components:
         Retry-After:
           schema: { type: integer }
   schemas:
+    AlertSilence:
+      type: object
+      properties:
+        id: { type: integer }
+        match_kind: { type: string, description: "boş = her tür" }
+        match_site: { type: string, description: "boş = her saha" }
+        match_key: { type: string, description: "boş = her anahtar; aksi alt-dize" }
+        starts_ts: { type: integer }
+        ends_ts: { type: integer }
+        reason: { type: string }
+        created_by: { type: string }
+        created_ts: { type: integer }
     TelemetryBatch:
       type: object
       properties:

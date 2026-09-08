@@ -243,6 +243,37 @@ func TestPostgresStore(t *testing.T) {
 	if o, _ := st.OpenAlertEventByKey("bw", "en0"); o.Count != 2 || o.LastTs != now+10 {
 		t.Fatalf("bump sonrası: %+v", o)
 	}
+	// S22.8/S22.9: stale + kind + site sorguları, resolve, grup ataması
+	if st2, _ := st.OpenAlertEventsStale(now + 20); len(st2) != 1 {
+		t.Fatalf("stale sorgu: %d", len(st2))
+	}
+	if k, _ := st.OpenAlertEventsByKind("bw"); len(k) != 1 {
+		t.Fatalf("kind sorgu: %d", len(k))
+	}
+	if ss, _ := st.OpenAlertEventsBySiteSince("dc1", now-100); len(ss) != 1 {
+		t.Fatalf("site-since sorgu: %d", len(ss))
+	}
+	if err := st.SetAlertEventGroup(aeID, "g-1"); err != nil {
+		t.Fatalf("grup ata: %v", err)
+	}
+	if err := st.ResolveAlertEvent(aeID, now+15); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if o, _ := st.OpenAlertEventByKey("bw", "en0"); o != nil {
+		t.Fatalf("resolved olay açık dönmemeli")
+	}
+	// S22.10: susturma CRUD (PG)
+	sid, err := st.AddAlertSilence(AlertSilence{MatchKind: "anomaly", StartsTs: now - 10, EndsTs: now + 600, Reason: "bakım", CreatedTs: now})
+	if err != nil || sid == 0 {
+		t.Fatalf("silence add: %v %d", err, sid)
+	}
+	if a, _ := st.ListAlertSilences(true, now); len(a) != 1 {
+		t.Fatalf("aktif silence: %d", len(a))
+	}
+	if err := st.DeleteAlertSilence(sid); err != nil {
+		t.Fatalf("silence delete: %v", err)
+	}
+
 	if err := st.MarkAlertSeen("proc", "curl"); err != nil {
 		t.Fatalf("seen: %v", err)
 	}

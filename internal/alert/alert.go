@@ -159,6 +159,11 @@ type Manager struct {
 	// için (C1, Faz 15). nil → daima lider (tek replika / dev). Lider değilken
 	// motor "sıcak" kalır ama hiçbir kural değerlendirmez.
 	isLeader func() bool
+
+	// silences, aktif bakım pencerelerinin önbelleği (S22.10) — run() döngüsü
+	// periyodik, POST/DELETE sonrası RefreshSilences() ile tazeler.
+	silenceMu sync.RWMutex
+	silences  []store.AlertSilence
 }
 
 // SetLeaderCheck, değerlendirme öncesi çağrılacak liderlik denetimini bağlar.
@@ -211,6 +216,11 @@ func (m *Manager) run() {
 
 			if !cfg.Enabled {
 				continue
+			}
+			// bakım penceresi önbelleği (S22.10): liderlikten bağımsız — devir
+			// anında güncel olsun. 20 sn'de bir + ilk tick.
+			if m.tickN == 1 || m.tickN%20 == 5 {
+				m.RefreshSilences()
 			}
 			// C1: çoklu replikada yalnız lider değerlendirir (alarm çift
 			// ateşlenmesin). Lider değilken bant genişliği sayaçları sıfırlanır
@@ -576,6 +586,18 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 		return
 	}
 
+	// S22.10: aktif bakım penceresi → kayıt tut (state='silenced'), bildirme.
+	if reason, ok := m.silenced(kind, opt.Site, key); ok {
+		if _, err := m.st.InsertAlertEvent(store.AlertEvent{
+			Ts: now, Kind: kind, Key: key, Message: message,
+			Severity: cfg.severityFor(kind), State: "silenced", Site: opt.Site,
+			Count: 1, FirstTs: now, LastTs: now, Note: "susturuldu: " + reason,
+		}); err != nil {
+			log.Printf("susturulan uyari kaydi hatasi: %v", err)
+		}
+		return
+	}
+
 	cooldownKey := kind + "|" + key
 	m.mu.Lock()
 	if t, ok := m.lastFire[cooldownKey]; ok && time.Since(t) < time.Duration(cfg.CooldownMin)*time.Minute {
@@ -606,6 +628,33 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	if n != nil {
 		n.Deliver(cfg.Notifiers, ev)
 	}
+}
+
+// RefreshSilences, aktif bakım penceresi önbelleğini DB'den tazeler. run()
+// döngüsü periyodik çağırır; sunucu POST/DELETE /api/v1/alerts/silences
+// sonrası hemen çağırır.
+func (m *Manager) RefreshSilences() {
+	sl, err := m.st.ListAlertSilences(true, time.Now().Unix())
+	if err != nil {
+		log.Printf("susturma listesi okunamadi: %v", err)
+		return
+	}
+	m.silenceMu.Lock()
+	m.silences = sl
+	m.silenceMu.Unlock()
+}
+
+// silenced, bir uyarının aktif bir bakım penceresine uyup uymadığı.
+func (m *Manager) silenced(kind, site, key string) (string, bool) {
+	now := time.Now().Unix()
+	m.silenceMu.RLock()
+	defer m.silenceMu.RUnlock()
+	for _, s := range m.silences {
+		if s.Active(now) && s.Matches(kind, site, key) {
+			return s.Reason, true
+		}
+	}
+	return "", false
 }
 
 // correlate, yeni bir olay için korelasyon grubu belirler (S22.9): aynı sahada
@@ -674,6 +723,26 @@ func (m *Manager) resolveEvent(cfg Config, e store.AlertEvent, reason string) {
 		e.Message = "[ÇÖZÜLDÜ] " + e.Message + " — " + reason
 		n.Deliver(cfg.Notifiers, e)
 	}
+}
+
+// --- bakım pencereleri (server icin, S22.10) ---
+
+func (m *Manager) ListSilences(activeOnly bool) ([]store.AlertSilence, error) {
+	return m.st.ListAlertSilences(activeOnly, time.Now().Unix())
+}
+
+func (m *Manager) AddSilence(sl store.AlertSilence) (int64, error) {
+	id, err := m.st.AddAlertSilence(sl)
+	if err == nil {
+		m.RefreshSilences()
+	}
+	return id, err
+}
+
+func (m *Manager) DeleteSilence(id int64) error {
+	err := m.st.DeleteAlertSilence(id)
+	m.RefreshSilences()
+	return err
 }
 
 // --- config erisimi (server icin) ---
