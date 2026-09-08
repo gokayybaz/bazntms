@@ -91,6 +91,7 @@ func main() {
 	flowExporter := fl.String("flow-exporter", "", "NetFlow/sFlow exporter IP override — hub bir NAT/röle arkasindaysa (ör. Docker Desktop) paketin kaynak IP'si kaybolur; tek exporter'li kurulumda cihazin IP'sini yazin")
 	syslogPort := fl.String("syslog-port", "", "Syslog UDP dinleme portu (bos = kapali; ex: 5514)")
 	iocFile := fl.String("ioc-file", "", "Tehdit istihbarati domain kara listesi (IOC) — eslesen L7/DNS trafigi 'ioc' uyarisi uretir. hosts/AdBlock/duz metin formatlari; mtime degisince otomatik yeniden yuklenir")
+	domainCatFile := fl.String("domain-category-file", "", "Alan adi -> kategori tablosu (Faz 23-E zenginlestirme). Her satir: \"<alan> <kategori>\" veya \"<alan>,<kategori>\"; alan tam ya da kayitli-alan (eTLD+1) eslesir")
 	updatesDir := fl.String("updates-dir", "", "Agent guncelleme kanali dizini (bos: -update-github-repo doluysa 'updates', degilse kapali)")
 	updateRepo := fl.String("update-github-repo", "gokayybaz/bazntms", "Agent binary'lerini cekecek GitHub deposu (owner/name); bos = GitHub senkronu kapali, yalnizca -updates-dir icerigi (bazntmsctl update sign) sunulur")
 	updateSyncInterval := fl.Duration("update-github-interval", 30*time.Minute, "GitHub release yoklama araligi")
@@ -298,6 +299,10 @@ func main() {
 	reportsDir := filepath.Join(filepath.Dir(*dbPath), "reports")
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
 	srv.SetReportsDir(reportsDir)
+	if *domainCatFile != "" {
+		srv.SetEnrichCategories(*domainCatFile)
+		slog.Info("alan adi kategori tablosu yuklendi", "file", *domainCatFile)
+	}
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
 	}

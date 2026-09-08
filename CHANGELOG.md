@@ -15,6 +15,40 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
+Faz 23 — **Gözlemlenebilirlik derinliği** (devam ediyor). Tümü geriye uyumlu
+(yeni uç / tablo / alan) → **minor**. `ProtocolVersion` 1'de kalır.
+
+### Eklendi
+- **Süreç detayı & derin inceleme** (23-A). Agent → Süreç Trafiği → `Enter` →
+  tek bir sürecin (ad bazlı) tüm ağ etkinliği tek ekranda: kimlik/özet, uzak
+  hedefler (ip:port/proto toplama + GeoIP/ASN), canlı bağlantılar, uygulama
+  görünürlüğü (DNS + TLS SNI + HTTP Host), zaman çizelgesi (ilk temas / DNS-L7
+  ilk görülme / trafik sıçraması / ilişkili uyarılar). `GET /api/v1/agents/:id/
+  processes/:ad` — yeni telemetri hattı yok, mevcut tablolar sunucu-tarafı
+  toplanır. Rota `/agentlar/:id/surec/:ad`.
+- **NetFlow konuşma toplama** (23-B). Ham `flows` → 5'li / uç-çifti konuşmalar
+  (`GET /api/v1/flows/conversations`), pencere 15dk–24s, sıralama
+  bytes/packets/flows/last-seen. Drill-down (`GET /api/v1/flows/conversation`):
+  ham akışlar + uç GeoIP/ASN + `process_traffic` ile ilişkili agent/süreç.
+  `/cihazlar` altında `Top Konuşmalar` (ham NetFlow görünümü değişmedi).
+  Migrasyon `0015` (`idx_flows_convo`, `idx_flows_pair`).
+- **Arayüz kapasitesi & kullanım** (23-C). SNMP `ifType` (IANAifType) +
+  `ifHighSpeed` toplanır; `class` (ethernet/wifi/loopback/tunnel/vpn/bridge/
+  vlan/ppp/unknown) + `rx/tx_util_pct` (yalnız güvenilir hız + oper=up).
+  `iface_util` uyarısı: `warn_pct` (70) / `crit_pct` (90) eşiği `sustain_sec`
+  (300) boyunca aşılırsa; loopback/tünel atlanır (`iface` config bölümü).
+  `LatestDeviceIfaces` sayaç-geri-gitme koruması (SNMP restart/wrap → sahte
+  sıçrama yok). Migrasyon `0016`. `DeviceDetailPage` TÜR / UTİL kolonları.
+- **Topoloji canlı bağlantı telemetrisi** (23-D). SNMP-destekli kenarlara
+  (`local_port` ↔ ifName) canlı arayüz telemetrisi bağlanır → görsel durum
+  (normal/uyarı≥%70/kritik≥%90/down), `Enter`/tık → link inspector, güven
+  düzeyi rozeti (`confidence`: discovered/inferred/manual). Migrasyon `0017`.
+- **Hedef zenginleştirme** (23-E). Paylaşılan `internal/enrich` servisi: uzak IP
+  → ülke/ASN/org + özel/genel (RFC1918→`YEREL`); alan → normalize + kayıtlı-alan
+  (eTLD+1) + kategori (`-domain-category-file`). `GET /api/v1/enrich?ip=&domain=`.
+  Süreç detayı hedefleri + konuşma drill-down + harita aynı servisi kullanır;
+  frontend ortak `lib/enrich.tsx`.
+
 ## [1.1.0] — 2026-09-08
 
 Faz 22 — **İleri Analiz & operasyonel derinlik**. `docs/enterprise-plan.html` →

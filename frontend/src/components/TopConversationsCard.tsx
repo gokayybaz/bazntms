@@ -4,6 +4,8 @@ import { usePolledJson } from '../lib/usePolledJson'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
+import { IpBadge } from '../lib/enrich'
+import type { IPInfo } from '../lib/enrich'
 
 interface Conversation {
   src: string
@@ -16,10 +18,6 @@ interface Conversation {
   octets: number
   first_seen: number
   last_seen: number
-}
-interface GeoInfo {
-  country?: string
-  asn?: string
 }
 interface FlowRow {
   ts: number
@@ -41,8 +39,8 @@ interface Actor {
 interface DrillResponse {
   flows: FlowRow[]
   actors: Actor[]
-  src_info?: GeoInfo
-  dst_info?: GeoInfo
+  src_info?: IPInfo
+  dst_info?: IPInfo
 }
 
 const WINDOWS = [
@@ -178,10 +176,8 @@ export function TopConversationsCard() {
         <div className="mt-3 border border-rule bg-panel-2/40 p-3 font-mono text-[11px]">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-ink-hi">
-              {drill.src} ↔ {drill.dst}
+              {drill.src} <IpBadge info={drillData?.src_info} /> ↔ {drill.dst} <IpBadge info={drillData?.dst_info} />
             </span>
-            {drillData?.src_info?.asn && <span className="text-tui-dim">A: {drillData.src_info.asn}</span>}
-            {drillData?.dst_info?.asn && <span className="text-tui-dim">B: {drillData.dst_info.asn}</span>}
             <button type="button" onClick={() => setDrill(null)} className="ml-auto border border-rule-hi px-2 py-0.5 uppercase text-tui-dim hover:text-ink-hi">
               kapat
             </button>

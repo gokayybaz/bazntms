@@ -320,12 +320,12 @@ func (s *Server) handleFlowConversationDetail(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := map[string]any{"flows": rows, "actors": actors}
-	if s.geo != nil {
-		resp["src_info"] = s.geo.Lookup(src)
-		resp["dst_info"] = s.geo.Lookup(dst)
-	}
-	writeJSON(w, resp)
+	writeJSON(w, map[string]any{
+		"flows":    rows,
+		"actors":   actors,
+		"src_info": s.enrich.IP(src),
+		"dst_info": s.enrich.IP(dst),
+	})
 }
 
 func (s *Server) handleSyslogEvents(w http.ResponseWriter, r *http.Request) {

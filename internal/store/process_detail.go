@@ -105,10 +105,11 @@ type ProcessRemote struct {
 	// Conns, bu uzak IP'ye açık canlı bağlantı sayısı — handler
 	// `agent_conn_latest`'ten doldurur (sorgu penceresi değil, o an).
 	Conns int `json:"conns"`
-	// Country/ASN, handler `s.geo` ile doldurur (23-E `internal/enrich`
-	// gelene kadar opportunistik zenginleştirme).
+	// Zenginleştirme — handler `internal/enrich` ile doldurur (23-E).
+	Private bool   `json:"private"`
 	Country string `json:"country,omitempty"`
 	ASN     string `json:"asn,omitempty"`
+	Org     string `json:"org,omitempty"`
 }
 
 // ProcessRemotes, sürecin uzak uç noktalarını (remote_ip,port,proto) bayt

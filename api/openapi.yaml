@@ -411,6 +411,24 @@ paths:
                     out: { type: number }
                     local: { type: number }
                     pps: { type: integer }
+  /api/v1/enrich:
+    get:
+      tags: [fleet]
+      summary: IP / alan adı zenginleştirme (Faz 23-E)
+      description: >
+        `internal/enrich` — IP: ülke/ASN/org + özel/genel (RFC1918/ULA/loopback);
+        alan: normalize + kayıtlı-alan (eTLD+1) + kategori (-domain-category-file).
+      parameters:
+        - name: ip
+          in: query
+          schema: { type: string }
+        - name: domain
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: "{ ip?: {ip,private,country,asn,org}, domain?: {domain,normalized,registrable,category} }"
+        "400": { description: ip veya domain gerekli }
   /api/v1/agents/{id}/processes/{process}:
     get:
       tags: [fleet]

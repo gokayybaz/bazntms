@@ -590,11 +590,11 @@ func (s *Server) handleProcessDetail(w http.ResponseWriter, r *http.Request) {
 				remotes[i].Conns++
 			}
 		}
-		if s.geo != nil {
-			info := s.geo.Lookup(remotes[i].RemoteIP)
-			remotes[i].Country = info.Country
-			remotes[i].ASN = info.ASN
-		}
+		e := s.enrich.IP(remotes[i].RemoteIP)
+		remotes[i].Private = e.Private
+		remotes[i].Country = e.Country
+		remotes[i].ASN = e.ASN
+		remotes[i].Org = e.Org
 	}
 
 	writeJSON(w, map[string]any{

@@ -20,6 +20,7 @@ import (
 
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
+	"github.com/gokayybaz/bazntms/internal/enrich"
 	"github.com/gokayybaz/bazntms/internal/geoip"
 	appmetrics "github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
@@ -39,6 +40,7 @@ type Server struct {
 	dbPath            string
 	alerts            *alert.Manager
 	geo               *geoip.Resolver
+	enrich            *enrich.Service // Faz 23-E: paylaşılan IP/alan zenginleştirme
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
@@ -95,6 +97,7 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 		dbPath:   dbPath,
 		alerts:   alerts,
 		geo:      geo,
+		enrich:   enrich.New(geo, ""),
 		auth:     NewAuthManager(password, st),
 		oidc:     NewOIDCManager(derefOIDC(oidcOpts)),
 	}
@@ -184,6 +187,14 @@ func (s *Server) SetMockDevices(on bool) { s.mockDevices = on }
 // bunu kullanır (panel bir tünel/proxy arkasından localhost'ta açılmış olabilir).
 func (s *Server) SetPublicURL(u string) { s.publicURL = strings.TrimRight(u, "/") }
 
+// SetEnrichCategories, -domain-category-file verildiyse zenginleştirme
+// servisini alan-kategori tablosuyla yeniden kurar (Faz 23-E).
+func (s *Server) SetEnrichCategories(path string) {
+	if path != "" {
+		s.enrich = enrich.New(s.geo, path)
+	}
+}
+
 // SetWSOrigins, WebSocket handshake için izin verilen origin host'larını
 // ayarlar (B5 — CSWSH savunması). localhost/127.0.0.1/[::1] her zaman eklenir.
 // Boş liste → tüm origin'ler kabul (bugünkü davranış) + uyarı logu.
@@ -254,6 +265,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/l7", s.handleL7)
 	mux.HandleFunc("GET /api/v1/dns", s.handleAgentDNS)
 	mux.HandleFunc("GET /api/v1/geo", s.handleGeo)
+	mux.HandleFunc("GET /api/v1/enrich", s.handleEnrich)
 
 	// filo yonetimi (UI auth'u ile korunur; silme = netops+)
 	mux.HandleFunc("GET /api/v1/agents", s.handleAgentsList)

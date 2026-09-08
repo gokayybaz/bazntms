@@ -36,11 +36,27 @@ func (s *Server) handleGeo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookup := func(ip string) string { return "" }
-	if s.geo != nil {
-		lookup = func(ip string) string { return s.geo.Lookup(ip).Country }
-	}
+	lookup := func(ip string) string { return s.enrich.IP(ip).Country }
 	writeJSON(w, aggregateGeo(eps, lookup))
+}
+
+// handleEnrich, tek bir IP ve/veya alan adının anlık zenginleştirmesi (Faz
+// 23-E). ?ip=&domain= — UI'da satır-içi rozet / tooltip için.
+func (s *Server) handleEnrich(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	ip, domain := q.Get("ip"), q.Get("domain")
+	if ip == "" && domain == "" {
+		http.Error(w, "ip veya domain gerekli", http.StatusBadRequest)
+		return
+	}
+	out := map[string]any{}
+	if ip != "" {
+		out["ip"] = s.enrich.IP(ip)
+	}
+	if domain != "" {
+		out["domain"] = s.enrich.Domain(domain)
+	}
+	writeJSON(w, out)
 }
 
 // aggregateGeo, uzak uç noktaları ülkeye göre toplar; `lookup` bir IP için

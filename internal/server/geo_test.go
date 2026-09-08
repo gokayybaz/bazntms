@@ -1,8 +1,14 @@
 package server
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
+	"github.com/gokayybaz/bazntms/internal/alert"
+	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
@@ -47,5 +53,49 @@ func TestAggregateGeoNilLookup(t *testing.T) {
 	out := aggregateGeo(eps, func(string) string { return "" })
 	if len(out) != 0 {
 		t.Fatalf("GeoIP kaynagi yokken bos liste beklenirdi: %+v", out)
+	}
+}
+
+// TestEnrichEndpoint, Faz 23-E: GET /api/v1/enrich — IP özel/genel + alan
+// normalize/kayıtlı-alan. GeoIP kaynağı yok → ülke/ASN boş ama endpoint çalışır.
+func TestEnrichEndpoint(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "e.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	engine := capture.NewEngine()
+	mgr := alert.NewManager(alert.DefaultConfig(), st, engine, 30)
+	srv := New(nil, engine, st, "test.db", mgr, nil, "", testEnrollToken, 30, false, nil, nil, nil)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	var out struct {
+		IP struct {
+			Private bool `json:"private"`
+		} `json:"ip"`
+		Domain struct {
+			Normalized  string `json:"normalized"`
+			Registrable string `json:"registrable"`
+		} `json:"domain"`
+	}
+	r := apiReq(t, http.MethodGet, ts.URL+"/api/v1/enrich?ip=10.1.2.3&domain=API.Anthropic.com.", nil)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("200: %d", r.StatusCode)
+	}
+	json.NewDecoder(r.Body).Decode(&out)
+	r.Body.Close()
+	if !out.IP.Private {
+		t.Fatalf("RFC1918 → private beklenirdi: %+v", out.IP)
+	}
+	if out.Domain.Normalized != "api.anthropic.com" || out.Domain.Registrable != "anthropic.com" {
+		t.Fatalf("alan normalize/kayıtlı hatalı: %+v", out.Domain)
+	}
+
+	// ip ve domain yok → 400
+	rbad := apiReq(t, http.MethodGet, ts.URL+"/api/v1/enrich", nil)
+	rbad.Body.Close()
+	if rbad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("boş sorgu 400 beklenirdi: %d", rbad.StatusCode)
 	}
 }

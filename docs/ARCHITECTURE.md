@@ -280,6 +280,17 @@ protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer fil
 ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
 metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
 
+**Hedef zenginleştirme (`internal/enrich`, Faz 23-E):** paylaşılan `Service`
+uzak IP → `{private, country, asn, org}` (geoip.Resolver'a devreder — o zaten
+100k LRU önbellekli; RFC1918/ULA/loopback → `private=true`, lookup yok) ve alan
+adı → `{normalized, registrable, category}` (`x/net/publicsuffix` eTLD+1 +
+opsiyonel `-domain-category-file`, bounded önbellek) döndürür. Süreç detayı
+hedefleri (`/api/v1/agents/:id/processes/:ad`), NetFlow konuşma drill-down'ı
+(`/api/v1/flows/conversation`), coğrafi harita ve anlık `GET /api/v1/enrich?ip=&domain=`
+hepsi bu servisi kullanır. Frontend ortak render: `lib/enrich.tsx`
+(`IpBadge`/`DomainBadge` — RFC1918 → `YEREL` pill). Zenginleştirme salt
+okuma-yolu; hata/eksik veri ingest'i bloklamaz.
+
 **Coğrafi trafik haritası (`/api/v1/geo` → `Overview` `GeoMapCard`):**
 `store.FleetTopEndpoints` ile çıkarılan uzak uç noktalar `geoip.Resolver`
 üzerinden ülkeye (ISO2) çözümlenir, `internal/geoip/centroids.go`'daki ~120
