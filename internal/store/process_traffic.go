@@ -41,8 +41,16 @@ func (s *sqlStore) TopProcessTraffic(since time.Time, agentID int64, limit int, 
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
+	// Uzun pencerelerde (kapasite raporu 30/90g) ham `process_traffic`
+	// retention'da (vars. 7g) duser — TimescaleDB modunda `process_traffic_1h`
+	// continuous aggregate'ından oku (S21.12). Kısa pencerelerde ham tablo
+	// (saatlik kova sınır hatası pencereye göre ihmal edilebilir hale gelir).
+	src, tsCol := "process_traffic", "ts"
+	if s.ts && time.Since(since) > 48*time.Hour {
+		src, tsCol = "process_traffic_1h", "bucket"
+	}
 	q := `SELECT process, SUM(bytes_in), SUM(bytes_out), COUNT(DISTINCT agent_id)
-		FROM process_traffic WHERE ts >= ?`
+		FROM ` + src + ` WHERE ` + tsCol + ` >= ?`
 	args := []any{since.Unix()}
 	if agentID > 0 {
 		q += ` AND agent_id = ?`

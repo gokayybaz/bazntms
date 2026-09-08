@@ -271,8 +271,39 @@ func TestTimescaleSetup(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.hypertables`).Scan(&hypertables); err != nil || hypertables < 9 {
 		t.Fatalf("hypertable sayisi: %d (err: %v)", hypertables, err)
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates WHERE view_name IN ('samples_1m','samples_1h','flows_1h')`).Scan(&caggs); err != nil || caggs != 3 {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates WHERE view_name IN ('samples_1m','samples_1h','flows_1h','process_traffic_1h')`).Scan(&caggs); err != nil || caggs != 4 {
 		t.Fatalf("continuous aggregate sayisi: %d (err: %v)", caggs, err)
+	}
+	// S21.12: process_traffic_1h cagg + yenileme/retention job'ları
+	var jobs int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.jobs
+		WHERE hypertable_name = 'process_traffic_1h'`).Scan(&jobs); err != nil || jobs < 2 {
+		t.Fatalf("process_traffic_1h job sayisi: %d (yenileme + retention beklenir; err: %v)", jobs, err)
+	}
+	// TopProcessTraffic uzun pencerede (>48s) cagg'den okumalı — ham
+	// process_traffic 7g retention'da düşse de kapasite raporu doğru.
+	old := time.Now().Add(-72 * time.Hour).Unix()
+	if err := st.SaveProcessTraffic(7, old, []telemetry.ProcessTrafficSample{
+		{PID: 1, Process: "backup", Proto: "tcp", RemoteIP: "9.9.9.9", Port: 443, BytesIn: 100, BytesOut: 900_000},
+	}); err != nil {
+		t.Fatalf("eski process_traffic: %v", err)
+	}
+	// cagg'i manuel yenile (job zamanlamasını beklemeden)
+	if _, err := s.db.Exec(`CALL refresh_continuous_aggregate('process_traffic_1h', NULL, NULL)`); err != nil {
+		t.Fatalf("refresh process_traffic_1h: %v", err)
+	}
+	tp, err := st.TopProcessTraffic(time.Now().Add(-96*time.Hour), 0, 10, "")
+	if err != nil {
+		t.Fatalf("TopProcessTraffic (uzun pencere): %v", err)
+	}
+	var backup *ProcessTrafficUsage
+	for i := range tp {
+		if tp[i].Process == "backup" {
+			backup = &tp[i]
+		}
+	}
+	if backup == nil || backup.BytesOut != 900_000 {
+		t.Fatalf("cagg'den backup süreci okunamadı: %+v", tp)
 	}
 
 	// flows_1h real-time cagg: FleetProtocolTotals ham `flows` yerine buradan

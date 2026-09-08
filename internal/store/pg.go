@@ -105,6 +105,18 @@ func setupTimescale(db *sql.DB) bool {
 		FROM flows GROUP BY bucket, device, proto WITH NO DATA`,
 		"continuous aggregate flows_1h")
 
+	// Sürec bazli bant genisligi trendi: (agent, sürec) basina saatlik toplam
+	// (S21.12). process_traffic 5000 agent'ta yuksek hacimli; ham tablo
+	// `-retention-hours`'da (vars. 7g) duser, bu cagg trendi 1 yil tutar →
+	// kapasite raporu (30/90g) sürec kirilimini kaybetmez. remote_ip KASITLI
+	// grupta degil (kardinalite) — "en yogun uzak uç" ham 7g penceresinden.
+	tsTry(db, `CREATE MATERIALIZED VIEW IF NOT EXISTS process_traffic_1h
+		WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+		SELECT time_bucket(3600, ts) AS bucket, agent_id, process,
+			SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out
+		FROM process_traffic GROUP BY bucket, agent_id, process WITH NO DATA`,
+		"continuous aggregate process_traffic_1h")
+
 	// cagg yenileme politikalari
 	tsTry(db, `SELECT add_continuous_aggregate_policy('samples_1m',
 		start_offset => 7200::BIGINT, end_offset => 60::BIGINT,
@@ -118,6 +130,10 @@ func setupTimescale(db *sql.DB) bool {
 		start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
 		schedule_interval => INTERVAL '1 hour')`,
 		"cagg policy flows_1h")
+	tsTry(db, `SELECT add_continuous_aggregate_policy('process_traffic_1h',
+		start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
+		schedule_interval => INTERVAL '1 hour')`,
+		"cagg policy process_traffic_1h")
 
 	// downsample cagg'leri icin retention: 1dk kova 90g, 1sa kova 2y.
 	// Param adi `drop_after` (eski `retain_after` TS 2.x'te YOK — sessizce
@@ -129,6 +145,8 @@ func setupTimescale(db *sql.DB) bool {
 		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention samples_1h (2y)")
 	tsTry(db, `SELECT add_retention_policy('flows_1h', drop_after => 31536000::BIGINT,
 		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention flows_1h (1y)")
+	tsTry(db, `SELECT add_retention_policy('process_traffic_1h', drop_after => 31536000::BIGINT,
+		schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention process_traffic_1h (1y)")
 
 	slog.Info("timescaledb aktif — hypertable, downsample ve retention politikaları kuruldu")
 	return true
