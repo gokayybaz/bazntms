@@ -2,16 +2,117 @@
 
 Bu projedeki dikkate değer değişiklikler burada tutulur. Biçim
 [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) temellidir; sürümleme
-[SemVer](https://semver.org/lang/tr/) (v1.0.0'a kadar minor = özellik, patch =
-düzeltme). Her GitHub sürümü ayrıca `--generate-notes` ile üretilmiş tam commit
-listesi taşır — bu dosya **operatörün önemsediği** başlıkları ve **kırıcı /
-yükseltme** notlarını özetler.
+[SemVer](https://semver.org/lang/tr/) — **v1.0.0'dan itibaren** kırıcı
+`/api/v1` / protokol değişikliği major, geriye uyumlu özellik minor, düzeltme
+patch (bkz. [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md)).
+Her GitHub sürümü ayrıca `--generate-notes` ile üretilmiş tam commit listesi
+taşır — bu dosya **operatörün önemsediği** başlıkları ve **kırıcı / yükseltme**
+notlarını özetler.
 
 Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışında
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 — yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md)).
 
 ## [Yayımlanmamış]
+
+## [1.0.0] — 2026-09-08
+
+Faz 21 — **v1.0 sertleştirme + ölçek doğrulama**. Kurumsal kapasite hedefleri
+(`docs/enterprise-plan.html`) sentetik yükle ölçüldü, bulunan darboğazlar
+düzeltildi, sürekli operasyon için sertleştirildi. Tam rapor:
+[`docs/CAPACITY.md`](docs/CAPACITY.md).
+
+> **Doğrulanan ölçek** (tek-node `deploy/docker-compose.scale.yml`, `target`
+> profili): 5.000 agent @ 30 sn (167 ist/sn, batch p95 6 ms, hata %0) +
+> 50.000 flow/sn sürekli (`flows_dropped_total` = 0, flow yazım p95 1.1 ms) +
+> 1.000 mock cihaz (poll döngüsü 0,21 sn). Panel sorgusu p95 < 200 ms.
+> 200.000 flow/sn patlaması tek-node laptop yığınında **donanım-bağlı** —
+> flow verisi kayıpsız (NATS buffer'lar + boşalır), agent telemetrisi geçici
+> degrade eder ve otomatik kurtarır; üretim boyutlandırması `docs/CAPACITY.md`.
+
+### Eklendi
+- **`bazntms-loadgen` — flow + cihaz modları.** Agent moduna ek olarak sentetik
+  NetFlow v5/v9 + IPFIX + sFlow üreteci (token-kova hız kontrolü, patlama
+  desteği) ve mock SNMP cihaz filosu (`internal/driver` `mock` sürücüsü, ağ
+  I/O'suz monoton sayaçlar). Kova-interpolasyonlu quantile + hata sınıflama +
+  `-out` / `-warmup`.
+- **`internal/metrics` paketi** — ingest hattı için çapraz-kesen Prometheus
+  metrikleri: store yazım süresi/satır sayısı (tablo etiketli), telemetri
+  çözümleme süresi, kuyruk bekleyen/batch, flow alınan/düşürülen (sebep
+  etiketli), devpoll döngü/inflight, DB bağlantı havuzu (6 gauge/counter).
+  `/metrics` bu kaydı ana kayıtla birleştirir.
+- **Yük testi koşum takımı** — `scripts/loadtest.sh <profil>` (birleşik
+  senaryo), `scripts/perf_summary.py` (Prometheus çok-replika toplamı +
+  eşik kontrolü + markdown rapor), `scripts/profile.sh` (pprof toplama +
+  diff), `scripts/query_bench.sh` (panel sorgu p95), `scripts/chaos.sh`
+  (4 kaos senaryosu), `scripts/soak.sh` (gece sızıntı koşusu, medyan
+  bant analizi). Profiller: `loadtest/profiles/{baseline,target,burst}.env`.
+- **Grafana "bazNTMS — Kapasite" panosu** + Prometheus (`--profile obs`) —
+  tüm hub replikalarını `dns_sd` ile toplar (nginx LB arkasında `/metrics`
+  tek replika görür).
+- **Agent dayanıklılığı** — offline kuyruk taşma sayacı (`DroppedBatches()`
+  + "offline kuyruk dolu" logu), gönderme hatasında üstel backoff + jitter
+  (taban × 2^min(fails,3), maks 5 dk), telemetride saat kayması clamp'i
+  (`ClampTS` — `[now-7g, now+1g]` dışı → `now`), protokol sürümü graceful
+  degrade (hub `maxProtocolVersion`'a düşürür, agent reply'den öğrenir).
+- **`docs/CAPACITY.md`** — kapasite doğrulama raporu (hedefler × ölçülen,
+  darboğazlar + düzeltmeler, önerilen üretim boyutlandırması, yeniden
+  çalıştırma adımları).
+
+### Değiştirildi
+- **Toplu yazım** — `internal/store/bulk.go`: PostgreSQL'de satır-başına
+  `stmt.Exec` (round-trip/satır) yerine chunk başına tek çok-satırlı
+  `INSERT ... VALUES (…),(…)` (`pgMaxParams` 60000'de böler). SQLite yolu
+  değişmedi. `SaveIfaceSamples` / `ReplaceConnLatest` / `SaveFlows` /
+  `SaveL7*` / `SaveDNS` / `SaveProcessTraffic` / `SaveDeviceIfaceSamples`
+  bu yolu kullanır.
+- **`/api/v1/agents`** — agent başına ayrı rate + conn sorgusu (N+1, ~1 sn)
+  → tüm filo için tek `ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY
+  ts DESC)` sorgusu + tek `GROUP BY agent_id`. p95 1049 → 152 ms.
+- **`/api/v1/flows`** — üst-N taraması `idx_flows_octets` (`0008`) kullanır,
+  pencere üst sınırı 6 saat. p95 2369 → 16 ms.
+- **Flow collector** — tek okuyucu + senkron `OnFlows` yerine reader/worker
+  hattı: 1 okuyucu + N worker (`-`, varsayılan 6), havuzlanmış `*pkt`,
+  `SO_RCVBUF` 8 MiB, `TemplateCache` `sync.RWMutex`. 50k flow/sn drop 0.
+- **NATS flow yolu** — `js.PublishAsync` (bounded pending 8192) + store-writer
+  worker'ında Fetch içinde flow mesajı birleştirme (~150 msg / `SaveFlows`).
+  200k patlamada collector düşürmesi 127k → ~0.
+- **`devpoll.pollAll`** — cihaz başına sınırsız goroutine yerine bounded
+  semafor (`-devpoll-concurrency`, varsayılan 96; `p.stop` ile iptal edilir).
+- **Rapor / geo uçları** — uzun pencerede ham `flows` UNION+GROUP BY (60–90 sn
+  timeout) yerine continuous aggregate okur.
+- **DB bağlantı havuzu** — `BAZNTMS_DB_MAX_CONNS` env (varsayılan 32, scale
+  compose'ta 64); `SetMaxIdleConns(maxConns/4+1)`. `devpoll-concurrency`
+  havuzu aşmamalı.
+- **`cmd/bazntms-hub`** yeni bayraklar: `-queue-workers` (store-writer
+  paralel worker, varsayılan 4), `-devpoll-concurrency` (96), `-pprof-rates`
+  (block/mutex profil oranı), `-mock-devices` (yalnız yük testi).
+- **`deploy/docker-compose.scale.yml`** — hub replikalarında
+  `BAZNTMS_DB_MAX_CONNS=64`, `GOMEMLIMIT=512MiB`, `-pprof`; hub-ingest
+  `-queue-workers 8`; `prometheus` + `grafana` servisleri (`profiles: [obs]`).
+
+### Şema
+- **`0008_perf_indexes`** — `idx_flows_octets` (`flows (octets DESC)`),
+  `/api/v1/flows` üst-N taraması için.
+- **Yeni continuous aggregate'ler** (yalnız TimescaleDB) — `agent_iface_1h`,
+  `process_traffic_1h`, `flows_dst_1h`, `flows_src_1h` (her biri cagg
+  yenileme + saklama politikasıyla, 1–2 yıl). Rapor / geo / filo trafiği
+  uçları uzun pencerede bunları okur.
+
+### Kırıcı / yükseltme
+- **Mevcut TimescaleDB kurulumlarında** yeni cagg'ler boş oluşturulur —
+  yükseltmeden sonra geçmiş dönem raporları eksik görünür. Bir kez
+  `CALL refresh_continuous_aggregate('<ad>', NULL, NULL)` ile geri doldurun
+  (saklama penceresi kadar ham veri tarar, saatler sürebilir). Adımlar:
+  [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md).
+- SQLite / TimescaleDB dışı PostgreSQL kurulumları etkilenmez (cagg'ler
+  yalnız TimescaleDB'de kurulur).
+
+### Karar kaydı
+- [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md) —
+  v1.0 API / protokol kararlılık taahhüdü, SemVer sözleşmesi,
+  `protocol_version` uyumluluk politikası, v1 kapsamı **dışında** bırakılanlar
+  (ETW L7, macOS Endpoint Security, gerçek KMS zarf şifreleme, çok-kiracılılık).
 
 ## [0.4.0] — 2026-09-07
 
@@ -331,7 +432,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/gokayybaz/bazntms/compare/v0.3.1...v0.3.2

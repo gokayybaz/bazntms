@@ -15,17 +15,22 @@ yapılması gerekenleri ve **sonrasında** doğrulanacakları listeler.
 
 ## 1) Sürüm numarası
 
-SemVer, v1.0.0'a kadar:
+SemVer — **v1.0.0'dan itibaren** kararlı sözleşme (bkz.
+[`docs/decisions/0008-v1-scope.md`](decisions/0008-v1-scope.md)):
 
 | Değişiklik | Artış | Örnek |
 |---|---|---|
-| Kırıcı şema / API / config değişikliği, kaldırılan bayrak | minor | `0.3.x → 0.4.0` |
-| Yeni özellik, geriye uyumlu | minor | `0.3.2 → 0.4.0` (v0 döneminde feature = minor) |
-| Yalnızca düzeltme / doküman / CI | patch | `0.3.2 → 0.3.3` |
+| Kırıcı `/api/v1` / protokol / config değişikliği, kaldırılan uç veya bayrak | **major** | `1.4.x → 2.0.0` |
+| Yeni özellik / uç / alan, geriye uyumlu | minor | `1.0.0 → 1.1.0` |
+| Yalnızca düzeltme / doküman / CI | patch | `1.0.0 → 1.0.1` |
 
-Protokol uyumu ayrı: agent ↔ hub `internal/version.ProtocolVersion`. Wire
-formatı kırılırsa **önce** bu sayı artar ve `maxProtocolVersion` negotiation'ı
-güncellenir — sürüm numarasından bağımsız.
+> v1.0.0 öncesi (v0.x) dönemde feature = minor, kırıcı değişiklik de minor idi;
+> bu artık geçerli değil.
+
+Protokol uyumu ayrı: agent ↔ hub `internal/version.ProtocolVersion` (v1.x
+boyunca `1`). Wire formatı kırılırsa **önce** bu sayı artar ve
+`maxProtocolVersion` negotiation'ı güncellenir; kırıcı wire değişikliği aynı
+zamanda sürüm major artışı gerektirir.
 
 ## 2) Etiketten önce — kontrol listesi
 
