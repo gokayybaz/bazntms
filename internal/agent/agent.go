@@ -57,7 +57,19 @@ type Client struct {
 	hubIdx  int  // aktif hub indeksi (failover icin kayar)
 	mtls    bool // istemci sertifikasi yuklu (karsilikli TLS aktif)
 	certEnd time.Time
+
+	// dropped, offline kuyruk tavanı (maxQueuedBatches) aşıldığında atılan
+	// en eski batch sayısı — uzun hub kesintisinde veri kaybı görünürlüğü (S21.15).
+	dropped int64
+	// protoVer, hub'la etkin protokol sürümü. version.ProtocolVersion ile
+	// başlar; hub daha eskisini bildirirse (HubReply.ProtocolVersion) düşürülür
+	// (S21.15 — nazik degrade).
+	protoVer int
 }
+
+// DroppedBatches, offline kuyruk taşması nedeniyle şimdiye dek atılan batch
+// sayısı (kümülatif). Agent bunu periyodik loglar.
+func (c *Client) DroppedBatches() int64 { return c.dropped }
 
 func New(opts Options) *Client {
 	if opts.IntervalSec <= 0 {
@@ -69,7 +81,7 @@ func New(opts Options) *Client {
 	if opts.HubURL != "" && len(opts.HubURLs) == 0 {
 		opts.HubURLs = []string{opts.HubURL}
 	}
-	c := &Client{opts: opts, http: &http.Client{Timeout: opts.HTTPTimeout}}
+	c := &Client{opts: opts, http: &http.Client{Timeout: opts.HTTPTimeout}, protoVer: version.ProtocolVersion}
 	c.reloadTLS() // diskte sertifika/CA varsa mTLS transport'unu kur
 	return c
 }
@@ -183,6 +195,11 @@ func (c *Client) Enroll() (State, error) {
 		c.saveCerts(newKeyPEM, reply.ClientCertPEM, reply.CACertPEM)
 	}
 	slog.Info("enrollment tamamlandi", "agent_id", st.AgentID, "interval", reply.TelemetryIntervalSeconds, "mtls", c.mtls)
+	if reply.ProtocolVersion > 0 && reply.ProtocolVersion < c.protoVer {
+		slog.Warn("hub daha eski protokol konusuyor — agent degrade ediyor",
+			"agent_surumu", version.ProtocolVersion, "hub_surumu", reply.ProtocolVersion)
+		c.protoVer = reply.ProtocolVersion
+	}
 	if reply.TelemetryIntervalSeconds > 0 {
 		c.opts.IntervalSec = reply.TelemetryIntervalSeconds
 	}
@@ -272,7 +289,7 @@ func (c *Client) Collect() telemetry.TelemetryBatch {
 	batch := telemetry.TelemetryBatch{
 		TS:              time.Now().Unix(),
 		Version:         version.Version,
-		ProtocolVersion: version.ProtocolVersion,
+		ProtocolVersion: c.protoVer,
 	}
 	for _, i := range sysmon.ListInterfaces() {
 		batch.Interfaces = append(batch.Interfaces, telemetry.InterfaceSample{
@@ -332,7 +349,11 @@ func (c *Client) Send(st State, batch telemetry.TelemetryBatch) error {
 	if err := c.postBatch(st, batch.TS, batch); err != nil {
 		queue = append(queue, queuedBatch{TS: batch.TS, Data: batch})
 		if len(queue) > maxQueuedBatches {
-			queue = queue[len(queue)-maxQueuedBatches:]
+			drop := len(queue) - maxQueuedBatches
+			c.dropped += int64(drop)
+			queue = queue[drop:]
+			slog.Warn("offline kuyruk dolu — en eski batch'ler atildi (veri kaybi)",
+				"atilan", drop, "toplam_atilan", c.dropped, "kuyruk_tavani", maxQueuedBatches)
 		}
 		c.saveQueue(queue)
 		return err

@@ -154,6 +154,29 @@ uygular (S12.4 sonrası) — eski bir komut kopyaladıysanız panelden yenisini 
 
 ## Agent filosu
 
+### Uzun hub kesintisi sonrası bir agent'ın verisinde boşluk
+
+Hub'a ulaşamayan agent her telemetri batch'ini diskteki offline kuyruğa
+(`<state-file>.queue.jsonl`, 0600) yazar ve hub dönünce hepsini sırayla
+oynatır. Kuyruk tavanı **100 batch** (varsayılan 30 sn aralıkta ~50 dk); daha
+uzun kesintide en eski batch'ler atılır ve agent logu bunu belirtir:
+
+```
+WARN offline kuyruk dolu — en eski batch'ler atildi (veri kaybi) atilan=N toplam_atilan=M
+```
+
+Bu, o pencerede kalıcı veri kaybıdır (agent tarafında tampon sınırlı). Kesinti
+sırasında agent gönderim denemelerini **üstel olarak geri çeker** (aralık ×2,
+×4, ×8; en fazla 5 dk) + ±%20 jitter — 5000 agent'ın hub dönünce onu aynı
+anda dövmemesi için. Kuyruk (dolmadıysa) tam replay eder, boşluk oluşmaz.
+
+### Agent logu "hub daha eski protokol konusuyor — agent degrade ediyor"
+
+Agent, hub'dan yeni bir sürüm (daha yüksek `protocol_version`). Hub sert
+reddetmek yerine (eski davranış: 401) agent'ı kabul eder ve `HubReply`'de
+kendi sürümünü bildirir; agent o sürüme göre çalışır (telgraf JSON ileri/geri
+uyumlu). Çözüm: hub'ı da güncelleyin — degrade yalnızca geçiş dönemi içindir.
+
 ### Agent'lar sayfasında yanlış/beklenmedik IP adresi görünüyor
 
 Hub, agent'ın IP'sini `X-Forwarded-For` başlığından (varsa) okur, yoksa

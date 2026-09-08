@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -343,6 +344,7 @@ func main() {
 		// edilir. reenrollAfter * interval kadar bekleme, hub tarafinin ayni
 		// machine_id'li bayat kaydi yeniden kullanmasi icin de yeterli sure.
 		authFails := 0
+		sendFails := 0
 		const reenrollAfter = 3
 
 		for {
@@ -361,10 +363,11 @@ func main() {
 				}
 				switch err := client.Send(st, batch); {
 				case err == nil:
-					authFails = 0
+					authFails, sendFails = 0, 0
 					slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
 				case errors.Is(err, agent.ErrUnauthorized):
 					authFails++
+					sendFails++
 					if authFails < reenrollAfter {
 						slog.Warn("telemetri reddedildi (401) — offline kuyruga alindi", "ard_arda", authFails, "esik", reenrollAfter)
 						break
@@ -374,16 +377,17 @@ func main() {
 						slog.Error("yeniden enroll basarisiz — elle mudahale gerekebilir", "err", rerr)
 					} else {
 						st = newSt
-						authFails = 0
+						authFails, sendFails = 0, 0
 						slog.Info("yeniden enroll tamamlandi", "agent_id", st.AgentID)
 					}
 				default:
-					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err)
+					sendFails++
+					slog.Warn("telemetri gonderilemedi (offline kuyruga alindi)", "err", err, "ard_arda", sendFails)
 				}
 				// Send, hub politikasini (interval + pcap_enabled) tazeledi;
 				// atif motorunu yeni duruma gore ac/kapat.
 				syncAttr()
-				timer.Reset(time.Duration(client.Interval()) * time.Second)
+				timer.Reset(retryDelay(client.Interval(), sendFails))
 			}
 		}
 	}
@@ -410,6 +414,31 @@ func main() {
 		slog.Error("agent sonlandi", "err", err)
 		os.Exit(1)
 	}
+}
+
+// retryDelay, bir sonraki telemetri denemesine kadar beklenecek süre (S21.15).
+// Başarılıysa (fails == 0) normal aralık. Ard arda hata varsa üstel geri
+// çekilme (aralık × 2^fails, en fazla 8× ve 5 dk) + ±%20 jitter — 5000
+// agent'ın kesinti sonrası hub'ı aynı anda dövmemesi için.
+func retryDelay(intervalSec, fails int) time.Duration {
+	base := time.Duration(intervalSec) * time.Second
+	if fails <= 0 {
+		return base
+	}
+	mult := 1 << minInt(fails, 3) // 2, 4, 8
+	d := base * time.Duration(mult)
+	if d > 5*time.Minute {
+		d = 5 * time.Minute
+	}
+	jitter := time.Duration(rand.Int63n(int64(d)/5+1)) - d/10
+	return d + jitter
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // firstNonEmpty, bos olmayan ilk degeri dondurur.

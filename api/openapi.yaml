@@ -237,6 +237,7 @@ paths:
                   agent_token: { type: string }
                   telemetry_interval_seconds: { type: integer }
                   pcap_enabled: { type: boolean }
+                  protocol_version: { type: integer, description: "hub'ın konuştuğu protokol sürümü; agent bundan yeniyse degrade eder (S21.15)" }
                   client_cert_pem: { type: string }
                   ca_cert_pem: { type: string }
         "401": { description: Geçersiz/iptal edilmiş enrollment token }

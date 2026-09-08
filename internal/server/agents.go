@@ -235,9 +235,14 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name zorunlu", http.StatusBadRequest)
 		return
 	}
-	if hello.ProtocolVersion > maxProtocolVersion {
-		unauthorized(w, "protokol surumu hub'dan yeni")
-		return
+	// Protokol sürümü hub'dan yeniyse: sert reddetmek yerine (S21.15) hub
+	// eskisini dayatır. Telgraf JSON ileri/geri uyumlu (omitempty + bilinmeyen
+	// alan yok sayılır); agent HubReply.ProtocolVersion'a göre degrade eder.
+	effProto := hello.ProtocolVersion
+	if effProto > maxProtocolVersion {
+		slog.Warn("agent protokol surumu hub'dan yeni — hub eskisini dayatiyor",
+			"agent_surumu", hello.ProtocolVersion, "hub_max", maxProtocolVersion, "name", hello.Name)
+		effProto = maxProtocolVersion
 	}
 
 	buf := make([]byte, 32)
@@ -261,7 +266,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		Site:            site,
 		TokenHash:       store.TokenHash(agentToken),
 		Version:         hello.Version,
-		ProtocolVersion: hello.ProtocolVersion,
+		ProtocolVersion: effProto,
 		RemoteIP:        displayIP,
 		MachineID:       hello.MachineID,
 	}, offlineBefore)
@@ -275,6 +280,7 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		AgentToken:               agentToken,
 		TelemetryIntervalSeconds: s.telemetryInterval,
 		PCAPEnabled:              s.agentPCAP,
+		ProtocolVersion:          maxProtocolVersion,
 	}
 	// mTLS: CSR verilmis ve hub CA'si acıksa istemci sertifikasi imzala
 	if s.agentCA != nil && hello.CSRPEM != "" {
@@ -335,10 +341,7 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	appmetrics.ObserveTelemetryDecode(dec)
-	ts := batch.TS
-	if ts == 0 {
-		ts = time.Now().Unix()
-	}
+	ts := telemetry.ClampTS(batch.TS, time.Now().Unix())
 	ip := agentClientIP(r)
 
 	// Surum batch ile gelir (kayitli agent hello'yu atladigi icin enrollment'taki

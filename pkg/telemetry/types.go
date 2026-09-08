@@ -3,6 +3,20 @@
 // sozlesmesiyle birebir eslesir (protobuf'ya gecis icin hazir).
 package telemetry
 
+// ClampTS, agent'in bildirdigi batch zaman damgasini makul araliga sikistirir
+// (S21.15 — saat kaymasi). Agent saati ileri/geri kaymissa örnekler yanlis
+// zaman kovasina duser (rapor/grafik bozulur, TS retention erken siler). now
+// hub'in su anki unix saniyesi. Kabul araligi: [now-7g, now+1g] — offline
+// kuyruk replay'i (eski TS'li batch'ler) bu pencerede kalir, ham veri
+// retention'i zaten 7g. Disi veya ts <= 0 → now.
+func ClampTS(ts, now int64) int64 {
+	const day = 86400
+	if ts <= 0 || ts < now-7*day || ts > now+day {
+		return now
+	}
+	return ts
+}
+
 // AgentHello, enrollment/ilk baglanti handshake'i.
 type AgentHello struct {
 	Name            string   `json:"name"`
@@ -30,6 +44,11 @@ type HubReply struct {
 	AgentToken               string `json:"agent_token,omitempty"`
 	TelemetryIntervalSeconds int    `json:"telemetry_interval_seconds"`
 	PCAPEnabled              bool   `json:"pcap_enabled"`
+	// ProtocolVersion, hub'in konustugu protokol surumu. Agent bundan
+	// yeniyse hub eskisini dayatir; agent bu degere gore degrade eder
+	// (S21.15 — sert 401 yerine nazik degrade). 0 = eski hub, agent kendi
+	// surumunu korur.
+	ProtocolVersion int `json:"protocol_version,omitempty"`
 	// mTLS: hub CA'si acikken CSR gonderilirse doldurulur.
 	ClientCertPEM string `json:"client_cert_pem,omitempty"`
 	CACertPEM     string `json:"ca_cert_pem,omitempty"`

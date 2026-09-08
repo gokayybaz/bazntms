@@ -227,10 +227,7 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			return
 		}
 		metrics.ObserveTelemetryDecode(dec)
-		ts := env.TS
-		if ts == 0 {
-			ts = time.Now().Unix()
-		}
+		ts := telemetry.ClampTS(env.TS, time.Now().Unix())
 		if err := st.SaveIfaceSamples(env.AgentID, ts, env.Batch.Interfaces); err != nil {
 			q.retry(msg, err)
 			return
