@@ -59,6 +59,13 @@ func TestReenrollOn401(t *testing.T) {
 		t.Fatalf("ErrUnauthorized beklendi, gelen: %v", err)
 	}
 
+	// ana dongu bu noktada diskteki 401 sayacini isler; reenroll onu sifirlamali
+	c.NoteAuthFailure()
+	c.NoteAuthFailure()
+	if got := c.AuthFailStreak(); got != 2 {
+		t.Fatalf("401 sayaci 2 olmali, gelen: %d", got)
+	}
+
 	// yeniden enroll: bayat state silinir, enroll token ile hello yapilir
 	fresh, err := c.Reenroll()
 	if err != nil {
@@ -66,6 +73,9 @@ func TestReenrollOn401(t *testing.T) {
 	}
 	if fresh.AgentID != 77 || fresh.Token != goodToken {
 		t.Fatalf("yeni state hatali: %+v", fresh)
+	}
+	if got := c.AuthFailStreak(); got != 0 {
+		t.Fatalf("reenroll sonrasi 401 sayaci sifirlanmali, gelen: %d", got)
 	}
 	if helloCount != 1 {
 		t.Fatalf("hello tam 1 kez cagirilmali, gelen: %d", helloCount)
@@ -77,6 +87,47 @@ func TestReenrollOn401(t *testing.T) {
 	// yeni token'la telemetri (kuyrukta bekleyen bayat batch dahil) gecer
 	if err := c.Send(fresh, telemetry.TelemetryBatch{TS: 2}); err != nil {
 		t.Fatalf("yeni token'la telemetri: %v", err)
+	}
+}
+
+// Ardisik 401 sayaci state dosyasinda yasamali: bellekte tutulunca token'i
+// olmus ama sik yeniden baslayan agent (crash-loop / launchd KeepAlive /
+// tekrarli kurulum) her restart'ta 0'a donuyor ve reenroll esigine hic
+// ulasamiyordu.
+func TestAuthFailStreakPersistsAcrossRestart(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "agent.state.json")
+
+	// 1. oturum: bayat kimlik + iki 401
+	c1 := New(Options{HubURL: "http://127.0.0.1:0", Name: "n", StateFile: stateFile})
+	if err := c1.saveState(State{AgentID: 5, Token: "bayat"}); err != nil {
+		t.Fatalf("saveState: %v", err)
+	}
+	if n := c1.NoteAuthFailure(); n != 1 {
+		t.Fatalf("ilk 401 → 1, gelen %d", n)
+	}
+	if n := c1.NoteAuthFailure(); n != 2 {
+		t.Fatalf("ikinci 401 → 2, gelen %d", n)
+	}
+
+	// 2. oturum: yeni Client, ayni dosya — sayac korunmali, kimlik bozulmamali
+	c2 := New(Options{HubURL: "http://127.0.0.1:0", Name: "n", StateFile: stateFile})
+	if got := c2.AuthFailStreak(); got != 2 {
+		t.Fatalf("restart sonrasi sayac 2 olmali, gelen %d", got)
+	}
+	if st := c2.LoadState(); st.AgentID != 5 || st.Token != "bayat" {
+		t.Fatalf("kimlik alanlari bozuldu: %+v", st)
+	}
+	if n := c2.NoteAuthFailure(); n != 3 {
+		t.Fatalf("ucuncu 401 → 3 (esik), gelen %d", n)
+	}
+
+	// telemetri basarili → sayac sifir, kimlik yerinde
+	c2.ClearAuthFailure()
+	if got := c2.AuthFailStreak(); got != 0 {
+		t.Fatalf("ClearAuthFailure sonrasi 0 olmali, gelen %d", got)
+	}
+	if st := c2.LoadState(); st.AgentID != 5 || st.Token != "bayat" {
+		t.Fatalf("Clear kimligi bozdu: %+v", st)
 	}
 }
 

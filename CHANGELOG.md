@@ -15,6 +15,16 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
+### Düzeltildi
+- **Agent 401 kendini-onarma sayacı restart'ta sıfırlanıyordu.** Hub veritabanı
+  yeniden yaratıldığında (ya da kayıt silindiğinde) kayıtlı agent token'ı kalıcı
+  401 döner; agent 3 ardışık 401'den sonra enroll token'ıyla yeniden kaydolur.
+  Bu sayaç bellekte tutulduğu için sık yeniden başlayan (crash-loop, launchd
+  `KeepAlive`, art arda kurulum) bir agent eşiğe hiç ulaşamıyor ve sonsuza dek
+  401 atıyordu. Sayaç artık `bazntms-agent.state.json` içinde tutuluyor
+  (`auth_fail_streak`) — restart'ları aşar, başarılı telemetride / yeniden
+  enroll'de sıfırlanır.
+
 ## [1.0.0] — 2026-09-08
 
 Faz 21 — **v1.0 sertleştirme + ölçek doğrulama**. Kurumsal kapasite hedefleri

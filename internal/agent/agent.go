@@ -49,6 +49,13 @@ type Options struct {
 type State struct {
 	AgentID int64  `json:"agent_id"`
 	Token   string `json:"token"`
+	// AuthFailStreak, ardisik telemetri 401 sayisi. Ana dongudeki esik sayaci
+	// (reenrollAfter) bellekte tutulunca her agent restart'i onu sifirliyordu —
+	// token'i olmus ama sik yeniden baslayan (crash-loop, launchd KeepAlive,
+	// tekrarli kurulum) bir agent esige hic ulasamiyor ve kendini onaramiyordu.
+	// Burada tutulunca sayac restart'i asar. Reenroll/Enroll yeni State yazinca
+	// dogal olarak 0'a doner.
+	AuthFailStreak int `json:"auth_fail_streak,omitempty"`
 }
 
 type Client struct {
@@ -113,6 +120,36 @@ func (c *Client) withFailover(fn func(baseURL string) error) error {
 	}
 	return lastErr
 }
+
+// NoteAuthFailure, diskteki ardisik 401 sayacini bir artirir ve yeni degeri
+// dondurur. Sayac state dosyasinda yasar ki agent restart'i onu sifirlamasin
+// (bkz. State.AuthFailStreak). Yeni bir kimlik yazilinca (Reenroll/Enroll)
+// sayac zaten 0'a doner.
+func (c *Client) NoteAuthFailure() int {
+	st := c.LoadState()
+	st.AuthFailStreak++
+	if err := c.saveState(st); err != nil {
+		slog.Warn("401 sayaci diske yazilamadi — restart'ta sifirlanabilir", "err", err)
+	}
+	return st.AuthFailStreak
+}
+
+// ClearAuthFailure, ardisik 401 sayacini sifirlar (telemetri basarili olunca).
+// Zaten 0 ise diske dokunmaz — normal dongude disk yazimi olmaz.
+func (c *Client) ClearAuthFailure() {
+	st := c.LoadState()
+	if st.AuthFailStreak == 0 {
+		return
+	}
+	st.AuthFailStreak = 0
+	if err := c.saveState(st); err != nil {
+		slog.Warn("401 sayaci sifirlanamadi", "err", err)
+	}
+}
+
+// AuthFailStreak, diskte tutulan ardisik 401 sayisi — ana dongu baslangicta
+// bunu devralir (onceki oturumun ilerlemesi kaybolmaz).
+func (c *Client) AuthFailStreak() int { return c.LoadState().AuthFailStreak }
 
 // State, varsa diskten agent kimligini yukler.
 func (c *Client) LoadState() State {

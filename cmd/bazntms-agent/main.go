@@ -343,9 +343,16 @@ func main() {
 		// sirasinda DB baglantisi) — bu yuzden esige ulasinca yeniden enroll
 		// edilir. reenrollAfter * interval kadar bekleme, hub tarafinin ayni
 		// machine_id'li bayat kaydi yeniden kullanmasi icin de yeterli sure.
-		authFails := 0
+		//
+		// Sayac state dosyasinda tutulur (Client.NoteAuthFailure): bellekte
+		// tutulunca her restart onu sifirliyor, token'i olmus ama sik yeniden
+		// baslayan agent esige hic ulasamiyordu. Onceki oturumdan devral.
+		authFails := client.AuthFailStreak()
 		sendFails := 0
 		const reenrollAfter = 3
+		if authFails > 0 {
+			slog.Warn("onceki oturumdan devralinan ardisik 401 sayaci", "ard_arda", authFails, "esik", reenrollAfter)
+		}
 
 		for {
 			select {
@@ -363,11 +370,16 @@ func main() {
 				}
 				switch err := client.Send(st, batch); {
 				case err == nil:
+					if authFails > 0 {
+						client.ClearAuthFailure() // diskteki sayaci da temizle
+					}
 					authFails, sendFails = 0, 0
 					slog.Debug("telemetri gonderildi", "ifaces", len(batch.Interfaces), "conns", len(batch.Connections))
 				case errors.Is(err, agent.ErrUnauthorized):
-					authFails++
 					sendFails++
+					if authFails < reenrollAfter {
+						authFails = client.NoteAuthFailure() // diskte kalici — restart sifirlamaz
+					}
 					if authFails < reenrollAfter {
 						slog.Warn("telemetri reddedildi (401) — offline kuyruga alindi", "ard_arda", authFails, "esik", reenrollAfter)
 						break
