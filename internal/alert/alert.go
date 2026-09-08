@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -154,6 +155,30 @@ type Notifiers struct {
 
 	// Faz 6.5: SIEM/ITSM push connector (CEF/LEEF/JSON → syslog veya HTTP)
 	SIEM SIEMConfig `json:"siem"`
+
+	// Faz 22 S22.14/S22.15: bilet sistemleri. API token'ları vault ile
+	// şifreli saklanır ("v1:..." — Manager.crypter); GET'te maskeli.
+	Jira       JiraConfig `json:"jira"`
+	ServiceNow SNowConfig `json:"servicenow"`
+}
+
+// JiraConfig, Jira Cloud REST v3 entegrasyonu (S22.14).
+type JiraConfig struct {
+	Enabled           bool   `json:"enabled"`
+	BaseURL           string `json:"base_url"`   // https://xxx.atlassian.net
+	Email             string `json:"email"`      // Basic auth kullanıcı
+	APIToken          string `json:"api_token"`  // vault-şifreli
+	Project           string `json:"project"`    // proje anahtarı (ör. OPS)
+	IssueType         string `json:"issue_type"` // "" → "Task"
+	ResolveTransition string `json:"resolve_transition"`
+}
+
+// SNowConfig, ServiceNow Table API (incident) entegrasyonu (S22.15).
+type SNowConfig struct {
+	Enabled  bool   `json:"enabled"`
+	BaseURL  string `json:"base_url"` // https://xxx.service-now.com
+	User     string `json:"user"`
+	Password string `json:"password"` // vault-şifreli
 }
 
 // DefaultConfig, ilk calistirma icin makul ayarlar.
@@ -218,6 +243,40 @@ type Manager struct {
 	// periyodik, POST/DELETE sonrası RefreshSilences() ile tazeler.
 	silenceMu sync.RWMutex
 	silences  []store.AlertSilence
+
+	// crypter, bilet API token'larını şifreler/çözer (S22.14 — vault).
+	// nil → düz metin (dev / vault yok).
+	crypter Crypter
+}
+
+// Crypter, bilet sistemi sırlarının şifrelenmesi/çözülmesi (vault.Vault sağlar).
+type Crypter interface {
+	Encrypt(plain string) (string, error)
+	Decrypt(enc string) (string, error)
+}
+
+// SetCrypter, bilet API token şifrelemesini bağlar (main.go, vault mevcutsa).
+func (m *Manager) SetCrypter(c Crypter) { m.crypter = c }
+
+func (m *Manager) decrypt(s string) string {
+	if m.crypter == nil || s == "" {
+		return s
+	}
+	v, err := m.crypter.Decrypt(s)
+	if err != nil {
+		return s
+	}
+	return v
+}
+
+// encryptSecret, düz metin bir sırrı yerinde şifreler ("v1:" öneki yoksa).
+func (m *Manager) encryptSecret(s *string) {
+	if m.crypter == nil || *s == "" || strings.HasPrefix(*s, "v1:") {
+		return
+	}
+	if enc, err := m.crypter.Encrypt(*s); err == nil {
+		*s = enc
+	}
 }
 
 // SetLeaderCheck, değerlendirme öncesi çağrılacak liderlik denetimini bağlar.
@@ -682,6 +741,19 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	if n != nil {
 		n.Deliver(cfg.Notifiers, cfg.NotifyRoutes, ev)
 	}
+	go m.ticketFire(cfg, ev)
+}
+
+// ticketFire, yeni bir uyarı için bilet sistemlerini (Jira / ServiceNow)
+// yönlendirme kurallarına göre tetikler. Grup zaten biletlenmişse yorum ekler.
+func (m *Manager) ticketFire(cfg Config, ev store.AlertEvent) {
+	allow := routeAllows(cfg.NotifyRoutes, ev)
+	if cfg.Notifiers.Jira.Enabled && cfg.Notifiers.Jira.Project != "" && allow("jira") {
+		m.jiraFire(cfg.Notifiers.Jira, ev)
+	}
+	if cfg.Notifiers.ServiceNow.Enabled && cfg.Notifiers.ServiceNow.BaseURL != "" && allow("servicenow") {
+		m.snowFire(cfg.Notifiers.ServiceNow, ev)
+	}
 }
 
 // RefreshSilences, aktif bakım penceresi önbelleğini DB'den tazeler. run()
@@ -777,6 +849,13 @@ func (m *Manager) resolveEvent(cfg Config, e store.AlertEvent, reason string) {
 		e.Message = "[ÇÖZÜLDÜ] " + e.Message + " — " + reason
 		n.Deliver(cfg.Notifiers, cfg.NotifyRoutes, e)
 	}
+	// S22.14/15: bağlı bilet varsa kapat
+	if strings.HasPrefix(e.ExtRef, jiraRefPrefix) && cfg.Notifiers.Jira.Enabled {
+		go m.jiraResolve(cfg.Notifiers.Jira, e.ExtRef, reason)
+	}
+	if strings.HasPrefix(e.ExtRef, snowRefPrefix) && cfg.Notifiers.ServiceNow.Enabled {
+		go m.snowResolve(cfg.Notifiers.ServiceNow, e.ExtRef, reason)
+	}
 }
 
 // --- olay sorgu + operatör aksiyonları (server icin, S22.11) ---
@@ -839,6 +918,10 @@ func (m *Manager) Config() Config {
 }
 
 func (m *Manager) UpdateConfig(cfg Config) error {
+	// S22.14: bilet API token'larını (düz metin geldiyse) şifrele — vault
+	// "v1:" öneki taşıyanlar zaten şifreli, dokunma.
+	m.encryptSecret(&cfg.Notifiers.Jira.APIToken)
+	m.encryptSecret(&cfg.Notifiers.ServiceNow.Password)
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -882,6 +965,15 @@ func (m *Manager) TestNotifiers() map[string]ChannelStatus {
 	m.mu.Unlock()
 	if n == nil {
 		return map[string]ChannelStatus{}
+	}
+	// bilet sistemleri: issue/incident açmadan hafif bağlantı denemesi
+	if cfg.Notifiers.Jira.Enabled && cfg.Notifiers.Jira.BaseURL != "" {
+		_, err := jiraDo(cfg.Notifiers.Jira, m.decrypt(cfg.Notifiers.Jira.APIToken), "GET", "/rest/api/3/myself", nil)
+		n.record("jira", err)
+	}
+	if cfg.Notifiers.ServiceNow.Enabled && cfg.Notifiers.ServiceNow.BaseURL != "" {
+		_, err := snowDo(cfg.Notifiers.ServiceNow, m.decrypt(cfg.Notifiers.ServiceNow.Password), "GET", "/api/now/table/incident?sysparm_limit=1", nil)
+		n.record("servicenow", err)
 	}
 	return n.Test(cfg.Notifiers, cfg.NotifyRoutes)
 }

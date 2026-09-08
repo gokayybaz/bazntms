@@ -271,6 +271,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("kimlik kasasi acildi", "anahtar_kaynagi", vaultProvider.Name())
+	alerts.SetCrypter(v) // S22.14: Jira/ServiceNow API token'larını vault ile şifrele
 
 	var sink server.TelemetrySink
 	if q != nil {

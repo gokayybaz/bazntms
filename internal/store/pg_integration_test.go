@@ -256,6 +256,13 @@ func TestPostgresStore(t *testing.T) {
 	if err := st.SetAlertEventGroup(aeID, "g-1"); err != nil {
 		t.Fatalf("grup ata: %v", err)
 	}
+	// S22.14: ext_ref + grup bilet sorgusu
+	if err := st.SetAlertEventExtRef(aeID, "jira:OPS-9"); err != nil {
+		t.Fatalf("ext_ref ata: %v", err)
+	}
+	if ref, _ := st.GroupExtRef("g-1"); ref != "jira:OPS-9" {
+		t.Fatalf("GroupExtRef: %q", ref)
+	}
 	if err := st.ResolveAlertEvent(aeID, now+15); err != nil {
 		t.Fatalf("resolve: %v", err)
 	}

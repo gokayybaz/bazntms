@@ -84,6 +84,9 @@ type AlertStore interface {
 	// korelasyon (S22.9)
 	OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error)
 	SetAlertEventGroup(id int64, groupID string) error
+	// bilet entegrasyonu (S22.14)
+	SetAlertEventExtRef(id int64, ref string) error
+	GroupExtRef(groupID string) (string, error)
 	// bakım pencereleri / susturma (S22.10)
 	AddAlertSilence(sl AlertSilence) (int64, error)
 	ListAlertSilences(activeOnly bool, now int64) ([]AlertSilence, error)

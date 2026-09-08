@@ -570,6 +570,8 @@ func (s *Server) handleAlertsGet(w http.ResponseWriter, r *http.Request) {
 	cfg.Notifiers.EmailPass = maskNonEmpty(cfg.Notifiers.EmailPass)
 	cfg.Notifiers.WebhookV2Secret = maskNonEmpty(cfg.Notifiers.WebhookV2Secret)
 	cfg.Notifiers.SIEM.Token = maskNonEmpty(cfg.Notifiers.SIEM.Token)
+	cfg.Notifiers.Jira.APIToken = maskNonEmpty(cfg.Notifiers.Jira.APIToken)
+	cfg.Notifiers.ServiceNow.Password = maskNonEmpty(cfg.Notifiers.ServiceNow.Password)
 	writeJSON(w, cfg)
 }
 
@@ -591,6 +593,8 @@ func (s *Server) handleAlertsPut(w http.ResponseWriter, r *http.Request) {
 	keepIfMasked(&cfg.Notifiers.EmailPass, cur.Notifiers.EmailPass)
 	keepIfMasked(&cfg.Notifiers.WebhookV2Secret, cur.Notifiers.WebhookV2Secret)
 	keepIfMasked(&cfg.Notifiers.SIEM.Token, cur.Notifiers.SIEM.Token)
+	keepIfMasked(&cfg.Notifiers.Jira.APIToken, cur.Notifiers.Jira.APIToken)
+	keepIfMasked(&cfg.Notifiers.ServiceNow.Password, cur.Notifiers.ServiceNow.Password)
 
 	if err := s.alerts.UpdateConfig(cfg); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})

@@ -128,6 +128,27 @@ func (s *sqlStore) SetAlertEventGroup(id int64, groupID string) error {
 	return err
 }
 
+// SetAlertEventExtRef, bir olaya harici bilet kimliği atar (S22.14 — "jira:PROJ-1").
+func (s *sqlStore) SetAlertEventExtRef(id int64, ref string) error {
+	_, err := s.db.Exec(s.q(`UPDATE alert_events SET ext_ref = ? WHERE id = ?`), ref, id)
+	return err
+}
+
+// GroupExtRef, bir korelasyon grubundaki ilk dolu ext_ref'i döndürür (grup
+// başına tek bilet). groupID boşsa "".
+func (s *sqlStore) GroupExtRef(groupID string) (string, error) {
+	if groupID == "" {
+		return "", nil
+	}
+	var ref string
+	err := s.db.QueryRow(s.q(`SELECT ext_ref FROM alert_events
+		WHERE group_id = ? AND ext_ref <> '' ORDER BY id LIMIT 1`), groupID).Scan(&ref)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return ref, err
+}
+
 func (s *sqlStore) queryAlertEvents(query string, args ...any) ([]AlertEvent, error) {
 	rows, err := s.db.Query(s.q(query), args...)
 	if err != nil {
