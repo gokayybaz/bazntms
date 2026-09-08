@@ -387,6 +387,10 @@ func (m *Manager) run() {
 			if m.tickN%60 == 30 {
 				m.sweepAutoResolve(cfg)
 			}
+			// SLA hedef ihlali (S22.21): 10 dk'da bir (TTL otomatik-çözülme altında)
+			if m.tickN%600 == 60 {
+				m.checkSLA()
+			}
 		}
 	}
 }

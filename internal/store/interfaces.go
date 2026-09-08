@@ -84,6 +84,11 @@ type FleetReportStore interface {
 	FleetProtocolTotals(since time.Time) (map[string]uint64, error)
 	FleetTopEndpoints(since time.Time, limit int, site string) ([]EndpointDelta, error)
 	FleetIfaceHealth(since time.Time, site string) (discards uint64, errors uint64, err error)
+	// SLA hedefleri (Faz 22 S22.21)
+	ListSLATargets() ([]SLATarget, error)
+	SLATargetFor(site string) (SLATarget, error)
+	UpsertSLATarget(t SLATarget) error
+	DeleteSLATarget(scope, site string) error
 }
 
 // AlertStore, uyari motorunun kalici durumu.

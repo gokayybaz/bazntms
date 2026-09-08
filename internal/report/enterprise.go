@@ -44,6 +44,12 @@ type EnterpriseData struct {
 	DataWindowDays float64 `json:"data_window_days"`
 	Empty          bool    `json:"empty"`
 
+	// SLA hedefleri (S22.21) — Target.Set()=false ise hedef tanımlı değil
+	Target       store.SLATarget `json:"sla_target"`
+	UptimeBreach bool            `json:"uptime_breach"`
+	DeviceBreach bool            `json:"device_breach"`
+	IfaceBreach  bool            `json:"iface_breach"`
+
 	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
 	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
 	AlertCounts  map[string]int              `json:"alert_counts"`
@@ -152,6 +158,15 @@ func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, er
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
 	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0
+
+	// SLA hedefleri (S22.21): saha-özel varsa o, yoksa global
+	if tgt, terr := st.SLATargetFor(site); terr == nil && tgt.Set() {
+		d.Target = tgt
+		d.UptimeBreach = tgt.AgentUptimePct > 0 && d.AgentTotal > 0 && d.AgentUptime < tgt.AgentUptimePct
+		d.DeviceBreach = tgt.DeviceHealthPct > 0 && d.DeviceTotal > 0 && d.DeviceHealth < tgt.DeviceHealthPct
+		d.IfaceBreach = tgt.IfaceErrCeiling > 0 && int64(d.IfaceDiscards+d.IfaceErrors) > tgt.IfaceErrCeiling
+	}
+
 	alerts, err := st.RecentAlertEvents(500)
 	if err == nil {
 		cutoff := since.Unix()
@@ -230,6 +245,15 @@ const enterpriseTpl = `<!doctype html>
   </div>
   <p style="font-size:10.5px;color:var(--muted)">İskarta/hata: SNMP izlenen cihaz arayüzlerinin dönem içi ifIn/OutDiscards + ifIn/OutErrors sayaç artışı.</p>
 
+  {{if .Target.Set}}
+  <table style="margin-top:8px">
+    <tr><th>SLA Hedefi</th><th class="num">Hedef</th><th class="num">Gerçek</th><th class="num">Durum</th></tr>
+    {{if gt .Target.AgentUptimePct 0.0}}<tr><td>Agent uptime</td><td class="num">≥ {{printf "%.1f" .Target.AgentUptimePct}}%</td><td class="num">{{printf "%.1f" .AgentUptime}}%</td><td class="num" style="color:{{if .UptimeBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .UptimeBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
+    {{if gt .Target.DeviceHealthPct 0.0}}<tr><td>Cihaz sağlığı</td><td class="num">≥ {{printf "%.1f" .Target.DeviceHealthPct}}%</td><td class="num">{{printf "%.1f" .DeviceHealth}}%</td><td class="num" style="color:{{if .DeviceBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .DeviceBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
+    {{if gt .Target.IfaceErrCeiling 0}}<tr><td>Arayüz iskarta+hata (24s)</td><td class="num">≤ {{.Target.IfaceErrCeiling}}</td><td class="num">{{add64 .IfaceDiscards .IfaceErrors}}</td><td class="num" style="color:{{if .IfaceBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .IfaceBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
+  </table>
+  {{end}}
+
   <h2>Kapasite ve Banding</h2>
   <div class="kpi">
     <div><span>Toplam Trafik</span><b>{{printf "%.1f" .TotalGB}} GB</b></div>
@@ -275,9 +299,10 @@ const enterpriseTpl = `<!doctype html>
 </body>
 </html>`
 
-// RenderEnterpriseHTML, kurumsal raporu HTML uretir (PDF destegi ileri faz).
+// RenderEnterpriseHTML, kurumsal raporu HTML olarak uretir.
 func (d *EnterpriseData) RenderEnterpriseHTML() ([]byte, error) {
 	funcs := template.FuncMap{
+		"add64": func(a, b uint64) uint64 { return a + b },
 		"divf": func(a any, b float64) float64 {
 			switch v := a.(type) {
 			case uint64:

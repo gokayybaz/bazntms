@@ -42,7 +42,7 @@ export interface AgentWithRates {
 export interface AlertEvent {
   id: number
   ts: number
-  kind: 'bw' | 'port' | 'proc' | 'target' | 'anomaly' | 'ioc' | 'vpn_down' | 'sdwan_sla_breach' | 'high_sessions'
+  kind: 'bw' | 'port' | 'proc' | 'target' | 'anomaly' | 'ioc' | 'vpn_down' | 'sdwan_sla_breach' | 'high_sessions' | 'sla_breach'
   key: string
   message: string
 }

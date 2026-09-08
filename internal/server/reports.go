@@ -155,6 +155,56 @@ func (s *Server) handleReportScheduleDelete(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, map[string]any{"ok": true})
 }
 
+// --- SLA hedefleri (S22.21) ---
+
+func (s *Server) handleSLATargetsGet(w http.ResponseWriter, r *http.Request) {
+	all, err := s.store.ListSLATargets()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		kept := all[:0]
+		for _, t := range all {
+			if t.Scope == "global" || t.Site == scope {
+				kept = append(kept, t)
+			}
+		}
+		all = kept
+	}
+	writeJSON(w, map[string]any{"targets": all})
+}
+
+func (s *Server) handleSLATargetPut(w http.ResponseWriter, r *http.Request) {
+	var t store.SLATarget
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		http.Error(w, "geçersiz gövde", http.StatusBadRequest)
+		return
+	}
+	if t.Scope != "site" {
+		t.Scope, t.Site = "global", ""
+	}
+	if err := s.store.UpsertSLATarget(t); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "sla.target.update", t.Scope+"/"+t.Site, "")
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleSLATargetDelete(w http.ResponseWriter, r *http.Request) {
+	scope := r.URL.Query().Get("scope")
+	if scope == "" {
+		scope = "global"
+	}
+	if err := s.store.DeleteSLATarget(scope, r.URL.Query().Get("site")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "sla.target.delete", scope+"/"+r.URL.Query().Get("site"), "")
+	writeJSON(w, map[string]any{"ok": true})
+}
+
 func (s *Server) handleReportGenerate(w http.ResponseWriter, r *http.Request) {
 	var p reportjob.Payload
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {

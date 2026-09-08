@@ -60,6 +60,26 @@ func (d *EnterpriseData) RenderEnterprisePDF() ([]byte, error) {
 		total += v
 	}
 	p.kvLine("Uyarı sayısı", fmt.Sprintf("%d", total))
+	if d.Target.Set() {
+		p.Ln(1)
+		sc := []float64{60, 35, 35, 0}
+		p.tableHeader(sc, []string{"SLA Hedefi", "Hedef", "Gerçek", "Durum"})
+		st := func(breach bool) string {
+			if breach {
+				return "İHLAL"
+			}
+			return "karşılandı"
+		}
+		if d.Target.AgentUptimePct > 0 {
+			p.tableRow(sc, []string{"Agent uptime", fmt.Sprintf(">= %.1f%%", d.Target.AgentUptimePct), fmt.Sprintf("%.1f%%", d.AgentUptime), st(d.UptimeBreach)}, false)
+		}
+		if d.Target.DeviceHealthPct > 0 {
+			p.tableRow(sc, []string{"Cihaz sağlığı", fmt.Sprintf(">= %.1f%%", d.Target.DeviceHealthPct), fmt.Sprintf("%.1f%%", d.DeviceHealth), st(d.DeviceBreach)}, true)
+		}
+		if d.Target.IfaceErrCeiling > 0 {
+			p.tableRow(sc, []string{"Arayüz iskarta+hata 24s", fmt.Sprintf("<= %d", d.Target.IfaceErrCeiling), fmt.Sprintf("%d", d.IfaceDiscards+d.IfaceErrors), st(d.IfaceBreach)}, false)
+		}
+	}
 
 	// Kapasite ve banding
 	p.section("Kapasite ve Banding")

@@ -17,6 +17,7 @@ export const KIND_STYLES: Record<string, string> = {
   ioc: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
   vpn_down: 'bg-rose-500/10 text-rose-400 ring-rose-500/20',
   sdwan_sla_breach: 'bg-orange-500/10 text-orange-300 ring-orange-500/20',
+  sla_breach: 'bg-rose-500/10 text-rose-400 ring-rose-500/20',
   high_sessions: 'bg-orange-500/10 text-orange-300 ring-orange-500/20',
 }
 
@@ -29,5 +30,6 @@ export const KIND_LABELS: Record<string, string> = {
   ioc: 'ioc / tehdit',
   vpn_down: 'vpn down',
   sdwan_sla_breach: 'sd-wan sla',
+  sla_breach: 'sla ihlali',
   high_sessions: 'yüksek oturum',
 }

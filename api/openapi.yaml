@@ -669,7 +669,7 @@ paths:
                   properties:
                     id: { type: integer }
                     ts: { type: integer }
-                    kind: { type: string, description: "bw · port · proc · target · anomaly · ioc · vpn_down · sdwan_sla_breach · high_sessions" }
+                    kind: { type: string, description: "bw · port · proc · target · anomaly · ioc · vpn_down · sdwan_sla_breach · high_sessions · sla_breach" }
                     key: { type: string }
                     message: { type: string }
 
@@ -870,6 +870,38 @@ paths:
             text/html: { schema: { type: string } }
             application/pdf: { schema: { type: string, format: binary } }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/sla/targets:
+    get:
+      tags: [reports]
+      summary: SLA hedefleri (global + per-site) — S22.21
+      responses:
+        "200": { description: "{ targets: [ { scope, site, agent_uptime_pct, device_health_pct, iface_err_ceiling } ] }" }
+    put:
+      tags: [reports]
+      summary: SLA hedefi ekle/güncelle — yetki:global-admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope: { type: string, enum: [global, site] }
+                site: { type: string }
+                agent_uptime_pct: { type: number }
+                device_health_pct: { type: number }
+                iface_err_ceiling: { type: integer }
+      responses:
+        "200": { description: "{ ok: true }" }
+    delete:
+      tags: [reports]
+      summary: SLA hedefi sil — yetki:global-admin
+      parameters:
+        - { name: scope, in: query, schema: { type: string } }
+        - { name: site, in: query, schema: { type: string } }
+      responses:
+        "200": { description: "{ ok: true }" }
 
   /api/v1/reports/archive:
     get:
