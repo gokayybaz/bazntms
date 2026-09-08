@@ -53,6 +53,19 @@ type EnterpriseData struct {
 	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
 	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
 	AlertCounts  map[string]int              `json:"alert_counts"`
+
+	// Sites, filo-geneli raporda (site=="") saha kırılımı (S22.22).
+	Sites []SiteBreakdown `json:"sites,omitempty"`
+}
+
+type SiteBreakdown struct {
+	Site        string  `json:"site"`
+	AgentTotal  int     `json:"agent_total"`
+	AgentOnline int     `json:"agent_online"`
+	DeviceTotal int     `json:"device_total"`
+	DeviceOK    int     `json:"device_ok"`
+	UptimePct   float64 `json:"uptime_pct"`
+	HealthPct   float64 `json:"health_pct"`
 }
 
 // BuildEnterprise, son `days` gun icin SLA/kapasite/banding modelini kurar.
@@ -159,6 +172,47 @@ func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, er
 	}
 	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0
 
+	// saha kırılımı (S22.22) — yalnız filo-geneli raporda
+	if site == "" {
+		bySite := map[string]*SiteBreakdown{}
+		get := func(s string) *SiteBreakdown {
+			if bySite[s] == nil {
+				bySite[s] = &SiteBreakdown{Site: s}
+			}
+			return bySite[s]
+		}
+		for _, a := range agents {
+			if a.Site == "" {
+				continue
+			}
+			sb := get(a.Site)
+			sb.AgentTotal++
+			if a.Online {
+				sb.AgentOnline++
+			}
+		}
+		for _, dev := range devices {
+			if dev.Site == "" || !dev.Enabled {
+				continue
+			}
+			sb := get(dev.Site)
+			sb.DeviceTotal++
+			if dev.LastError == "" && dev.LastPoll > 0 && now-dev.LastPoll < int64(3*dev.PollSeconds) {
+				sb.DeviceOK++
+			}
+		}
+		for _, sb := range bySite {
+			if sb.AgentTotal > 0 {
+				sb.UptimePct = 100 * float64(sb.AgentOnline) / float64(sb.AgentTotal)
+			}
+			if sb.DeviceTotal > 0 {
+				sb.HealthPct = 100 * float64(sb.DeviceOK) / float64(sb.DeviceTotal)
+			}
+			d.Sites = append(d.Sites, *sb)
+		}
+		sort.Slice(d.Sites, func(i, j int) bool { return d.Sites[i].Site < d.Sites[j].Site })
+	}
+
 	// SLA hedefleri (S22.21): saha-özel varsa o, yoksa global
 	if tgt, terr := st.SLATargetFor(site); terr == nil && tgt.Set() {
 		d.Target = tgt
@@ -251,6 +305,20 @@ const enterpriseTpl = `<!doctype html>
     {{if gt .Target.AgentUptimePct 0.0}}<tr><td>Agent uptime</td><td class="num">≥ {{printf "%.1f" .Target.AgentUptimePct}}%</td><td class="num">{{printf "%.1f" .AgentUptime}}%</td><td class="num" style="color:{{if .UptimeBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .UptimeBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
     {{if gt .Target.DeviceHealthPct 0.0}}<tr><td>Cihaz sağlığı</td><td class="num">≥ {{printf "%.1f" .Target.DeviceHealthPct}}%</td><td class="num">{{printf "%.1f" .DeviceHealth}}%</td><td class="num" style="color:{{if .DeviceBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .DeviceBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
     {{if gt .Target.IfaceErrCeiling 0}}<tr><td>Arayüz iskarta+hata (24s)</td><td class="num">≤ {{.Target.IfaceErrCeiling}}</td><td class="num">{{add64 .IfaceDiscards .IfaceErrors}}</td><td class="num" style="color:{{if .IfaceBreach}}#b91c1c{{else}}#15803d{{end}}">{{if .IfaceBreach}}İHLAL{{else}}karşılandı{{end}}</td></tr>{{end}}
+  </table>
+  {{end}}
+
+  {{if .Sites}}
+  <h2>Saha Kırılımı</h2>
+  <table>
+    <tr><th>Saha</th><th class="num">Agent (online/toplam)</th><th class="num">Uptime</th><th class="num">Cihaz (ok/toplam)</th><th class="num">Sağlık</th></tr>
+    {{range .Sites}}
+    <tr><td>{{.Site}}</td>
+        <td class="num">{{.AgentOnline}} / {{.AgentTotal}}</td>
+        <td class="num">{{printf "%.1f" .UptimePct}}%</td>
+        <td class="num">{{.DeviceOK}} / {{.DeviceTotal}}</td>
+        <td class="num">{{printf "%.1f" .HealthPct}}%</td></tr>
+    {{end}}
   </table>
   {{end}}
 

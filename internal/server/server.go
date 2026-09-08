@@ -504,10 +504,12 @@ func etagMatch(header, etag string) bool {
 }
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
-	// Rapor motoru filo geneli veriye dayaniyor (FleetSummary, protokol
-	// trendleri, top uc/surec/domain). Site-kisitli kimlige site-kapsamli
-	// rapor uretimi ayri bir is — o zamana dek erisim reddedilir (B3).
-	if SiteScope(identityFromCtx(r)) != "" {
+	scope := SiteScope(identityFromCtx(r))
+	rtype := r.URL.Query().Get("type")
+	// Trafik raporu filo-geneli akış/protokol verisine dayanır; site-kısıtlı
+	// kimlik erişemez (B3). Kurumsal + uyumluluk raporları S22.22'de sahaya
+	// kırpılarak açıldı.
+	if scope != "" && rtype != "enterprise" && rtype != "compliance" {
 		http.Error(w, "site-kisitli kimlik filo raporuna erisemez", http.StatusForbidden)
 		return
 	}
@@ -516,9 +518,13 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		days = 7
 	}
 	// Faz 6.4: kurumsal rapor (SLA/kapasite/banding). S22.20: ?site= saha
-	// kırılımı + ?format=pdf.
-	if r.URL.Query().Get("type") == "enterprise" {
-		data, err := report.BuildEnterprise(s.store, days, r.URL.Query().Get("site"))
+	// kırılımı + ?format=pdf. S22.22: site-kısıtlı kimlik kendi sahasına kırpılır.
+	if rtype == "enterprise" {
+		site := r.URL.Query().Get("site")
+		if scope != "" {
+			site = scope
+		}
+		data, err := report.BuildEnterprise(s.store, days, site)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

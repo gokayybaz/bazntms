@@ -129,9 +129,15 @@ func TestSiteLeak(t *testing.T) {
 		}
 	}
 
-	// --- rapor: site-kısıtlıya 403 ---
+	// --- rapor: trafik raporu site-kısıtlıya 403; kurumsal/uyumluluk açık (S22.22) ---
 	if code, _ := getJSON(t, ts, "/api/report?days=1", saTok); code != http.StatusForbidden {
-		t.Errorf("/api/report site-admin: 403 beklenirdi, %d", code)
+		t.Errorf("/api/report (trafik) site-admin: 403 beklenirdi, %d", code)
+	}
+	if code, _ := getJSON(t, ts, "/api/report?type=enterprise&days=1", saTok); code != http.StatusOK {
+		t.Errorf("/api/report?type=enterprise site-admin: 200 beklenirdi (kendi sahasına kırpılı), %d", code)
+	}
+	if code, _ := getJSON(t, ts, "/api/report?type=compliance", saTok); code != http.StatusOK {
+		t.Errorf("/api/report?type=compliance site-admin: 200 beklenirdi, %d", code)
 	}
 }
 

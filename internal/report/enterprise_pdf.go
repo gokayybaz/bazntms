@@ -81,6 +81,22 @@ func (d *EnterpriseData) RenderEnterprisePDF() ([]byte, error) {
 		}
 	}
 
+	// Saha kırılımı
+	if len(d.Sites) > 0 {
+		p.section("Saha Kırılımı")
+		bc := []float64{45, 45, 30, 30, 0}
+		p.tableHeader(bc, []string{"Saha", "Agent on/top", "Uptime", "Cihaz ok/top", "Sağlık"})
+		for i, sb := range d.Sites {
+			p.tableRow(bc, []string{
+				sb.Site,
+				fmt.Sprintf("%d/%d", sb.AgentOnline, sb.AgentTotal),
+				fmt.Sprintf("%.1f%%", sb.UptimePct),
+				fmt.Sprintf("%d/%d", sb.DeviceOK, sb.DeviceTotal),
+				fmt.Sprintf("%.1f%%", sb.HealthPct),
+			}, i%2 == 1)
+		}
+	}
+
 	// Kapasite ve banding
 	p.section("Kapasite ve Banding")
 	p.kvLine("Toplam trafik", fmt.Sprintf("%.1f GB", d.TotalGB))
