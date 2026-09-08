@@ -85,7 +85,8 @@ if n < 6:
 else:
     k = max(1, n // 3)
     warm = n // 3   # ilk üçte-bir tamamen ısınma (rampa + pool + Go plato) sayılır
-    def band(lo, hi, col): return statistics.mean(float(r[col]) for r in rows[lo:hi])
+    # medyan: kuyruk-boşaltma burst'lerindeki geçici goroutine/FD sıçramalarına dayanıklı
+    def band(lo, hi, col): return statistics.median(float(r[col]) for r in rows[lo:hi])
     # SIZINTI sinyalleri (FAIL eder): canlı heap, goroutine, açık FD
     for col, label, tol in [("heap_alloc_mb","canlı heap",1.35),
                             ("goroutines","goroutine",1.25),
