@@ -30,7 +30,7 @@ func TestNotifierTestChannelStatus(t *testing.T) {
 	var failCh atomic.Value // string
 	n.SetFailHook(func(channel string) { failCh.Store(channel) })
 
-	res := n.Test(Notifiers{SlackURL: ok.URL, DiscordURL: bad.URL})
+	res := n.Test(Notifiers{SlackURL: ok.URL, DiscordURL: bad.URL}, nil)
 
 	if okHits == 0 || failHits == 0 {
 		t.Fatalf("her iki uç da çağrılmalıydı: ok=%d bad=%d", okHits, failHits)
@@ -63,7 +63,7 @@ func TestNotifierDispatchRecordsStatus(t *testing.T) {
 	defer srv.Close()
 
 	n := NewNotifier()
-	n.dispatch(Notifiers{GenericURL: srv.URL}, store.AlertEvent{Kind: "test", Message: "x"})
+	n.dispatch(Notifiers{GenericURL: srv.URL}, nil, store.AlertEvent{Kind: "test", Message: "x"})
 	if s := n.Status()[ChGeneric]; !s.OK {
 		t.Fatalf("generic durumu OK olmalı: %+v", s)
 	}

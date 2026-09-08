@@ -43,7 +43,61 @@ type Config struct {
 	// AnomalyConfig.CritZ) — bu harita onu etkilemez.
 	Severities map[string]string `json:"severities,omitempty"`
 
+	// NotifyRoutes, bildirim yönlendirme kuralları (S22.13). Boşsa mevcut
+	// davranış (etkin kanalların hepsi). Doluysa yukarıdan aşağı değerlendirilir;
+	// eşleşen kuralın kanallarına gönderilir, `continue` yoksa durulur. Hiçbir
+	// kural eşleşmezse güvenli-varsayılan: etkin kanalların hepsi.
+	NotifyRoutes []NotifyRoute `json:"notify_routes,omitempty"`
+
 	Notifiers Notifiers `json:"notifiers"`
+}
+
+// NotifyRoute, bir bildirim yönlendirme kuralı. Eşleşme alanları boşsa joker.
+type NotifyRoute struct {
+	Severity string   `json:"severity,omitempty"` // info | warn | crit
+	Kind     string   `json:"kind,omitempty"`
+	Site     string   `json:"site,omitempty"`
+	Channels []string `json:"channels"`           // bkz. Ch* sabitleri + "jira"/"servicenow"/"pagerduty"
+	Continue bool     `json:"continue,omitempty"` // eşleştikten sonra sonraki kurala devam
+}
+
+func (r NotifyRoute) matches(ev store.AlertEvent) bool {
+	if r.Severity != "" && r.Severity != ev.Severity {
+		return false
+	}
+	if r.Kind != "" && r.Kind != ev.Kind {
+		return false
+	}
+	if r.Site != "" && r.Site != ev.Site {
+		return false
+	}
+	return true
+}
+
+// routeAllows, bir olay için hangi kanalların izinli olduğunu döndürür. Kural
+// yoksa ya da hiçbiri eşleşmezse tüm kanallar izinli (güvenli-varsayılan).
+func routeAllows(routes []NotifyRoute, ev store.AlertEvent) func(string) bool {
+	if len(routes) == 0 {
+		return func(string) bool { return true }
+	}
+	set := map[string]bool{}
+	matched := false
+	for _, r := range routes {
+		if !r.matches(ev) {
+			continue
+		}
+		matched = true
+		for _, c := range r.Channels {
+			set[c] = true
+		}
+		if !r.Continue {
+			break
+		}
+	}
+	if !matched {
+		return func(string) bool { return true }
+	}
+	return func(c string) bool { return set[c] }
 }
 
 // severityFor, bir uyarı türünün etkin önemi: önce operatör geçersiz kılması
@@ -626,7 +680,7 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	log.Printf("UYARI [%s/%s] %s", kind, sev, message)
 
 	if n != nil {
-		n.Deliver(cfg.Notifiers, ev)
+		n.Deliver(cfg.Notifiers, cfg.NotifyRoutes, ev)
 	}
 }
 
@@ -721,7 +775,7 @@ func (m *Manager) resolveEvent(cfg Config, e store.AlertEvent, reason string) {
 		e.State = "resolved"
 		e.ResolvedTs = now
 		e.Message = "[ÇÖZÜLDÜ] " + e.Message + " — " + reason
-		n.Deliver(cfg.Notifiers, e)
+		n.Deliver(cfg.Notifiers, cfg.NotifyRoutes, e)
 	}
 }
 
@@ -829,7 +883,7 @@ func (m *Manager) TestNotifiers() map[string]ChannelStatus {
 	if n == nil {
 		return map[string]ChannelStatus{}
 	}
-	return n.Test(cfg.Notifiers)
+	return n.Test(cfg.Notifiers, cfg.NotifyRoutes)
 }
 
 // SetNotifyFailHook, kanal başına teslim hatasında çağrılacak metrik

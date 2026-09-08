@@ -94,54 +94,56 @@ func (n *Notifier) deliver(channel string, fn func() error) {
 	n.record(channel, fn())
 }
 
-func (n *Notifier) Deliver(nf Notifiers, ev store.AlertEvent) {
-	go n.dispatch(nf, ev)
+func (n *Notifier) Deliver(nf Notifiers, routes []NotifyRoute, ev store.AlertEvent) {
+	go n.dispatch(nf, routes, ev)
 }
 
-// Test, tüm etkin kanallara sentetik bir uyarı gönderir (senkron) ve güncel
-// durumları döndürür — panelden "Test Et" için.
-func (n *Notifier) Test(nf Notifiers) map[string]ChannelStatus {
+// Test, yönlendirme kurallarına göre kanallara sentetik bir uyarı gönderir
+// (senkron) ve güncel durumları döndürür — panelden "Test Et" için.
+func (n *Notifier) Test(nf Notifiers, routes []NotifyRoute) map[string]ChannelStatus {
 	ev := store.AlertEvent{
-		Ts:      time.Now().Unix(),
-		Kind:    "test",
-		Key:     "manual",
-		Message: "bazNTMS test bildirimi — kanal yapılandırmasını doğrulamak için gönderildi.",
+		Ts:       time.Now().Unix(),
+		Kind:     "test",
+		Key:      "manual",
+		Severity: "info",
+		Message:  "bazNTMS test bildirimi — kanal yapılandırmasını doğrulamak için gönderildi.",
 	}
-	n.dispatch(nf, ev)
+	n.dispatch(nf, routes, ev)
 	return n.Status()
 }
 
-// dispatch, yapılandırmadaki etkin kanalların her birine ev'i iletir ve
-// sonucu kaydeder. Deliver bunu goroutine'de, Test senkron çağırır.
-func (n *Notifier) dispatch(nf Notifiers, ev store.AlertEvent) {
+// dispatch, yönlendirme kurallarının izin verdiği + yapılandırılmış her kanala
+// ev'i iletir. Deliver bunu goroutine'de, Test senkron çağırır.
+func (n *Notifier) dispatch(nf Notifiers, routes []NotifyRoute, ev store.AlertEvent) {
 	title := fmt.Sprintf("bazNTMS [%s]", kindLabel(ev.Kind))
-	if nf.Desktop {
+	allow := routeAllows(routes, ev)
+	if allow(ChDesktop) && nf.Desktop {
 		n.deliver(ChDesktop, func() error { return sendDesktop(title, ev.Message) })
 	}
-	if nf.GenericURL != "" {
+	if allow(ChGeneric) && nf.GenericURL != "" {
 		n.deliver(ChGeneric, func() error {
 			return postJSON(nf.GenericURL, map[string]any{
 				"ts": ev.Ts, "kind": ev.Kind, "key": ev.Key, "message": ev.Message, "title": title,
 			})
 		})
 	}
-	if nf.DiscordURL != "" {
+	if allow(ChDiscord) && nf.DiscordURL != "" {
 		n.deliver(ChDiscord, func() error {
 			return postJSON(nf.DiscordURL, map[string]string{"content": "**" + title + "**\n" + ev.Message})
 		})
 	}
-	if nf.SlackURL != "" {
+	if allow(ChSlack) && nf.SlackURL != "" {
 		n.deliver(ChSlack, func() error {
 			return postJSON(nf.SlackURL, map[string]string{"text": "*" + title + "*\n" + ev.Message})
 		})
 	}
-	if nf.TelegramToken != "" && nf.TelegramChatID != "" {
+	if allow(ChTelegram) && nf.TelegramToken != "" && nf.TelegramChatID != "" {
 		n.deliver(ChTelegram, func() error {
 			url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", nf.TelegramToken)
 			return postJSON(url, map[string]string{"chat_id": nf.TelegramChatID, "text": title + "\n" + ev.Message})
 		})
 	}
-	if nf.TeamsURL != "" {
+	if allow(ChTeams) && nf.TeamsURL != "" {
 		n.deliver(ChTeams, func() error {
 			return postJSON(nf.TeamsURL, map[string]any{
 				"@type": "MessageCard", "@context": "http://schema.org/extensions",
@@ -149,13 +151,13 @@ func (n *Notifier) dispatch(nf Notifiers, ev store.AlertEvent) {
 			})
 		})
 	}
-	if nf.WebhookV2URL != "" {
+	if allow(ChWebhookV2) && nf.WebhookV2URL != "" {
 		n.deliver(ChWebhookV2, func() error { return postWebhookV2(nf.WebhookV2URL, nf.WebhookV2Secret, ev, title) })
 	}
-	if nf.EmailHost != "" && len(nf.EmailTo) > 0 {
+	if allow(ChEmail) && nf.EmailHost != "" && len(nf.EmailTo) > 0 {
 		n.deliver(ChEmail, func() error { return sendEmail(nf, title, ev.Message) })
 	}
-	if nf.SIEM.Enabled {
+	if allow(ChSIEM) && nf.SIEM.Enabled {
 		n.deliver(ChSIEM, func() error { return deliverSIEM(nf.SIEM, ev) })
 	}
 }
