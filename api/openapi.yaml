@@ -46,6 +46,8 @@ tags:
     description: Sağlık, hazırlık, metrik, API şeması
   - name: geo
     description: Coğrafi trafik dağılımı
+  - name: ai
+    description: AI analiz — çok-turlu sohbet, çoklu sağlayıcı (yerel + bulut), preset butonlar (Faz 26)
 
 security:
   - cookieAuth: []
@@ -1195,6 +1197,127 @@ paths:
         - { name: site, in: query, schema: { type: string } }
       responses:
         "200": { description: "{ ok: true }" }
+
+  /api/v1/ai/status:
+    get:
+      tags: [ai]
+      summary: AI analiz durumu — etkin sağlayıcılar + varsayılan model (yetki:analyze)
+      responses:
+        "200": { description: "{ enabled, providers[], default_provider, default_model, has_ready_provider }" }
+  /api/v1/ai/presets:
+    get:
+      tags: [ai]
+      summary: Hazır analiz butonları (sunucu-tanımlı) (yetki:analyze)
+      responses:
+        "200": { description: "{ presets: [ { id, label, scopes, task } ] }" }
+  /api/v1/ai/conversations:
+    get:
+      tags: [ai]
+      summary: Sohbet oturumları — kapsam/kaynak filtreli, site-kapsamlı (yetki:analyze)
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [fleet, agent, incident, anomaly, device] } }
+        - { name: ref, in: query, schema: { type: string } }
+        - { name: source, in: query, schema: { type: string, enum: [user, nightly, triage] } }
+        - { name: archived, in: query, schema: { type: string } }
+      responses:
+        "200": { description: AIConversation dizisi }
+    post:
+      tags: [ai]
+      summary: Sohbet oturumu oluştur (yetki:analyze)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { scope_kind: { type: string }, scope_ref: { type: string }, provider_id: { type: integer }, model: { type: string }, title: { type: string } } }
+      responses:
+        "200": { description: "{ ok: true, id }" }
+  /api/v1/ai/conversations/{id}:
+    get:
+      tags: [ai]
+      summary: Oturum + mesajları (yetki:analyze)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ conversation, messages[] }" }
+        "404": { description: bulunamadı }
+    delete:
+      tags: [ai]
+      summary: Oturumu arşivle (hard-delete yok) (yetki:analyze)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok: true }" }
+  /api/v1/ai/conversations/{id}/messages:
+    post:
+      tags: [ai]
+      summary: Mesaj gönder — SSE streaming yanıt (yetki:analyze)
+      description: >
+        text/event-stream döner; her satır `data: {"delta":"..."}`, sonda
+        `data: {"done":true}` ya da `data: {"error":"..."}`. Kullanıcı ve
+        asistan mesajı kalıcı yazılır. İlk turda bağlam anlık görüntüsü eklenir.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { content: { type: string }, preset: { type: string }, refresh_context: { type: boolean } } }
+      responses:
+        "200": { description: "SSE akışı (text/event-stream)" }
+  /api/v1/ai/providers:
+    get:
+      tags: [ai]
+      summary: AI sağlayıcı listesi — api_key düz DÖNMEZ (has_key) (yetki:global-admin)
+      responses:
+        "200": { description: "[ { id, name, kind, base_url, default_model, enabled, has_key, is_local } ]" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [ai]
+      summary: AI sağlayıcı oluştur — api_key vault ile şifrelenir (yetki:global-admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, kind: { type: string, enum: [openai, anthropic, ollama, lmstudio, openai-compat] }, base_url: { type: string }, api_key: { type: string }, default_model: { type: string }, enabled: { type: boolean }, no_think: { type: boolean }, max_tokens: { type: integer }, temperature: { type: number } } }
+      responses:
+        "200": { description: "{ ok: true, id }" }
+  /api/v1/ai/providers/{id}:
+    put:
+      tags: [ai]
+      summary: AI sağlayıcı güncelle — api_key boş bırakılırsa değişmez (yetki:global-admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: "{ ok: true }" }
+    delete:
+      tags: [ai]
+      summary: AI sağlayıcı sil (yetki:global-admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok: true }" }
+  /api/v1/ai/providers/{id}/test:
+    post:
+      tags: [ai]
+      summary: Sağlayıcı bağlantı testi — model listesi / küçük completion (yetki:global-admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ ok, latency_ms, models[], error }" }
+  /api/v1/ai/providers/{id}/models:
+    get:
+      tags: [ai]
+      summary: Sağlayıcının canlı model listesi (yetki:global-admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "{ models: [string] }" }
+        "502": { description: sağlayıcıya ulaşılamadı }
 
   /api/v1/reports/archive:
     get:

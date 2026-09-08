@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/compliance"
@@ -67,6 +68,11 @@ func main() {
 	pprofAddr := fl.String("pprof", "", "net/http/pprof dinleme adresi (ex: 127.0.0.1:6060); bos = kapali")
 	pprofRates := fl.Int("pprof-rates", 0, "0'dan buyukse block + mutex profillemesini acar (SetBlockProfileRate=N ns, SetMutexProfileFraction=N); yalnizca -pprof ile anlamli, kucuk ek yuk (S21.6)")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
+	aiOn := fl.Bool("ai", false, "AI analiz sekmesi + uclari (Faz 26). Saglayicilar: panel > Yonetim > AI Saglayici")
+	aiAllowCloud := fl.Bool("ai-allow-cloud", true, "false ise yalnizca yerel (loopback/ozel-ag) model adreslerine izin verilir — bulut saglayici egress kilidi")
+	llmBaseURL := fl.String("llm-base-url", "", "Bootstrap AI saglayicisi taban adresi (OpenAI-uyumlu; ex: http://localhost:11434/v1). ai_providers tablosu bossa bir kez seed edilir")
+	llmAPIKey := fl.String("llm-api-key", "", "Bootstrap AI saglayicisi API anahtari (yerel modeller icin gerekmez)")
+	llmModel := fl.String("llm-model", "", "Bootstrap AI saglayicisi varsayilan modeli (ex: qwen2.5:7b, gpt-4o-mini)")
 	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
 	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
 	configPath := fl.String("config", "", "YAML config dosyasi (bayraklar ustunlukte)")
@@ -319,6 +325,23 @@ func main() {
 	}
 	if tiSvc != nil {
 		srv.SetThreatIntel(tiSvc)
+	}
+	// AI analiz (Faz 26). ai_providers boşsa -llm-* / LLM_* / OPENAI_* ile bir
+	// bootstrap sağlayıcı seed edilir (eski monolit uyumu). -ai / -ai-allow-cloud
+	// bayrakları; nightly/triage/max-context YAML (cfg.AI).
+	if *aiOn {
+		allowCloud := *aiAllowCloud
+		maxCtxKB := cfg.AI.MaxContextKB
+		redact := cfg.AI.RedactContext
+		aiCfg := func() ai.Config {
+			return ai.Config{Enabled: true, AllowCloud: allowCloud, MaxContextKB: maxCtxKB, RedactContext: redact}
+		}
+		aiReg := ai.NewRegistry(st, v, aiCfg)
+		if err := seedAIProvider(aiReg, *llmBaseURL, *llmAPIKey, *llmModel); err != nil {
+			slog.Warn("AI bootstrap sağlayıcı seed edilemedi", "err", err)
+		}
+		srv.SetAIRegistry(aiReg)
+		slog.Info("AI analiz aktif", "bulut_izni", allowCloud)
 	}
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
@@ -589,4 +612,50 @@ func main() {
 	if err := hs.Shutdown(shutdownCtx); err != nil {
 		slog.Error("http shutdown hatasi", "err", err)
 	}
+}
+
+// seedAIProvider, ai_providers tablosu boşsa bayrak/env'den (-llm-* / LLM_* /
+// OPENAI_*) bir bootstrap sağlayıcı ekler — eski monolit uyumu.
+func seedAIProvider(reg *ai.Registry, flagBase, flagKey, flagModel string) error {
+	provs, err := reg.Store().ListAIProviders()
+	if err != nil || len(provs) > 0 {
+		return err
+	}
+	base := firstNonEmpty(flagBase, os.Getenv("LLM_BASE_URL"), os.Getenv("OPENAI_BASE_URL"))
+	key := firstNonEmpty(flagKey, os.Getenv("LLM_API_KEY"), os.Getenv("OPENAI_API_KEY"))
+	model := firstNonEmpty(flagModel, os.Getenv("LLM_MODEL"))
+	if base == "" && key == "" {
+		return nil // seed edilecek bir şey yok — panelden eklenir
+	}
+	kind := ai.KindOpenAICompat
+	switch {
+	case strings.Contains(base, "anthropic.com"):
+		kind = ai.KindAnthropic
+	case strings.Contains(base, "openai.com"):
+		kind = ai.KindOpenAI
+	case strings.Contains(base, ":11434"):
+		kind = ai.KindOllama
+	case strings.Contains(base, ":1234"):
+		kind = ai.KindLMStudio
+	}
+	if base == "" {
+		base = ai.DefaultBaseURL(kind)
+	}
+	_, err = reg.SaveProvider(store.AIProvider{
+		Name: "bootstrap", Kind: string(kind), BaseURL: base,
+		DefaultModel: model, Enabled: true, CreatedBy: "bootstrap",
+	}, key)
+	if err == nil {
+		slog.Info("AI bootstrap sağlayıcı eklendi", "kind", kind, "base_url", base)
+	}
+	return err
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

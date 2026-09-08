@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// Baglam uretimi (Faz 26 S26.5). internal/ai bir YAPRAK pakettir — store /
-// alert / health import etmez. Server katmani (internal/server/ai_context.go)
-// ilgili sorgulari calistirip Snapshot'i doldurur; buradaki kod onu
-// token-butceli kompakt JSON bolumlerine cevirir ve modele gonderir.
+// Baglam uretimi (Faz 26 S26.5). Bu dosya store/alert/health import ETMEZ
+// (registry.go store'a baglanir, digerleri yalniz net/http). Server katmani
+// (internal/server/ai_context.go) ilgili sorgulari calistirip Snapshot'i
+// doldurur; buradaki kod onu token-butceli kompakt JSON bolumlerine cevirir.
 
 // Snapshot, bir analiz baglaminin ham bilesenleri.
 type Snapshot struct {

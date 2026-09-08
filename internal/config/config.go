@@ -81,6 +81,27 @@ type HubConfig struct {
 		Dir         string `koanf:"dir"`
 		IPAPILookup bool   `koanf:"ip_api_lookup"`
 	} `koanf:"geoip"`
+	AI struct {
+		Enabled       bool   `koanf:"enabled"`        // AI analiz sekmesi + uçları (Faz 26)
+		AllowCloud    bool   `koanf:"allow_cloud"`    // false → loopback/özel-ağ dışı sağlayıcı adresi reddedilir (egress kilidi)
+		MaxContextKB  int    `koanf:"max_context_kb"` // model bağlamı üst sınırı (0 → 24)
+		RedactContext bool   `koanf:"redact_context"` // bağlam anlık görüntüsünde IP/kullanıcı maskeleme
+		DefaultModel  string `koanf:"default_model"`  // bootstrap sağlayıcı varsayılan modeli
+		// bootstrap sağlayıcı: ai_providers tablosu boşsa ilk açılışta bir
+		// satır seed edilir (eski -llm-* bayrakları / LLM_* env ile uyum).
+		BaseURL string `koanf:"base_url"`
+		APIKey  string `koanf:"api_key"`
+		Nightly struct {
+			Enabled    bool     `koanf:"enabled"`
+			Spec       string   `koanf:"spec"`       // cron; boş → "0 6 * * *"
+			Recipients []string `koanf:"recipients"` // boş → yalnız konuşmaya yazılır
+		} `koanf:"nightly"`
+		Triage struct {
+			Enabled     bool   `koanf:"enabled"`
+			MinSeverity string `koanf:"min_severity"` // warn | crit (boş → crit)
+			MaxPerHour  int    `koanf:"max_per_hour"` // 0 → 10 (LLM maliyet/gürültü sınırı)
+		} `koanf:"triage"`
+	} `koanf:"ai"`
 	Log struct {
 		Level  string `koanf:"level"`
 		Format string `koanf:"format"`
@@ -142,6 +163,11 @@ var hubFlagKeys = map[string]string{
 	"auth.password":            "auth-password",
 	"geoip.dir":                "geoip-dir",
 	"geoip.ip_api_lookup":      "ip-api-lookup",
+	"ai.enabled":               "ai",
+	"ai.allow_cloud":           "ai-allow-cloud",
+	"ai.base_url":              "llm-base-url",
+	"ai.api_key":               "llm-api-key",
+	"ai.default_model":         "llm-model",
 	"updates.dir":              "updates-dir",
 	"enroll_token":             "enroll-token",
 	"compliance.enabled":       "compliance",

@@ -82,3 +82,35 @@ type Section struct {
 	Title string `json:"title"`
 	Data  string `json:"data"`
 }
+
+// Preset, sohbet sekmesindeki hazir analiz butonu (sunucu-tanimli — promptlar
+// kod dagitimi olmadan iyilestirilebilir, i18n tek yerde). GET /api/v1/ai/presets.
+type Preset struct {
+	ID     string   `json:"id"`
+	Label  string   `json:"label"`
+	Scopes []string `json:"scopes"` // gosterilecegi kapsamlar; bos = hepsi
+	System string   `json:"-"`      // kullanilacak persona
+	Task   string   `json:"task"`   // kullanici mesaji govdesi
+}
+
+// Presets, tum hazir analiz butonlari.
+func Presets() []Preset {
+	return []Preset{
+		{ID: "fleet_summary", Label: "Filoyu ozetle", Scopes: []string{"fleet"}, System: SystemAnalyst, Task: TaskFleetSummary},
+		{ID: "security_scan", Label: "Guvenlik taramasi", Scopes: nil, System: SystemAnalyst, Task: TaskSecurityScan},
+		{ID: "anomaly_review", Label: "Anomali yorumu", Scopes: []string{"fleet", "anomaly"}, System: SystemAnalyst, Task: TaskAnomalyReview},
+		{ID: "capacity_view", Label: "Kapasite gorunumu", Scopes: []string{"fleet", "device"}, System: SystemAnalyst, Task: TaskCapacityView},
+		{ID: "incident_triage", Label: "Bu olayi acikla", Scopes: []string{"incident"}, System: SystemTriage, Task: "Bu olayi (incident) triyaj et: ne olmus gorunuyor, en olası aciklama, operatorun ilk bakacagi yerler, aciliyet."},
+		{ID: "agent_review", Label: "Bu agent'i incele", Scopes: []string{"agent"}, System: SystemAnalyst, Task: "Bu agent'in trafik/surec/DNS verisine bak: normal mi, dikkat ceken bir sey var mi, oneriler."},
+	}
+}
+
+// PresetByID, id ile hazir butonu dondurur (yoksa false).
+func PresetByID(id string) (Preset, bool) {
+	for _, p := range Presets() {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return Preset{}, false
+}

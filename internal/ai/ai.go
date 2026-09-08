@@ -142,6 +142,10 @@ type Adapter interface {
 // httpTimeout, reasoning modelleri yavas olabilir — uzun timeout.
 const httpTimeout = 5 * time.Minute
 
+// StreamTimeout, tek bir sohbet akisinin ust siniri (server handler'i bu
+// sureyle ctx kurar; reasoning + uzun cikti icin genis).
+const StreamTimeout = 5 * time.Minute
+
 // AdapterFor, saglayici turune gore uygun adaptoru kurar. hc nil ise
 // dahili uzun-timeout'lu istemci kullanilir.
 func AdapterFor(p Provider, hc *http.Client) Adapter {

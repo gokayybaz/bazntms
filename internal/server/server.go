@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/gokayybaz/bazntms/internal/ai"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/enrich"
@@ -44,6 +45,7 @@ type Server struct {
 	enrich            *enrich.Service      // Faz 23-E: paylaşılan IP/alan zenginleştirme
 	ti                *threatintel.Service // Faz 24-E: tehdit istihbaratı (nil = pasif)
 	hcache            healthCache          // Faz 25-A: sağlık skoru ~30sn önbellek
+	aiReg             *ai.Registry         // Faz 26: AI analiz motoru (nil = kapalı)
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
@@ -236,6 +238,20 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/sla/targets", s.requirePerm(PermView, http.HandlerFunc(s.handleSLATargetsGet)))
 	mux.Handle("PUT /api/v1/sla/targets", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleSLATargetPut)))
 	mux.Handle("DELETE /api/v1/sla/targets", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleSLATargetDelete)))
+	// AI analiz (Faz 26). Sohbet = PermAnalyze; sağlayıcı CRUD = PermGlobalAdmin.
+	mux.Handle("GET /api/v1/ai/status", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIStatus)))
+	mux.Handle("GET /api/v1/ai/presets", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIPresets)))
+	mux.Handle("GET /api/v1/ai/conversations", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIConversationsList)))
+	mux.Handle("POST /api/v1/ai/conversations", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIConversationCreate)))
+	mux.Handle("GET /api/v1/ai/conversations/{id}", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIConversationGet)))
+	mux.Handle("DELETE /api/v1/ai/conversations/{id}", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIConversationArchive)))
+	mux.Handle("POST /api/v1/ai/conversations/{id}/messages", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleAIMessagePost)))
+	mux.Handle("GET /api/v1/ai/providers", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProvidersList)))
+	mux.Handle("POST /api/v1/ai/providers", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderCreate)))
+	mux.Handle("PUT /api/v1/ai/providers/{id}", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderUpdate)))
+	mux.Handle("DELETE /api/v1/ai/providers/{id}", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderDelete)))
+	mux.Handle("POST /api/v1/ai/providers/{id}/test", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderTest)))
+	mux.Handle("GET /api/v1/ai/providers/{id}/models", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderModels)))
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)
