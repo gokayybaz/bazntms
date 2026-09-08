@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/driver"
+	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/vault"
 )
@@ -81,6 +82,7 @@ func (p *Poller) pollAll() {
 	if err != nil {
 		return
 	}
+	defer metrics.ObserveDevpollCycle(time.Now())
 	var wg sync.WaitGroup
 	for _, d := range devices {
 		if !d.Enabled {
@@ -100,6 +102,9 @@ func (p *Poller) pollAll() {
 
 // pollDevice, driver'dan Snapshot alır ve depoya yazar (tek yazım noktası).
 func (p *Poller) pollDevice(d store.Device) {
+	metrics.AddDevpollInflight(1)
+	defer metrics.AddDevpollInflight(-1)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"time"
+
+	"github.com/gokayybaz/bazntms/internal/metrics"
 )
 
 // --- cihaz envanteri, SNMP ornekleri, NetFlow, syslog (Faz 3) ---
@@ -163,6 +165,7 @@ func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr 
 }
 
 func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
+	defer metrics.ObserveStoreWrite("device_iface_samples", len(ifaces), time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -249,6 +252,7 @@ func (s *sqlStore) SaveFlows(rows []FlowRow) error {
 	if len(rows) == 0 {
 		return nil
 	}
+	defer metrics.ObserveStoreWrite("flows", len(rows), time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err

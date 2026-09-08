@@ -3,6 +3,7 @@ package store
 import (
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
@@ -13,6 +14,7 @@ func (s *sqlStore) SaveAgentDNS(agentID int64, ts int64, samples []telemetry.DNS
 	if len(samples) == 0 {
 		return nil
 	}
+	defer metrics.ObserveStoreWrite("agent_dns", len(samples), time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err

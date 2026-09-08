@@ -147,3 +147,8 @@ func i64ptr(n sql.NullInt64) *int64 {
 func (s *sqlStore) Close() error { return s.db.Close() }
 
 func (s *sqlStore) Ping() error { return s.db.Ping() }
+
+// PoolStats, database/sql bağlantı havuzu istatistiklerini döndürür
+// (metrics.RegisterDBPool için — Store arayüzünde değil, yalnız somut tip;
+// hub main type-assert ile bağlar).
+func (s *sqlStore) PoolStats() sql.DBStats { return s.db.Stats() }

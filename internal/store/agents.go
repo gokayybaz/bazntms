@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
@@ -119,6 +120,7 @@ func (s *sqlStore) SetAgentAttrMethod(id int64, method string) error {
 }
 
 func (s *sqlStore) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error {
+	defer metrics.ObserveStoreWrite("agent_iface_samples", len(samples), time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -139,6 +141,7 @@ func (s *sqlStore) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry
 }
 
 func (s *sqlStore) ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error {
+	defer metrics.ObserveStoreWrite("agent_conn_latest", len(conns), time.Now())
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	appmetrics "github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
@@ -328,10 +329,12 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var batch telemetry.TelemetryBatch
+	dec := time.Now()
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	appmetrics.ObserveTelemetryDecode(dec)
 	ts := batch.TS
 	if ts == 0 {
 		ts = time.Now().Unix()

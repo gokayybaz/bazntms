@@ -21,6 +21,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
@@ -166,6 +167,7 @@ func (q *Queue) RunProcessor(ctx context.Context, st store.Store, workers int) e
 			q.workerLoop(runCtx, cons, st)
 		}()
 	}
+	go q.pendingLoop(runCtx, cons)
 	go func() {
 		wg.Wait()
 		close(q.done)
@@ -174,17 +176,42 @@ func (q *Queue) RunProcessor(ctx context.Context, st store.Store, workers int) e
 	return nil
 }
 
+// pendingLoop, tüketicinin bekleyen mesaj sayısını periyodik olarak
+// bazntms_queue_pending metriğine yazar — ingest lag göstergesi.
+func (q *Queue) pendingLoop(ctx context.Context, cons jetstream.Consumer) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			ictx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			info, err := cons.Info(ictx)
+			cancel()
+			if err == nil {
+				metrics.SetQueuePending(float64(info.NumPending) + float64(info.NumAckPending))
+			}
+		}
+	}
+}
+
 func (q *Queue) workerLoop(ctx context.Context, cons jetstream.Consumer, st store.Store) {
 	for ctx.Err() == nil {
 		batch, err := cons.Fetch(128, jetstream.FetchMaxWait(time.Second))
 		if err != nil {
 			continue // bos cekim veya gecici hata
 		}
+		n := 0
 		for msg := range batch.Messages() {
 			if ctx.Err() != nil {
 				return
 			}
 			q.handle(msg, st)
+			n++
+		}
+		if n > 0 {
+			metrics.ObserveQueueBatch(n)
 		}
 	}
 }
@@ -193,11 +220,13 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 	switch msg.Subject() {
 	case subTelemetry:
 		var env Envelope
+		dec := time.Now()
 		if err := json.Unmarshal(msg.Data(), &env); err != nil {
 			slog.Error("kuyruk: telemetri cozumlenemedi", "err", err)
 			termMsg(msg)
 			return
 		}
+		metrics.ObserveTelemetryDecode(dec)
 		ts := env.TS
 		if ts == 0 {
 			ts = time.Now().Unix()

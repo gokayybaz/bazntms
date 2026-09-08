@@ -21,6 +21,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/geoip"
+	appmetrics "github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/report"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -406,7 +407,10 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.captureRun.Set(0)
 	}
-	promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+	// server'ın instance-başına registry'si + paketler-arası ingest metrik
+	// registry'si (internal/metrics — global) birlikte sunulur.
+	g := prometheus.Gatherers{s.registry, appmetrics.Registry()}
+	promhttp.HandlerFor(g, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 }
 
 func serveIndex(w http.ResponseWriter, fsys fs.FS) {

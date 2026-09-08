@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"net"
 	"time"
+
+	"github.com/gokayybaz/bazntms/internal/metrics"
 )
 
 const (
@@ -65,13 +67,46 @@ func (c *Collector) Listen(addr string) error {
 			if c.ExporterIP != "" {
 				device = c.ExporterIP
 			}
+			kind := datagramKind(buf[:n])
 			rows := c.parse(buf[:n], device, exporterKey, time.Now())
-			if len(rows) > 0 && c.OnFlows != nil {
-				c.OnFlows(device, rows)
+			switch {
+			case len(rows) > 0:
+				metrics.AddFlowsReceived(kind, len(rows))
+				if c.OnFlows != nil {
+					c.OnFlows(device, rows)
+				}
+			case kind == "unknown":
+				metrics.IncFlowsDropped("unknown_version")
+			case n < 4:
+				metrics.IncFlowsDropped("short")
+			default:
+				// bilinen protokol ama 0 satır: şablon henüz gelmedi, bozuk kayıt
+				// veya yalnız-sayaç sFlow örneği
+				metrics.IncFlowsDropped("empty_parse")
 			}
 		}
 	}()
 	return nil
+}
+
+// datagramKind, ham datagramı protokol etiketine sınıflandırır (metrik için;
+// parse ile aynı ayrım mantığı).
+func datagramKind(payload []byte) string {
+	if len(payload) < 4 {
+		return "short"
+	}
+	if binary.BigEndian.Uint32(payload[0:4]) == 5 {
+		return "sflow"
+	}
+	switch binary.BigEndian.Uint16(payload[0:2]) {
+	case 5:
+		return "v5"
+	case 9:
+		return "v9"
+	case 10:
+		return "ipfix"
+	}
+	return "unknown"
 }
 
 // parse, paket versiyonuna gore uygun cozucuye yonlendirir. sFlow v5 ile

@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,6 +33,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/geoip"
 	"github.com/gokayybaz/bazntms/internal/ioc"
 	"github.com/gokayybaz/bazntms/internal/logging"
+	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/queue"
 	"github.com/gokayybaz/bazntms/internal/server"
@@ -164,6 +166,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = st.Close() }()
+
+	// DB bağlantı havuzu istatistiklerini bazntms_db_pool_* metriklerine bağla
+	// (S21.5 — ölçek koşularında havuz doygunluğu göstergesi).
+	if ps, ok := st.(interface{ PoolStats() sql.DBStats }); ok {
+		metrics.RegisterDBPool(ps.PoolStats)
+	}
 
 	retention := time.Duration(*retentionH) * time.Hour
 	// veritabani bakimi: eski satirlarin temizligi + (TS'te) native chunk-drop
