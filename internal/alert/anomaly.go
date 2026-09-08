@@ -46,6 +46,10 @@ type AnomalyConfig struct {
 	// S22.4 — bps disi metrikler
 	Metrics        []string `json:"metrics"`           // "bps" | "dns_qps" | "proc_bps" (vars. ucu)
 	MinAbsDeltaQps float64  `json:"min_abs_delta_qps"` // dns_qps gurultu tabani (vars. 5)
+
+	// S22.7 — z-buyuklugune gore dinamik onem: |z| >= CritZ ise uyari "crit"
+	// (aksi "warn"). 0 → varsayilan.
+	CritZ float64 `json:"crit_z"`
 }
 
 // knownMetrics, gecerli Metrics degerleri.
@@ -77,6 +81,7 @@ func DefaultAnomalyConfig() AnomalyConfig {
 		MinAbsDeltaBps: 500_000,
 		Metrics:        []string{"bps", "dns_qps", "proc_bps"},
 		MinAbsDeltaQps: 5,
+		CritZ:          5,
 	}
 }
 
@@ -132,6 +137,9 @@ func (a AnomalyConfig) normalized() AnomalyConfig {
 	}
 	if a.MinAbsDeltaQps <= 0 {
 		a.MinAbsDeltaQps = d.MinAbsDeltaQps
+	}
+	if a.CritZ <= 0 {
+		a.CritZ = d.CritZ
 	}
 	return a
 }
@@ -266,11 +274,15 @@ func (m *Manager) checkAnomaly(cfg Config) {
 		if c.z < 0 {
 			direction = "düşüş"
 		}
+		sev := "warn"
+		if math.Abs(c.z) >= ac.CritZ {
+			sev = "crit"
+		}
 		unit := metricUnit(c.metric)
 		m.fireCtx("anomaly", fmt.Sprintf("%s:%s:%s:%d", c.metric, c.dim, c.key, curBucket),
 			fmt.Sprintf("%s: alışılmadık %s sapması (%s) — %.0f %s, bu zaman dilimi ortalaması %.0f ± %.0f %s (z=%.1f, son %d dk)",
 				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin),
-			fireOpts{Site: m.anomalySite(c.dim, c.key)})
+			fireOpts{Site: m.anomalySite(c.dim, c.key), Severity: sev})
 	}
 }
 

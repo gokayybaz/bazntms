@@ -26,8 +26,25 @@ type Config struct {
 	Forti     FortiAlertConfig `json:"forti"`   // Faz 8.5: vpn/sdwan/oturum eşikleri
 	IOC       IOCConfig        `json:"ioc"`     // Faz 6.6: tehdit istihbaratı domain eşleştirmesi
 
+	// Severities, eşik-tabanlı uyarı türleri için operatör önem geçersiz
+	// kılması (S22.7): kind → "info"|"warn"|"crit". Anahtar yoksa kindSeverity
+	// varsayılanı geçerli. Anomali önemi z-büyüklüğünden türetilir (bkz.
+	// AnomalyConfig.CritZ) — bu harita onu etkilemez.
+	Severities map[string]string `json:"severities,omitempty"`
+
 	Notifiers Notifiers `json:"notifiers"`
 }
+
+// severityFor, bir uyarı türünün etkin önemi: önce operatör geçersiz kılması
+// (Config.Severities), sonra kindSeverity varsayılanı.
+func (c Config) severityFor(kind string) string {
+	if s, ok := c.Severities[kind]; ok && validSeverity(s) {
+		return s
+	}
+	return severityForKind(kind)
+}
+
+func validSeverity(s string) bool { return s == "info" || s == "warn" || s == "crit" }
 
 type BandwidthConfig struct {
 	Enabled bool    `json:"enabled"`
@@ -552,7 +569,7 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 
 	sev := opt.Severity
 	if sev == "" {
-		sev = severityForKind(kind)
+		sev = cfg.severityFor(kind)
 	}
 	ev := store.AlertEvent{
 		Ts: now, Kind: kind, Key: key, Message: message,
