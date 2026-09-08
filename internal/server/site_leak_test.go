@@ -41,6 +41,11 @@ func seedSite(t *testing.T, st store.Store, site string) (agentID, deviceID int6
 	_ = st.SaveProcessTraffic(agentID, now, []telemetry.ProcessTrafficSample{{PID: 9, Process: site + "-proc", Proto: "tcp", RemoteIP: "1.1.1.1", Port: 443, BytesIn: 10, BytesOut: 5}})
 	_ = st.ReplaceConnLatest(agentID, []telemetry.ConnectionSample{{Proto: "tcp", LocalAddr: "10.0.0.1:22", RemoteAddr: "2.2.2.2:5000", Status: "ESTABLISHED", Process: site + "-sshd"}})
 	_ = st.SaveAgentSubnets(agentID, site+"-agent", []string{"10." + site[len(site)-1:] + ".0.0/24"})
+	_, _ = st.CreateIncident(store.Incident{
+		Title: site + " şüpheli aktivite", Severity: "crit", Status: "open", Site: site,
+		AgentID: agentID, CorrelationKey: "r1|" + site, CorrelationReason: site + "-neden",
+		FirstSeen: now, LastSeen: now,
+	})
 
 	deviceID, err = st.AddDevice(store.Device{Name: site + "-fw", Host: "192.168." + site[len(site)-1:] + ".1", Kind: "firewall", Site: site, Vendor: "snmp"})
 	if err != nil {
@@ -96,6 +101,7 @@ func TestSiteLeak(t *testing.T) {
 		"/api/v1/processes?agent_id=" + i64(a2),
 		"/api/v1/devices/" + i64(d2) + "/interfaces",
 		"/api/v1/devices/" + i64(d2) + "/vpn",
+		"/api/v1/incidents?agent_id=" + i64(a2),
 	} {
 		if code, _ := getJSON(t, ts, p, saTok); code != http.StatusNotFound {
 			t.Errorf("çapraz-saha IDOR %s: 404 beklenirdi, %d", p, code)
@@ -111,11 +117,12 @@ func TestSiteLeak(t *testing.T) {
 	// koyduğu belirgin işaretçileri arıyoruz.)
 	dc2Markers := []string{
 		`"site":"dc2"`, "dc2-agent", "dc2-fw", "dc2.example.com", "dc2.example.net",
-		"dc2-proc", "dc2-sshd", "dc2 syslog", "192.168.2.1", "10.2.0.0/24",
+		"dc2-proc", "dc2-sshd", "dc2 syslog", "192.168.2.1", "10.2.0.0/24", "dc2-neden", "dc2 şüpheli",
 	}
 	bodyChecks := []string{
 		"/api/v1/agents", "/api/v1/devices", "/api/v1/flows", "/api/v1/flows/conversations", "/api/v1/syslog",
 		"/api/v1/topology", "/api/v1/geo", "/api/v1/l7", "/api/v1/dns", "/api/v1/processes", "/api/v1/events",
+		"/api/v1/incidents",
 		"/api/v1/users", "/api/v1/tokens", "/api/v1/enroll-tokens", "/api/v1/audit",
 	}
 	for _, p := range bodyChecks {

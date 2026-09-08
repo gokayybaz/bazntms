@@ -32,6 +32,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/devpoll"
 	"github.com/gokayybaz/bazntms/internal/flows"
 	"github.com/gokayybaz/bazntms/internal/geoip"
+	"github.com/gokayybaz/bazntms/internal/incident"
 	"github.com/gokayybaz/bazntms/internal/ioc"
 	"github.com/gokayybaz/bazntms/internal/logging"
 	"github.com/gokayybaz/bazntms/internal/metrics"
@@ -250,6 +251,14 @@ func main() {
 		alerts.SetLeaderCheck(leaderAlerts.IsLeader)
 		alerts.Start()
 		defer alerts.Stop()
+
+		// Faz 24-B: olay korelasyon motoru — aynı lider (uyarı değerlendirmesiyle
+		// eş rol). Config uyarı config'inin "incident" bölümünden okunur.
+		incEngine := incident.New(st, func() incident.Config { return alerts.Config().Incident })
+		incEngine.SetLeaderCheck(leaderAlerts.IsLeader)
+		incEngine.SetNotifier(alerts.NotifyIncident)
+		incEngine.Start()
+		defer incEngine.Stop()
 	} else {
 		slog.Info("uyari motoru kapali (coklu replika ingest modu)")
 	}

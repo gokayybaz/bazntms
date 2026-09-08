@@ -31,16 +31,19 @@ type AlertEvent struct {
 	Note       string `json:"note,omitempty"`
 	GroupID    string `json:"group_id,omitempty"`
 	ExtRef     string `json:"ext_ref,omitempty"`
+	// AgentID, olayın atfedildiği agent (Faz 24-B korelasyon — 0018). 0 =
+	// agent'a bağlı değil (hub-yerel kural, cihaz kuralı, vb.).
+	AgentID int64 `json:"agent_id,omitempty"`
 }
 
 const alertEventCols = `id, ts, kind, key, message, severity, state, site, count,
-	first_ts, last_ts, resolved_ts, ack_by, ack_ts, note, group_id, ext_ref`
+	first_ts, last_ts, resolved_ts, ack_by, ack_ts, note, group_id, ext_ref, agent_id`
 
 func scanAlertEvent(sc interface{ Scan(...any) error }) (AlertEvent, error) {
 	var e AlertEvent
 	err := sc.Scan(&e.ID, &e.Ts, &e.Kind, &e.Key, &e.Message, &e.Severity, &e.State,
 		&e.Site, &e.Count, &e.FirstTs, &e.LastTs, &e.ResolvedTs, &e.AckBy, &e.AckTs,
-		&e.Note, &e.GroupID, &e.ExtRef)
+		&e.Note, &e.GroupID, &e.ExtRef, &e.AgentID)
 	return e, err
 }
 
@@ -62,10 +65,10 @@ func (s *sqlStore) InsertAlertEvent(e AlertEvent) (int64, error) {
 	}
 	var id int64
 	err := s.db.QueryRow(s.q(`INSERT INTO alert_events
-		(ts, kind, key, message, severity, state, site, count, first_ts, last_ts, group_id)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		(ts, kind, key, message, severity, state, site, count, first_ts, last_ts, group_id, agent_id)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
 		e.Ts, e.Kind, e.Key, e.Message, e.Severity, e.State, e.Site, e.Count,
-		e.FirstTs, e.LastTs, e.GroupID).Scan(&id)
+		e.FirstTs, e.LastTs, e.GroupID, e.AgentID).Scan(&id)
 	return id, err
 }
 
@@ -120,6 +123,13 @@ func (s *sqlStore) OpenAlertEventsByKind(kind string) ([]AlertEvent, error) {
 func (s *sqlStore) OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error) {
 	return s.queryAlertEvents(`SELECT `+alertEventCols+` FROM alert_events
 		WHERE state IN ('firing','ack') AND site = ? AND last_ts >= ? ORDER BY id`, site, since)
+}
+
+// AlertEventsSince, last_ts >= since olan tüm olayları (her durumda) döndürür —
+// Faz 24-B incident korelasyon motoru penceresi.
+func (s *sqlStore) AlertEventsSince(since int64) ([]AlertEvent, error) {
+	return s.queryAlertEvents(`SELECT `+alertEventCols+` FROM alert_events
+		WHERE last_ts >= ? ORDER BY last_ts ASC`, since)
 }
 
 // SetAlertEventGroup, bir olayın korelasyon grubunu atar (S22.9).

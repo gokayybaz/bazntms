@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/incident"
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
@@ -158,6 +159,9 @@ func NormalizeConfig(cfg Config) Config {
 	}
 	if cfg.Iface == (IfaceConfig{}) { // Faz 23-C öncesi config → varsayılan
 		cfg.Iface = DefaultIfaceConfig()
+	}
+	if cfg.Incident == (incident.Config{}) { // Faz 24-B öncesi config → varsayılan
+		cfg.Incident = incident.DefaultConfig()
 	}
 	if cfg.AutoResolveMin == 0 { // S22.8 öncesi config → otomatik çözülme varsayılanı
 		cfg.AutoResolveMin = 15

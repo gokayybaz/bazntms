@@ -443,6 +443,48 @@ paths:
         "200":
           description: "{ events: [{type,source,ts,agent_id,device,process,pid,src_ip,src_port,dst_ip,dst_port,proto,domain,severity,count}], next }"
         "404": { description: agent site kapsamı dışında }
+  /api/v1/incidents:
+    get:
+      tags: [alerts]
+      summary: Olay (incident) listesi — korele uyarı kümeleri (Faz 24-B)
+      description: >
+        internal/incident deterministik korelasyon motoru (5 kural, LLM yok).
+        RBAC site scope. status="open" özel: open+investigating.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, investigating, resolved, closed] }
+        - name: severity
+          in: query
+          schema: { type: string, enum: [info, warn, crit] }
+        - name: agent_id
+          in: query
+          schema: { type: integer }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200": { description: "{ incidents: [{id,title,severity,status,agent_id,correlation_reason,risk_score,first_seen,last_seen,...}] }" }
+  /api/v1/incidents/{id}:
+    get:
+      tags: [alerts]
+      summary: Olay detayı + kronolojik kanıt zaman çizelgesi
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: "{ incident, evidence: [{kind,ref,ts,summary}] }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/incidents/{id}/{action}:
+    post:
+      tags: [alerts]
+      summary: Olay durum eylemi (ack | investigate | resolve | close) — denetimli
+      parameters:
+        - { $ref: "#/components/parameters/idPath" }
+        - name: action
+          in: path
+          required: true
+          schema: { type: string, enum: [ack, investigate, resolve, close] }
+      responses:
+        "200": { description: "{ ok: true, status }" }
+        "400": { description: geçersiz eylem }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/enrich:
     get:
       tags: [fleet]

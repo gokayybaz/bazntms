@@ -69,9 +69,10 @@ func (m *Manager) checkIOC(cfg Config) {
 		if rule != "" && rule != s.Domain {
 			match = fmt.Sprintf("%s (kural: %s)", s.Domain, rule)
 		}
-		m.fire("ioc",
+		m.fireCtx("ioc",
 			fmt.Sprintf("%d|%s", s.AgentID, s.Domain),
 			fmt.Sprintf("IOC eşleşmesi: %s — agent %s, süreç %s, kaynak %s",
-				match, s.AgentName, proc, src))
+				match, s.AgentName, proc, src),
+			fireOpts{AgentID: s.AgentID})
 	}
 }

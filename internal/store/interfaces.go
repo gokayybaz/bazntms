@@ -25,6 +25,21 @@ type Store interface {
 	ClusterStore
 	SchedulerStore
 	EventStore
+	IncidentStore
+}
+
+// IncidentStore, olay korelasyonu (Faz 24-B) — internal/incident.Engine
+// lider-kapılı yazar; UI/rapor okur.
+type IncidentStore interface {
+	OpenIncidentByCorrelation(key string) (*Incident, error)
+	CreateIncident(in Incident) (int64, error)
+	BumpIncident(id, lastSeen int64, severity string, riskScore int, reason, summary string) error
+	AddIncidentEvidence(incidentID int64, ev IncidentEvidence) error
+	ListIncidents(f IncidentFilter) ([]Incident, error)
+	IncidentByID(id int64) (*Incident, []IncidentEvidence, error)
+	SetIncidentStatus(id int64, status, by string, ts int64) error
+	SetIncidentExtRef(id int64, ref string) error
+	RecentOpenIncidents(since time.Time) ([]Incident, error)
 }
 
 // EventStore, normalleştirilmiş olay akışı (Faz 24-A) — kaynak tabloların
@@ -112,6 +127,7 @@ type AlertStore interface {
 	OpenAlertEventsByKind(kind string) ([]AlertEvent, error)
 	// korelasyon (S22.9)
 	OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error)
+	AlertEventsSince(since int64) ([]AlertEvent, error) // Faz 24-B korelasyon
 	SetAlertEventGroup(id int64, groupID string) error
 	// bilet entegrasyonu (S22.14)
 	SetAlertEventExtRef(id int64, ref string) error

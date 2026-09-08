@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/capture"
+	"github.com/gokayybaz/bazntms/internal/incident"
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/sysmon"
 )
@@ -34,10 +35,11 @@ type Config struct {
 	Ports     PortsConfig      `json:"ports"`
 	NewProc   ProcConfig       `json:"new_proc"`
 	NewTarget TargetConfig     `json:"new_target"`
-	Anomaly   AnomalyConfig    `json:"anomaly"` // Faz 6.2: istatistiksel baseline
-	Forti     FortiAlertConfig `json:"forti"`   // Faz 8.5: vpn/sdwan/oturum eşikleri
-	IOC       IOCConfig        `json:"ioc"`     // Faz 6.6: tehdit istihbaratı domain eşleştirmesi
-	Iface     IfaceConfig      `json:"iface"`   // Faz 23-C: SNMP arayüz kullanım eşiği
+	Anomaly   AnomalyConfig    `json:"anomaly"`  // Faz 6.2: istatistiksel baseline
+	Forti     FortiAlertConfig `json:"forti"`    // Faz 8.5: vpn/sdwan/oturum eşikleri
+	IOC       IOCConfig        `json:"ioc"`      // Faz 6.6: tehdit istihbaratı domain eşleştirmesi
+	Iface     IfaceConfig      `json:"iface"`    // Faz 23-C: SNMP arayüz kullanım eşiği
+	Incident  incident.Config  `json:"incident"` // Faz 24-B: olay korelasyon motoru
 
 	// Severities, eşik-tabanlı uyarı türleri için operatör önem geçersiz
 	// kılması (S22.7): kind → "info"|"warn"|"crit". Anahtar yoksa kindSeverity
@@ -206,6 +208,7 @@ func DefaultConfig() Config {
 		Forti:     DefaultFortiAlertConfig(),
 		IOC:       DefaultIOCConfig(),
 		Iface:     DefaultIfaceConfig(),
+		Incident:  incident.DefaultConfig(),
 		Notifiers: Notifiers{Desktop: true},
 	}
 }
@@ -546,7 +549,7 @@ func (m *Manager) checkAgentPorts(cfg Config, agents []store.AgentWithRates) {
 			}
 			m.fireCtx("port", a.Name+":"+fmt.Sprint(port),
 				fmt.Sprintf("Şüpheli porta bağlantı — agent %s: uzak %s (%s) — yerel %s", a.Name, c.RemoteAddr, c.Process, c.LocalAddr),
-				fireOpts{Site: a.Site})
+				fireOpts{Site: a.Site, AgentID: a.ID})
 		}
 	}
 }
@@ -592,7 +595,7 @@ func (m *Manager) checkAgentNewProcess(cfg Config, agents []store.AgentWithRates
 			m.markSeen(seenKind, c.Process)
 			m.fireCtx("proc", a.Name+":"+c.Process,
 				fmt.Sprintf("Yeni süreç ağa çıktı — agent %s: %s (pid %d)", a.Name, c.Process, c.PID),
-				fireOpts{Site: a.Site})
+				fireOpts{Site: a.Site, AgentID: a.ID})
 		}
 	}
 }
@@ -632,7 +635,7 @@ func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates)
 			if c.in == need {
 				m.fireCtx("bw", "agent-in:"+a.Name,
 					fmt.Sprintf("Agent %s: indirme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, inMbps),
-					fireOpts{Site: a.Site})
+					fireOpts{Site: a.Site, AgentID: a.ID})
 			}
 		} else {
 			c.in = 0
@@ -642,7 +645,7 @@ func (m *Manager) checkAgentBandwidth(cfg Config, agents []store.AgentWithRates)
 			if c.out == need {
 				m.fireCtx("bw", "agent-out:"+a.Name,
 					fmt.Sprintf("Agent %s: gönderme hızı %d ardışık kontrolde eşik üzerinde: %.1f Mbps", a.Name, need, outMbps),
-					fireOpts{Site: a.Site})
+					fireOpts{Site: a.Site, AgentID: a.ID})
 			}
 		} else {
 			c.out = 0
@@ -668,6 +671,7 @@ func (m *Manager) markSeen(kind, key string) {
 type fireOpts struct {
 	Site     string
 	Severity string // "" → severityForKind(kind)
+	AgentID  int64  // Faz 24-B korelasyon — 0 = agent'a bağlı değil
 }
 
 // kindSeverity, uyarı türü → varsayılan önem (S22.6). S22.7 z-büyüklüğüne göre
@@ -743,7 +747,7 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	}
 	ev := store.AlertEvent{
 		Ts: now, Kind: kind, Key: key, Message: message,
-		Severity: sev, State: "firing", Site: opt.Site,
+		Severity: sev, State: "firing", Site: opt.Site, AgentID: opt.AgentID,
 		Count: 1, FirstTs: now, LastTs: now,
 		GroupID: m.correlate(cfg, opt.Site, now),
 	}
@@ -924,6 +928,33 @@ func (m *Manager) DeleteSilence(id int64) error {
 	err := m.st.DeleteAlertSilence(id)
 	m.RefreshSilences()
 	return err
+}
+
+// NotifyIncident, incident motorunun (Faz 24-B) açtığı / önemi yükselen bir
+// olayı mevcut bildirim kanallarından duyurur (sentetik bir AlertEvent'e
+// çevirerek — masaüstü/Telegram/Slack/webhook/SIEM aynı yol). isNew=false →
+// "önem yükseldi" ön eki. Bilet (Jira/ServiceNow) entegrasyonu şimdilik yok.
+func (m *Manager) NotifyIncident(in store.Incident, isNew bool) {
+	m.mu.Lock()
+	cfg := m.cfg
+	n := m.notifier
+	m.mu.Unlock()
+	if n == nil {
+		return
+	}
+	prefix := "OLAY"
+	if !isNew {
+		prefix = "OLAY (önem yükseldi)"
+	}
+	ev := store.AlertEvent{
+		ID: in.ID, Ts: in.LastSeen, Kind: "incident",
+		Key:      in.CorrelationKey,
+		Message:  fmt.Sprintf("%s #%d [risk %d]: %s — %s", prefix, in.ID, in.RiskScore, in.Title, in.CorrelationReason),
+		Severity: in.Severity, State: "firing", Site: in.Site, AgentID: in.AgentID,
+		Count: 1, FirstTs: in.FirstSeen, LastTs: in.LastSeen,
+		GroupID: fmt.Sprintf("incident-%d", in.ID),
+	}
+	n.Deliver(cfg.Notifiers, cfg.NotifyRoutes, ev)
 }
 
 // --- config erisimi (server icin) ---
