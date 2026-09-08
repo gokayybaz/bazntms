@@ -28,6 +28,9 @@ web/dist/*
 *.log
 .DS_Store
 
+# hub calisma zamani: GitHubSyncer'in yazdigi update kanali manifesti
+/updates/
+
 # kimlik kasasi master key (gizli, makineye ozel)
 /vault.key
 

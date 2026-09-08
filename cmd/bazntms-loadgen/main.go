@@ -37,6 +37,11 @@ type stats struct {
 	enrolled atomic.Int64
 	hist     [9]atomic.Int64 // ms siniflari: 5,10,25,50,100,250,500,1000,1000+
 	start    time.Time
+
+	// flow modu sayaçları (S21.1)
+	flowDatagrams atomic.Int64
+	flowRecords   atomic.Int64
+	flowErrors    atomic.Int64
 }
 
 var buckets = []int64{5, 10, 25, 50, 100, 250, 500, 1000}
@@ -73,11 +78,19 @@ func (s *stats) percentile(p float64) int64 {
 }
 
 func (s *stats) report(elapsed time.Duration) {
-	sent := s.sent.Load()
-	rps := float64(sent) / elapsed.Seconds()
-	fmt.Printf("[%6s] gonderilen=%d hata=%d rps=%.1f p50<=%dms p95<=%dms p99<=%dms\n",
-		elapsed.Round(time.Second), sent, s.failed.Load(), rps,
-		s.percentile(0.50), s.percentile(0.95), s.percentile(0.99))
+	secs := elapsed.Seconds()
+	if secs <= 0 {
+		secs = 1
+	}
+	if sent := s.sent.Load(); sent > 0 || s.enrolled.Load() > 0 {
+		fmt.Printf("[%6s] agent: gonderilen=%d hata=%d rps=%.1f p50<=%dms p95<=%dms p99<=%dms\n",
+			elapsed.Round(time.Second), sent, s.failed.Load(), float64(sent)/secs,
+			s.percentile(0.50), s.percentile(0.95), s.percentile(0.99))
+	}
+	if fr := s.flowRecords.Load(); fr > 0 {
+		fmt.Printf("[%6s] flow:  datagram=%d kayit=%d hata=%d rate=%.0f flow/sn\n",
+			elapsed.Round(time.Second), s.flowDatagrams.Load(), fr, s.flowErrors.Load(), float64(fr)/secs)
+	}
 }
 
 var (
@@ -89,17 +102,32 @@ var (
 
 func main() {
 	fl := flag.NewFlagSet("bazntms-loadgen", flag.ExitOnError)
+	mode := fl.String("mode", "agent", "yük türü: agent | flow | mixed")
 	hub := fl.String("hub", "http://localhost:8080", "hub adresi")
-	enroll := fl.String("token", "", "enrollment token'i (zorunlu)")
+	enroll := fl.String("token", "", "enrollment token'i (mode=agent|mixed için zorunlu)")
 	agents := fl.Int("agents", 100, "sanal agent sayisi")
 	interval := fl.Int("interval", 30, "telemetri araligi (saniye)")
 	duration := fl.Duration("duration", 0, "test suresi (0 = Ctrl+C'ye kadar)")
 	spread := fl.Duration("spread", 30*time.Second, "agent baslangic rampasi (thundering herd onleme)")
 	site := fl.String("site", "loadgen", "sanal agent site adi")
+
+	// flow modu (S21.1) — sentetik NetFlow v5/v9 + IPFIX + sFlow UDP üreteci
+	flowTarget := fl.String("flow-target", "127.0.0.1:2055", "flow collector UDP adresi (mode=flow|mixed)")
+	flowRate := fl.Int("flow-rate", 10000, "sürekli flow kaydı/sn")
+	flowBurst := fl.Int("flow-burst", 0, "patlama flow kaydı/sn (0 = patlama yok)")
+	flowBurstAfter := fl.Duration("flow-burst-after", 2*time.Minute, "patlamanın test başından itibaren gecikmesi")
+	flowBurstFor := fl.Duration("flow-burst-for", 5*time.Minute, "patlama süresi")
+	flowExporters := fl.Int("flow-exporters", 8, "sahte exporter (cihaz) sayısı — şablon önbelleği çeşitliliği")
+	flowProto := fl.String("flow-proto", "mix", "datagram türü: v5 | v9 | ipfix | sflow | mix")
 	_ = fl.Parse(os.Args[1:])
 
-	if *enroll == "" {
+	needToken := *mode == "agent" || *mode == "mixed"
+	if needToken && *enroll == "" {
 		fmt.Fprintln(os.Stderr, "-token zorunlu (hub'in logladigi enroll token)")
+		os.Exit(1)
+	}
+	if *mode != "agent" && *mode != "flow" && *mode != "mixed" {
+		fmt.Fprintf(os.Stderr, "bilinmeyen -mode: %q (agent|flow|mixed)\n", *mode)
 		os.Exit(1)
 	}
 
@@ -111,34 +139,76 @@ func main() {
 		defer cancel()
 	}
 
+	st := &stats{start: time.Now()}
+	var wg sync.WaitGroup
+
+	if *mode == "agent" || *mode == "mixed" {
+		fmt.Printf("loadgen agent: %d agent, %v aralik, %v rampa → %s\n",
+			*agents, time.Duration(*interval)*time.Second, *spread, *hub)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runAgentFleet(ctx, agentFleetConfig{
+				hub: *hub, token: *enroll, site: *site,
+				agents: *agents, interval: *interval, spread: *spread,
+			}, st)
+		}()
+	}
+	if *mode == "flow" || *mode == "mixed" {
+		fmt.Printf("loadgen flow: %d flow/sn (%s), %d exporter → %s\n",
+			*flowRate, *flowProto, *flowExporters, *flowTarget)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runFlowGen(ctx, flowGenConfig{
+				target: *flowTarget, proto: *flowProto,
+				rate: *flowRate, burst: *flowBurst,
+				burstAfter: *flowBurstAfter, burstFor: *flowBurstFor,
+				exporters: *flowExporters,
+			}, st)
+		}()
+	}
+
+	reportLoop(ctx, st, &wg)
+}
+
+// agentFleetConfig, sanal agent filosu parametreleri.
+type agentFleetConfig struct {
+	hub, token, site string
+	agents, interval int
+	spread           time.Duration
+}
+
+// runAgentFleet, N sanal agent'ı rampayla başlatır ve wg üzerinden tamamlanmayı
+// bekler (her agent kendi telemetri döngüsünü ctx bitene dek sürdürür).
+func runAgentFleet(ctx context.Context, cfg agentFleetConfig, st *stats) {
 	client := &http.Client{Transport: &http.Transport{
 		MaxIdleConns:        1024,
 		MaxIdleConnsPerHost: 1024,
 		IdleConnTimeout:     90 * time.Second,
 	}}
-
-	st := &stats{start: time.Now()}
-	fmt.Printf("loadgen basladi: %d agent, %v aralik, %v rampa → %s\n",
-		*agents, time.Duration(*interval)*time.Second, *spread, *hub)
-
 	var wg sync.WaitGroup
-	for i := 0; i < *agents; i++ {
+	for i := 0; i < cfg.agents; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			// rampa: agent'lari yayarak baslat
-			delay := time.Duration(float64(idx) / float64(*agents) * float64(*spread))
+			delay := time.Duration(float64(idx) / float64(cfg.agents) * float64(cfg.spread))
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(delay):
 			}
-			runAgent(ctx, client, *hub, *enroll, *site, idx, *interval, st)
+			runAgent(ctx, client, cfg.hub, cfg.token, cfg.site, idx, cfg.interval, st)
 		}(i)
 	}
+	wg.Wait()
+}
 
-	// periyodik rapor
+// reportLoop, 5 sn'de bir istatistik basar; tüm iş bitince veya ctx iptal
+// edilince son bir özet basıp döner.
+func reportLoop(ctx context.Context, st *stats, wg *sync.WaitGroup) {
 	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -149,7 +219,7 @@ func main() {
 		case <-ticker.C:
 			st.report(time.Since(st.start))
 		case <-done:
-			fmt.Println("tum agent'lar tamamlandi")
+			fmt.Println("tamamlandi")
 			st.report(time.Since(st.start))
 			return
 		case <-ctx.Done():

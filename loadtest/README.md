@@ -9,7 +9,11 @@ Kapasite hedefleri (`docs/enterprise-plan.html` → "Kapasite Hedefleri"):
 | Flow işleme | ≥50.000 flow/sn sürekli; 200K flow/sn 5 dk kayıpsız (NATS buffer) |
 | Depolama | ham 7g → 1dk 90g → 1sa 2y; panel sorgusu p95 < 1 sn |
 
-## Sentetik Agent Filosu (birincil araç)
+## `bazntms-loadgen` (birincil araç)
+
+`-mode` ile üç yük türü: `agent` (varsayılan), `flow`, `mixed` (ikisi birden).
+
+### Agent telemetri filosu
 
 Gerçek agent protokolünü (hello/telemetry JSON) birebir oynatır:
 
@@ -23,6 +27,25 @@ go run ./cmd/bazntms-loadgen -hub http://localhost:8080 \
 ```
 
 Çıktı: 5 saniyede bir `rps`, `p50/p95/p99` gecikme özeti.
+
+### Flow üreteci (S21.1)
+
+Sentetik NetFlow v5/v9 + IPFIX + sFlow v5 datagramları — hub'ın `-flow-port`
+dinleyicisine. Her sahte exporter tek protokole bağlı; v9/IPFIX şablonları
+periyodik yenilenir.
+
+```bash
+# sürekli 50k flow/sn, 8 exporter, karışık protokol
+go run ./cmd/bazntms-loadgen -mode flow \
+  -flow-target 127.0.0.1:2055 -flow-rate 50000 -flow-proto mix -flow-exporters 8
+
+# taban 20k, 4. dakikada 5 dk boyunca 200k patlama
+go run ./cmd/bazntms-loadgen -mode flow -flow-target 127.0.0.1:2055 \
+  -flow-rate 20000 -flow-burst 200000 -flow-burst-after 4m -flow-burst-for 5m -duration 15m
+```
+
+Doğrulama: hub `/metrics` → `bazntms_flows_received_total{version}` hızı
+`-flow-rate`'e eşit, `bazntms_flows_dropped_total` == 0.
 
 ## k6 Senaryosu (alternatif)
 
