@@ -167,6 +167,106 @@ func TestEnrollTokenExpiredRejected(t *testing.T) {
 	}
 }
 
+// TestEnrollTokenHardening (Faz 25-D): max_uses tükenmesi → 409, allowed_cidrs
+// uyumsuzluğu → 403, varsayılan 1 gün son kullanma, enroll_token.used denetim.
+func TestEnrollTokenHardening(t *testing.T) {
+	ts, _, st := newRBACServerEx(t, "admin-pass-1", "", false)
+	_, out := postJSON(t, ts, "/api/login", "", map[string]string{"password": "admin-pass-1"})
+	adminTok, _ := out["token"].(string)
+
+	// max_uses=1 (varsayılan): ilk enroll 200, ikinci 409
+	_, out = postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{"name": "tek-kullanim"})
+	plain, _ := out["token"].(string)
+
+	// varsayılan son kullanma ~1 gün sonra
+	toks, _ := st.ListEnrollTokens()
+	var tk store.EnrollToken
+	for _, x := range toks {
+		if x.Name == "tek-kullanim" {
+			tk = x
+		}
+	}
+	if tk.MaxUses != 1 {
+		t.Fatalf("varsayılan max_uses 1 olmalı: %d", tk.MaxUses)
+	}
+	if d := time.Until(time.Unix(tk.ExpiresAt, 0)); d < 22*time.Hour || d > 26*time.Hour {
+		t.Fatalf("varsayılan son kullanma ~1 gün olmalı: %v", d)
+	}
+	if tk.CreatedBy != "admin" {
+		t.Fatalf("created_by 'admin' olmalı: %q", tk.CreatedBy)
+	}
+
+	if r1 := helloReq(t, ts, plain, "agent-1"); r1.StatusCode != http.StatusOK {
+		r1.Body.Close()
+		t.Fatalf("ilk enroll 200 beklenirdi: %d", r1.StatusCode)
+	} else {
+		r1.Body.Close()
+	}
+	r2 := helloReq(t, ts, plain, "agent-2")
+	r2.Body.Close()
+	if r2.StatusCode != http.StatusConflict {
+		t.Fatalf("max_uses dolmuş → 409 beklenirdi: %d", r2.StatusCode)
+	}
+
+	// allowed_cidrs: loopback dışı bir aralık → 403
+	_, out = postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{
+		"name": "cidr-kisitli", "allowed_cidrs": "10.0.0.0/8", "max_uses": 0,
+	})
+	cidrTok, _ := out["token"].(string)
+	r3 := helloReq(t, ts, cidrTok, "cidr-agent")
+	r3.Body.Close()
+	if r3.StatusCode != http.StatusForbidden {
+		t.Fatalf("CIDR uyumsuz → 403 beklenirdi: %d", r3.StatusCode)
+	}
+
+	// eşleşen CIDR (loopback) → 200
+	_, out = postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{
+		"name": "cidr-ok", "allowed_cidrs": "127.0.0.0/8, ::1/128", "max_uses": 0,
+	})
+	okTok, _ := out["token"].(string)
+	r4 := helloReq(t, ts, okTok, "cidr-ok-agent")
+	r4.Body.Close()
+	if r4.StatusCode != http.StatusOK {
+		t.Fatalf("eşleşen CIDR → 200 beklenirdi: %d", r4.StatusCode)
+	}
+
+	// geçersiz CIDR → 400
+	if status, _ := postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{
+		"name": "bozuk", "allowed_cidrs": "not-a-cidr",
+	}); status != http.StatusBadRequest {
+		t.Fatalf("geçersiz CIDR → 400 beklenirdi: %d", status)
+	}
+
+	// enroll_token.used denetim kaydı yazıldı
+	auds, _ := st.RecentAuditEvents(50, "")
+	used := false
+	for _, a := range auds {
+		if a.Action == "enroll_token.used" {
+			used = true
+			if a.ActorType != "enroll" {
+				t.Errorf("enroll_token.used actor_type='enroll' olmalı: %q", a.ActorType)
+			}
+		}
+	}
+	if !used {
+		t.Fatal("enroll_token.used denetim kaydı yok")
+	}
+}
+
+// TestEnrollTokenNeverExpires, expires_in_days=-1 → süresiz.
+func TestEnrollTokenNeverExpires(t *testing.T) {
+	ts, _, st := newRBACServerEx(t, "admin-pass-1", "", false)
+	_, out := postJSON(t, ts, "/api/login", "", map[string]string{"password": "admin-pass-1"})
+	adminTok, _ := out["token"].(string)
+	postJSON(t, ts, "/api/v1/enroll-tokens", adminTok, map[string]any{"name": "kalici", "expires_in_days": -1})
+	toks, _ := st.ListEnrollTokens()
+	for _, x := range toks {
+		if x.Name == "kalici" && x.ExpiresAt != 0 {
+			t.Fatalf("expires_in_days=-1 → süresiz (0) olmalı: %d", x.ExpiresAt)
+		}
+	}
+}
+
 // TestEnrollTokenSiteBinding (A3 / S12.7): site-kapsamli DB token ile enroll
 // olan agent, kendi -site beyanindan bagimsiz olarak token'in site'ina yazilir.
 // Statik token'da agent'in beyani gecerli kalir.

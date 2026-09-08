@@ -32,20 +32,58 @@ func TestEnrollTokenCRUD(t *testing.T) {
 		t.Fatalf("liste: %v %+v", err, list)
 	}
 
-	if err := st.TouchEnrollToken(id); err != nil {
-		t.Fatalf("touch: %v", err)
+	if ok, err := st.ConsumeEnrollToken(id); err != nil || !ok {
+		t.Fatalf("consume: ok=%v err=%v", ok, err)
 	}
 	tok, _ = st.EnrollTokenByHash(TokenHash("gizli-1"))
-	if tok.LastUsed == 0 {
-		t.Fatal("touch sonrasi last_used guncellenmeliydi")
+	if tok.LastUsed == 0 || tok.UsedCount != 1 {
+		t.Fatalf("consume sonrasi last_used + used_count guncellenmeliydi: %+v", tok)
 	}
 
 	if err := st.RevokeEnrollToken(id); err != nil {
 		t.Fatalf("iptal: %v", err)
 	}
 	tok, _ = st.EnrollTokenByHash(TokenHash("gizli-1"))
-	if !tok.Revoked {
-		t.Fatal("iptal sonrasi Revoked=true olmali")
+	if !tok.Revoked || tok.RevokedAt == 0 {
+		t.Fatalf("iptal sonrasi Revoked=true + RevokedAt set olmali: %+v", tok)
+	}
+	// iptal sonrası consume reddedilir
+	if ok, _ := st.ConsumeEnrollToken(id); ok {
+		t.Fatal("iptal edilmiş token consume edilememeli")
+	}
+}
+
+// TestConsumeEnrollTokenMaxUses, max_uses sınırının atomik sayaçla
+// zorlandığını doğrular (paralel çağrılar toplamda max_uses'ı aşamaz).
+func TestConsumeEnrollTokenMaxUses(t *testing.T) {
+	st := openTest(t)
+	id, err := st.CreateEnrollToken(EnrollToken{Name: "3-kullanim", TokenHash: TokenHash("mx-1"), MaxUses: 3})
+	if err != nil {
+		t.Fatalf("olusturma: %v", err)
+	}
+
+	granted := 0
+	for i := 0; i < 10; i++ {
+		if ok, err := st.ConsumeEnrollToken(id); err != nil {
+			t.Fatalf("consume: %v", err)
+		} else if ok {
+			granted++
+		}
+	}
+	if granted != 3 {
+		t.Fatalf("max_uses=3 → 3 kullanım beklenirdi, gerçekleşen %d", granted)
+	}
+	tok, _ := st.EnrollTokenByHash(TokenHash("mx-1"))
+	if tok.UsedCount != 3 {
+		t.Fatalf("used_count 3 olmalı: %d", tok.UsedCount)
+	}
+
+	// max_uses=0 → sınırsız
+	id2, _ := st.CreateEnrollToken(EnrollToken{Name: "sinirsiz", TokenHash: TokenHash("mx-0"), MaxUses: 0})
+	for i := 0; i < 5; i++ {
+		if ok, _ := st.ConsumeEnrollToken(id2); !ok {
+			t.Fatalf("max_uses=0 sınırsız olmalı, %d. çağrı reddedildi", i+1)
+		}
 	}
 }
 

@@ -240,7 +240,9 @@ paths:
                   protocol_version: { type: integer, description: "hub'ın konuştuğu protokol sürümü; agent bundan yeniyse degrade eder (S21.15)" }
                   client_cert_pem: { type: string }
                   ca_cert_pem: { type: string }
-        "401": { description: Geçersiz/iptal edilmiş enrollment token }
+        "401": { description: Geçersiz/iptal/süresi dolmuş enrollment token }
+        "403": { description: "Faz 25-D: token'ın allowed_cidrs listesi bu kaynak IP'yi kapsamıyor" }
+        "409": { description: "Faz 25-D: token'ın max_uses kullanım hakkı doldu" }
         "429": { $ref: "#/components/responses/RateLimited" }
   /api/v1/agent/cert:
     post:
@@ -1355,6 +1357,7 @@ paths:
     post:
       tags: [rbac]
       summary: Enrollment token oluştur — düz token yalnızca bir kez döner (yetki:admin)
+      description: "Faz 25-D sertleştirme — varsayılanlar güvenli: max_uses 1 (tek kullanım), geçerlilik 1 gün."
       requestBody:
         required: true
         content:
@@ -1365,9 +1368,18 @@ paths:
               properties:
                 name: { type: string }
                 site: { type: string }
-                expires_in_days: { type: integer }
+                expires_in_days:
+                  type: integer
+                  description: "0/atlanmış → 1 gün; -1 → süresiz; N>0 → N gün"
+                max_uses:
+                  type: integer
+                  description: "atlanmış → 1 (tek kullanım); 0 → sınırsız; N → en çok N enrollment"
+                allowed_cidrs:
+                  type: string
+                  description: "virgülle ayrılmış CIDR listesi; boş = her IP (soket peer'ine göre denetlenir)"
       responses:
         "200": { description: "{ ok, id, token: ent_... }" }
+        "400": { description: "Geçersiz CIDR / negatif max_uses / çoklu-saha modunda site eksik" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/enroll-tokens/{id}:
     delete:

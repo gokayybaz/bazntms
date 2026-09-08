@@ -253,7 +253,7 @@ type AuthStore interface {
 	EnrollTokenByHash(hash string) (*EnrollToken, error)
 	ListEnrollTokens() ([]EnrollToken, error)
 	RevokeEnrollToken(id int64) error
-	TouchEnrollToken(id int64) error
+	ConsumeEnrollToken(id int64) (bool, error) // Faz 25-D — atomik kullanım sayacı
 	InsertAuditEvent(e AuditEvent) (int64, error)
 	RecentAuditEvents(limit int, site string) ([]AuditEvent, error)
 	QueryAuditEvents(f AuditFilter) ([]AuditEvent, error) // Faz 25-C — süzgeçli

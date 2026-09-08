@@ -167,27 +167,59 @@ func (s *Server) agentFromClientCert(r *http.Request) *store.Agent {
 }
 
 // resolveEnrollToken, sunulan X-Enroll-Token'i dogrular ve token'a BAGLI
-// site'i dondurur (ok=false ise gecersiz/iptal/suresi dolmus). Kaynaklar:
+// site + (DB token ise) kaydi dondurur. `code` 0 → gecerli; aksi → HTTP
+// durum kodu (401 gecersiz/iptal/suresi dolmus, 403 CIDR uyumsuz). Kaynaklar:
 //   - hub'in TEK statik sirri (-enroll-token): sabit-zamanli karsilastirma;
 //     site "" — agent kendi hello.Site beyanini kullanir (bootstrap yolu)
 //   - DB enroll_tokens kaydi: hash arama; site doluysa o site BAGLAYICIDIR
-//     (A3 — agent istedigi site'i beyan edip filo icinde konum secemez)
-func (s *Server) resolveEnrollToken(presented string) (site string, ok bool) {
+//     (A3 — agent istedigi site'i beyan edip filo icinde konum secemez).
+//     max_uses TÜKETİMİ burada YAPILMAZ — cagiran tum dogrulamalar gecince
+//     ConsumeEnrollToken ile atomik sayar (Faz 25-D).
+func (s *Server) resolveEnrollToken(r *http.Request, presented string) (site string, tok *store.EnrollToken, code int, msg string) {
 	if presented == "" {
-		return "", false
+		return "", nil, http.StatusUnauthorized, "geçersiz enrollment token"
 	}
 	if subtle.ConstantTimeCompare([]byte(presented), []byte(s.enrollToken)) == 1 {
-		return "", true
+		return "", nil, 0, ""
 	}
 	t, err := s.store.EnrollTokenByHash(store.TokenHash(presented))
 	if err != nil || t.Revoked {
-		return "", false
+		return "", nil, http.StatusUnauthorized, "geçersiz enrollment token"
 	}
 	if t.ExpiresAt > 0 && time.Now().Unix() > t.ExpiresAt {
-		return "", false
+		return "", nil, http.StatusUnauthorized, "enrollment token süresi doldu"
 	}
-	go func() { _ = s.store.TouchEnrollToken(t.ID) }() // best-effort, akisi bloklamaz
-	return t.Site, true
+	if !cidrAllows(t.AllowedCIDRs, clientIP(r)) {
+		return "", nil, http.StatusForbidden, "bu ağdan enrollment'a izin yok"
+	}
+	if t.MaxUses > 0 && t.UsedCount >= t.MaxUses {
+		return "", nil, http.StatusConflict, "enrollment token kullanım hakkı doldu"
+	}
+	return t.Site, t, 0, ""
+}
+
+// cidrAllows, izin listesi bossa true; degilse ip parcalardan en az birine
+// dusuyorsa true. Bozuk parcalar yok sayilir (bos liste degil).
+func cidrAllows(list, ip string) bool {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return true
+	}
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return false
+	}
+	for _, part := range strings.Split(list, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		_, netw, err := net.ParseCIDR(part)
+		if err == nil && netw.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func unauthorized(w http.ResponseWriter, msg string) {
@@ -211,10 +243,12 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"error": "çok fazla başarısız enrollment denemesi, bir dakika bekleyin"})
 		return
 	}
-	tokenSite, ok := s.resolveEnrollToken(r.Header.Get("X-Enroll-Token"))
-	if !ok {
+	tokenSite, enrollTok, code, msg := s.resolveEnrollToken(r, r.Header.Get("X-Enroll-Token"))
+	if code != 0 {
 		s.enrollAttempts.recordFailure(ip)
-		unauthorized(w, "geçersiz enrollment token")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(map[string]any{"error": msg})
 		return
 	}
 	// S14.B1: çoklu-saha modunda site sert bir yetki sınırıdır — site'siz
@@ -234,6 +268,22 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 	if hello.Name == "" {
 		http.Error(w, "name zorunlu", http.StatusBadRequest)
 		return
+	}
+	// Faz 25-D: tüm doğrulamalar geçti — DB token'ının kullanım hakkını
+	// atomik tüket (yarış güvenli). Statik token (enrollTok == nil) sayılmaz.
+	if enrollTok != nil {
+		okc, err := s.store.ConsumeEnrollToken(enrollTok.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !okc {
+			s.enrollAttempts.recordFailure(ip)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "enrollment token kullanım hakkı doldu"})
+			return
+		}
 	}
 	// Protokol sürümü hub'dan yeniyse: sert reddetmek yerine (S21.15) hub
 	// eskisini dayatır. Telgraf JSON ileri/geri uyumlu (omitempty + bilinmeyen
@@ -296,6 +346,14 @@ func (s *Server) handleAgentHello(w http.ResponseWriter, r *http.Request) {
 	slog.Info("agent enroll edildi", "agent_id", id, "name", hello.Name,
 		"site", site, "site_token_bagli", tokenSite != "", "ip", displayIP,
 		"mtls", reply.ClientCertPEM != "", "kayit_yeniden_kullanildi", reused)
+	if enrollTok != nil {
+		detail := fmt.Sprintf("agent:%s (id:%d)", hello.Name, id)
+		if enrollTok.MaxUses > 0 {
+			detail += fmt.Sprintf(" · kalan hak %d", enrollTok.MaxUses-enrollTok.UsedCount-1)
+		}
+		s.audit(r, &Identity{Username: "enroll:" + enrollTok.Name, Kind: "enroll"},
+			"enroll_token.used", "enroll_token:"+strconv.FormatInt(enrollTok.ID, 10), detail)
+	}
 	writeJSON(w, reply)
 }
 

@@ -11,6 +11,10 @@ interface EnrollToken {
   expires_at: number
   last_used: number
   revoked: boolean
+  max_uses: number
+  used_count: number
+  allowed_cidrs: string
+  created_by: string
 }
 
 const REVOKE_CONFIRM_MS = 4000
@@ -37,8 +41,15 @@ export function EnrollWizard({
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
 
-  // sihirbaz
-  const [form, setForm] = useState({ name: '', site: lockedSite, expires_in_days: 0 })
+  // sihirbaz — expires_in_days: 1 gün varsayılan (0 da sunucuda 1 güne eşit,
+  // -1 = süresiz); max_uses: 1 = tek kullanım, 0 = sınırsız
+  const [form, setForm] = useState({
+    name: '',
+    site: lockedSite,
+    expires_in_days: 1,
+    max_uses: 1,
+    allowed_cidrs: '',
+  })
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState<{ token: string; site: string } | null>(null)
   const [osId, setOsId] = useState(OS_OPTIONS[0].id)
@@ -90,7 +101,7 @@ export function EnrollWizard({
       }
       const data = await res.json()
       setGenerated({ token: data.token, site: form.site })
-      setForm({ name: '', site: lockedSite, expires_in_days: 0 })
+      setForm({ name: '', site: lockedSite, expires_in_days: 1, max_uses: 1, allowed_cidrs: '' })
       await load()
     } finally {
       setGenerating(false)
@@ -134,39 +145,61 @@ export function EnrollWizard({
       {/* --- adım 1: token üret --- */}
       <div className="space-y-2">
         <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-rx">1 · Enrollment token’ı üret</p>
-        <div className="grid grid-cols-1 gap-2 border border-rule bg-panel-2/40 p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
-          <input
-            className={inputCls}
-            placeholder="ad (ör. ofis-linux, k8s-daemonset)"
-            autoComplete="off"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <input
-            className={inputCls}
-            placeholder={
-              lockedSite
-                ? 'site'
-                : multiSite
-                  ? 'site (zorunlu)'
-                  : 'site (boş = agent kendi beyan eder)'
-            }
-            title={lockedSite ? 'sahanıza sabit' : undefined}
-            readOnly={!!lockedSite}
-            value={form.site}
-            onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-          />
-          <label className="flex items-center gap-1.5 text-xs text-tui-dim">
-            geçerlilik
+        <div className="space-y-2 border border-rule bg-panel-2/40 p-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input
-              type="number"
-              min={0}
-              value={form.expires_in_days}
-              onChange={(e) => setForm((f) => ({ ...f, expires_in_days: Math.max(0, +e.target.value || 0) }))}
-              className={inputCls + ' !w-16'}
+              className={inputCls}
+              placeholder="ad (ör. ofis-linux, k8s-daemonset)"
+              autoComplete="off"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
-            gün (0=süresiz)
-          </label>
+            <input
+              className={inputCls}
+              placeholder={
+                lockedSite
+                  ? 'site'
+                  : multiSite
+                    ? 'site (zorunlu)'
+                    : 'site (boş = agent kendi beyan eder)'
+              }
+              title={lockedSite ? 'sahanıza sabit' : undefined}
+              readOnly={!!lockedSite}
+              value={form.site}
+              onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <label className="flex items-center gap-1.5 text-xs text-tui-dim">
+              geçerlilik
+              <input
+                type="number"
+                min={-1}
+                value={form.expires_in_days}
+                onChange={(e) => setForm((f) => ({ ...f, expires_in_days: Math.trunc(+e.target.value) || 0 }))}
+                className={inputCls + ' !w-16'}
+              />
+              gün (−1=süresiz)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-tui-dim">
+              kullanım
+              <input
+                type="number"
+                min={0}
+                value={form.max_uses}
+                onChange={(e) => setForm((f) => ({ ...f, max_uses: Math.max(0, Math.trunc(+e.target.value) || 0) }))}
+                className={inputCls + ' !w-16'}
+              />
+              kez (0=sınırsız)
+            </label>
+            <input
+              className={inputCls}
+              placeholder="izinli CIDR — 10.0.0.0/8, … (boş = her IP)"
+              autoComplete="off"
+              value={form.allowed_cidrs}
+              onChange={(e) => setForm((f) => ({ ...f, allowed_cidrs: e.target.value }))}
+            />
+          </div>
           <button
             onClick={generate}
             disabled={generating}
@@ -230,11 +263,13 @@ export function EnrollWizard({
           <p className="py-4 text-center text-sm text-tui-dim">Henüz DB enrollment token’ı yok.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                   <th className="py-2 pr-3 font-medium">Ad</th>
                   <th className="py-2 pr-3 font-medium">Site</th>
+                  <th className="py-2 pr-3 font-medium">Kullanım</th>
+                  <th className="py-2 pr-3 font-medium">İzinli Ağ</th>
                   <th className="py-2 pr-3 font-medium">Geçerlilik</th>
                   <th className="py-2 pr-3 font-medium">Son Kullanım</th>
                   <th className="py-2 pr-3 font-medium">Durum</th>
@@ -242,43 +277,58 @@ export function EnrollWizard({
                 </tr>
               </thead>
               <tbody>
-                {tokens.map((t) => (
-                  <tr key={t.id} className="border-b border-rule last:border-0">
-                    <td className="py-2 pr-3 font-mono text-ink-hi">{t.name}</td>
-                    <td className="py-2 pr-3 text-tui-dim">{t.site || <span className="text-tui-dim">—</span>}</td>
-                    <td className="py-2 pr-3 text-tui-dim">
-                      {t.expires_at > 0 ? new Date(t.expires_at * 1000).toLocaleDateString('tr-TR') : 'süresiz'}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">
-                      {t.last_used > 0 ? new Date(t.last_used * 1000).toLocaleString('tr-TR') : 'hiç'}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {t.revoked ? (
-                        <span className="border border-rose-500/40 px-1 text-[10px] font-semibold uppercase text-rose-400">
-                          iptal
-                        </span>
-                      ) : (
-                        <span className="border border-emerald-500/40 px-1 text-[10px] font-semibold uppercase text-emerald-400">
-                          etkin
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2">
-                      {t.revoked ? (
-                        <span className="text-[11px] text-tui-dim">—</span>
-                      ) : (
-                        <button
-                          onClick={() => handleRevokeClick(t)}
-                          className={`text-[11px] transition ${
-                            confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-tui-dim hover:text-rose-400'
-                          }`}
-                        >
-                          {confirmRevokeId === t.id ? 'emin misiniz?' : 'iptal et'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {tokens.map((t) => {
+                  const exhausted = !t.revoked && t.max_uses > 0 && t.used_count >= t.max_uses
+                  return (
+                    <tr key={t.id} className="border-b border-rule last:border-0">
+                      <td className="py-2 pr-3 font-mono text-ink-hi">
+                        {t.name}
+                        {t.created_by && <span className="ml-1 text-[10px] text-tui-dim">· {t.created_by}</span>}
+                      </td>
+                      <td className="py-2 pr-3 text-tui-dim">{t.site || <span className="text-tui-dim">—</span>}</td>
+                      <td className={`py-2 pr-3 font-mono text-[11px] ${exhausted ? 'text-amber-400' : 'text-tui-dim'}`}>
+                        {t.used_count}
+                        {t.max_uses > 0 ? `/${t.max_uses}` : ' / ∞'}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">{t.allowed_cidrs || 'her IP'}</td>
+                      <td className="py-2 pr-3 text-tui-dim">
+                        {t.expires_at > 0 ? new Date(t.expires_at * 1000).toLocaleDateString('tr-TR') : 'süresiz'}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-tui-dim">
+                        {t.last_used > 0 ? new Date(t.last_used * 1000).toLocaleString('tr-TR') : 'hiç'}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {t.revoked ? (
+                          <span className="border border-rose-500/40 px-1 text-[10px] font-semibold uppercase text-rose-400">
+                            iptal
+                          </span>
+                        ) : exhausted ? (
+                          <span className="border border-amber-500/40 px-1 text-[10px] font-semibold uppercase text-amber-400">
+                            dolmuş
+                          </span>
+                        ) : (
+                          <span className="border border-emerald-500/40 px-1 text-[10px] font-semibold uppercase text-emerald-400">
+                            etkin
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2">
+                        {t.revoked ? (
+                          <span className="text-[11px] text-tui-dim">—</span>
+                        ) : (
+                          <button
+                            onClick={() => handleRevokeClick(t)}
+                            className={`text-[11px] transition ${
+                              confirmRevokeId === t.id ? 'font-semibold text-rose-400' : 'text-tui-dim hover:text-rose-400'
+                            }`}
+                          >
+                            {confirmRevokeId === t.id ? 'emin misiniz?' : 'iptal et'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

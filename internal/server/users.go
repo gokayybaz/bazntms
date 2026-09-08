@@ -7,8 +7,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -375,9 +378,13 @@ func (s *Server) handleEnrollTokensList(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleEnrollTokenCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name         string `json:"name"`
-		Site         string `json:"site"`
-		ExpiresInDay int    `json:"expires_in_days"` // 0 = suresiz
+		Name string `json:"name"`
+		Site string `json:"site"`
+		// expires_in_days: 0/atlanmış → 1 gün (güvenli varsayılan, Faz 25-D);
+		// -1 → süresiz; N>0 → N gün.
+		ExpiresInDay int    `json:"expires_in_days"`
+		MaxUses      *int   `json:"max_uses"`      // nil → 1 (tek kullanım); 0 → sınırsız
+		AllowedCIDRs string `json:"allowed_cidrs"` // virgüllü CIDR; boş = her IP
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -396,20 +403,57 @@ func (s *Server) handleEnrollTokenCreate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "çoklu-saha modu: enroll token için site zorunlu", http.StatusBadRequest)
 		return
 	}
+	// CIDR listesini doğrula
+	cidrs := strings.TrimSpace(req.AllowedCIDRs)
+	for _, part := range strings.Split(cidrs, ",") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(part); err != nil {
+			http.Error(w, "geçersiz CIDR: "+part, http.StatusBadRequest)
+			return
+		}
+	}
+	// süre: varsayılan 1 gün, -1 süresiz
 	var expiresAt int64
-	if req.ExpiresInDay > 0 {
+	switch {
+	case req.ExpiresInDay < 0:
+		expiresAt = 0
+	case req.ExpiresInDay == 0:
+		expiresAt = time.Now().AddDate(0, 0, 1).Unix()
+	default:
 		expiresAt = time.Now().AddDate(0, 0, req.ExpiresInDay).Unix()
+	}
+	maxUses := 1
+	if req.MaxUses != nil {
+		if *req.MaxUses < 0 {
+			http.Error(w, "max_uses negatif olamaz", http.StatusBadRequest)
+			return
+		}
+		maxUses = *req.MaxUses
+	}
+	by := ""
+	if id := identityFromCtx(r); id != nil {
+		by = id.Username
 	}
 	plain := newEnrollTokenValue()
 	id, err := s.store.CreateEnrollToken(store.EnrollToken{
 		Name: req.Name, TokenHash: TokenHashString(plain),
 		Site: req.Site, ExpiresAt: expiresAt,
+		MaxUses: maxUses, AllowedCIDRs: cidrs, CreatedBy: by,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.audit(r, identityFromCtx(r), "enroll_token.create", "enroll_token:"+req.Name, "")
+	detail := fmt.Sprintf("max_uses:%d", maxUses)
+	if cidrs != "" {
+		detail += " cidr:" + cidrs
+	}
+	if expiresAt > 0 {
+		detail += " exp:" + time.Unix(expiresAt, 0).Format("2006-01-02")
+	}
+	s.audit(r, identityFromCtx(r), "enroll_token.create", "enroll_token:"+req.Name, detail)
 	// duz token YALNIZCA bir kez doner (hash saklanir)
 	writeJSON(w, map[string]any{"ok": true, "id": id, "token": plain})
 }

@@ -67,7 +67,7 @@ saldırgan (tam uzlaşma sayılır). Hub'ı çalıştıran OS kullanıcısı.
 
 | Tehdit | Karşı önlem | Kalan risk |
 |--------|-------------|------------|
-| Sahte agent kaydı | Enrollment token zorunlu. **B7/S12.6**: statik token bootstrap-only konumlandı; DB token'ları iptal edilebilir/süreli/site-bağlı. **S14.B1**: çoklu-sahada site'siz token reddedilir | Statik token sızarsa yeniden başlatana dek geçerli (DB token'ları önerilir) |
+| Sahte agent kaydı | Enrollment token zorunlu. **B7/S12.6**: statik token bootstrap-only konumlandı; DB token'ları iptal edilebilir/süreli/site-bağlı. **S14.B1**: çoklu-sahada site'siz token reddedilir. **Faz 25-D**: DB token'ları `max_uses` (varsayılan tek kullanım, atomik sayaç), `allowed_cidrs` (kaynak-IP kısıtı), varsayılan 1 gün geçerlilik; `enroll_token.used` denetlenir (ADR 0013) | Statik token sızarsa yeniden başlatana dek geçerli (DB token'ları önerilir). CIDR L7 proxy arkasında proxy IP'sini görür |
 | Agent'ın site iddiası | **A3/S12.7**: site enroll token'ından türetilir; site-bağlı token'da `hello.Site` yok sayılır | Site'siz token'da `hello.Site` fallback (tek-saha modu) |
 | Agent kimliğine bürünme | Kalıcı token (`sha256` hash) veya mTLS. TOFU: `-hub-ca` yoksa ilk `hello` `InsecureSkipVerify` | `-hub-ca` verilmezse ilk bağlantı MITM'e açık (TOFU) |
 | Offline agent satırı ele geçirme (`machine_id`) | **S13.6**: reuse yalnız `machine_id`+`site` eşleşen VE **çevrimdışı** satırda; yeni token verilir (eski telemetri okunamaz — telemetri yalnız-yazma). Saldırı için geçerli enroll token + 128-bit `machine_id` bilgisi gerekir | Marjinal — anlamlı erişim kazancı yok |
