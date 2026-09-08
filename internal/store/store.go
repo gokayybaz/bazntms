@@ -20,6 +20,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,9 +84,17 @@ func openPostgres(dsn string) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	// yuksek eszamanli ingest (5000 agent @ 30sn ≈ 170 ist/sn) icin havuz siniri
-	db.SetMaxOpenConns(32)
-	db.SetMaxIdleConns(8)
+	// yuksek eszamanli ingest (5000 agent @ 30sn ≈ 170 ist/sn) icin havuz siniri.
+	// BAZNTMS_DB_MAX_CONNS ile ayarlanabilir — cok-worker'li ingest + yuksek
+	// devpoll-concurrency havuzu doyurabilir (S21.8/S21.10 kosulari).
+	maxConns := 32
+	if v := os.Getenv("BAZNTMS_DB_MAX_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxConns = n
+		}
+	}
+	db.SetMaxOpenConns(maxConns)
+	db.SetMaxIdleConns(maxConns/4 + 1)
 	db.SetConnMaxLifetime(time.Hour)
 	if err := runMigrations(db, true); err != nil {
 		_ = db.Close()
