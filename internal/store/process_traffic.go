@@ -15,27 +15,15 @@ func (s *sqlStore) SaveProcessTraffic(agentID int64, ts int64, samples []telemet
 		return nil
 	}
 	defer metrics.ObserveStoreWrite("process_traffic", len(samples), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO process_traffic
-		(ts, agent_id, pid, process, proto, remote_ip, port, bytes_in, bytes_out)
-		VALUES (?,?,?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	rows := make([][]any, 0, len(samples))
 	for _, sm := range samples {
 		if sm.BytesIn+sm.BytesOut == 0 {
 			continue
 		}
-		if _, err := stmt.Exec(ts, agentID, sm.PID, sm.Process, sm.Proto, sm.RemoteIP, sm.Port, sm.BytesIn, sm.BytesOut); err != nil {
-			return err
-		}
+		rows = append(rows, []any{ts, agentID, sm.PID, sm.Process, sm.Proto, sm.RemoteIP, sm.Port, sm.BytesIn, sm.BytesOut})
 	}
-	return tx.Commit()
+	return s.bulkInsert("process_traffic",
+		[]string{"ts", "agent_id", "pid", "process", "proto", "remote_ip", "port", "bytes_in", "bytes_out"}, rows)
 }
 
 type ProcessTrafficUsage struct {

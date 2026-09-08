@@ -15,27 +15,15 @@ func (s *sqlStore) SaveAgentDNS(agentID int64, ts int64, samples []telemetry.DNS
 		return nil
 	}
 	defer metrics.ObserveStoreWrite("agent_dns", len(samples), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO agent_dns
-		(ts, agent_id, pid, process, domain, queries, responses)
-		VALUES (?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	rows := make([][]any, 0, len(samples))
 	for _, sm := range samples {
 		if sm.Domain == "" || sm.Queries+sm.Responses == 0 {
 			continue
 		}
-		if _, err := stmt.Exec(ts, agentID, sm.PID, sm.Process, sm.Domain, sm.Queries, sm.Responses); err != nil {
-			return err
-		}
+		rows = append(rows, []any{ts, agentID, sm.PID, sm.Process, sm.Domain, sm.Queries, sm.Responses})
 	}
-	return tx.Commit()
+	return s.bulkInsert("agent_dns",
+		[]string{"ts", "agent_id", "pid", "process", "domain", "queries", "responses"}, rows)
 }
 
 type AgentDNSUsage struct {

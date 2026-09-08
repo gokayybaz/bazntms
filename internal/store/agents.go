@@ -121,23 +121,12 @@ func (s *sqlStore) SetAgentAttrMethod(id int64, method string) error {
 
 func (s *sqlStore) SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error {
 	defer metrics.ObserveStoreWrite("agent_iface_samples", len(samples), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
+	rows := make([][]any, len(samples))
+	for i, sm := range samples {
+		rows[i] = []any{agentID, ts, sm.Name, sm.RxBytes, sm.TxBytes, sm.RxPackets, sm.TxPackets}
 	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO agent_iface_samples
-		(agent_id, ts, name, rx_bytes, tx_bytes, rx_packets, tx_packets) VALUES (?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	for _, sm := range samples {
-		if _, err := stmt.Exec(agentID, ts, sm.Name, sm.RxBytes, sm.TxBytes, sm.RxPackets, sm.TxPackets); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return s.bulkInsert("agent_iface_samples",
+		[]string{"agent_id", "ts", "name", "rx_bytes", "tx_bytes", "rx_packets", "tx_packets"}, rows)
 }
 
 func (s *sqlStore) ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error {
@@ -150,16 +139,13 @@ func (s *sqlStore) ReplaceConnLatest(agentID int64, conns []telemetry.Connection
 	if _, err := tx.Exec(s.q(`DELETE FROM agent_conn_latest WHERE agent_id = ?`), agentID); err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(s.q(`INSERT INTO agent_conn_latest
-		(agent_id, proto, local_addr, remote_addr, status, pid, process) VALUES (?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
+	rows := make([][]any, len(conns))
+	for i, c := range conns {
+		rows[i] = []any{agentID, c.Proto, c.LocalAddr, c.RemoteAddr, c.Status, c.PID, c.Process}
 	}
-	defer stmt.Close()
-	for _, c := range conns {
-		if _, err := stmt.Exec(agentID, c.Proto, c.LocalAddr, c.RemoteAddr, c.Status, c.PID, c.Process); err != nil {
-			return err
-		}
+	if err := s.insertRows(tx, "agent_conn_latest",
+		[]string{"agent_id", "proto", "local_addr", "remote_addr", "status", "pid", "process"}, rows); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

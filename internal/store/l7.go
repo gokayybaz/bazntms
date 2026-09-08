@@ -15,27 +15,15 @@ func (s *sqlStore) SaveL7(agentID int64, ts int64, samples []telemetry.L7Sample)
 		return nil
 	}
 	defer metrics.ObserveStoreWrite("l7_endpoints", len(samples), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO l7_endpoints
-		(ts, agent_id, pid, process, kind, host, remote_ip, bytes, hits)
-		VALUES (?,?,?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	rows := make([][]any, 0, len(samples))
 	for _, sm := range samples {
 		if sm.Host == "" || sm.Count == 0 {
 			continue
 		}
-		if _, err := stmt.Exec(ts, agentID, sm.PID, sm.Process, sm.Kind, sm.Host, sm.RemoteIP, sm.Bytes, sm.Count); err != nil {
-			return err
-		}
+		rows = append(rows, []any{ts, agentID, sm.PID, sm.Process, sm.Kind, sm.Host, sm.RemoteIP, sm.Bytes, sm.Count})
 	}
-	return tx.Commit()
+	return s.bulkInsert("l7_endpoints",
+		[]string{"ts", "agent_id", "pid", "process", "kind", "host", "remote_ip", "bytes", "hits"}, rows)
 }
 
 type L7Usage struct {

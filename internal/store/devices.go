@@ -166,25 +166,14 @@ func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr 
 
 func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error {
 	defer metrics.ObserveStoreWrite("device_iface_samples", len(ifaces), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
+	rows := make([][]any, len(ifaces))
+	for k, i := range ifaces {
+		rows[k] = []any{deviceID, ts, i.IfIndex, i.Name, i.Alias, i.Speed, i.OperStatus,
+			i.RxBytes, i.TxBytes, i.InErrors, i.OutErrors, i.InDiscards, i.OutDiscards}
 	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO device_iface_samples
-		(device_id, ts, if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes, in_errors, out_errors, in_discards, out_discards)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	for _, i := range ifaces {
-		if _, err := stmt.Exec(deviceID, ts, i.IfIndex, i.Name, i.Alias, i.Speed, i.OperStatus,
-			i.RxBytes, i.TxBytes, i.InErrors, i.OutErrors, i.InDiscards, i.OutDiscards); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return s.bulkInsert("device_iface_samples",
+		[]string{"device_id", "ts", "if_index", "name", "alias", "speed", "oper_status",
+			"rx_bytes", "tx_bytes", "in_errors", "out_errors", "in_discards", "out_discards"}, rows)
 }
 
 // LatestDeviceIfaces, son orneklerden arayuz verimlerini hesaplar.
@@ -248,28 +237,17 @@ type FlowRow struct {
 	Octets  uint64 `json:"octets"`
 }
 
-func (s *sqlStore) SaveFlows(rows []FlowRow) error {
-	if len(rows) == 0 {
+func (s *sqlStore) SaveFlows(flows []FlowRow) error {
+	if len(flows) == 0 {
 		return nil
 	}
-	defer metrics.ObserveStoreWrite("flows", len(rows), time.Now())
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
+	defer metrics.ObserveStoreWrite("flows", len(flows), time.Now())
+	rows := make([][]any, len(flows))
+	for i, f := range flows {
+		rows[i] = []any{f.Ts, f.Device, f.Src, f.Dst, f.SrcPort, f.DstPort, f.Proto, f.Packets, f.Octets}
 	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(s.q(`INSERT INTO flows
-		(ts, device, src, dst, src_port, dst_port, proto, packets, octets) VALUES (?,?,?,?,?,?,?,?,?)`))
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	for _, f := range rows {
-		if _, err := stmt.Exec(f.Ts, f.Device, f.Src, f.Dst, f.SrcPort, f.DstPort, f.Proto, f.Packets, f.Octets); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return s.bulkInsert("flows",
+		[]string{"ts", "device", "src", "dst", "src_port", "dst_port", "proto", "packets", "octets"}, rows)
 }
 
 // TopFlows, donemin en yogun NetFlow kayitlari. site bos degilse yalnizca o

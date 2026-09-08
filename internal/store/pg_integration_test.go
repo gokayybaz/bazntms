@@ -202,6 +202,23 @@ func TestPostgresStore(t *testing.T) {
 	if err != nil || len(fl) != 1 || fl[0].Octets != 9000 {
 		t.Fatalf("flow sorgu: %v %+v", err, fl)
 	}
+
+	// S21.8: PG çok-satırlı toplu yazım + chunk sınırı (flows 9 kolon,
+	// pgMaxParams/9 ≈ 6666 → 15000 satır 3 chunk).
+	big := make([]FlowRow, 15000)
+	for i := range big {
+		big[i] = FlowRow{Ts: now, Device: "rt-bulk", Src: "10.0.0.1", Dst: "9.9.9.9", SrcPort: uint16(1 + i%60000), DstPort: 53, Proto: "udp", Packets: 1, Octets: uint64(i + 1)}
+	}
+	if err := st.SaveFlows(big); err != nil {
+		t.Fatalf("toplu flow: %v", err)
+	}
+	var bulkCnt int
+	if err := st.(*sqlStore).db.QueryRow("SELECT COUNT(*) FROM flows WHERE device = $1", "rt-bulk").Scan(&bulkCnt); err != nil {
+		t.Fatalf("toplu flow count: %v", err)
+	}
+	if bulkCnt != 15000 {
+		t.Fatalf("toplu flow satır sayısı = %d, beklenen 15000", bulkCnt)
+	}
 	if err := st.SaveSyslogEvent(SyslogEvent{Ts: now, Host: "rt-1", Severity: 4, Tag: "LINK", Message: "up/down"}); err != nil {
 		t.Fatalf("syslog: %v", err)
 	}
