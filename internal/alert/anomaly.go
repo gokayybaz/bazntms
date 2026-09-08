@@ -40,7 +40,22 @@ type AnomalyConfig struct {
 	PerSite        bool    `json:"per_site"`          // saha bazli baseline (vars. acik)
 	PerAgent       bool    `json:"per_agent"`         // agent bazli baseline (vars. acik)
 	MaxSurfaced    int     `json:"max_surfaced"`      // tek degerlendirmede en cok kac uyari (vars. 8)
-	MinAbsDeltaBps float64 `json:"min_abs_delta_bps"` // gurultu tabani (vars. 500000 = 0.5 Mbit/sn)
+	MinAbsDeltaBps float64 `json:"min_abs_delta_bps"` // bps/proc_bps gurultu tabani (vars. 500000)
+
+	// S22.4 — bps disi metrikler
+	Metrics        []string `json:"metrics"`           // "bps" | "dns_qps" | "proc_bps" (vars. ucu)
+	MinAbsDeltaQps float64  `json:"min_abs_delta_qps"` // dns_qps gurultu tabani (vars. 5)
+}
+
+// knownMetrics, gecerli Metrics degerleri.
+var knownMetrics = map[string]bool{"bps": true, "dns_qps": true, "proc_bps": true}
+
+// minAbsDelta, bir metrigin mutlak-delta gurultu tabani (birimi metrige gore).
+func (a AnomalyConfig) minAbsDelta(metric string) float64 {
+	if metric == "dns_qps" {
+		return a.MinAbsDeltaQps
+	}
+	return a.MinAbsDeltaBps
 }
 
 // seasonalities, gecerli Seasonality degerleri (bilinmeyen → "weekday").
@@ -59,6 +74,8 @@ func DefaultAnomalyConfig() AnomalyConfig {
 		PerAgent:       true,
 		MaxSurfaced:    8,
 		MinAbsDeltaBps: 500_000,
+		Metrics:        []string{"bps", "dns_qps", "proc_bps"},
+		MinAbsDeltaQps: 5,
 	}
 }
 
@@ -101,6 +118,20 @@ func (a AnomalyConfig) normalized() AnomalyConfig {
 	if a.MinAbsDeltaBps < 0 {
 		a.MinAbsDeltaBps = 0
 	}
+	// S22.4 — metrik listesi: bilinmeyenleri ele, boşsa varsayılan üçlü.
+	filtered := a.Metrics[:0]
+	for _, mt := range a.Metrics {
+		if knownMetrics[mt] {
+			filtered = append(filtered, mt)
+		}
+	}
+	a.Metrics = filtered
+	if len(a.Metrics) == 0 {
+		a.Metrics = d.Metrics
+	}
+	if a.MinAbsDeltaQps <= 0 {
+		a.MinAbsDeltaQps = d.MinAbsDeltaQps
+	}
 	return a
 }
 
@@ -118,15 +149,15 @@ func NormalizeConfig(cfg Config) Config {
 	return cfg
 }
 
-// anomalyCand, degerlendirmede esigi asan tek bir (boyut, anahtar) sapmasi.
+// anomalyCand, degerlendirmede esigi asan tek bir (metrik, boyut, anahtar) sapmasi.
 type anomalyCand struct {
-	dim, key          string
+	metric, dim, key  string
 	z, cur, mean, std float64
 }
 
-// checkAnomaly, periyodik cagirilir: her boyutta mevcut pencere verimini bu
-// zaman diliminin (mevsimsel kova) baseline'i ile karsilastirir, adaylari
-// buyuklukce siralar ve en cok MaxSurfaced tanesini atesler.
+// checkAnomaly, periyodik cagirilir: her metrik × boyutta mevcut pencere
+// degerini bu zaman diliminin (mevsimsel kova) baseline'i ile karsilastirir,
+// adaylari buyuklukce siralar ve en cok MaxSurfaced tanesini atesler.
 func (m *Manager) checkAnomaly(cfg Config) {
 	ac := cfg.Anomaly.normalized()
 	if !ac.Enabled {
@@ -136,7 +167,8 @@ func (m *Manager) checkAnomaly(cfg Config) {
 	winStart := time.Now().Add(-time.Duration(ac.WindowMin) * time.Minute)
 	var cands []anomalyCand
 
-	eval := func(dim string, baseline []store.AnomalyBaselineRow, cur map[string]float64) {
+	eval := func(metric, dim string, baseline []store.AnomalyBaselineRow, cur map[string]float64) {
+		floor := ac.minAbsDelta(metric)
 		for i := range baseline {
 			b := baseline[i]
 			if b.Bucket != curBucket || b.N < int64(ac.MinSamples) {
@@ -150,36 +182,48 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			if !ok {
 				continue
 			}
-			if math.Abs(c-b.Mean) < ac.MinAbsDeltaBps {
+			if math.Abs(c-b.Mean) < floor {
 				continue // sessiz-saat gurultu tabani
 			}
 			if z := (c - b.Mean) / std; math.Abs(z) >= ac.Sensitivity {
-				cands = append(cands, anomalyCand{dim: dim, key: b.Key, z: z, cur: c, mean: b.Mean, std: std})
+				cands = append(cands, anomalyCand{metric: metric, dim: dim, key: b.Key, z: z, cur: c, mean: b.Mean, std: std})
 			}
 		}
 	}
 
-	// filo (her zaman) — baseline yoksa hub-yerel'e dus
-	if rows := m.loadBaseline("fleet"); len(rows) > 0 {
-		if v, err := m.st.FleetAvgBpsSince(winStart); err == nil {
-			eval("fleet", rows, map[string]float64{"": v})
+	for _, metric := range ac.Metrics {
+		dims := []string{"fleet"}
+		if ac.PerSite {
+			dims = append(dims, "site")
 		}
-	} else if rows := m.loadBaseline("local"); len(rows) > 0 {
-		if v, err := m.st.AvgBpsSince(winStart); err == nil {
-			eval("local", rows, map[string]float64{"": v})
+		if ac.PerAgent {
+			dims = append(dims, "agent")
 		}
-	}
-	if ac.PerSite {
-		if rows := m.loadBaseline("site"); len(rows) > 0 {
-			if cur, err := m.st.AvgBpsByDim("site", winStart); err == nil {
-				eval("site", rows, cur)
+		fleetRows := m.loadBaseline("fleet", metric)
+		for _, dim := range dims {
+			if dim == "fleet" {
+				if len(fleetRows) > 0 {
+					if cur, err := m.st.AvgMetricByDim("fleet", metric, winStart); err == nil {
+						eval(metric, "fleet", fleetRows, cur)
+					}
+					continue
+				}
+				// filo baseline yok → yalnız bps için hub-yerel'e düş
+				if metric == "bps" {
+					if rows := m.loadBaseline("local", "bps"); len(rows) > 0 {
+						if v, err := m.st.AvgBpsSince(winStart); err == nil {
+							eval("bps", "local", rows, map[string]float64{"": v})
+						}
+					}
+				}
+				continue
 			}
-		}
-	}
-	if ac.PerAgent {
-		if rows := m.loadBaseline("agent"); len(rows) > 0 {
-			if cur, err := m.st.AvgBpsByDim("agent", winStart); err == nil {
-				eval("agent", rows, cur)
+			rows := m.loadBaseline(dim, metric)
+			if len(rows) == 0 {
+				continue
+			}
+			if cur, err := m.st.AvgMetricByDim(dim, metric, winStart); err == nil {
+				eval(metric, dim, rows, cur)
 			}
 		}
 	}
@@ -198,14 +242,15 @@ func (m *Manager) checkAnomaly(cfg Config) {
 		if c.z < 0 {
 			direction = "düşüş"
 		}
-		m.fire("anomaly", fmt.Sprintf("bps:%s:%s:%d", c.dim, c.key, curBucket),
-			fmt.Sprintf("%s: alışılmadık trafik sapması (%s) — %.0f bps, bu zaman dilimi ortalaması %.0f ± %.0f (z=%.1f, son %d dk)",
-				anomalyScope(c.dim, c.key), direction, c.cur, c.mean, c.std, c.z, ac.WindowMin))
+		unit := metricUnit(c.metric)
+		m.fire("anomaly", fmt.Sprintf("%s:%s:%s:%d", c.metric, c.dim, c.key, curBucket),
+			fmt.Sprintf("%s: alışılmadık %s sapması (%s) — %.0f %s, bu zaman dilimi ortalaması %.0f ± %.0f %s (z=%.1f, son %d dk)",
+				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin))
 	}
 }
 
-func (m *Manager) loadBaseline(dim string) []store.AnomalyBaselineRow {
-	rows, err := m.st.LoadAnomalyBaseline(dim, "bps")
+func (m *Manager) loadBaseline(dim, metric string) []store.AnomalyBaselineRow {
+	rows, err := m.st.LoadAnomalyBaseline(dim, metric)
 	if err != nil {
 		return nil
 	}
@@ -227,26 +272,50 @@ func anomalyScope(dim, key string) string {
 	return dim
 }
 
+func metricLabel(metric string) string {
+	switch metric {
+	case "bps":
+		return "trafik"
+	case "dns_qps":
+		return "DNS sorgu hızı"
+	case "proc_bps":
+		return "süreç trafiği"
+	}
+	return metric
+}
+
+func metricUnit(metric string) string {
+	if metric == "dns_qps" {
+		return "sorgu/sn"
+	}
+	return "bps"
+}
+
 // rebuildAnomalyBaseline, lider-kapili saatlik: materyalize baseline tablosunu
-// tum etkin boyutlarin (filo / yerel / saha / agent) mevsimsel
-// alt-toplamlariyla gunceller.
+// tum etkin metrik × boyut kombinasyonlarinin mevsimsel alt-toplamlariyla
+// gunceller.
 func (m *Manager) rebuildAnomalyBaseline(cfg Config) {
 	ac := cfg.Anomaly.normalized()
-	dims := []string{"fleet", "local"}
-	if ac.PerSite {
-		dims = append(dims, "site")
-	}
-	if ac.PerAgent {
-		dims = append(dims, "agent")
-	}
 	var rows []store.AnomalyBaselineRow
-	for _, dim := range dims {
-		bk, err := m.st.BaselineDayBuckets(dim, ac.BaselineDays, ac.Seasonality)
-		if err != nil {
-			slog.Debug("anomali baseline alt-toplamlari okunamadi", "dim", dim, "err", err)
-			continue
+	for _, metric := range ac.Metrics {
+		dims := []string{"fleet"}
+		if metric == "bps" {
+			dims = append(dims, "local")
 		}
-		rows = append(rows, combineBaseline(dim, "bps", bk, ac.EWMAHalfLife)...)
+		if ac.PerSite {
+			dims = append(dims, "site")
+		}
+		if ac.PerAgent {
+			dims = append(dims, "agent")
+		}
+		for _, dim := range dims {
+			bk, err := m.st.BaselineDayBuckets(dim, metric, ac.BaselineDays, ac.Seasonality)
+			if err != nil {
+				slog.Debug("anomali baseline alt-toplamlari okunamadi", "dim", dim, "metric", metric, "err", err)
+				continue
+			}
+			rows = append(rows, combineBaseline(dim, metric, bk, ac.EWMAHalfLife)...)
+		}
 	}
 	if len(rows) == 0 {
 		return // taze kurulum / veri yok — tabloya dokunma

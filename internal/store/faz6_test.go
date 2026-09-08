@@ -85,7 +85,7 @@ func TestBaselineStats(t *testing.T) {
 			t.Fatalf("ornek: %v", err)
 		}
 	}
-	stats, err := st.BaselineDayBuckets("local", 21, "hourly")
+	stats, err := st.BaselineDayBuckets("local", "bps", 21, "hourly")
 	if err != nil {
 		t.Fatalf("stats: %v", err)
 	}

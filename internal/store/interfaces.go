@@ -191,19 +191,20 @@ type TopologyStore interface {
 	RecentTopologyLinks(since time.Time) ([]TopologyLink, error)
 	PruneTopology(retention time.Duration) error
 	SaveAgentSubnets(agentID int64, name string, subnets []string) error
+	// AvgBpsSince, hub-yerel (`samples`) current-window ortalamasi (dim="local").
 	AvgBpsSince(since time.Time) (float64, error)
-	// filo (agent telemetrisi) tabanli current-window ortalamasi — coklu-hub'da
-	// `samples` bos oldugu icin baseline karsilastirmasi buradan yapilir.
-	FleetAvgBpsSince(since time.Time) (float64, error)
-	// AvgBpsByDim, current-window ortalamasini saha/agent bazinda dondurur
-	// (dim = "site" | "agent") — S22.3 cok-boyutlu anomali.
-	AvgBpsByDim(dim string, since time.Time) (map[string]float64, error)
+	// AvgMetricByDim, current-window ortalamasi boyut × metrik bazinda
+	// (dim = "fleet" | "site" | "agent" ; metric = "bps" | "dns_qps" | "proc_bps")
+	// — S22.3/S22.4 cok-boyutlu anomali. Coklu-hub'da `samples` bos oldugu icin
+	// baseline karsilastirmasi buradan yapilir.
+	AvgMetricByDim(dim, metric string, since time.Time) (map[string]float64, error)
 	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
-	// anomali baseline alt-toplamlari (S22.2 mevsimsel · S22.3 cok-boyutlu):
-	// dim = "local" | "fleet" | "site" | "agent". rebuildAnomalyBaseline bunlari
-	// EWMA agirligiyla birlestirip SaveAnomalyBaseline ile materyalize eder;
-	// checkAnomaly LoadAnomalyBaseline ile okur (S22.1).
-	BaselineDayBuckets(dim string, days int, seasonality string) ([]BaselineDayBucket, error)
+	// anomali baseline alt-toplamlari (S22.2 mevsimsel · S22.3/S22.4 cok-boyutlu):
+	// dim = "local"|"fleet"|"site"|"agent", metric = "bps"|"dns_qps"|"proc_bps".
+	// rebuildAnomalyBaseline bunlari EWMA agirligiyla birlestirip
+	// SaveAnomalyBaseline ile materyalize eder; checkAnomaly LoadAnomalyBaseline
+	// ile okur (S22.1).
+	BaselineDayBuckets(dim, metric string, days int, seasonality string) ([]BaselineDayBucket, error)
 	SaveAnomalyBaseline(rows []AnomalyBaselineRow) error
 	LoadAnomalyBaseline(dim, metric string) ([]AnomalyBaselineRow, error)
 }

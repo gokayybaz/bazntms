@@ -261,25 +261,22 @@ func TestPostgresStore(t *testing.T) {
 	}
 	// S22.2: mevsimsel baseline alt-toplamları — alias GROUP BY + tamsayı / %
 	// PG semantiği. samples 120 satır (hepsi güncel saat) → en az 1 kova.
-	lb, err := st.BaselineDayBuckets("local", 21, "weekday")
+	lb, err := st.BaselineDayBuckets("local", "bps", 21, "weekday")
 	if err != nil || len(lb) == 0 {
 		t.Fatalf("BaselineDayBuckets: %v (%d satır)", err, len(lb))
 	}
-	if _, err := st.BaselineDayBuckets("fleet", 21, "dow"); err != nil {
+	if _, err := st.BaselineDayBuckets("fleet", "bps", 21, "dow"); err != nil {
 		t.Fatalf("BaselineDayBuckets(fleet): %v", err)
 	}
-	// S22.3: saha/agent boyutu — JOIN agents + CAST(agent_id AS TEXT) PG'de
-	if _, err := st.BaselineDayBuckets("site", 21, "weekday"); err != nil {
-		t.Fatalf("BaselineDayBuckets(site): %v", err)
-	}
-	if _, err := st.BaselineDayBuckets("agent", 21, "weekday"); err != nil {
-		t.Fatalf("BaselineDayBuckets(agent): %v", err)
-	}
-	if _, err := st.AvgBpsByDim("site", time.Now().Add(-time.Hour)); err != nil {
-		t.Fatalf("AvgBpsByDim(site): %v", err)
-	}
-	if _, err := st.AvgBpsByDim("agent", time.Now().Add(-time.Hour)); err != nil {
-		t.Fatalf("AvgBpsByDim(agent): %v", err)
+	// S22.3/S22.4: saha/agent boyutu + bps-dışı metrikler — JOIN agents +
+	// CAST(agent_id AS TEXT) + SUM path PG'de.
+	for _, dm := range [][2]string{{"site", "bps"}, {"agent", "bps"}, {"fleet", "dns_qps"}, {"agent", "proc_bps"}} {
+		if _, err := st.BaselineDayBuckets(dm[0], dm[1], 21, "weekday"); err != nil {
+			t.Fatalf("BaselineDayBuckets(%s,%s): %v", dm[0], dm[1], err)
+		}
+		if _, err := st.AvgMetricByDim(dm[0], dm[1], time.Now().Add(-time.Hour)); err != nil {
+			t.Fatalf("AvgMetricByDim(%s,%s): %v", dm[0], dm[1], err)
+		}
 	}
 
 	// baglanti olaylari + temizlik: son ~30 saniyedeki ornekler kalir

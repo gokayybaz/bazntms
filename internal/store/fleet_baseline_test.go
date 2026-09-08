@@ -38,7 +38,7 @@ func TestFleetBaseline(t *testing.T) {
 		}
 	}
 
-	stats, err := st.BaselineDayBuckets("fleet", 21, "hourly")
+	stats, err := st.BaselineDayBuckets("fleet", "bps", 21, "hourly")
 	if err != nil {
 		t.Fatalf("BaselineDayBuckets(fleet): %v", err)
 	}
@@ -55,11 +55,11 @@ func TestFleetBaseline(t *testing.T) {
 	}
 
 	// pencere ortalamasi: yalniz saglikli arayuz → ~800 Kbit/sn civari
-	avg, err := st.FleetAvgBpsSince(now.Add(-30 * time.Minute))
+	cur, err := st.AvgMetricByDim("fleet", "bps", now.Add(-30*time.Minute))
 	if err != nil {
-		t.Fatalf("FleetAvgBpsSince: %v", err)
+		t.Fatalf("AvgMetricByDim(fleet,bps): %v", err)
 	}
-	if avg < 400_000 || avg > 1_600_000 {
+	if avg := cur[""]; avg < 400_000 || avg > 1_600_000 {
 		t.Fatalf("pencere ort beklenen ~800 Kbit/sn, gelen: %.0f bps", avg)
 	}
 }
