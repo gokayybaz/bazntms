@@ -673,6 +673,74 @@ paths:
                     key: { type: string }
                     message: { type: string }
 
+  /api/v1/anomaly/baseline:
+    get:
+      tags: [alerts]
+      summary: Anomali motoru materyalize baseline eğrisi (mevsimsel kova × metrik)
+      description: >
+        Bir boyut/metrik için beklenen bant (mean ± std) — panelin
+        "beklenen vs gerçek" grafiği. Site-kapsamlı kimlik yalnız kendi
+        sahasının/filonun eğrisini görür (agent boyutu reddedilir).
+      parameters:
+        - { name: dim, in: query, schema: { type: string, enum: [local, fleet, site, agent], default: fleet } }
+        - { name: metric, in: query, schema: { type: string, enum: [bps, dns_qps, proc_bps], default: bps } }
+        - { name: key, in: query, schema: { type: string }, description: "site adı / agent id (boyuta göre)" }
+      responses:
+        "200":
+          description: Baseline satırları
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dim: { type: string }
+                  metric: { type: string }
+                  key: { type: string }
+                  seasonality: { type: string, description: "hourly · weekday · dow" }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        dim: { type: string }
+                        metric: { type: string }
+                        key: { type: string }
+                        bucket: { type: integer, description: "mevsimsel kova numarası" }
+                        n: { type: integer }
+                        mean: { type: number }
+                        m2: { type: number, description: "Welford ikinci moment; std = sqrt(m2/n)" }
+  /api/v1/anomaly/active:
+    get:
+      tags: [alerts]
+      summary: O an gözlenen anomali sapmaları (sıralı, sınırsız)
+      description: >
+        Mevcut kova için z-skoru eşiğini aşan tüm (metrik × boyut) sapmalar —
+        ateşlenen uyarıların aksine MaxSurfaced sınırı uygulanmaz. Site-kapsamlı
+        kimlik yalnız filo + kendi sahası sapmalarını görür.
+      responses:
+        "200":
+          description: Sapma dizisi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        metric: { type: string }
+                        dim: { type: string }
+                        key: { type: string }
+                        scope: { type: string, description: "insan-okur boyut etiketi" }
+                        bucket: { type: integer }
+                        mean: { type: number }
+                        std: { type: number }
+                        cur: { type: number }
+                        z: { type: number }
+                        n: { type: integer }
+
   /api/report:
     get:
       tags: [reports]

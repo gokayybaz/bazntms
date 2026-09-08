@@ -153,19 +153,32 @@ func NormalizeConfig(cfg Config) Config {
 type anomalyCand struct {
 	metric, dim, key  string
 	z, cur, mean, std float64
+	n                 int64
 }
 
-// checkAnomaly, periyodik cagirilir: her metrik × boyutta mevcut pencere
-// degerini bu zaman diliminin (mevsimsel kova) baseline'i ile karsilastirir,
-// adaylari buyuklukce siralar ve en cok MaxSurfaced tanesini atesler.
-func (m *Manager) checkAnomaly(cfg Config) {
-	ac := cfg.Anomaly.normalized()
-	if !ac.Enabled {
-		return
-	}
-	curBucket := store.SeasonalBucket(time.Now(), ac.Seasonality)
+// AnomalyDeviation, o an gözlenen bir sapma (UI "aktif sapmalar" listesi ve
+// GET /api/v1/anomaly/active için). Yüzeye çıkan uyarıların aksine MaxSurfaced
+// sınırı uygulanmaz — panelde hepsi görülür.
+type AnomalyDeviation struct {
+	Metric string  `json:"metric"`
+	Dim    string  `json:"dim"`
+	Key    string  `json:"key"`
+	Scope  string  `json:"scope"` // insan-okur: "Filo geneli" / "Saha X" / "Agent #N"
+	Bucket int     `json:"bucket"`
+	Mean   float64 `json:"mean"`
+	Std    float64 `json:"std"`
+	Cur    float64 `json:"cur"`
+	Z      float64 `json:"z"`
+	N      int64   `json:"n"`
+}
+
+// evalAnomalyCands, mevcut kova için tüm metrik × boyut kombinasyonlarını
+// değerlendirir ve z-skoru eşiğini (+ gürültü tabanını) aşan adayları döndürür.
+// checkAnomaly (ateşleme, MaxSurfaced'lı) ve AnomalyActive (panel, sınırsız)
+// ortak kaynağı.
+func (m *Manager) evalAnomalyCands(ac AnomalyConfig) (curBucket int, cands []anomalyCand) {
+	curBucket = store.SeasonalBucket(time.Now(), ac.Seasonality)
 	winStart := time.Now().Add(-time.Duration(ac.WindowMin) * time.Minute)
-	var cands []anomalyCand
 
 	eval := func(metric, dim string, baseline []store.AnomalyBaselineRow, cur map[string]float64) {
 		floor := ac.minAbsDelta(metric)
@@ -186,7 +199,7 @@ func (m *Manager) checkAnomaly(cfg Config) {
 				continue // sessiz-saat gurultu tabani
 			}
 			if z := (c - b.Mean) / std; math.Abs(z) >= ac.Sensitivity {
-				cands = append(cands, anomalyCand{metric: metric, dim: dim, key: b.Key, z: z, cur: c, mean: b.Mean, std: std})
+				cands = append(cands, anomalyCand{metric: metric, dim: dim, key: b.Key, z: z, cur: c, mean: b.Mean, std: std, n: b.N})
 			}
 		}
 	}
@@ -227,11 +240,21 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			}
 		}
 	}
+	sort.Slice(cands, func(i, j int) bool { return math.Abs(cands[i].z) > math.Abs(cands[j].z) })
+	return curBucket, cands
+}
 
+// checkAnomaly, periyodik cagirilir: adaylari buyuklukce siralar ve en cok
+// MaxSurfaced tanesini atesler (bildirim seli kontrolu — panel hepsini gorur).
+func (m *Manager) checkAnomaly(cfg Config) {
+	ac := cfg.Anomaly.normalized()
+	if !ac.Enabled {
+		return
+	}
+	curBucket, cands := m.evalAnomalyCands(ac)
 	if len(cands) == 0 {
 		return
 	}
-	sort.Slice(cands, func(i, j int) bool { return math.Abs(cands[i].z) > math.Abs(cands[j].z) })
 	limit := ac.MaxSurfaced
 	if limit <= 0 || limit > len(cands) {
 		limit = len(cands)
@@ -247,6 +270,29 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			fmt.Sprintf("%s: alışılmadık %s sapması (%s) — %.0f %s, bu zaman dilimi ortalaması %.0f ± %.0f %s (z=%.1f, son %d dk)",
 				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin))
 	}
+}
+
+// AnomalyActive, o an gözlenen tüm sapmaları (sıralı, sınırsız) döndürür.
+func (m *Manager) AnomalyActive() []AnomalyDeviation {
+	ac := m.Config().Anomaly.normalized()
+	if !ac.Enabled {
+		return nil
+	}
+	curBucket, cands := m.evalAnomalyCands(ac)
+	out := make([]AnomalyDeviation, 0, len(cands))
+	for _, c := range cands {
+		out = append(out, AnomalyDeviation{
+			Metric: c.metric, Dim: c.dim, Key: c.key, Scope: anomalyScope(c.dim, c.key),
+			Bucket: curBucket, Mean: c.mean, Std: c.std, Cur: c.cur, Z: c.z, N: c.n,
+		})
+	}
+	return out
+}
+
+// AnomalyBaseline, bir (dim, metric) için materyalize baseline eğrisini
+// döndürür — panelin "beklenen bant" grafiği için.
+func (m *Manager) AnomalyBaseline(dim, metric string) []store.AnomalyBaselineRow {
+	return m.loadBaseline(dim, metric)
 }
 
 func (m *Manager) loadBaseline(dim, metric string) []store.AnomalyBaselineRow {

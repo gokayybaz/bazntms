@@ -219,6 +219,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/alerts/status", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAlertsStatus)))
 	mux.Handle("POST /api/alerts/test", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAlertsTest)))
 	mux.HandleFunc("GET /api/alerts/events", s.handleAlertEvents)
+	// anomali paneli (S22.5) — düşük hassasiyetli analiz verisi, PermView.
+	mux.Handle("GET /api/v1/anomaly/baseline", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyBaseline)))
+	mux.Handle("GET /api/v1/anomaly/active", s.requirePerm(PermView, http.HandlerFunc(s.handleAnomalyActive)))
 
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
@@ -608,6 +611,62 @@ func (s *Server) handleAlertEvents(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 	writeJSONETag(w, r, s.alerts.RecentEvents(limit)) // D4: sık pollanır
+}
+
+// handleAnomalyBaseline, bir (dim, metric) icin materyalize baseline egrisini
+// dondurur — panelin "beklenen bant" grafigi. Site-kapsamli kimlik yalniz
+// kendi sahasinin/filonun egrisini gorur (agent boyutu reddedilir).
+func (s *Server) handleAnomalyBaseline(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	dim := q.Get("dim")
+	if dim == "" {
+		dim = "fleet"
+	}
+	metric := q.Get("metric")
+	if metric == "" {
+		metric = "bps"
+	}
+	key := q.Get("key")
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		switch dim {
+		case "site":
+			key = scope // kendi sahasina sabitle
+		case "agent":
+			writeJSON(w, map[string]any{"dim": dim, "metric": metric, "rows": []any{}})
+			return
+		}
+	}
+	rows := s.alerts.AnomalyBaseline(dim, metric)
+	if key != "" {
+		filtered := rows[:0]
+		for _, rw := range rows {
+			if rw.Key == key {
+				filtered = append(filtered, rw)
+			}
+		}
+		rows = filtered
+	}
+	writeJSON(w, map[string]any{
+		"dim": dim, "metric": metric, "key": key,
+		"seasonality": s.alerts.Config().Anomaly.Seasonality,
+		"rows":        rows,
+	})
+}
+
+// handleAnomalyActive, o an gozlenen sapmalari dondurur. Site-kapsamli kimlik
+// yalniz filo + kendi sahasi sapmalarini gorur (agent boyutu elenir).
+func (s *Server) handleAnomalyActive(w http.ResponseWriter, r *http.Request) {
+	devs := s.alerts.AnomalyActive()
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		kept := devs[:0]
+		for _, d := range devs {
+			if d.Dim == "fleet" || d.Dim == "local" || (d.Dim == "site" && d.Key == scope) {
+				kept = append(kept, d)
+			}
+		}
+		devs = kept
+	}
+	writeJSON(w, map[string]any{"deviations": devs})
 }
 
 // EnrollToken, otomatik uretilen enrollment token'ini dondurur (banner logu icin).
