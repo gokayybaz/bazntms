@@ -34,7 +34,7 @@
 | `-ai-allow-cloud` | `true` | `false` → yalnız yerel (loopback/RFC1918) model adresleri kabul edilir — bulut sağlayıcı **egress kilidi** (self-hosted / hava boşluklu) |
 | `-llm-base-url` | — | **Bootstrap** AI sağlayıcısı adresi (OpenAI-uyumlu; `http://localhost:11434/v1` Ollama). `ai_providers` tablosu boşsa ilk açılışta bir kez seed edilir |
 | `-llm-api-key` | — | Bootstrap sağlayıcı API anahtarı. Yerel modeller için gerekmez |
-| `-llm-model` | — | Bootstrap sağlayıcı varsayılan modeli (`qwen2.5:7b`, `gpt-4o-mini` …) |
+| `-llm-model` | — | Bootstrap sağlayıcı varsayılan modeli (`gemma3`, `qwen2.5:7b`, `gpt-4o-mini` …) |
 | `-record-dir` | `captures` | PCAP kayıt dosyalarının yazılacağı dizin |
 | `-record-max-mb` | `100` | PCAP dosya başına üst boyut; aşıldığında otomatik yeni dosyaya geçer (rotasyon) |
 | `-geoip-dir` | `geoip` | MaxMind GeoLite2 `.mmdb` dosyalarının aranacağı dizin |
@@ -61,8 +61,8 @@ API anahtarları vault ile şifreli saklanır. `-llm-*` bayrakları yalnız
 ### Yerel model (önerilen — veri ağdan çıkmaz)
 
 ```bash
-ollama pull qwen2.5:7b
-./bazntms-hub -ai -ai-allow-cloud=false -llm-base-url http://localhost:11434/v1 -llm-model qwen2.5:7b
+ollama pull gemma3
+./bazntms-hub -ai -ai-allow-cloud=false -llm-base-url http://localhost:11434/v1 -llm-model gemma3
 ```
 
 Yerel adreslerde (`localhost` / `127.0.0.1` / RFC1918) API anahtarı gerekmez.

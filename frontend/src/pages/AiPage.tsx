@@ -93,7 +93,7 @@ export function AiPage() {
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [detail?.messages.length, streaming])
+  }, [detail?.messages?.length, streaming])
 
   const send = useCallback(
     (opts: { content?: string; preset?: string }) => {
@@ -110,7 +110,7 @@ export function AiPage() {
           ? {
               ...d,
               messages: [
-                ...d.messages,
+                ...(d.messages ?? []),
                 { id: -1, role: 'user', content: content || `[${opts.preset}]`, tokens_in: 0, tokens_out: 0, created_ts: Math.floor(Date.now() / 1000) },
               ],
             }
@@ -138,7 +138,7 @@ export function AiPage() {
   // sayfa-farkında derin bağlantı: ?c=&preset= → o preset'i bir kez gönder
   const firedPreset = useRef(false)
   useEffect(() => {
-    if (activeID && pendingPreset && detailLoaded && detail && detail.messages.length === 0 && !firedPreset.current) {
+    if (activeID && pendingPreset && detailLoaded && detail && (detail.messages?.length ?? 0) === 0 && !firedPreset.current) {
       firedPreset.current = true
       send({ preset: pendingPreset })
       params.delete('preset')
@@ -288,7 +288,7 @@ export function AiPage() {
 
               {/* transcript */}
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-                {detail?.messages
+                {(detail?.messages ?? [])
                   .filter((m) => m.role !== 'system')
                   .map((m) => (
                     <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : ''}>

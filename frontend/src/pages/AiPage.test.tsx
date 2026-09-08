@@ -43,6 +43,24 @@ describe('AiPage', () => {
     await waitFor(() => expect(screen.getByText(/AI analiz kapalı/i)).toBeInTheDocument())
   })
 
+  it('mesajsız (yeni) konuşmada çökmez — messages: null', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url === '/api/v1/ai/status')
+        return Promise.resolve({ ok: true, json: async () => ({ enabled: true, has_ready_provider: true }) } as Response)
+      if (url === '/api/v1/ai/presets')
+        return Promise.resolve({ ok: true, json: async () => ({ presets: [] }) } as Response)
+      if (url === '/api/v1/ai/conversations')
+        return Promise.resolve({ ok: true, json: async () => CONVS } as Response)
+      if (url === '/api/v1/ai/conversations/1')
+        // backend eski davranışı: mesajsız konuşmada messages null dönebilir
+        return Promise.resolve({ ok: true, json: async () => ({ conversation: CONVS[0], messages: null }) } as Response)
+      return Promise.resolve({ ok: false, status: 404, text: async () => '', json: async () => ({}) } as Response)
+    }))
+    renderAt('/ai?c=1')
+    // composer görünür → sayfa çökmedi
+    await waitFor(() => expect(screen.getByPlaceholderText(/Bir şey sor/i)).toBeInTheDocument())
+  })
+
   it('sohbet listesini gösterir ve mesaj akışını render eder', async () => {
     let sent = false
     vi.stubGlobal('fetch', vi.fn((url: string) => {

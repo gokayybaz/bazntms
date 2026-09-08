@@ -249,7 +249,7 @@ artırın. `reasoning_content` + `<think>` blokları otomatik temizlenir.
 ### "AI servisine ulaşılamadı" / "Test Et" başarısız
 
 - Yerel sunucu çalışıyor mu? (`curl localhost:11434/v1/models`)
-- Ollama'da model çekilmiş mi? (`ollama pull qwen2.5:7b`)
+- Ollama'da model çekilmiş mi? (`ollama pull gemma3`)
 - Docker'da hub → host Ollama: `-llm-base-url http://host.docker.internal:11434/v1`
 
 ### Sohbet akışı "donuyor" (nginx LB arkasında)
@@ -311,8 +311,8 @@ Hub `X-Accel-Buffering: no` gönderir ama LB tamponu bunu ezebilir.
 ## Log örnekleri
 
 ```
->> AI aktif: qwen2.5:7b (http://localhost:11434/v1)   # AI hazır
->> AI pasif: -llm-base-url ...                        # AI yapılmamış
->> UYARI: kimlik dogrulama kapali — ...               # -auth-password verin
-UYARI [port] Şüpheli porta bağlantı: ...              # uyarı tetiklendi
+level=INFO msg="AI analiz aktif" bulut_izni=false            # -ai açık
+level=INFO msg="AI bootstrap sağlayıcı eklendi" kind=ollama  # -llm-* seed etti
+level=WARN msg="kimlik dogrulama kapali — ..."               # -auth-password verin
+UYARI [port] Şüpheli porta bağlantı: ...                     # uyarı tetiklendi
 ```

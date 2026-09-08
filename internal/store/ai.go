@@ -236,7 +236,7 @@ func (s *sqlStore) AIConversationByID(id int64) (*AIConversation, []AIMessage, e
 		return &c, nil, err
 	}
 	defer rows.Close()
-	var msgs []AIMessage
+	msgs := []AIMessage{} // JSON'da hiç null olmasın (UI .filter/.length çağırır)
 	for rows.Next() {
 		var m AIMessage
 		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.ContextJSON,

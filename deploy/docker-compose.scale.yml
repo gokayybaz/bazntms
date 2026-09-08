@@ -89,7 +89,7 @@ services:
       - "-llm-base-url" #   ai_providers boşsa bootstrap sağlayıcı (ollama servisi)
       - "http://ollama:11434/v1"
       - "-llm-model"
-      - "${AI_MODEL:-qwen2.5:0.5b}"
+      - "${AI_MODEL:-gemma3}"
     # /data kalıcı: vault.key. Volume olmadan her recreate yeni master key üretir
     # → DB'deki AES-GCM şifreli cihaz kimlikleri çözülemez. İki replika AYNI
     # named volume'u paylaşır (vault.key ortak).
@@ -229,8 +229,8 @@ services:
   # Prometheus hub-controller + hub-ingest replikalarını Docker DNS ile keşfeder;
   # Grafana "bazNTMS — Kapasite" dashboard'unu otomatik yükler.
   # --- yerel AI modeli (Faz 26) — opsiyonel; `--profile ai` ile ---
-  # İlk çalıştırmada modeli çeker (birkaç dk). Küçük model (0.5B) yalnız duman
-  # testi içindir — gerçek analiz için qwen2.5:7b vb. kullanın (AI_MODEL env).
+  # İlk çalıştırmada modeli çeker (gemma3 ≈ 3.3 GB, birkaç dk). Daha küçük
+  # (hızlı pull) için: AI_MODEL=gemma3:1b · daha güçlü: AI_MODEL=gemma3:12b.
   ollama:
     image: ollama/ollama:latest
     profiles: ["ai"]
@@ -239,12 +239,12 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 3 && ollama pull "${AI_MODEL:-qwen2.5:0.5b}" && wait'
+      - 'ollama serve & sleep 3 && ollama pull "${AI_MODEL:-gemma3}" && wait'
     healthcheck:
       test: ["CMD-SHELL", "ollama list | grep -q . || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 30
+      retries: 60 # gemma3 pull uzun sürebilir
 
   prometheus:
     image: prom/prometheus:v3.1.0
