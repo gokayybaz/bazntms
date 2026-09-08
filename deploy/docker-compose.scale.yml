@@ -95,6 +95,7 @@ services:
       BAZNTMS_NATS__URL: nats://nats:4222
       BAZNTMS_LOG__FORMAT: json
       BAZNTMS_DB_MAX_CONNS: "64" # Faz 21: combined ingest + devpoll havuzu doyuruyordu (32 → 64)
+      GOMEMLIMIT: "512MiB" # Faz 21 S21.13: Go GC/scavenger RSS'i sınır altında tutar
       AUTH_PASSWORD: demo123
     deploy:
       replicas: 2
@@ -129,6 +130,7 @@ services:
       BAZNTMS_NATS__URL: nats://nats:4222
       BAZNTMS_LOG__FORMAT: json
       BAZNTMS_DB_MAX_CONNS: "64" # Faz 21: combined ingest + devpoll havuzu doyuruyordu (32 → 64)
+      GOMEMLIMIT: "512MiB" # Faz 21 S21.13: Go GC/scavenger RSS'i sınır altında tutar
     deploy:
       replicas: 2
     healthcheck:

@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      soak_minutes:
+        description: "soak-short süresi (dk)"
+        default: "20"
 
 jobs:
   frontend:
@@ -291,6 +296,39 @@ jobs:
       - name: Temizlik
         if: always()
         run: docker compose -f deploy/docker-compose.scale.yml down -v
+
+  soak-short:
+    # Faz 21 S21.13: sızıntı avı — yalnızca elle (workflow_dispatch). Ölçek
+    # yığını + --profile obs, kısa birleşik yük, canlı heap/goroutine/FD
+    # platosu kontrolü. Tam 8 saat soak operatör görevidir (docs/perf/).
+    name: Soak (short — leak check)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Yığın + gözlemlenebilirlik
+        run: |
+          docker compose -f deploy/docker-compose.scale.yml up -d --build --wait --wait-timeout 360
+          docker compose -f deploy/docker-compose.scale.yml --profile obs up -d
+          sleep 15
+      - name: Soak
+        env:
+          DURATION: ${{ github.event.inputs.soak_minutes || 20 }}m
+          SAMPLE_EVERY: "60"
+          AGENTS: "800"
+          FLOW_RATE: "12000"
+          DEVICES: "200"
+        run: scripts/soak.sh
+      - name: Rapor
+        if: always()
+        run: cat docs/perf/soak-*.md || true
+      - name: Temizlik
+        if: always()
+        run: docker compose -f deploy/docker-compose.scale.yml --profile obs down -v
 
   govulncheck:
     name: Vulnerability scan

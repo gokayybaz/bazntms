@@ -142,6 +142,10 @@ func New(staticFS fs.FS, engine *capture.Engine, st store.Store, dbPath string, 
 	s.registry = prometheus.NewRegistry()
 	s.registry.MustRegister(s.httpRequests, s.httpDuration, s.wsClients, s.captureRun, s.notifyFailures, s.ingestDead)
 	s.registry.MustRegister(collectors.NewGoCollector())
+	// process_resident_memory_bytes / process_open_fds / process_cpu_seconds_total
+	// — soak testi + operasyon için RSS/FD/CPU izleme (S21.13). Linux'ta /proc'tan;
+	// diğer platformlarda sessizce boş.
+	s.registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	if alerts != nil {
 		alerts.SetNotifyFailHook(func(channel string) {
