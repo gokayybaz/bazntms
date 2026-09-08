@@ -67,6 +67,32 @@ bütçenin %80'i (48 sn) altında; `bazntms_devpoll_inflight` sınırlı (gorout
 sızıntısı yok); `bazntms_store_write_rows_total{table="device_iface_samples"}`
 artıyor.
 
+## Birleşik Koşucu — `scripts/loadtest.sh` (S21.3)
+
+Bir profil (`loadtest/profiles/<ad>.env`) alır, çalışan bir hub yığınına karşı
+agent + flow + cihaz yükünü **birlikte** sürer, `/metrics`'i ölçüm penceresinin
+başında/sonunda örnekler, `scripts/perf_summary.py` ile profil eşiklerine karşı
+PASS/FAIL raporu üretir (`docs/perf/runs/<utc>-<ad>.md`; çıkış kodu ihlalde 1).
+
+```bash
+docker compose -f deploy/docker-compose.scale.yml up -d --build
+
+# hızlı regresyon (~3 dk) / tam kapasite (~10 dk) / patlama (~12 dk)
+scripts/loadtest.sh baseline
+scripts/loadtest.sh target
+scripts/loadtest.sh burst
+```
+
+Ortam değişkenleriyle hedeflenir: `HUB_PANEL` (:8080), `HUB_AGENT` (:8081),
+`FLOW_TARGET` (127.0.0.1:12055), `ENROLL_TOKEN`, `AUTH_PASSWORD`, `METRICS_URL`,
+`STACK`. Profiller: `AGENTS`/`INTERVAL`/`FLOW_RATE`/`FLOW_BURST*`/`DEVICES`/
+`DURATION`/`WARMUP` + `MAX_P95_MS`/`MIN_TELEMETRY_RPS`/`MAX_QUEUE_PENDING`/
+`MAX_FLOW_DROP_RATE`/`MAX_DEVPOLL_CYCLE_S` eşikleri.
+
+> Tek-makine SQLite'a karşı `mode=device` + eşzamanlı agent enroll'ü yazıcı
+> kilidi (SQLITE_BUSY) yaratır — kapasite koşuları Postgres/Timescale yığınına
+> karşı yapılır.
+
 ## k6 Senaryosu (alternatif)
 
 Open-loop constant-arrival-rate: ritim VU sayısından bağımsız korunur.

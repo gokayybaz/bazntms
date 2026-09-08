@@ -81,6 +81,7 @@ services:
       - "/etc/bazntms/ioc.txt"
       - "-enroll-token"
       - "scale-enroll-token"
+      - "-mock-devices" # Faz 21 yük testi: bazntms-loadgen -mode device (vendor=mock)
     # /data kalıcı: vault.key. Volume olmadan her recreate yeni master key üretir
     # → DB'deki AES-GCM şifreli cihaz kimlikleri çözülemez. İki replika AYNI
     # named volume'u paylaşır (vault.key ortak).

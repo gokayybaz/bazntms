@@ -31,6 +31,10 @@ web/dist/*
 # hub calisma zamani: GitHubSyncer'in yazdigi update kanali manifesti
 /updates/
 
+# Faz 21 yuk kosusu ciktilari — kapasite raporuna girecekler `git add -f` ile
+docs/perf/runs/
+docs/perf/pprof/
+
 # kimlik kasasi master key (gizli, makineye ozel)
 /vault.key
 
