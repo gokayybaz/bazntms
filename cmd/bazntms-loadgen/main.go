@@ -1,15 +1,20 @@
-// bazntms-loadgen — Faz 4.5 yuk testi: sentetik agent filosu.
+// bazntms-loadgen — yük üreteci (Faz 4.5 + Faz 21). -mode ile üç yük türü:
 //
-// Hub'a N adet sanal agent enroll eder ve gercek agent ritmiyle
-// (varsayilan 30 sn batch) telemetri gonderir. Kapasite hedefleri
-// (docs/enterprise-plan.html): 5000 agent @ 30 sn ≈ ≥170 ist/sn surekli.
+//	agent  : N sanal agent enroll + gerçek ritimde telemetri (varsayılan)
+//	flow   : sentetik NetFlow v5/v9 + IPFIX + sFlow datagramları (-flow-port'a)
+//	device : hub'a vendor=mock cihaz ekler, devpoll zamanlayıcıyı sürer
+//	mixed  : agent + flow birlikte
 //
-// Ornek:
+// Kapasite hedefleri (docs/enterprise-plan.html): 5000 agent @ 30 sn ≈
+// ≥170 ist/sn, ≥50k flow/sn, 1000 cihaz / 60 sn.
 //
-//	bazntms-loadgen -hub http://localhost:8080 -token <enroll-token> \
-//	  -agents 5000 -interval 30 -duration 10m
+// Örnek:
 //
-// Istatistikler 5 saniyede bir ve kapanista yazilir (rps, p50/p95/p99).
+//	bazntms-loadgen -hub http://localhost:8081 -token <enroll-token> \
+//	  -agents 5000 -interval 30 -duration 10m -warmup 1m -out /tmp/run.json
+//
+// İstatistik 5 sn'de bir + kapanışta yazılır; -out ile JSON özet.
+// scripts/loadtest.sh birleşik senaryoları koşar (bkz. loadtest/profiles/).
 package main
 
 import (
@@ -31,50 +36,101 @@ import (
 	"github.com/gokayybaz/bazntms/pkg/telemetry"
 )
 
+// latencyBuckets, gecikme histogramının üst sınırları (ms). Kova içi doğrusal
+// interpolasyonla p50/p95/p99 tahmini yapılır — 250 ms eşiği çevresinde
+// yeterli çözünürlük için sık aralıklı.
+var latencyBuckets = []float64{
+	1, 2, 5, 10, 20, 35, 50, 75, 100, 125, 150, 175, 200, 225, 250,
+	300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000,
+}
+
 type stats struct {
 	sent     atomic.Int64
 	failed   atomic.Int64
 	enrolled atomic.Int64
-	hist     [9]atomic.Int64 // ms siniflari: 5,10,25,50,100,250,500,1000,1000+
-	start    time.Time
+	// hist: latencyBuckets + taşma kovası
+	hist  [25]atomic.Int64
+	start time.Time
 
 	// flow modu sayaçları (S21.1)
 	flowDatagrams atomic.Int64
 	flowRecords   atomic.Int64
 	flowErrors    atomic.Int64
+
+	// hata sınıflandırma (S21.4)
+	errDial atomic.Int64
+	errHTTP atomic.Int64
 }
 
-var buckets = []int64{5, 10, 25, 50, 100, 250, 500, 1000}
-
 func (s *stats) observe(d time.Duration) {
-	ms := d.Milliseconds()
+	ms := float64(d.Microseconds()) / 1000.0
 	i := 0
-	for i < len(buckets) && ms > buckets[i] {
+	for i < len(latencyBuckets) && ms > latencyBuckets[i] {
 		i++
 	}
 	s.hist[i].Add(1)
 }
 
-func (s *stats) percentile(p float64) int64 {
+// percentile, p-yüzdelik gecikmeyi (ms) kova içi doğrusal interpolasyonla
+// tahmin eder.
+func (s *stats) percentile(p float64) float64 {
+	var counts [25]int64
 	total := int64(0)
 	for i := range s.hist {
-		total += s.hist[i].Load()
+		counts[i] = s.hist[i].Load()
+		total += counts[i]
 	}
 	if total == 0 {
 		return 0
 	}
-	target := int64(p * float64(total))
+	target := p * float64(total)
 	cum := int64(0)
-	for i := range s.hist {
-		cum += s.hist[i].Load()
-		if cum >= target {
-			if i == len(buckets) {
-				return buckets[len(buckets)-1] * 2
-			}
-			return buckets[i]
+	for i := 0; i < len(counts); i++ {
+		prev := cum
+		cum += counts[i]
+		if float64(cum) < target || counts[i] == 0 {
+			continue
 		}
+		lo := 0.0
+		if i > 0 {
+			lo = latencyBuckets[i-1]
+		}
+		hi := latencyBuckets[len(latencyBuckets)-1] * 2
+		if i < len(latencyBuckets) {
+			hi = latencyBuckets[i]
+		}
+		frac := (target - float64(prev)) / float64(counts[i])
+		return lo + frac*(hi-lo)
 	}
-	return 0
+	return latencyBuckets[len(latencyBuckets)-1]
+}
+
+// reset, ısınma penceresi sonunda sayaçları sıfırlar (S21.4 -warmup) —
+// rampa/ilk-bağlantı gürültüsü ölçüme karışmasın.
+func (s *stats) reset() {
+	s.sent.Store(0)
+	s.failed.Store(0)
+	s.enrolled.Store(0)
+	s.flowDatagrams.Store(0)
+	s.flowRecords.Store(0)
+	s.flowErrors.Store(0)
+	s.errDial.Store(0)
+	s.errHTTP.Store(0)
+	for i := range s.hist {
+		s.hist[i].Store(0)
+	}
+	s.start = time.Now()
+}
+
+// fail, bir başarısız isteği sınıflandırarak sayar (dial = bağlantı/timeout,
+// aksi = HTTP durum kodu / gövde).
+func (s *stats) fail(dial bool) {
+	s.failed.Add(1)
+	if dial {
+		s.errDial.Add(1)
+	} else {
+		s.errHTTP.Add(1)
+	}
 }
 
 func (s *stats) report(elapsed time.Duration) {
@@ -83,14 +139,64 @@ func (s *stats) report(elapsed time.Duration) {
 		secs = 1
 	}
 	if sent := s.sent.Load(); sent > 0 || s.enrolled.Load() > 0 {
-		fmt.Printf("[%6s] agent: gonderilen=%d hata=%d rps=%.1f p50<=%dms p95<=%dms p99<=%dms\n",
-			elapsed.Round(time.Second), sent, s.failed.Load(), float64(sent)/secs,
-			s.percentile(0.50), s.percentile(0.95), s.percentile(0.99))
+		fmt.Printf("[%6s] agent: gonderilen=%d hata=%d(dial=%d http=%d) rps=%.1f p50=%.0fms p95=%.0fms p99=%.0fms\n",
+			elapsed.Round(time.Second), sent, s.failed.Load(), s.errDial.Load(), s.errHTTP.Load(),
+			float64(sent)/secs, s.percentile(0.50), s.percentile(0.95), s.percentile(0.99))
 	}
 	if fr := s.flowRecords.Load(); fr > 0 {
 		fmt.Printf("[%6s] flow:  datagram=%d kayit=%d hata=%d rate=%.0f flow/sn\n",
 			elapsed.Round(time.Second), s.flowDatagrams.Load(), fr, s.flowErrors.Load(), float64(fr)/secs)
 	}
+}
+
+// summary, -out dosyasına yazılan makine-okur özet (S21.4).
+type summary struct {
+	Mode        string        `json:"mode"`
+	ElapsedSecs float64       `json:"elapsed_secs"`
+	Agent       *agentSummary `json:"agent,omitempty"`
+	Flow        *flowSummary  `json:"flow,omitempty"`
+}
+
+type agentSummary struct {
+	Sent     int64   `json:"sent"`
+	Failed   int64   `json:"failed"`
+	ErrDial  int64   `json:"err_dial"`
+	ErrHTTP  int64   `json:"err_http"`
+	Enrolled int64   `json:"enrolled"`
+	RPS      float64 `json:"rps"`
+	P50ms    float64 `json:"p50_ms"`
+	P95ms    float64 `json:"p95_ms"`
+	P99ms    float64 `json:"p99_ms"`
+}
+
+type flowSummary struct {
+	Datagrams int64   `json:"datagrams"`
+	Records   int64   `json:"records"`
+	Errors    int64   `json:"errors"`
+	RatePerS  float64 `json:"rate_per_s"`
+}
+
+func (s *stats) summarize(mode string) summary {
+	el := time.Since(s.start).Seconds()
+	if el <= 0 {
+		el = 1
+	}
+	sm := summary{Mode: mode, ElapsedSecs: el}
+	if s.sent.Load() > 0 || s.enrolled.Load() > 0 {
+		sm.Agent = &agentSummary{
+			Sent: s.sent.Load(), Failed: s.failed.Load(),
+			ErrDial: s.errDial.Load(), ErrHTTP: s.errHTTP.Load(),
+			Enrolled: s.enrolled.Load(), RPS: float64(s.sent.Load()) / el,
+			P50ms: s.percentile(0.50), P95ms: s.percentile(0.95), P99ms: s.percentile(0.99),
+		}
+	}
+	if s.flowRecords.Load() > 0 {
+		sm.Flow = &flowSummary{
+			Datagrams: s.flowDatagrams.Load(), Records: s.flowRecords.Load(),
+			Errors: s.flowErrors.Load(), RatePerS: float64(s.flowRecords.Load()) / el,
+		}
+	}
+	return sm
 }
 
 var (
@@ -125,6 +231,10 @@ func main() {
 	flowBurstFor := fl.Duration("flow-burst-for", 5*time.Minute, "patlama süresi")
 	flowExporters := fl.Int("flow-exporters", 8, "sahte exporter (cihaz) sayısı — şablon önbelleği çeşitliliği")
 	flowProto := fl.String("flow-proto", "mix", "datagram türü: v5 | v9 | ipfix | sflow | mix")
+
+	// ölçüm (S21.4)
+	warmup := fl.Duration("warmup", 0, "ısınma penceresi — bu süre sonunda sayaçlar sıfırlanır (rampa gürültüsünü ölçümden çıkarır)")
+	outPath := fl.String("out", "", "kapanışta JSON özet dosyası (boş = yalnız stdout)")
 	_ = fl.Parse(os.Args[1:])
 
 	needToken := *mode == "agent" || *mode == "mixed"
@@ -188,7 +298,34 @@ func main() {
 		}()
 	}
 
+	if *warmup > 0 {
+		go func() {
+			select {
+			case <-ctx.Done():
+			case <-time.After(*warmup):
+				st.reset()
+				fmt.Printf("[%6s] ısınma bitti — sayaçlar sıfırlandı\n", warmup.String())
+			}
+		}()
+	}
+
 	reportLoop(ctx, st, &wg)
+
+	if *outPath != "" {
+		if err := writeSummary(*outPath, st.summarize(*mode)); err != nil {
+			fmt.Fprintf(os.Stderr, "özet yazılamadı: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("özet → %s\n", *outPath)
+	}
+}
+
+func writeSummary(path string, sm summary) error {
+	b, err := json.MarshalIndent(sm, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o644)
 }
 
 // agentFleetConfig, sanal agent filosu parametreleri.
@@ -268,18 +405,18 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		st.failed.Add(1)
+		st.fail(true)
 		return
 	}
 	defer resp.Body.Close()
 	st.observe(time.Since(start))
 	if resp.StatusCode != http.StatusOK {
-		st.failed.Add(1)
+		st.fail(false)
 		return
 	}
 	var reply telemetry.HubReply
 	if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil || !reply.Accepted {
-		st.failed.Add(1)
+		st.fail(false)
 		return
 	}
 	st.enrolled.Add(1)
@@ -362,7 +499,7 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 		bb, _ := json.Marshal(batch)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, hub+"/api/v1/agent/telemetry", bytes.NewReader(bb))
 		if err != nil {
-			st.failed.Add(1)
+			st.fail(false)
 			return
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -373,7 +510,7 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 			if ctx.Err() != nil {
 				return
 			}
-			st.failed.Add(1)
+			st.fail(true)
 			continue
 		}
 		resp.Body.Close()
@@ -381,7 +518,7 @@ func runAgent(ctx context.Context, client *http.Client, hub, enrollToken, site s
 		if resp.StatusCode == http.StatusOK {
 			st.sent.Add(1)
 		} else {
-			st.failed.Add(1)
+			st.fail(false)
 		}
 	}
 }
