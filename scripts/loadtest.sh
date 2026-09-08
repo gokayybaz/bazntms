@@ -23,6 +23,7 @@ ENVFILE="${2:-$ROOT/loadtest/profiles/$PROFILE.env}"
 HUB_PANEL="${HUB_PANEL:-http://localhost:8080}"
 HUB_AGENT="${HUB_AGENT:-http://localhost:8081}"
 METRICS_URL="${METRICS_URL:-$HUB_PANEL/metrics}"
+PROM_URL="${PROM_URL:-http://localhost:9090}"   # boş = kapalı; çok-replika yığında --profile obs ile kullan
 FLOW_TARGET="${FLOW_TARGET:-127.0.0.1:12055}"
 ENROLL_TOKEN="${ENROLL_TOKEN:-scale-enroll-token}"
 AUTH_PASSWORD="${AUTH_PASSWORD:-demo123}"
@@ -112,7 +113,13 @@ scrape "$WORK/after.prom"
 
 wait "$LG_PID" || true
 
+PROM_ARG=()
+if [ -n "$PROM_URL" ] && curl -fsS "$PROM_URL/-/ready" >/dev/null 2>&1; then
+  echo ">> Prometheus bulundu ($PROM_URL) — toplam metrikler tüm replikalardan"
+  PROM_ARG=(--prom "$PROM_URL")
+fi
+
 python3 "$ROOT/scripts/perf_summary.py" \
   --before "$WORK/before.prom" --after "$WORK/after.prom" \
   --loadgen "$WORK/lg.json" --profile "$ENVFILE" --label "$PROFILE" \
-  --elapsed "$WINDOW_S" --stack "$STACK" --out "$OUT"
+  --elapsed "$WINDOW_S" --stack "$STACK" --out "$OUT" "${PROM_ARG[@]}"

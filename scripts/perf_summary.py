@@ -15,9 +15,27 @@ import json
 import re
 import sys
 import time
+import urllib.parse
+import urllib.request
 
 LINE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([-+0-9.eE]+|NaN|\+Inf|-Inf)\s*$')
 LBL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"')
+
+
+def prom_q(base, expr):
+    """Prometheus instant query → sonuçların toplamı (float). Hata → None."""
+    try:
+        url = base.rstrip("/") + "/api/v1/query?" + urllib.parse.urlencode({"query": expr})
+        with urllib.request.urlopen(url, timeout=10) as r:
+            d = json.load(r)
+        if d.get("status") != "success":
+            return None
+        res = d["data"]["result"]
+        if not res:
+            return 0.0
+        return sum(float(x["value"][1]) for x in res)
+    except Exception:
+        return None
 
 
 def parse_prom(path):
@@ -86,6 +104,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--stack", default="single-node")
     ap.add_argument("--label", default="")
+    ap.add_argument("--prom", default="", help="Prometheus URL — verilirse toplam metrikler tüm replikalar üzerinden buradan sorgulanır (çok-replika yığında /metrics tek replika görür)")
     args = ap.parse_args()
     label = args.label or args.profile
 
@@ -95,36 +114,59 @@ def main():
         lg = json.load(f)
     cfg = read_profile(args.profile)
     el = max(args.elapsed, 1.0)
+    w = f"{int(el)}s"
+
+    prom = args.prom.strip()
+    src = "prometheus (tüm replikalar)" if prom else "/metrics (tek replika)"
 
     is_tel = lambda l: l.get("path", "").endswith("/api/v1/agent/telemetry")
-    tel_reqs = total(a, "bazntms_http_requests_total", is_tel) - total(b, "bazntms_http_requests_total", is_tel)
-    tel_2xx = total(a, "bazntms_http_requests_total", lambda l: is_tel(l) and l.get("status", "").startswith("2")) \
-        - total(b, "bazntms_http_requests_total", lambda l: is_tel(l) and l.get("status", "").startswith("2"))
+
+    def diff_total(name, pred=None):
+        return total(a, name, pred) - total(b, name, pred)
+
+    def diff_one(name, pred=None):
+        return one(a, name, pred) - one(b, name, pred)
+
+    if prom:
+        tel_reqs = prom_q(prom, f'sum(increase(bazntms_http_requests_total{{path=~".*agent/telemetry"}}[{w}]))') or 0.0
+        tel_2xx = prom_q(prom, f'sum(increase(bazntms_http_requests_total{{path=~".*agent/telemetry",status=~"2.."}}[{w}]))') or 0.0
+        flow_recv = prom_q(prom, f'sum(increase(bazntms_flows_received_total[{w}]))') or 0.0
+        flow_drop = prom_q(prom, f'sum(increase(bazntms_flows_dropped_total[{w}]))') or 0.0
+        q_pending = prom_q(prom, f'max(max_over_time(bazntms_queue_pending[{w}]))') or 0.0
+        dp_sum = prom_q(prom, f'sum(increase(bazntms_devpoll_cycle_duration_seconds_sum[{w}]))') or 0.0
+        dp_cnt = prom_q(prom, f'sum(increase(bazntms_devpoll_cycle_duration_seconds_count[{w}]))') or 0.0
+        db_wait = prom_q(prom, f'sum(increase(bazntms_db_pool_wait_count_total[{w}]))') or 0.0
+        db_inuse = prom_q(prom, 'sum(bazntms_db_pool_in_use)') or 0.0
+    else:
+        tel_reqs = diff_total("bazntms_http_requests_total", is_tel)
+        tel_2xx = diff_total("bazntms_http_requests_total", lambda l: is_tel(l) and l.get("status", "").startswith("2"))
+        flow_recv = diff_total("bazntms_flows_received_total")
+        flow_drop = diff_total("bazntms_flows_dropped_total")
+        q_pending = one(a, "bazntms_queue_pending", default=0.0)
+        dp_cnt = diff_one("bazntms_devpoll_cycle_duration_seconds_count")
+        dp_sum = diff_one("bazntms_devpoll_cycle_duration_seconds_sum")
+        db_wait = diff_one("bazntms_db_pool_wait_count_total")
+        db_inuse = one(a, "bazntms_db_pool_in_use", default=0.0)
+
     tel_rps = tel_reqs / el
     tel_err_rate = 0.0 if tel_reqs == 0 else (tel_reqs - tel_2xx) / tel_reqs
-
-    flow_recv = total(a, "bazntms_flows_received_total") - total(b, "bazntms_flows_received_total")
-    flow_drop = total(a, "bazntms_flows_dropped_total") - total(b, "bazntms_flows_dropped_total")
     flow_rate = flow_recv / el
     flow_drop_rate = flow_drop / el
-
-    q_pending = one(a, "bazntms_queue_pending", default=0.0)
-
-    dp_cnt = one(a, "bazntms_devpoll_cycle_duration_seconds_count") - one(b, "bazntms_devpoll_cycle_duration_seconds_count")
-    dp_sum = one(a, "bazntms_devpoll_cycle_duration_seconds_sum") - one(b, "bazntms_devpoll_cycle_duration_seconds_sum")
     dp_avg = dp_sum / dp_cnt if dp_cnt > 0 else 0.0
 
-    db_wait = one(a, "bazntms_db_pool_wait_count_total") - one(b, "bazntms_db_pool_wait_count_total")
-    db_inuse = one(a, "bazntms_db_pool_in_use", default=0.0)
-
-    # store_write per table (ortalama süre ms)
+    # store_write per table (ortalama süre ms + satır)
     tables = sorted({l.get("table", "") for n, l, _ in a if n == "bazntms_store_write_duration_seconds_count"})
     writes = []
     for t in tables:
         p = lambda l, t=t: l.get("table") == t
-        c = one(a, "bazntms_store_write_duration_seconds_count", p) - one(b, "bazntms_store_write_duration_seconds_count", p)
-        s = one(a, "bazntms_store_write_duration_seconds_sum", p) - one(b, "bazntms_store_write_duration_seconds_sum", p)
-        rows = total(a, "bazntms_store_write_rows_total", p) - total(b, "bazntms_store_write_rows_total", p)
+        if prom:
+            c = prom_q(prom, f'sum(increase(bazntms_store_write_duration_seconds_count{{table="{t}"}}[{w}]))') or 0.0
+            s = prom_q(prom, f'sum(increase(bazntms_store_write_duration_seconds_sum{{table="{t}"}}[{w}]))') or 0.0
+            rows = prom_q(prom, f'sum(increase(bazntms_store_write_rows_total{{table="{t}"}}[{w}]))') or 0.0
+        else:
+            c = diff_one("bazntms_store_write_duration_seconds_count", p)
+            s = diff_one("bazntms_store_write_duration_seconds_sum", p)
+            rows = diff_total("bazntms_store_write_rows_total", p)
         if c > 0:
             writes.append((t, c, (s / c) * 1000.0, rows))
 
@@ -192,7 +234,7 @@ def main():
     lines.append(json.dumps(lg, indent=2, ensure_ascii=False))
     lines.append("```")
     lines.append("")
-    lines.append("## Hub /metrics deltaları")
+    lines.append(f"## Hub metrik deltaları — kaynak: {src}")
     lines.append("")
     lines.append(f"- telemetri istekleri: {tel_reqs:.0f} ({tel_rps:.0f}/sn), 2xx-dışı oran {tel_err_rate*100:.2f}%")
     lines.append(f"- flow alınan: {flow_recv:.0f} ({flow_rate:.0f}/sn), düşürülen: {flow_drop:.0f}")
