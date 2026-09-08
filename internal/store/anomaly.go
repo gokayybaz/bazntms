@@ -11,10 +11,11 @@ import (
 	"time"
 )
 
-// BaselineDayBucket, bir (mevsimsel kova, gün-yaşı) alt-toplamı. Anomali
-// baseline rebuild'i (S22.2) bunları gün yaşına göre EWMA ağırlığıyla
-// birleştirir: yeni günler eskilerden ağır basar (yavaş drift'e uyum).
+// BaselineDayBucket, bir (boyut anahtarı, mevsimsel kova, gün-yaşı) alt-toplamı.
+// Anomali baseline rebuild'i (S22.2/S22.3) bunları gün yaşına göre EWMA
+// ağırlığıyla birleştirir: yeni günler eskilerden ağır basar (yavaş drift).
 type BaselineDayBucket struct {
+	Key    string  // boyut anahtarı — fleet/local için "" ; site adı / agent id
 	Bucket int     // mevsimsel kova — SeasonalBucket ile aynı şema
 	DayAge int     // kaç gün önce (0 = son 24 saat)
 	N      int64   // örnek sayısı — MinSamples geçidi için (ağırlıksız)
@@ -105,12 +106,14 @@ func (s *sqlStore) SaveAnomalyBaseline(rows []AnomalyBaselineRow) error {
 		}
 	}
 	now := time.Now().Unix()
-	for _, r := range rows {
-		if _, err := tx.Exec(s.q(`INSERT INTO anomaly_baseline
-			(dim, metric, key, bucket, n, mean, m2, updated_ts) VALUES (?,?,?,?,?,?,?,?)`),
-			r.Dim, r.Metric, r.Key, r.Bucket, r.N, r.Mean, r.M2, now); err != nil {
-			return err
-		}
+	vals := make([][]any, len(rows))
+	for i, r := range rows {
+		vals[i] = []any{r.Dim, r.Metric, r.Key, r.Bucket, r.N, r.Mean, r.M2, now}
+	}
+	// per-agent baseline 5.000 agent × 48 kova = ~240k satır → bulk yazım.
+	if err := s.insertRows(tx, "anomaly_baseline",
+		[]string{"dim", "metric", "key", "bucket", "n", "mean", "m2", "updated_ts"}, vals); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

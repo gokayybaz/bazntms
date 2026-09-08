@@ -1,20 +1,25 @@
 package alert
 
-// Anomali tespiti (Faz 6.2 · S22.1 materyalize · S22.2 mevsimsel + EWMA):
-// AI'sız erken uyarı. Mevsimsel bir baseline (hafta içi/sonu × saat) ile o
-// anki verim karşılaştırılır; z-skoru eşiği aşılırsa "anomaly" uyarısı üretilir.
+// Anomali tespiti (Faz 6.2 · S22.1 materyalize · S22.2 mevsimsel · S22.3
+// çok-boyutlu): AI'sız erken uyarı. Mevsimsel bir baseline (hafta içi/sonu ×
+// saat) ile o anki verim boyut bazında (filo / saha / agent) karşılaştırılır;
+// z-skoru eşiği aşılırsa "anomaly" uyarısı üretilir.
 //
 //   - Baseline lider-kapılı saatlik rebuildAnomalyBaseline ile materyalize
 //     edilir (anomaly_baseline tablosu) — checkAnomaly değerlendirme başına
 //     canlı LAG taraması yapmaz.
 //   - Rebuild, (kova × gün-yaşı) alt-toplamlarını gün yaşına göre EWMA
 //     ağırlığıyla birleştirir: yeni günler eskilerden ağır basar (yavaş drift).
+//   - checkAnomaly her boyutu değerlendirir, adayları |z|'ye göre sıralar ve
+//     en çok MaxSurfaced tanesini yüzeye çıkarır (5.000 agent'ta uyarı seli
+//     olmasın). MinAbsDeltaBps altındaki sapmalar (sessiz-saat gürültüsü) elenir.
 //   - std = sqrt(m2/n) Go tarafında hesaplanır (SQLite'ta SQL sqrt yok).
 
 import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -27,9 +32,15 @@ type AnomalyConfig struct {
 	WindowMin   int     `json:"window_min"`  // karsilastirma penceresi dk (varsayilan 5)
 
 	// S22.2 — mevsimsel model
-	Seasonality  string  `json:"seasonality"`   // "hourly" | "weekday" | "dow" (varsayilan "weekday")
-	BaselineDays int     `json:"baseline_days"` // baseline penceresi gun (varsayilan 21)
-	EWMAHalfLife float64 `json:"ewma_half_life_days"`
+	Seasonality  string  `json:"seasonality"`         // "hourly" | "weekday" | "dow" (vars. "weekday")
+	BaselineDays int     `json:"baseline_days"`       // baseline penceresi gun (vars. 21)
+	EWMAHalfLife float64 `json:"ewma_half_life_days"` // gun yasi yari-omru; 0 = esit agirlik
+
+	// S22.3 — cok-boyutlu
+	PerSite        bool    `json:"per_site"`          // saha bazli baseline (vars. acik)
+	PerAgent       bool    `json:"per_agent"`         // agent bazli baseline (vars. acik)
+	MaxSurfaced    int     `json:"max_surfaced"`      // tek degerlendirmede en cok kac uyari (vars. 8)
+	MinAbsDeltaBps float64 `json:"min_abs_delta_bps"` // gurultu tabani (vars. 500000 = 0.5 Mbit/sn)
 }
 
 // seasonalities, gecerli Seasonality degerleri (bilinmeyen → "weekday").
@@ -37,13 +48,17 @@ var seasonalities = map[string]bool{"hourly": true, "weekday": true, "dow": true
 
 func DefaultAnomalyConfig() AnomalyConfig {
 	return AnomalyConfig{
-		Enabled:      true,
-		Sensitivity:  3.0,
-		MinSamples:   120, // ~2 saat ornek (1/sn) / 2 saat filo 60sn kova
-		WindowMin:    5,
-		Seasonality:  "weekday",
-		BaselineDays: 21,
-		EWMAHalfLife: 10, // gun — 0 = esit agirlik
+		Enabled:        true,
+		Sensitivity:    3.0,
+		MinSamples:     120, // ~2 saat ornek (1/sn) / 2 saat filo 60sn kova
+		WindowMin:      5,
+		Seasonality:    "weekday",
+		BaselineDays:   21,
+		EWMAHalfLife:   10, // gun — 0 = esit agirlik
+		PerSite:        true,
+		PerAgent:       true,
+		MaxSurfaced:    8,
+		MinAbsDeltaBps: 500_000,
 	}
 }
 
@@ -71,6 +86,21 @@ func (a AnomalyConfig) normalized() AnomalyConfig {
 	if a.EWMAHalfLife < 0 {
 		a.EWMAHalfLife = 0
 	}
+	// MaxSurfaced == 0 → config S22.3 oncesi; yeni alanlar icin varsayilanlari
+	// benimse (per-site/agent'ı acık getir — mevcut kurulumlarda da devrede olsun).
+	if a.MaxSurfaced == 0 {
+		a.PerSite, a.PerAgent = d.PerSite, d.PerAgent
+		a.MaxSurfaced = d.MaxSurfaced
+		if a.MinAbsDeltaBps == 0 {
+			a.MinAbsDeltaBps = d.MinAbsDeltaBps
+		}
+	}
+	if a.MaxSurfaced < 0 {
+		a.MaxSurfaced = d.MaxSurfaced
+	}
+	if a.MinAbsDeltaBps < 0 {
+		a.MinAbsDeltaBps = 0
+	}
 	return a
 }
 
@@ -88,96 +118,135 @@ func NormalizeConfig(cfg Config) Config {
 	return cfg
 }
 
-// checkAnomaly, periyodik cagirilir: mevcut pencere verimini bu zaman
-// diliminin (mevsimsel kova) baseline'i ile karsilastirir. Yalnizca baseline
-// guvenilir (>= MinSamples) ve std > 0 iken degerlendirir. Baseline once filo
-// (dim="fleet"), yetersizse hub yerel yakalamasi (dim="local").
+// anomalyCand, degerlendirmede esigi asan tek bir (boyut, anahtar) sapmasi.
+type anomalyCand struct {
+	dim, key          string
+	z, cur, mean, std float64
+}
+
+// checkAnomaly, periyodik cagirilir: her boyutta mevcut pencere verimini bu
+// zaman diliminin (mevsimsel kova) baseline'i ile karsilastirir, adaylari
+// buyuklukce siralar ve en cok MaxSurfaced tanesini atesler.
 func (m *Manager) checkAnomaly(cfg Config) {
 	ac := cfg.Anomaly.normalized()
 	if !ac.Enabled {
 		return
 	}
 	curBucket := store.SeasonalBucket(time.Now(), ac.Seasonality)
-	base, fleet := m.anomalyBaseline(curBucket, int64(ac.MinSamples))
-	if base == nil {
-		slog.Debug("anomali baseline isiniyor — yeterli ornek yok", "kova", curBucket, "min", ac.MinSamples)
+	winStart := time.Now().Add(-time.Duration(ac.WindowMin) * time.Minute)
+	var cands []anomalyCand
+
+	eval := func(dim string, baseline []store.AnomalyBaselineRow, cur map[string]float64) {
+		for i := range baseline {
+			b := baseline[i]
+			if b.Bucket != curBucket || b.N < int64(ac.MinSamples) {
+				continue
+			}
+			std := b.Std()
+			if std <= 0 {
+				continue
+			}
+			c, ok := cur[b.Key]
+			if !ok {
+				continue
+			}
+			if math.Abs(c-b.Mean) < ac.MinAbsDeltaBps {
+				continue // sessiz-saat gurultu tabani
+			}
+			if z := (c - b.Mean) / std; math.Abs(z) >= ac.Sensitivity {
+				cands = append(cands, anomalyCand{dim: dim, key: b.Key, z: z, cur: c, mean: b.Mean, std: std})
+			}
+		}
+	}
+
+	// filo (her zaman) — baseline yoksa hub-yerel'e dus
+	if rows := m.loadBaseline("fleet"); len(rows) > 0 {
+		if v, err := m.st.FleetAvgBpsSince(winStart); err == nil {
+			eval("fleet", rows, map[string]float64{"": v})
+		}
+	} else if rows := m.loadBaseline("local"); len(rows) > 0 {
+		if v, err := m.st.AvgBpsSince(winStart); err == nil {
+			eval("local", rows, map[string]float64{"": v})
+		}
+	}
+	if ac.PerSite {
+		if rows := m.loadBaseline("site"); len(rows) > 0 {
+			if cur, err := m.st.AvgBpsByDim("site", winStart); err == nil {
+				eval("site", rows, cur)
+			}
+		}
+	}
+	if ac.PerAgent {
+		if rows := m.loadBaseline("agent"); len(rows) > 0 {
+			if cur, err := m.st.AvgBpsByDim("agent", winStart); err == nil {
+				eval("agent", rows, cur)
+			}
+		}
+	}
+
+	if len(cands) == 0 {
 		return
 	}
-	std := base.Std()
-	if std <= 0 {
-		return
+	sort.Slice(cands, func(i, j int) bool { return math.Abs(cands[i].z) > math.Abs(cands[j].z) })
+	limit := ac.MaxSurfaced
+	if limit <= 0 || limit > len(cands) {
+		limit = len(cands)
 	}
-	window := time.Duration(ac.WindowMin) * time.Minute
-	var cur float64
-	var err error
-	if fleet {
-		cur, err = m.st.FleetAvgBpsSince(time.Now().Add(-window))
-	} else {
-		cur, err = m.st.AvgBpsSince(time.Now().Add(-window))
+	slog.Debug("anomali", "kova", curBucket, "aday", len(cands), "yuzeye", limit)
+	for _, c := range cands[:limit] {
+		direction := "yükseliş"
+		if c.z < 0 {
+			direction = "düşüş"
+		}
+		m.fire("anomaly", fmt.Sprintf("bps:%s:%s:%d", c.dim, c.key, curBucket),
+			fmt.Sprintf("%s: alışılmadık trafik sapması (%s) — %.0f bps, bu zaman dilimi ortalaması %.0f ± %.0f (z=%.1f, son %d dk)",
+				anomalyScope(c.dim, c.key), direction, c.cur, c.mean, c.std, c.z, ac.WindowMin))
 	}
+}
+
+func (m *Manager) loadBaseline(dim string) []store.AnomalyBaselineRow {
+	rows, err := m.st.LoadAnomalyBaseline(dim, "bps")
 	if err != nil {
-		return
+		return nil
 	}
-	z := (cur - base.Mean) / std
-	src := "yerel"
-	if fleet {
-		src = "filo"
-	}
-	slog.Debug("anomali baseline", "kaynak", src, "kova", curBucket, "n", base.N,
-		"ort_bps", int64(base.Mean), "std_bps", int64(std), "son_bps", int64(cur), "z", math.Round(z*10)/10)
-	direction := "yükseliş"
-	if z < 0 {
-		direction = "düşüş"
-	}
-	if math.Abs(z) >= ac.Sensitivity {
-		m.fire("anomaly", fmt.Sprintf("bps:%d", curBucket),
-			fmt.Sprintf("Trafiğe alışılmadık sapma (%s): %.0f bps — bu zaman dilimi ortalaması %.0f ± %.0f (z=%.1f, son %d dk)",
-				direction, cur, base.Mean, std, z, ac.WindowMin))
-	}
+	return rows
 }
 
-// anomalyBaseline, mevcut kovada >= minSamples ornek iceren ilk baseline
-// satirini dondurur: once filo (dim="fleet"), sonra hub yerel (dim="local").
-// fleet=true ise current-window karsilastirmasi da FleetAvgBpsSince ile
-// yapilmali. Iki boyutta da yeterli veri yoksa (base=nil) motor sessiz kalir.
-//
-// S22.1: kaynak materyalize anomaly_baseline tablosu (canli LAG taramasi yok).
-func (m *Manager) anomalyBaseline(bucket int, minSamples int64) (base *store.AnomalyBaselineRow, fleet bool) {
-	if rows, err := m.st.LoadAnomalyBaseline("fleet", "bps"); err == nil {
-		if b := baselineBucket(rows, bucket); b != nil && b.N >= minSamples {
-			return b, true
-		}
+// anomalyScope, uyari mesajindaki insan-okur boyut etiketi.
+func anomalyScope(dim, key string) string {
+	switch dim {
+	case "fleet":
+		return "Filo geneli"
+	case "local":
+		return "Hub yerel"
+	case "site":
+		return "Saha " + key
+	case "agent":
+		return "Agent #" + key
 	}
-	if rows, err := m.st.LoadAnomalyBaseline("local", "bps"); err == nil {
-		if b := baselineBucket(rows, bucket); b != nil && b.N >= minSamples {
-			return b, false
-		}
-	}
-	return nil, false
-}
-
-func baselineBucket(rows []store.AnomalyBaselineRow, bucket int) *store.AnomalyBaselineRow {
-	for i := range rows {
-		if rows[i].Bucket == bucket {
-			return &rows[i]
-		}
-	}
-	return nil
+	return dim
 }
 
 // rebuildAnomalyBaseline, lider-kapili saatlik: materyalize baseline tablosunu
-// filo (agent_iface_samples) ve hub yerel (samples) mevsimsel alt-toplamlariyla
-// gunceller.
+// tum etkin boyutlarin (filo / yerel / saha / agent) mevsimsel
+// alt-toplamlariyla gunceller.
 func (m *Manager) rebuildAnomalyBaseline(cfg Config) {
 	ac := cfg.Anomaly.normalized()
-	var rows []store.AnomalyBaselineRow
-	if fb, err := m.st.FleetBaselineDayBuckets(ac.BaselineDays, ac.Seasonality); err == nil {
-		rows = append(rows, combineBaseline("fleet", "bps", fb, ac.EWMAHalfLife)...)
-	} else {
-		slog.Debug("anomali baseline: filo alt-toplamlari okunamadi", "err", err)
+	dims := []string{"fleet", "local"}
+	if ac.PerSite {
+		dims = append(dims, "site")
 	}
-	if lb, err := m.st.BaselineDayBuckets(ac.BaselineDays, ac.Seasonality); err == nil {
-		rows = append(rows, combineBaseline("local", "bps", lb, ac.EWMAHalfLife)...)
+	if ac.PerAgent {
+		dims = append(dims, "agent")
+	}
+	var rows []store.AnomalyBaselineRow
+	for _, dim := range dims {
+		bk, err := m.st.BaselineDayBuckets(dim, ac.BaselineDays, ac.Seasonality)
+		if err != nil {
+			slog.Debug("anomali baseline alt-toplamlari okunamadi", "dim", dim, "err", err)
+			continue
+		}
+		rows = append(rows, combineBaseline(dim, "bps", bk, ac.EWMAHalfLife)...)
 	}
 	if len(rows) == 0 {
 		return // taze kurulum / veri yok — tabloya dokunma
@@ -187,21 +256,26 @@ func (m *Manager) rebuildAnomalyBaseline(cfg Config) {
 	}
 }
 
-// combineBaseline, (kova × gun-yasi) alt-toplamlarini kova basina tek bir
-// baseline satirina indirger. halfLife > 0 ise her gun-yasi 2^(-yas/halfLife)
-// ile agirliklanir (EWMA): ortalama ve varyans agirlikli, n (MinSamples
-// geridi) agirliksiz ham ornek sayisi.
+// combineBaseline, (anahtar × kova × gun-yasi) alt-toplamlarini (anahtar × kova)
+// basina tek bir baseline satirina indirger. halfLife > 0 ise her gun-yasi
+// 2^(-yas/halfLife) ile agirliklanir (EWMA): ortalama/varyans agirlikli, n
+// (MinSamples geridi) agirliksiz ham ornek sayisi.
 func combineBaseline(dim, metric string, buckets []store.BaselineDayBucket, halfLife float64) []store.AnomalyBaselineRow {
+	type kb struct {
+		key    string
+		bucket int
+	}
 	type acc struct {
 		rawN             int64
 		wN, wSum, wSumSq float64
 	}
-	byBucket := map[int]*acc{}
+	byKB := map[kb]*acc{}
 	for _, b := range buckets {
-		a := byBucket[b.Bucket]
+		k := kb{b.Key, b.Bucket}
+		a := byKB[k]
 		if a == nil {
 			a = &acc{}
-			byBucket[b.Bucket] = a
+			byKB[k] = a
 		}
 		w := 1.0
 		if halfLife > 0 {
@@ -212,8 +286,8 @@ func combineBaseline(dim, metric string, buckets []store.BaselineDayBucket, half
 		a.wSum += w * b.Sum
 		a.wSumSq += w * b.SumSq
 	}
-	out := make([]store.AnomalyBaselineRow, 0, len(byBucket))
-	for bucket, a := range byBucket {
+	out := make([]store.AnomalyBaselineRow, 0, len(byKB))
+	for k, a := range byKB {
 		if a.wN <= 0 {
 			continue
 		}
@@ -223,7 +297,7 @@ func combineBaseline(dim, metric string, buckets []store.BaselineDayBucket, half
 			variance = 0 // kayan nokta artigi
 		}
 		out = append(out, store.AnomalyBaselineRow{
-			Dim: dim, Metric: metric, Key: "", Bucket: bucket,
+			Dim: dim, Metric: metric, Key: k.key, Bucket: k.bucket,
 			N: a.rawN, Mean: mean, M2: float64(a.rawN) * variance,
 		})
 	}

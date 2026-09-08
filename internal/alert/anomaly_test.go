@@ -71,8 +71,10 @@ func TestAnomalyFires(t *testing.T) {
 
 	// bu test z-skoru sıçrama mantığını sınar, mevsimsel kovayı değil —
 	// "hourly" ile geçmiş 5 günün hepsi aynı kovaya düşer (hafta içi/sonu ayrımı yok).
+	// Değerler toy ölçekte (~300k bps spike) → S22.3 mutlak-delta tabanını kapat.
 	cfg := DefaultConfig()
 	cfg.Anomaly.Seasonality = "hourly"
+	cfg.Anomaly.MinAbsDeltaBps = 0
 	m.rebuildAnomalyBaseline(cfg) // S22.1: materyalize baseline (run() döngüsünün saatlik yaptığı iş)
 	m.checkAnomaly(cfg)
 

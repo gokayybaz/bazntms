@@ -38,9 +38,9 @@ func TestFleetBaseline(t *testing.T) {
 		}
 	}
 
-	stats, err := st.FleetBaselineDayBuckets(21, "hourly")
+	stats, err := st.BaselineDayBuckets("fleet", 21, "hourly")
 	if err != nil {
-		t.Fatalf("FleetBaselineDayBuckets: %v", err)
+		t.Fatalf("BaselineDayBuckets(fleet): %v", err)
 	}
 	var total int64
 	for _, b := range stats {

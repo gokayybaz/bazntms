@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"net"
 	"time"
 )
@@ -89,42 +88,11 @@ func (s *sqlStore) PruneTopology(retention time.Duration) error {
 	return err
 }
 
-// --- istatistiksel baseline (Faz 6.2 · S22.2 mevsimsel + EWMA) ---
+// --- istatistiksel baseline (Faz 6.2 · S22.2 mevsimsel + S22.3 çok-boyutlu) ---
 //
-// Anomali motorunun baseline'ı: (mevsimsel kova × gün-yaşı) alt-toplamları.
-// std, alert katmanında sqrt(Σw·x² / Σw − mean²) olarak hesaplanır (SQL sqrt
-// yerine — SQLite uyumluluğu). Kaynak: hub yerel yakalaması (`samples`);
-// çoklu-hub'da boş → FleetBaselineDayBuckets devreye girer.
-
-// BaselineDayBuckets, son `days` günün hub-yerel baseline'ını (mevsimsel kova ×
-// gün-yaşı) alt-toplamları olarak döndürür.
-func (s *sqlStore) BaselineDayBuckets(days int, seasonality string) ([]BaselineDayBucket, error) {
-	if days <= 0 {
-		days = 21
-	}
-	_, offset := time.Now().Zone()
-	now := time.Now().Unix()
-	since := now - int64(days)*86400
-	q := fmt.Sprintf(`SELECT %s AS bucket, (%d - ts) / 86400 AS day_age, COUNT(*),
-			COALESCE(SUM(bps_in + bps_out), 0),
-			COALESCE(SUM((bps_in + bps_out) * (bps_in + bps_out)), 0)
-		FROM samples WHERE ts >= ?
-		GROUP BY bucket, day_age`, seasonalBucketExpr(seasonality, fmt.Sprintf("(ts + %d)", offset)), now)
-	rows, err := s.db.Query(s.q(q), since)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []BaselineDayBucket{}
-	for rows.Next() {
-		var b BaselineDayBucket
-		if err := rows.Scan(&b.Bucket, &b.DayAge, &b.N, &b.Sum, &b.SumSq); err != nil {
-			return nil, err
-		}
-		out = append(out, b)
-	}
-	return out, rows.Err()
-}
+// Baseline alt-toplam sorguları (mevsimsel kova × gün-yaşı, boyut bazlı) artık
+// fleet_baseline.go'da (BaselineDayBuckets — dim="local"|"fleet"|"site"|"agent").
+// Buradaki iki fonksiyon current-window karşılaştırması içindir.
 
 // AvgBpsSince, penceredeki ortalama toplam verim (bps_in + bps_out).
 func (s *sqlStore) AvgBpsSince(since time.Time) (float64, error) {
