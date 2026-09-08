@@ -271,7 +271,9 @@ func TestTimescaleSetup(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.hypertables`).Scan(&hypertables); err != nil || hypertables < 9 {
 		t.Fatalf("hypertable sayisi: %d (err: %v)", hypertables, err)
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates WHERE view_name IN ('samples_1m','samples_1h','flows_1h','process_traffic_1h')`).Scan(&caggs); err != nil || caggs != 4 {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates
+		WHERE view_name IN ('samples_1m','samples_1h','flows_1h','process_traffic_1h',
+			'flows_dst_1h','flows_src_1h','agent_iface_1h')`).Scan(&caggs); err != nil || caggs != 7 {
 		t.Fatalf("continuous aggregate sayisi: %d (err: %v)", caggs, err)
 	}
 	// S21.12: process_traffic_1h cagg + yenileme/retention job'ları

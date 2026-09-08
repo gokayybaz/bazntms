@@ -105,6 +105,39 @@ func setupTimescale(db *sql.DB) bool {
 		FROM flows GROUP BY bucket, device, proto WITH NO DATA`,
 		"continuous aggregate flows_1h")
 
+	// Uzak uç nokta hacim trendi: hedef/kaynak IP başına saatlik toplam
+	// (S21.11). `FleetTopEndpoints` (geo haritası + rapor "en yoğun uçlar")
+	// 50k flow/sn'de ham `flows` üstünde UNION+GROUP BY ile dakikalarca
+	// sürüyordu. device KASITLI grupta değil — site-kapsamlı sorgu ham yola
+	// düşer (o filolar küçüktür).
+	tsTry(db, `CREATE MATERIALIZED VIEW IF NOT EXISTS flows_dst_1h
+		WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+		SELECT time_bucket(3600, ts) AS bucket, dst,
+			SUM(octets) AS octets, SUM(packets) AS packets
+		FROM flows WHERE dst <> '' GROUP BY bucket, dst WITH NO DATA`,
+		"continuous aggregate flows_dst_1h")
+	tsTry(db, `CREATE MATERIALIZED VIEW IF NOT EXISTS flows_src_1h
+		WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+		SELECT time_bucket(3600, ts) AS bucket, src,
+			SUM(octets) AS octets, SUM(packets) AS packets
+		FROM flows WHERE src <> '' GROUP BY bucket, src WITH NO DATA`,
+		"continuous aggregate flows_src_1h")
+
+	// Agent arayüz verim trendi: (agent, arayüz) başına saatlik ilk/son
+	// kümülatif sayaç (S21.11). rx/tx_bytes KÜMÜLATİF → hourly delta
+	// last-first; FleetTrafficBuckets uzun pencerede (7g rapor) ham
+	// agent_iface_samples üzerinde LAG yerine buradan okur (5000 agent'ta
+	// 200M satır taraması). Sayaç sıfırlanması → sorguda CASE ile 0.
+	tsTry(db, `CREATE MATERIALIZED VIEW IF NOT EXISTS agent_iface_1h
+		WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+		SELECT time_bucket(3600, ts) AS bucket, agent_id, name,
+			first(rx_bytes, ts) AS rx_first, last(rx_bytes, ts) AS rx_last,
+			first(tx_bytes, ts) AS tx_first, last(tx_bytes, ts) AS tx_last,
+			first(rx_packets + tx_packets, ts) AS pk_first,
+			last(rx_packets + tx_packets, ts) AS pk_last
+		FROM agent_iface_samples GROUP BY bucket, agent_id, name WITH NO DATA`,
+		"continuous aggregate agent_iface_1h")
+
 	// Sürec bazli bant genisligi trendi: (agent, sürec) basina saatlik toplam
 	// (S21.12). process_traffic 5000 agent'ta yuksek hacimli; ham tablo
 	// `-retention-hours`'da (vars. 7g) duser, bu cagg trendi 1 yil tutar →
@@ -134,6 +167,13 @@ func setupTimescale(db *sql.DB) bool {
 		start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
 		schedule_interval => INTERVAL '1 hour')`,
 		"cagg policy process_traffic_1h")
+	for _, v := range []string{"flows_dst_1h", "flows_src_1h", "agent_iface_1h"} {
+		tsTry(db, `SELECT add_continuous_aggregate_policy('`+v+`',
+			start_offset => 172800::BIGINT, end_offset => 3600::BIGINT,
+			schedule_interval => INTERVAL '1 hour')`, "cagg policy "+v)
+		tsTry(db, `SELECT add_retention_policy('`+v+`', drop_after => 63072000::BIGINT,
+			schedule_interval => INTERVAL '1 hour', if_not_exists => true)`, "retention "+v+" (2y)")
+	}
 
 	// downsample cagg'leri icin retention: 1dk kova 90g, 1sa kova 2y.
 	// Param adi `drop_after` (eski `retain_after` TS 2.x'te YOK — sessizce

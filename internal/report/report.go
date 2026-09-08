@@ -61,12 +61,18 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 		AlertCounts: map[string]int{},
 	}
 
-	buckets, err := st.FleetTrafficBuckets(since, bucketSecs)
+	// 2+ günlük raporlarda saatlik kova: TimescaleDB'de agent_iface_1h
+	// cagg'inden okunur (S21.11 — ham LAG taraması ölçekte dakikalar sürüyor).
+	bs := bucketSecs
+	if days >= 2 {
+		bs = 3600
+	}
+	buckets, err := st.FleetTrafficBuckets(since, bs)
 	if err != nil {
 		return nil, fmt.Errorf("filo trafik serisi: %w", err)
 	}
-	summarize(d, buckets)
-	d.Daily = rollupDaily(buckets)
+	summarize(d, buckets, bs)
+	d.Daily = rollupDaily(buckets, bs)
 
 	agents, err := st.ListAgents(2*time.Minute, "")
 	if err != nil {
@@ -126,7 +132,7 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 
 // summarize, kova serisinden donem ozetini (ort/zirve bit/sn, toplam GB) doldurur.
 // store.Bucket.In/Out bayt/sn'dir → bit/sn icin ×8.
-func summarize(d *Data, buckets []store.Bucket) {
+func summarize(d *Data, buckets []store.Bucket, bucketSecs int) {
 	var sumIn, sumOut, totalBytes float64
 	for _, b := range buckets {
 		inBps, outBps := b.In*8, b.Out*8
@@ -150,7 +156,7 @@ func summarize(d *Data, buckets []store.Bucket) {
 // rollupDaily, 5 dk kovalari yerel gece yarisina hizali gunlere toplar.
 // DayTotal.Samples = gunde kapsanan saniye sayisi (sablonun dailyGB
 // yardimcisi bunu "saniye" olarak yorumlar).
-func rollupDaily(buckets []store.Bucket) []store.DayTotal {
+func rollupDaily(buckets []store.Bucket, bucketSecs int) []store.DayTotal {
 	_, offset := time.Now().Zone()
 	type acc struct {
 		sumIn, sumOut   float64

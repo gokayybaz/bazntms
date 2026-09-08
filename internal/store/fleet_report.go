@@ -35,6 +35,34 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 	if maxDt < 1800 {
 		maxDt = 1800
 	}
+
+	// Uzun pencere + saatlik kova + TimescaleDB → agent_iface_1h cagg'inden
+	// oku (S21.11 — 5000 agent'ta ham LAG taraması 200M satır). Kova saatlik
+	// olduğundan cagg'in ilk/son sayaç farkı doğrudan kullanılır; sayaç
+	// sıfırlanması CASE ile 0.
+	if s.ts && bucketSecs >= 3600 {
+		if r2, e2 := s.db.Query(s.q(`SELECT bucket,
+				COALESCE(SUM(CASE WHEN rx_last >= rx_first THEN rx_last - rx_first ELSE 0 END), 0),
+				COALESCE(SUM(CASE WHEN tx_last >= tx_first THEN tx_last - tx_first ELSE 0 END), 0),
+				COALESCE(SUM(CASE WHEN pk_last >= pk_first THEN pk_last - pk_first ELSE 0 END), 0)
+			FROM agent_iface_1h WHERE bucket >= ?
+			GROUP BY bucket ORDER BY bucket`), since.Unix()); e2 == nil {
+			defer r2.Close()
+			var out []Bucket
+			div := float64(bucketSecs)
+			for r2.Next() {
+				var b Bucket
+				var rx, tx, pk uint64
+				if err := r2.Scan(&b.Ts, &rx, &tx, &pk); err != nil {
+					return nil, err
+				}
+				b.In, b.Out, b.Pps = float64(rx)/div, float64(tx)/div, float64(pk)/div
+				out = append(out, b)
+			}
+			return out, r2.Err()
+		}
+	}
+
 	q := `SELECT (d.ts / ?) * ? AS bucket,
 			COALESCE(SUM(d.rx_d), 0), COALESCE(SUM(d.tx_d), 0), COALESCE(SUM(d.pk_d), 0)
 		FROM (
@@ -171,7 +199,11 @@ func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int, site string) ([
 	if limit <= 0 || limit > 100 {
 		limit = 15
 	}
-	// site bos degilse: flows cihaz site'ina, process_traffic agent site'ina gore filtrelenir.
+	// Kaynak seçimi (S21.11): site-genel + TimescaleDB → flows_{dst,src}_1h
+	// cagg'leri (ham `flows` 50k/sn'de UNION+GROUP BY ile dakikalarca sürüyor).
+	// Site-kapsamlı sorgu cihaz filtresi ister → ham yola düşer ama son 2M
+	// satırla sınırlanır (temsili "güncel en yoğun uçlar").
+	dstT, srcT, tsCol := "flows", "flows", "ts"
 	flowSite, ptSite := "", ""
 	flowArgs := []any{since.Unix(), since.Unix()}
 	ptArgs := []any{since.Unix()}
@@ -180,6 +212,15 @@ func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int, site string) ([
 		flowArgs = []any{since.Unix(), site, since.Unix(), site}
 		ptSite = ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
 		ptArgs = []any{since.Unix(), site}
+	} else if s.ts {
+		if _, e := s.db.Exec(`SELECT 1 FROM flows_dst_1h LIMIT 1`); e == nil {
+			dstT, srcT, tsCol = "flows_dst_1h", "flows_src_1h", "bucket"
+		}
+	}
+	scanCap := ""
+	if dstT == "flows" {
+		// ham yol: temsili son 2M satır (aksi halde 50k/sn'de dakikalar sürer)
+		scanCap = ` ORDER BY ` + tsCol + ` DESC LIMIT 2000000`
 	}
 	flowArgs = append(flowArgs, limit)
 	ptArgs = append(ptArgs, limit)
@@ -187,9 +228,11 @@ func (s *sqlStore) FleetTopEndpoints(since time.Time, limit int, site string) ([
 	rows, err := s.db.Query(s.q(`SELECT ip,
 			COALESCE(SUM(in_oct), 0), COALESCE(SUM(out_oct), 0), COALESCE(SUM(pk), 0)
 		FROM (
-			SELECT dst AS ip, octets AS in_oct, 0 AS out_oct, packets AS pk FROM flows WHERE ts >= ?`+flowSite+`
+			SELECT dst AS ip, octets AS in_oct, 0 AS out_oct, packets AS pk FROM (
+				SELECT dst, octets, packets FROM `+dstT+` WHERE `+tsCol+` >= ?`+flowSite+scanCap+`) a
 			UNION ALL
-			SELECT src AS ip, 0 AS in_oct, octets AS out_oct, packets AS pk FROM flows WHERE ts >= ?`+flowSite+`
+			SELECT src AS ip, 0 AS in_oct, octets AS out_oct, packets AS pk FROM (
+				SELECT src, octets, packets FROM `+srcT+` WHERE `+tsCol+` >= ?`+flowSite+scanCap+`) b
 		) t
 		WHERE ip <> ''
 		GROUP BY ip ORDER BY SUM(in_oct + out_oct) DESC LIMIT ?`), flowArgs...)
