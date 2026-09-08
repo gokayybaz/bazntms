@@ -44,20 +44,49 @@ type DeviceIface struct {
 	IfIndex     int64  `json:"if_index"`
 	Name        string `json:"name"`
 	Alias       string `json:"alias"`
-	Speed       uint64 `json:"speed"`
-	OperStatus  int    `json:"oper_status"` // 1=up
+	Speed       uint64 `json:"speed"` // ifSpeed (bit/sn); >4 Gbps'te taşar → HighSpeed
+	OperStatus  int    `json:"oper_status"`
 	RxBytes     uint64 `json:"rx_bytes"`
 	TxBytes     uint64 `json:"tx_bytes"`
 	InErrors    uint64 `json:"in_errors"`
 	OutErrors   uint64 `json:"out_errors"`
 	InDiscards  uint64 `json:"in_discards"`
 	OutDiscards uint64 `json:"out_discards"`
+	// Faz 23-C: kapasite farkındalığı.
+	IfType    int    `json:"if_type"`    // IANAifType (0 = bilinmeyen)
+	HighSpeed uint64 `json:"high_speed"` // ifHighSpeed (Mbps; 0 = yok)
+}
+
+// SpeedBps, güvenilir arayüz hızını bit/sn olarak döndürür: ifHighSpeed
+// (Mbps) varsa onu, yoksa ifSpeed'i. 0 = bilinmiyor (kullanım hesaplanamaz).
+func (i DeviceIface) SpeedBps() uint64 {
+	if i.HighSpeed > 0 {
+		return i.HighSpeed * 1_000_000
+	}
+	return i.Speed
+}
+
+// SpeedSource, hız değerinin kaynağı: "ifHighSpeed" | "ifSpeed" | "" (bilinmiyor).
+func (i DeviceIface) SpeedSource() string {
+	if i.HighSpeed > 0 {
+		return "ifHighSpeed"
+	}
+	if i.Speed > 0 {
+		return "ifSpeed"
+	}
+	return ""
 }
 
 type DeviceIfaceRate struct {
 	DeviceIface
 	RxBps float64 `json:"rx_bps"`
 	TxBps float64 `json:"tx_bps"`
+	// Faz 23-C: yalnız güvenilir hız + oper=up iken hesaplanır (aksi -1).
+	RxUtilPct   float64 `json:"rx_util_pct"`
+	TxUtilPct   float64 `json:"tx_util_pct"`
+	Class       string  `json:"class"`        // ethernet|wifi|loopback|tunnel|vpn|bridge|vlan|ppp|unknown
+	SpeedBitsPS uint64  `json:"speed_bps"`    // etkin hız (bit/sn); 0 = bilinmiyor
+	SpeedSrc    string  `json:"speed_source"` // ifHighSpeed | ifSpeed | ""
 }
 
 type DeviceWithStatus struct {
@@ -169,19 +198,19 @@ func (s *sqlStore) SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []Dev
 	rows := make([][]any, len(ifaces))
 	for k, i := range ifaces {
 		rows[k] = []any{deviceID, ts, i.IfIndex, i.Name, i.Alias, i.Speed, i.OperStatus,
-			i.RxBytes, i.TxBytes, i.InErrors, i.OutErrors, i.InDiscards, i.OutDiscards}
+			i.RxBytes, i.TxBytes, i.InErrors, i.OutErrors, i.InDiscards, i.OutDiscards, i.IfType, i.HighSpeed}
 	}
 	return s.bulkInsert("device_iface_samples",
 		[]string{"device_id", "ts", "if_index", "name", "alias", "speed", "oper_status",
-			"rx_bytes", "tx_bytes", "in_errors", "out_errors", "in_discards", "out_discards"}, rows)
+			"rx_bytes", "tx_bytes", "in_errors", "out_errors", "in_discards", "out_discards", "if_type", "high_speed"}, rows)
 }
 
 // LatestDeviceIfaces, son orneklerden arayuz verimlerini hesaplar.
 func (s *sqlStore) LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error) {
 	rows, err := s.db.Query(s.q(`SELECT if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes,
-		in_errors, out_errors, in_discards, out_discards, ts FROM (
+		in_errors, out_errors, in_discards, out_discards, if_type, high_speed, ts FROM (
 		SELECT if_index, name, alias, speed, oper_status, rx_bytes, tx_bytes,
-		       in_errors, out_errors, in_discards, out_discards, ts
+		       in_errors, out_errors, in_discards, out_discards, if_type, high_speed, ts
 		FROM device_iface_samples WHERE device_id = ? ORDER BY ts DESC LIMIT 400) sq ORDER BY ts ASC`), deviceID)
 	if err != nil {
 		return nil, err
@@ -199,7 +228,7 @@ func (s *sqlStore) LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
 		var i DeviceIface
 		var ts int64
 		if err := rows.Scan(&i.IfIndex, &i.Name, &i.Alias, &i.Speed, &i.OperStatus, &i.RxBytes, &i.TxBytes,
-			&i.InErrors, &i.OutErrors, &i.InDiscards, &i.OutDiscards, &ts); err != nil {
+			&i.InErrors, &i.OutErrors, &i.InDiscards, &i.OutDiscards, &i.IfType, &i.HighSpeed, &ts); err != nil {
 			break
 		}
 		if _, ok := first[i.IfIndex]; !ok {
@@ -213,11 +242,23 @@ func (s *sqlStore) LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
 	for _, idx := range order {
 		f, l := first[idx], last[idx]
 		rate := DeviceIfaceRate{DeviceIface: l.iface}
+		rate.Class = classifyIfType(l.iface.IfType, l.iface.Name, l.iface.Alias)
+		rate.SpeedBitsPS = l.iface.SpeedBps()
+		rate.SpeedSrc = l.iface.SpeedSource()
 		if l.ts > f.ts {
 			dt := float64(l.ts - f.ts)
-			rate.RxBps = float64(l.iface.RxBytes-f.iface.RxBytes) / dt
-			rate.TxBps = float64(l.iface.TxBytes-f.iface.TxBytes) / dt
+			// sayaç geriye gitmişse (SNMP agent restart, 32-bit wrap, mock
+			// counter reset) delta'yı 0 say — yanlış verim sıçraması / sahte
+			// iface_util uyarısı üretme.
+			if l.iface.RxBytes >= f.iface.RxBytes {
+				rate.RxBps = float64(l.iface.RxBytes-f.iface.RxBytes) / dt
+			}
+			if l.iface.TxBytes >= f.iface.TxBytes {
+				rate.TxBps = float64(l.iface.TxBytes-f.iface.TxBytes) / dt
+			}
 		}
+		// kullanım yalnız güvenilir hız + oper=up iken; aksi -1 (UI "-" gösterir)
+		rate.RxUtilPct, rate.TxUtilPct = ifaceUtil(rate.RxBps, rate.TxBps, rate.SpeedBitsPS, l.iface.OperStatus)
 		out = append(out, rate)
 	}
 	return out, nil

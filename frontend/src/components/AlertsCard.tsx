@@ -309,6 +309,26 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
           <p className="text-[10px] text-tui-dim">Eşik 0 ise o kontrol kapalıdır (VPN down hariç, ayrı toggle).</p>
         </Section>
 
+        <Section title="SNMP arayüz kullanımı" status={cfg.iface?.enabled ? 'açık' : 'kapalı'}>
+          <Toggle
+            checked={!!cfg.iface?.enabled}
+            onChange={(v) => setCfg((c) => c && { ...c, iface: { ...(c.iface ?? { warn_pct: 70, crit_pct: 90, sustain_sec: 300 }), enabled: v } })}
+            label="Arayüz verimi kapasitenin eşiğini aşınca"
+          />
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3 text-xs text-tui-dim">
+            <label className={fieldLabelCls}>uyarı eşiği (%)
+              <input type="number" min={0} max={100} value={cfg.iface?.warn_pct ?? 70} onChange={(e) => setCfg((c) => c && { ...c, iface: { ...(c.iface ?? { enabled: true, crit_pct: 90, sustain_sec: 300 }), warn_pct: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+            <label className={fieldLabelCls}>kritik eşiği (%)
+              <input type="number" min={0} max={100} value={cfg.iface?.crit_pct ?? 90} onChange={(e) => setCfg((c) => c && { ...c, iface: { ...(c.iface ?? { enabled: true, warn_pct: 70, sustain_sec: 300 }), crit_pct: +e.target.value || 0 } })} className={inputCls} />
+            </label>
+            <label className={fieldLabelCls}>süre (sn)
+              <input type="number" min={60} step={60} value={cfg.iface?.sustain_sec ?? 300} onChange={(e) => setCfg((c) => c && { ...c, iface: { ...(c.iface ?? { enabled: true, warn_pct: 70, crit_pct: 90 }), sustain_sec: +e.target.value || 60 } })} className={inputCls} />
+            </label>
+          </div>
+          <p className="text-[10px] text-tui-dim">Yalnız güvenilir hızlı (ifSpeed/ifHighSpeed) arayüzler; loopback/tünel atlanır. Eşik bu süre boyunca aşılırsa tetiklenir (flap koruması).</p>
+        </Section>
+
         <Section title="Bildirim Kanalları">
           <div className="flex flex-wrap items-center gap-2">
             <button

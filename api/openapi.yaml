@@ -619,7 +619,12 @@ paths:
   /api/v1/devices/{id}/interfaces:
     get:
       tags: [devices]
-      summary: Cihaz arayüzleri + verim + hata sayaçları
+      summary: Cihaz arayüzleri + verim + hata sayaçları + kapasite/kullanım (Faz 23-C)
+      description: >
+        Katkısal alanlar (Faz 23-C): rx_util_pct/tx_util_pct (kullanım %; <0 →
+        güvenilir hız yok / oper down), class (ethernet|wifi|loopback|tunnel|vpn|
+        bridge|vlan|ppp|unknown), speed_bps (etkin hız — ifHighSpeed varsa o),
+        speed_source (ifHighSpeed|ifSpeed|"").
       parameters: [ { $ref: "#/components/parameters/idPath" }, { $ref: "#/components/parameters/minutes" } ]
       responses:
         "200": { description: Arayüz dizisi }

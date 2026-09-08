@@ -12,6 +12,7 @@ export const KIND_STYLES: Record<string, string> = {
   // Overview.tsx'in yerel kopyasıyla eşleştirildi)
   target: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
   anomaly: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
+  iface_util: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
   // ioc: red, 7 renklik sözleşmede tanımsız 8. bir tondu — rose'a taşındı
   // (kritik alarm anlamı zaten rose'a ait, Overview.tsx ile eşleştirildi)
   ioc: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
@@ -27,6 +28,7 @@ export const KIND_LABELS: Record<string, string> = {
   proc: 'yeni süreç',
   target: 'yeni hedef',
   anomaly: 'anomali',
+  iface_util: 'arayüz kullanımı',
   ioc: 'ioc / tehdit',
   vpn_down: 'vpn down',
   sdwan_sla_breach: 'sd-wan sla',

@@ -122,6 +122,26 @@ alan adları farklı olabilir — kendi instance'ınızda bir kez doğrulayın.
 (`/rest/api/3/myself`, `incident?sysparm_limit=1`) + diğer kanallara sentetik
 uyarı. Sonuç kanal durumu `GET /api/alerts/status`.
 
+## Arayüz kullanım eşiği (`iface`, Faz 23-C)
+
+`internal/alert/iface.go` — SNMP arayüz verimi güvenilir hızla (ifSpeed veya
+ifHighSpeed) karşılaştırılır. Config (`/api/alerts` JSON → `iface`):
+
+| alan | varsayılan | anlam |
+|---|---|---|
+| `enabled` | true | kontrol açık |
+| `warn_pct` | 70 | uyarı eşiği (%) |
+| `crit_pct` | 90 | bu yüzde aşılırsa olay önemi `crit` (aksi `warn`) |
+| `sustain_sec` | 300 | eşik bu süre boyunca aşılmalı (flap koruması) |
+
+Kontrol dakikada bir; `sustain_sec / 60` ardışık geçişte `iface_util` olayı
+ateşlenir (anahtar `deviceID|ifIndex|rx|tx`). **Yalnız güvenilir hızlı**
+(`speed_bps > 0`) **ve oper=up** arayüzler; `class ∈ {loopback, tunnel}`
+atlanır (yanıltıcı). Kullanım eşik altına düşünce sayaç sıfırlanır →
+yinelenmeyen açık olay `auto_resolve_min` sonrası otomatik kapanır.
+Arayüz sınıfı `classifyIfType` (IANAifType → ethernet/wifi/loopback/tunnel/
+vpn/bridge/vlan/ppp/unknown); tünel arayüzü ad/alias VPN ipucu taşırsa `vpn`.
+
 ## SLA hedefleri (`sla_targets`)
 
 `GET` (görüntüleme) / `PUT` + `DELETE` (global-admin) `/api/v1/sla/targets`.

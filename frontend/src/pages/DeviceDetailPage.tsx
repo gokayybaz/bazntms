@@ -44,6 +44,29 @@ interface IfaceRate {
   out_errors: number
   in_discards: number
   out_discards: number
+  // Faz 23-C
+  rx_util_pct: number // <0 → hesaplanamadı
+  tx_util_pct: number
+  class: string
+  speed_bps: number
+  speed_source: string
+}
+
+// UtilCell — arayüz kullanım yüzdesi + eşik renkli mini çubuk (htop dili).
+// pct < 0 → "-" (güvenilir hız yok). Eşikler alert IfaceConfig varsayılanıyla
+// hizalı: <70 emerald, <90 amber, >=90 rose.
+function UtilCell({ pct }: { pct: number }) {
+  if (pct == null || pct < 0) return <span className="font-mono text-xs text-tui-dim">—</span>
+  const tone = pct < 70 ? 'bg-emerald-500' : pct < 90 ? 'bg-amber-500' : 'bg-rose-500'
+  const txt = pct < 70 ? 'text-emerald-400' : pct < 90 ? 'text-amber-400' : 'text-rose-400'
+  return (
+    <span className="flex items-center justify-end gap-1.5">
+      <span className="h-1 w-10 bg-panel-2">
+        <span className={`block h-full ${tone}`} style={{ width: `${Math.min(100, Math.max(2, pct))}%` }} />
+      </span>
+      <span className={`w-9 text-right font-mono text-xs ${txt}`}>{pct >= 1 ? `%${Math.round(pct)}` : '%<1'}</span>
+    </span>
+  )
 }
 
 interface FlowRow {
@@ -326,10 +349,13 @@ export function DeviceDetailPage() {
               <thead className="sticky top-0">
                 <tr className="bg-rx text-left text-[10px] uppercase tracking-[0.04em] text-ground">
                   <th scope="col" className="px-3 py-2 font-medium">Arayüz</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Tür</th>
                   <th scope="col" className="px-3 py-2 font-medium">Durum</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">Hız</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium" title="Etkin hız — ifHighSpeed varsa o, yoksa ifSpeed; güvenilir değilse '-'">Hız</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">↓</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">↑</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium" title="Kullanım ↓ — yalnız güvenilir hız + oper=up iken">Util ↓</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium" title="Kullanım ↑">Util ↑</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Toplam (↓/↑)</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Hata (in/out)</th>
                   <th scope="col" className="px-3 py-2 text-right font-medium" title="ifInDiscards / ifOutDiscards — kuyruk taşması, QoS drop (hatadan farklı)">
@@ -344,16 +370,19 @@ export function DeviceDetailPage() {
                       <span className="font-mono text-ink">{i.name || `if${i.if_index}`}</span>
                       {i.alias && <span className="ml-2 text-[11px] text-tui-dim">{i.alias}</span>}
                     </td>
+                    <td className="px-3 py-1.5 font-mono text-[10px] text-tui-dim">{i.class && i.class !== 'unknown' ? i.class : '—'}</td>
                     <td className="px-3 py-1.5">
                       <span className={`font-mono text-[10px] ${i.oper_status === 1 ? 'text-emerald-400' : 'text-tui-dim'}`}>
                         {i.oper_status === 1 ? 'up' : 'down'}
                       </span>
                     </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-tui-dim">
-                      {i.speed > 0 ? formatBits(i.speed) : '—'}
+                    <td className="px-3 py-1.5 text-right font-mono text-xs text-tui-dim" title={i.speed_source}>
+                      {i.speed_bps > 0 ? formatBits(i.speed_bps) : '—'}
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-rx">{formatBits(i.rx_bps)}</td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs text-tx">{formatBits(i.tx_bps)}</td>
+                    <td className="px-3 py-1.5 text-right"><UtilCell pct={i.rx_util_pct} /></td>
+                    <td className="px-3 py-1.5 text-right"><UtilCell pct={i.tx_util_pct} /></td>
                     <td className="px-3 py-1.5 text-right font-mono text-[11px] text-tui-dim">
                       {formatBytes(i.rx_bytes)}/{formatBytes(i.tx_bytes)}
                     </td>

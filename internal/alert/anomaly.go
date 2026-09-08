@@ -156,6 +156,9 @@ func NormalizeConfig(cfg Config) Config {
 	if cfg.IOC == (IOCConfig{}) { // eski config: "ioc" alani yok → varsayilan (acik)
 		cfg.IOC = DefaultIOCConfig()
 	}
+	if cfg.Iface == (IfaceConfig{}) { // Faz 23-C öncesi config → varsayılan
+		cfg.Iface = DefaultIfaceConfig()
+	}
 	if cfg.AutoResolveMin == 0 { // S22.8 öncesi config → otomatik çözülme varsayılanı
 		cfg.AutoResolveMin = 15
 		cfg.NotifyResolve = true

@@ -93,6 +93,7 @@ func (m *MockDriver) Poll(ctx context.Context, d store.Device, _ *vault.Vault) (
 			Name:       fmt.Sprintf("eth%d", i),
 			Speed:      1_000_000_000,
 			OperStatus: 1,
+			IfType:     6, // ethernetCsmacd
 			RxBytes:    c.rx[i],
 			TxBytes:    c.tx[i],
 		}

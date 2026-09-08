@@ -59,6 +59,31 @@ describe('DeviceDetailPage', () => {
     expect(screen.getByText('sağlıklı')).toBeInTheDocument()
   })
 
+  it('arayüz kullanım kolonu: güvenilir hızda % gösterir, hız yoksa "—" (Faz 23-C)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/v1/devices') return Promise.resolve({ status: 200, json: async () => [DEVICE] } as Response)
+        if (url.endsWith('/interfaces'))
+          return Promise.resolve({
+            status: 200,
+            json: async () => [
+              { if_index: 1, name: 'Gi0/1', alias: '', speed: 1e9, oper_status: 1, rx_bps: 95_000_000, tx_bps: 1000, rx_bytes: 0, tx_bytes: 0, in_errors: 0, out_errors: 0, in_discards: 0, out_discards: 0, rx_util_pct: 76, tx_util_pct: 0.008, class: 'ethernet', speed_bps: 1e9, speed_source: 'ifSpeed' },
+              { if_index: 2, name: 'Tunnel1', alias: '', speed: 0, oper_status: 1, rx_bps: 10, tx_bps: 10, rx_bytes: 0, tx_bytes: 0, in_errors: 0, out_errors: 0, in_discards: 0, out_discards: 0, rx_util_pct: -1, tx_util_pct: -1, class: 'tunnel', speed_bps: 0, speed_source: '' },
+            ],
+          } as Response)
+        if (url.startsWith('/api/v1/flows') || url.startsWith('/api/v1/syslog'))
+          return Promise.resolve({ status: 200, json: async () => [] } as Response)
+        return Promise.resolve({ status: 404, json: async () => ({}) } as Response)
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Gi0/1')).toBeInTheDocument())
+    expect(screen.getByText('%76')).toBeInTheDocument()
+    expect(screen.getByText('ethernet')).toBeInTheDocument()
+    expect(screen.getByText('tunnel')).toBeInTheDocument()
+  })
+
   it('listede olmayan id için "cihaz bulunamadı" gösterir', async () => {
     mockFetch()
     renderPage('999')

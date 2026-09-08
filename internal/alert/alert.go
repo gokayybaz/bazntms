@@ -37,6 +37,7 @@ type Config struct {
 	Anomaly   AnomalyConfig    `json:"anomaly"` // Faz 6.2: istatistiksel baseline
 	Forti     FortiAlertConfig `json:"forti"`   // Faz 8.5: vpn/sdwan/oturum eşikleri
 	IOC       IOCConfig        `json:"ioc"`     // Faz 6.6: tehdit istihbaratı domain eşleştirmesi
+	Iface     IfaceConfig      `json:"iface"`   // Faz 23-C: SNMP arayüz kullanım eşiği
 
 	// Severities, eşik-tabanlı uyarı türleri için operatör önem geçersiz
 	// kılması (S22.7): kind → "info"|"warn"|"crit". Anahtar yoksa kindSeverity
@@ -204,6 +205,7 @@ func DefaultConfig() Config {
 		Anomaly:   DefaultAnomalyConfig(),
 		Forti:     DefaultFortiAlertConfig(),
 		IOC:       DefaultIOCConfig(),
+		Iface:     DefaultIfaceConfig(),
 		Notifiers: Notifiers{Desktop: true},
 	}
 }
@@ -218,6 +220,10 @@ type Manager struct {
 	bwInCount  int
 	bwOutCount int
 	lastFire   map[string]time.Time // key: kind|key -> cooldown
+
+	// ifaceOver, arayüz kullanım eşiği ardışık aşım sayacı (checkIfaceUtil) —
+	// anahtar "deviceID|ifIndex|rx|tx".
+	ifaceOver map[string]int
 
 	// agentBw, her online agent icin ardisik bant genisligi esik-asimi
 	// sayaci (checkAgentBandwidth) — anahtar agent ID.
@@ -296,6 +302,7 @@ func NewManager(cfg Config, st store.Store, engine *capture.Engine, telemetryInt
 		engine:            engine,
 		lastFire:          map[string]time.Time{},
 		agentBw:           map[int64]*agentBwCounter{},
+		ifaceOver:         map[string]int{},
 		telemetryInterval: telemetryInterval,
 		stopCh:            make(chan struct{}),
 		doneCh:            make(chan struct{}),
@@ -340,6 +347,7 @@ func (m *Manager) run() {
 			// ki devralınca geçmiş kalıntısıyla tetiklenmesin.
 			if !m.leading() {
 				m.bwInCount, m.bwOutCount = 0, 0
+				m.ifaceOver = map[string]int{}
 				continue
 			}
 			snap := m.engine.Snapshot()
@@ -378,6 +386,10 @@ func (m *Manager) run() {
 			// FortiGate uyarilari: dakikada bir (Faz 8.5)
 			if m.tickN%60 == 1 {
 				m.checkForti(cfg)
+			}
+			// arayüz kullanım eşiği: dakikada bir (Faz 23-C)
+			if m.tickN%60 == 15 {
+				m.checkIfaceUtil(cfg)
 			}
 			// IOC / tehdit istihbarati domain eslestirmesi: 30 sn'de bir (Faz 6.6)
 			if m.tickN%30 == 1 {
@@ -666,6 +678,7 @@ var kindSeverity = map[string]string{
 	"port":             "crit", // şüpheli port = güçlü sinyal
 	"bw":               "warn",
 	"anomaly":          "warn",
+	"iface_util":       "warn", // dinamik: crit_pct aşılırsa fireOpts.Severity="crit"
 	"sdwan_sla_breach": "warn",
 	"high_sessions":    "warn",
 	"sla_breach":       "crit",

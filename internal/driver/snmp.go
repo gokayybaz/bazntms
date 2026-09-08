@@ -24,6 +24,7 @@ const (
 	oidSysName      = "1.3.6.1.2.1.1.5.0"
 	oidIfIndex      = "1.3.6.1.2.1.2.2.1.1"
 	oidIfDescr      = "1.3.6.1.2.1.2.2.1.2"
+	oidIfType       = "1.3.6.1.2.1.2.2.1.3"
 	oidIfSpeed      = "1.3.6.1.2.1.2.2.1.5"
 	oidIfOperStatus = "1.3.6.1.2.1.2.2.1.8"
 	oidIfInOctets   = "1.3.6.1.2.1.2.2.1.10"
@@ -34,6 +35,7 @@ const (
 	oidIfAlias      = "1.3.6.1.2.1.31.1.1.1.18"
 	oidIfHCInOctets = "1.3.6.1.2.1.31.1.1.1.6"
 	oidIfHCOutOct   = "1.3.6.1.2.1.31.1.1.1.10"
+	oidIfHighSpeed  = "1.3.6.1.2.1.31.1.1.1.15" // Mbps — >4 Gbps arayüzlerde ifSpeed taşar
 )
 
 // SNMPDriver, SNMP tabanli cihaz toplamasi.
@@ -87,7 +89,9 @@ func (s *SNMPDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) (
 			}
 		}},
 		{oidIfAlias, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.Alias = truncate(pduValueString(p), 120) }},
+		{oidIfType, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.IfType = int(pduInt(p)) }},
 		{oidIfSpeed, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.Speed = pduUint(p) }},
+		{oidIfHighSpeed, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.HighSpeed = pduUint(p) }},
 		{oidIfOperStatus, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.OperStatus = int(pduInt(p)) }},
 		{oidIfHCInOctets, func(i *store.DeviceIface, p gosnmp.SnmpPDU) { i.RxBytes = pduUint(p) }},
 		{oidIfInOctets, func(i *store.DeviceIface, p gosnmp.SnmpPDU) {
