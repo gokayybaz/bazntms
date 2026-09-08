@@ -24,6 +24,7 @@ const mockIfaces = 4
 var (
 	mockInflight atomic.Int64
 	mockPeak     atomic.Int64
+	mockPolled   atomic.Int64
 )
 
 // MockPeakInflight, sürecin başından beri görülen en yüksek eşzamanlı mock
@@ -32,6 +33,14 @@ func MockPeakInflight() int64 { return mockPeak.Load() }
 
 // ResetMockPeak, tepe sayacını sıfırlar (test başında).
 func ResetMockPeak() { mockPeak.Store(0) }
+
+// MockPolled, ResetMockPolled'dan bu yana başlatılan toplam mock poll sayısı
+// (depo yazımından bağımsız — devpoll'un cihazları gerçekten gezdiğini
+// doğrulamak için). Yalnızca test.
+func MockPolled() int64 { return mockPolled.Load() }
+
+// ResetMockPolled, poll sayacını sıfırlar (test başında).
+func ResetMockPolled() { mockPolled.Store(0) }
 
 type mockCounters struct {
 	mu       sync.Mutex
@@ -49,6 +58,7 @@ type MockDriver struct{}
 // Poll, simüle edilmiş bir SNMP round-trip gecikmesi sonrası monoton artmış
 // sayaçlarla bir Snapshot döndürür. ctx iptal edilirse hemen döner.
 func (m *MockDriver) Poll(ctx context.Context, d store.Device, _ *vault.Vault) (Snapshot, error) {
+	mockPolled.Add(1)
 	n := mockInflight.Add(1)
 	for {
 		p := mockPeak.Load()

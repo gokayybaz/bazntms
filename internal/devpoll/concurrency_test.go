@@ -30,10 +30,14 @@ func TestPollAllConcurrencyBounded(t *testing.T) {
 	}
 
 	driver.ResetMockPeak()
+	driver.ResetMockPolled()
 	p := New(st, nil)
 	p.SetConcurrency(limit)
 	p.pollAll()
 
+	// Asıl iddia: eşzamanlı poll sayısı tavanı aşmadı ama paralellik de oldu.
+	// Bu ölçüm mock sürücünün atomik sayacından gelir — depoya (SQLite tek
+	// yazıcı, platforma göre değişken kontensiyon) bağlı değil.
 	peak := driver.MockPeakInflight()
 	if peak > limit {
 		t.Fatalf("eşzamanlı poll tavanı aşıldı: peak=%d, sınır=%d", peak, limit)
@@ -42,20 +46,10 @@ func TestPollAllConcurrencyBounded(t *testing.T) {
 		t.Fatalf("hiç paralellik yok (peak=%d) — test kurulumu bozuk olabilir", peak)
 	}
 
-	// pollAll gerçekten cihazları gezip iş yaptı mı — kaba bir kontrol.
-	// Asıl kanıt yukarıdaki eşzamanlılık sınırı; buradaki sayı SQLite tek-yazıcı
-	// kilidine duyarlı (15 eşzamanlı yazıcı + `-race` enstrümantasyonu altında
-	// LastPoll güncellemelerinin bir kısmı SQLITE_BUSY ile düşer — dev modu,
-	// üretimde Postgres). Bu yüzden eşik gevşek: yarısından fazlası yeter.
-	list, _ := st.ListDevices("")
-	polled := 0
-	for _, d := range list {
-		if d.LastPoll > 0 {
-			polled++
-		}
-	}
-	if polled < devices/2 {
-		t.Fatalf("yoklanan cihaz sayısı = %d/%d (çok düşük — pollAll gezinmiyor olabilir)", polled, devices)
+	// pollAll bütün etkin cihazları gezdi mi (goroutine sızıntısı / erken çıkış
+	// yok). Sürücü çağrısı depo yazımından bağımsız sayılır.
+	if got := driver.MockPolled(); got != devices {
+		t.Fatalf("yoklanan cihaz sayısı = %d/%d (pollAll bütün cihazları gezmedi)", got, devices)
 	}
 }
 
