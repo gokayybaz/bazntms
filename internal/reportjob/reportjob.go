@@ -93,7 +93,6 @@ func Generate(st store.Store, geo *geoip.Resolver, dir string, jobID int64, p Pa
 }
 
 func render(st store.Store, geo *geoip.Resolver, p Payload) (body []byte, format string, empty bool, err error) {
-	format = "html"
 	switch p.Type {
 	case "enterprise":
 		d, e := report.BuildEnterprise(st, p.Days, p.Site)

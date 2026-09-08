@@ -63,7 +63,9 @@ func TestSilenceEndpoints(t *testing.T) {
 		t.Fatalf("delete: %d", dresp.StatusCode)
 	}
 	dresp.Body.Close()
-	code, out = getJSON(t, ts, "/api/v1/alerts/silences?active=1", "")
+	if code, out = getJSON(t, ts, "/api/v1/alerts/silences?active=1", ""); code != 200 {
+		t.Fatalf("liste: %d", code)
+	}
 	if sl, _ := out["silences"].([]any); len(sl) != 0 {
 		t.Fatalf("silme sonrası 0 bekleniyordu: %+v", out)
 	}
