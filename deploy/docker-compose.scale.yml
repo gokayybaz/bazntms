@@ -82,6 +82,8 @@ services:
       - "-enroll-token"
       - "scale-enroll-token"
       - "-mock-devices" # Faz 21 yük testi: bazntms-loadgen -mode device (vendor=mock)
+      - "-pprof" # Faz 21: profil için (compose ağı içinden; bkz. scripts/profile.sh)
+      - "0.0.0.0:6060"
     # /data kalıcı: vault.key. Volume olmadan her recreate yeni master key üretir
     # → DB'deki AES-GCM şifreli cihaz kimlikleri çözülemez. İki replika AYNI
     # named volume'u paylaşır (vault.key ortak).
@@ -119,6 +121,8 @@ services:
       - "-agent-pcap" # agent'lar buraya (lb uzerinden) enroll olur — asil politika burasi
       - "-enroll-token"
       - "scale-enroll-token"
+      - "-pprof"
+      - "0.0.0.0:6060"
     environment:
       BAZNTMS_DATABASE__PATH: postgres://bazntms:bazntms@timescaledb:5432/bazntms?sslmode=disable
       BAZNTMS_NATS__URL: nats://nats:4222
@@ -209,6 +213,40 @@ services:
       lb:
         condition: service_healthy
 
+  # --- gözlemlenebilirlik (opsiyonel: --profile obs) — Faz 21 S21.7 ---
+  # Prometheus hub-controller + hub-ingest replikalarını Docker DNS ile keşfeder;
+  # Grafana "bazNTMS — Kapasite" dashboard'unu otomatik yükler.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["obs"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - hub-controller
+      - hub-ingest
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["obs"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   tsdata:
   ctldata: # hub-controller /data — vault.key kalıcılığı
+  promdata:
+  grafanadata:

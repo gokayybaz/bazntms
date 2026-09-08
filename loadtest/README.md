@@ -77,10 +77,17 @@ PASS/FAIL raporu üretir (`docs/perf/runs/<utc>-<ad>.md`; çıkış kodu ihlalde
 ```bash
 docker compose -f deploy/docker-compose.scale.yml up -d --build
 
+# canlı panolar (S21.7): Prometheus :9090 + Grafana :3000 (anon admin)
+docker compose -f deploy/docker-compose.scale.yml --profile obs up -d
+#   → http://localhost:3000 → "bazNTMS — Kapasite" dashboard
+
 # hızlı regresyon (~3 dk) / tam kapasite (~10 dk) / patlama (~12 dk)
 scripts/loadtest.sh baseline
 scripts/loadtest.sh target
 scripts/loadtest.sh burst
+
+# yük altında profil topla (hub -pprof ile başlatılmışsa)
+scripts/profile.sh 30
 ```
 
 Ortam değişkenleriyle hedeflenir: `HUB_PANEL` (:8080), `HUB_AGENT` (:8081),

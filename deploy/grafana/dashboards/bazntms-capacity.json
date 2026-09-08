@@ -1,0 +1,221 @@
+{
+  "uid": "bazntms-capacity",
+  "title": "bazNTMS — Kapasite",
+  "tags": ["bazntms", "faz21"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Ingest hattı",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Telemetri ingest hızı (ist/sn)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(bazntms_http_requests_total{path=~\".*agent/telemetry\"}[1m]))", "legendFormat": "tüm" },
+        { "refId": "B", "expr": "sum(rate(bazntms_http_requests_total{path=~\".*agent/telemetry\",status!~\"2..\"}[1m]))", "legendFormat": "2xx-dışı" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Telemetri gecikme p95 / p99 (ms)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "fillOpacity": 0 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(bazntms_http_request_duration_seconds_bucket{path=~\".*agent/telemetry\"}[1m]))) * 1000", "legendFormat": "p95" },
+        { "refId": "B", "expr": "histogram_quantile(0.99, sum by (le) (rate(bazntms_http_request_duration_seconds_bucket{path=~\".*agent/telemetry\"}[1m]))) * 1000", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kuyruk birikimi (bekleyen mesaj)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "max(bazntms_queue_pending)", "legendFormat": "queue_pending" }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Depo yazımı",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "id": 5,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Toplu yazım süresi p95 (ms, tablo)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 9 },
+      "id": 6,
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "fillOpacity": 0 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, table) (rate(bazntms_store_write_duration_seconds_bucket[1m]))) * 1000", "legendFormat": "{{table}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Yazılan satır hızı (satır/sn, tablo)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 9 },
+      "id": 7,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (table) (rate(bazntms_store_write_rows_total[1m]))", "legendFormat": "{{table}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB bağlantı havuzu",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 16 },
+      "id": 8,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "bazntms_db_pool_in_use", "legendFormat": "{{role}} kullanımda" },
+        { "refId": "B", "expr": "bazntms_db_pool_idle", "legendFormat": "{{role}} boşta" },
+        { "refId": "C", "expr": "bazntms_db_pool_max_open_connections", "legendFormat": "{{role}} üst sınır" },
+        { "refId": "D", "expr": "rate(bazntms_db_pool_wait_count_total[1m])", "legendFormat": "{{role}} bekleme/sn" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Telemetri JSON çözme p95 (ms)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 16 },
+      "id": 9,
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "fillOpacity": 0 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(bazntms_telemetry_decode_duration_seconds_bucket[1m]))) * 1000", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Fetch batch boyutu (ort)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 16 },
+      "id": 10,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "rate(bazntms_queue_batch_size_sum[1m]) / clamp_min(rate(bazntms_queue_batch_size_count[1m]), 1)", "legendFormat": "{{role}}" }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Flow + cihaz poll",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 11,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Flow alım hızı (kayıt/sn, protokol)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 24 },
+      "id": 12,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (version) (rate(bazntms_flows_received_total[1m]))", "legendFormat": "{{version}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Flow düşürme hızı (datagram/sn, sebep)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 24 },
+      "id": 13,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (reason) (rate(bazntms_flows_dropped_total[1m]))", "legendFormat": "{{reason}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cihaz poll döngüsü p90 (sn) + inflight",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 24 },
+      "id": 14,
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "fillOpacity": 0 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "inflight" }, "properties": [ { "id": "custom.axisPlacement", "value": "right" }, { "id": "unit", "value": "short" } ] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.90, sum by (le) (rate(bazntms_devpoll_cycle_duration_seconds_bucket[5m])))", "legendFormat": "döngü p90" },
+        { "refId": "B", "expr": "max(bazntms_devpoll_inflight)", "legendFormat": "inflight" }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Go çalışma zamanı",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "id": 15,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Heap kullanımda (bayt)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 32 },
+      "id": 16,
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "go_memstats_heap_inuse_bytes", "legendFormat": "{{role}} {{instance}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Goroutine sayısı",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 32 },
+      "id": 17,
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "go_goroutines", "legendFormat": "{{role}} {{instance}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC duraklama (p95, sn)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 32 },
+      "id": 18,
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 0 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "go_gc_duration_seconds{quantile=\"0.75\"}", "legendFormat": "{{role}} p75" }
+      ]
+    }
+  ]
+}

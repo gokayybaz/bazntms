@@ -1,0 +1,34 @@
+# Faz 21 — ölçek koşusu gözlemlenebilirliği (S21.7).
+# scale compose'un `obs` profili bu dosyayı Prometheus'a bağlar; hub-controller
+# ve hub-ingest replikalarını Docker DNS ile keşfeder (her ikisi de /metrics'i
+# :8080'de sunar).
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  - job_name: bazntms-controller
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [hub-controller]
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: role
+        replacement: controller
+
+  - job_name: bazntms-ingest
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [hub-ingest]
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: role
+        replacement: ingest
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
