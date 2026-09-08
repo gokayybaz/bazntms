@@ -5,8 +5,8 @@ type: application
 # version + appVersion release'de etiketten türetilir (RELEASE-RUNBOOK §2);
 # release.yml preflight'ı bunu `vX.Y.Z` ile eşleşmeye zorlar. İlk çalışan
 # chart sürümü 0.3.3 (ghcr imajları o sürümle yayına giriyor — bkz. S19.3).
-version: 1.0.0
-appVersion: "1.0.0"
+version: 1.1.0
+appVersion: "1.1.0"
 home: https://github.com/gokayybaz/bazntms
 sources:
   - https://github.com/gokayybaz/bazntms

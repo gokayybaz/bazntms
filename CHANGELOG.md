@@ -15,6 +15,56 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Yayımlanmamış]
 
+## [1.1.0] — 2026-09-08
+
+Faz 22 — **İleri Analiz & operasyonel derinlik**. `docs/enterprise-plan.html` →
+"İleri Analiz ve Kurumsal Özellikler" başlığı: anomali motoru site/cihaz bazına
+çıktı, uyarılara yaşam döngüsü geldi, bilet sistemlerine bağlandı, kurumsal
+raporlar zamanlanabilir oldu. Tüm değişiklikler geriye uyumlu (yeni tablo / uç /
+alan) → **minor** (ADR 0008). `ProtocolVersion` 1'de kalır.
+
+### Eklendi
+- **Anomali motoru v2.** Saat-of-day z-skoru baseline'ı → mevsimsel (hafta
+  içi/sonu × saat, opsiyonel gün-of-week) + EWMA gün ağırlığı (yavaş drift'e
+  uyum). Materyalize `anomaly_baseline` tablosu + lider-kapılı saatlik rebuild
+  → değerlendirme başına canlı `LAG` taraması yok. **Çok boyutlu:** filo / saha /
+  agent; **çok metrikli:** arayüz bant genişliği + DNS sorgu hızı + süreç
+  trafiği (tünelleme / DGA / sızdırma erken sinyali). `|z| ≥ crit_z` → "crit".
+  Yeni `/anomali` sayfası: elle-SVG "beklenen ±2σ bandı vs gerçek" grafiği +
+  aktif sapmalar tablosu. `GET /api/v1/anomaly/{baseline,active}`.
+- **Uyarı yaşam döngüsü.** `alert_events` artık severity / state
+  (firing → ack → resolved) / site / tekrar sayacı / korelasyon grubu taşır.
+  Aynı koşul tekrar ateşlenirse yeni satır değil `count++` (dedup). Otomatik
+  çözülme: koşul `auto_resolve_min` dakika yinelenmezse kapanır (anomali için
+  koşul-tabanlı da). Aynı sahada `correlate_window_sec` içinde ateşlenen
+  olaylar ortak `group_id`. **Bakım pencereleri** (`alert_silences`) — kind /
+  site / anahtar eşleşmesi + zaman aralığı; eşleşen uyarı bildirilmez.
+  Filtreli + sayfalı `GET /api/v1/alerts/events` + `POST .../:id/{ack,resolve,
+  note}`. Yeniden yazılmış Uyarılar sayfası (filtre çubuğu, işlem dialogu).
+- **Bildirim yönlendirme + bilet sistemleri.** `notify_routes` — matcher
+  (severity / kind / site) → kanal listesi + `continue`; kural yoksa mevcut
+  "etkinlerin hepsine" davranışı. **Jira Cloud** (REST v3) + **ServiceNow**
+  (Table API `incident`): uyarı grubu ilk ateşlendiğinde issue/incident açılır
+  (`ext_ref`), grup çözüldüğünde geçiş yapar. API token / parola kimlik
+  kasasında şifreli. (PagerDuty kanal id'si tanınır, gönderim ileride.)
+- **Zamanlanmış kurumsal raporlar + SLA.** `internal/scheduler` — hub-içi
+  lider-kapılı çalıştırıcı (harici bağımlılık yok; `daily:HH:MM` /
+  `weekly:<gün>:HH:MM` / `monthly:<n>:HH:MM` / `interval:<dk>`; kaçırılan koşu
+  bir kez telafi edilir). Rapor teslim hattı: üretilen rapor
+  `<data>/reports/`'a yazılır + arşivlenir + (alıcı varsa) e-postalanır.
+  **Enterprise rapor PDF** + `?site=` saha kırılımı (site-admin artık kendi
+  kurumsal + uyumluluk raporunu çekebilir). **SLA hedefleri** (`sla_targets`,
+  global + saha) — kurumsal raporda hedef-vs-gerçek + ihlal vurgusu; ihlalde
+  `sla_breach` uyarısı (crit). Raporlar sayfasına zamanlama editörü + arşiv +
+  SLA hedef ayarları. `GET/POST/DELETE /api/v1/reports/*`, `/api/v1/sla/targets`.
+
+### Şema
+
+`0009`–`0014` migrasyonları hub açılışında otomatik uygulanır (sqlite +
+postgres): `anomaly_baseline`, `alert_events` yaşam döngüsü sütunları,
+`alert_silences`, `scheduled_jobs`, `report_archive`, `sla_targets`. Geri alma
+yok — yükseltmeden önce yedek.
+
 ### Düzeltildi
 - **Agent 401 kendini-onarma sayacı restart'ta sıfırlanıyordu.** Hub veritabanı
   yeniden yaratıldığında (ya da kayıt silindiğinde) kayıtlı agent token'ı kalıcı
@@ -442,7 +492,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...v0.3.3

@@ -224,8 +224,9 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 | `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
 | `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
-| `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
-| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
+| `/uyarilar` | Yaşam döngüsü olay tablosu (kabul/çöz/not, filtre, korelasyon, bakım pencereleri) + eşik/bildirim/yönlendirme/bilet ayarları | `GET /api/v1/alerts/{events,silences}` + `POST .../events/:id/{ack,resolve,note}` + `GET/PUT /api/alerts` |
+| `/anomali` | Anomali paneli — mevsimsel "beklenen ±2σ bant vs gerçek" grafiği (elle SVG) + aktif sapmalar (filo/saha/agent × bps/dns/proc) | `GET /api/v1/anomaly/{baseline,active}` |
+| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite/saha kırılımı, PDF) + uyumluluk raporları · zamanlanmış teslim + arşiv · SLA hedefleri | `GET /api/report?type=…` · `GET/POST/DELETE /api/v1/reports/*` · `/api/v1/sla/targets` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
 
