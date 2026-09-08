@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatNum } from '../lib/format'
+import { PanelState } from './PanelState'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
 
@@ -132,9 +133,9 @@ export function EventsPanel({ agentId }: { agentId?: number } = {}) {
       </div>
 
       {loading && rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Bu pencerede olay yok.</p>
+        <PanelState kind="empty" message="Bu pencerede olay yok." />
       ) : (
         <>
           <TuiTable

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SEV_NAMES, SEV_STYLES } from '../lib/syslogSeverity'
+import { PanelState } from './PanelState'
 
 interface SyslogEvent {
   id: number
@@ -40,7 +41,7 @@ export function SyslogCard() {
   }, [])
 
   const shown = events.filter((e) => e.severity <= minSev)
-  if (!loaded) return <p className="py-6 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+  if (!loaded) return <PanelState kind="loading" />
 
   return (
     <div>
@@ -63,9 +64,16 @@ export function SyslogCard() {
       </div>
 
       {shown.length === 0 ? (
-        <p className="py-6 text-center font-mono text-[11px] text-tui-dim">
-          Olay yok — cihazları syslog'u hub'ın <code className="text-tui-dim">-syslog-port</code> adresine gönderecek şekilde ayarlayın.
-        </p>
+        <PanelState
+          kind="empty"
+          message="Olay yok."
+          hint={
+            <>
+              cihazları syslog'u hub'ın <code className="text-tui-dim">-syslog-port</code> adresine gönderecek şekilde
+              ayarlayın
+            </>
+          }
+        />
       ) : (
         <div role="log" aria-live="polite" className="max-h-72 overflow-y-auto font-mono text-[11px]">
           {shown.map((e, i) => (

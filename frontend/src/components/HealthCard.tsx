@@ -1,4 +1,5 @@
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 
 // Faz 25-A: ağ sağlık skoru — deterministik, her kesinti açıklanabilir.
 
@@ -15,7 +16,7 @@ export function HealthCard() {
   const { data, loaded } = usePolledJson<Score>('/api/v1/health', 30_000)
 
   if (!loaded || !data) {
-    return <p className="py-6 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+    return <PanelState kind="loading" />
   }
 
   const tone = data.score >= 85 ? 'text-emerald-400' : data.score >= 60 ? 'text-amber-400' : 'text-rose-400'

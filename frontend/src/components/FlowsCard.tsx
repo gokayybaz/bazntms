@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatBytes } from '../lib/format'
+import { PanelState } from './PanelState'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
 
@@ -66,12 +67,19 @@ export function FlowsCard() {
     }
   }, [])
 
-  if (!loaded) return <p className="py-6 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+  if (!loaded) return <PanelState kind="loading" />
   if (flows.length === 0) {
     return (
-      <p className="py-6 text-center font-mono text-[11px] text-tui-dim">
-        Akış yok — cihazları NetFlow v5 export için hub'ın <code className="text-tui-dim">-flow-port</code> adresine yönlendirin.
-      </p>
+      <PanelState
+        kind="empty"
+        message="Akış yok."
+        hint={
+          <>
+            cihazları NetFlow v5 export için hub'ın <code className="text-tui-dim">-flow-port</code> adresine
+            yönlendirin
+          </>
+        }
+      />
     )
   }
 

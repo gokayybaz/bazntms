@@ -68,6 +68,9 @@ export function TuiTable<Row>({
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(initialSort ?? null)
   const [selKey, setSelKey] = useState<string | null>(null)
+  // Tablo klavye odağında mı — seçili satır o zaman htop tarzı belirgin
+  // "imleç" alır (odak dışında sönük seçim).
+  const [focused, setFocused] = useState(false)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLInputElement>(null)
@@ -209,7 +212,13 @@ export function TuiTable<Row>({
       ref={wrapRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className={`border border-rule bg-panel outline-none focus-visible:border-rx/60 ${className}`}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setFocused(false)
+      }}
+      className={`border bg-panel outline-none transition-colors ${
+        focused ? 'border-rx/60' : 'border-rule'
+      } ${className}`}
     >
       {filterText && (
         <div className="flex items-center gap-2 border-b border-rule px-2 py-1">
@@ -276,7 +285,9 @@ export function TuiTable<Row>({
                   }}
                   className={`${
                     selected
-                      ? 'bg-rule-hi/50 text-ink-hi'
+                      ? focused
+                        ? 'bg-rx/25 text-ink-hi outline outline-1 -outline-offset-1 outline-rx/70'
+                        : 'bg-rule-hi/50 text-ink-hi'
                       : i % 2
                         ? 'bg-panel-2/50 text-ink'
                         : 'text-ink'

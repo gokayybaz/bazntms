@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { auditTone } from '../lib/auditKinds'
+import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -207,7 +208,6 @@ export function AuditCard() {
         >
           Yenile
         </button>
-        {error && <span className="text-rose-400">⚠ {error}</span>}
       </div>
 
       {/* sunucu-taraflı süzgeç barı (Faz 25-C) */}
@@ -241,11 +241,11 @@ export function AuditCard() {
       </div>
 
       {!loaded && !error ? (
-        <p className="py-6 text-center text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
+      ) : error ? (
+        <PanelState kind="error" message={error} onRetry={load} />
       ) : events.length === 0 ? (
-        <p className="py-6 text-center text-[11px] text-tui-dim">
-          {active ? 'Süzgece uyan denetim olayı yok.' : 'Henüz denetim olayı yok.'}
-        </p>
+        <PanelState kind="empty" message={active ? 'Süzgece uyan denetim olayı yok.' : 'Henüz denetim olayı yok.'} />
       ) : (
         <TuiTable
           columns={cols}

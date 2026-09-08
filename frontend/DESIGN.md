@@ -293,13 +293,24 @@ atlar, `TrafficFlowDiagram` paket animasyonu durur (mevcut davranış). Tarama
 - **Başlık:** reverse-video (`bg-rx text-ground`), mono uppercase; aktif sort
   kolonu `▼`/`▲`. **Cyan yalnızca başlıkta** — satırlarda kullanılmaz.
 - **Satır:** `↑↓`/`j`/`k` seçim (wrap yok), `g`/`G` baş/son, `Enter` →
-  `onActivate(row)`. Seçili satır **nötr gri highlight** (`bg-rule-hi/50
-  text-ink-hi`) — cyan değil; hücre renkleri (rx/tx/emerald…) okunur kalır.
+  `onActivate(row)`. Seçili satır: tablo **klavye odağındayken** htop tarzı
+  belirgin imleç (`bg-rx/25` + `outline outline-1 outline-rx/70` — layout'u
+  kaydırmaz), odak dışında sönük nötr highlight (`bg-rule-hi/50 text-ink-hi`).
+  Cyan zemin değil; hücre renkleri (rx/tx/emerald…) okunur kalır. Konteyner
+  kenarlığı da odakta `border-rx/60`.
 - **Filtre:** `/` → label'lı filtre alanına odaklan, `Esc` temizler + çıkar.
   Başlık **filtrelenmiş** satır sayısını gösterir (filtre aktifken `/ toplam`).
 - **Kesme:** `maxRows` üstünde sınırlı yükseklik + iç kaydırma + kesme notu.
 - **A11y:** gerçek `<table>` semantiği, `<th scope="col">`, seçili satır
   `aria-selected`, filtre `<label>`.
+
+### PanelState (durum bandı — Faz 25-E)
+- Kaynak: `frontend/src/components/PanelState.tsx`. Panel/kart içi tekil
+  yükleniyor / boş / hata durumu. `kind` + opsiyonel `message`/`hint`/`onRetry`.
+- TUI: ortalanmış, sönük, mono `text-[11px]`; `loading` → nabız `▪`, `error` →
+  `⚠` + rose ton + opsiyonel "Yeniden dene". `role=status`/`role=alert`.
+- **Do:** her liste/kart kendi `<p className="py-6 text-center …">Yükleniyor…</p>`
+  varyantını yazmak yerine `PanelState` kullanır (tek tutarlı görünüm).
 
 ### TabBar / FnKeyBar
 - `TabBar`: numaralı yatay nav (`1:PANO 2:AGENT …`), aktif sekme reverse-video,

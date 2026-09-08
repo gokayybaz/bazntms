@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatBytes, formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -160,11 +161,13 @@ export function TopConversationsCard() {
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
-          Bu pencerede NetFlow yok — cihaz(lar)ı NetFlow/IPFIX exporter olarak yapılandırın.
-        </p>
+        <PanelState
+          kind="empty"
+          message="Bu pencerede NetFlow yok."
+          hint="cihaz(lar)ı NetFlow/IPFIX exporter olarak yapılandırın"
+        />
       ) : (
         <TuiTable
           columns={cols}

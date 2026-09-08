@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatBytes, formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -70,11 +71,17 @@ export function L7Card({ agentId }: { agentId?: number } = {}) {
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
-          Henüz uygulama görünürlüğü verisi yok — agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın.
-        </p>
+        <PanelState
+          kind="empty"
+          message="Henüz uygulama görünürlüğü verisi yok."
+          hint={
+            <>
+              agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın
+            </>
+          }
+        />
       ) : (
         <TuiTable
           columns={cols}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
 
@@ -77,11 +78,13 @@ export function IncidentsPanel() {
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
-          {filter === 'open' ? 'Açık olay yok — ilişkili uyarılar kısa aralıkta gelince motor bir olay açar.' : 'Bu filtrede olay yok.'}
-        </p>
+        <PanelState
+          kind="empty"
+          message={filter === 'open' ? 'Açık olay yok.' : 'Bu filtrede olay yok.'}
+          hint={filter === 'open' ? 'ilişkili uyarılar kısa aralıkta gelince motor bir olay açar' : undefined}
+        />
       ) : (
         <TuiTable
           columns={cols}

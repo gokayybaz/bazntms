@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -60,14 +61,21 @@ export function DnsCard({ agentId }: { agentId?: number } = {}) {
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="mx-auto max-w-md py-8 text-center font-mono text-[11px] leading-relaxed text-tui-dim">
-          Henüz DNS görünürlüğü verisi yok. Agent'ta <code className="text-tui-dim">collect.pcap</code> ve
-          hub'da <code className="text-tui-dim">-agent-pcap</code> açık olmalı. Süreç trafiği doluyor ama
-          DNS boşsa: sorgular yakalanan arayüzden geçmiyordur — DoH/DoT (şifreli DNS) ya da
-          VPN/Tailscale MagicDNS (ayrı <code className="text-tui-dim">utun</code> arayüzü) bunun tipik nedenidir.
-        </p>
+        <PanelState
+          kind="empty"
+          message="Henüz DNS görünürlüğü verisi yok."
+          className="mx-auto max-w-md"
+          hint={
+            <>
+              Agent'ta <code className="text-tui-dim">collect.pcap</code> ve hub'da{' '}
+              <code className="text-tui-dim">-agent-pcap</code> açık olmalı. Süreç trafiği doluyor ama DNS boşsa:
+              sorgular yakalanan arayüzden geçmiyordur — DoH/DoT ya da VPN/Tailscale MagicDNS (ayrı{' '}
+              <code className="text-tui-dim">utun</code> arayüzü) tipik nedendir.
+            </>
+          }
+        />
       ) : (
         <TuiTable
           columns={cols}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatBytes } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
@@ -61,12 +62,18 @@ export function ProcessesCard({ agentId, onActivate }: { agentId?: number; onAct
       </div>
 
       {!loaded ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">Yükleniyor…</p>
+        <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center font-mono text-[11px] text-tui-dim">
-          Henüz süreç trafiği yok — agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın ve
-          hub'da <code className="text-tui-dim">-agent-pcap</code> politikasını açın.
-        </p>
+        <PanelState
+          kind="empty"
+          message="Henüz süreç trafiği yok."
+          hint={
+            <>
+              agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın ve hub'da{' '}
+              <code className="text-tui-dim">-agent-pcap</code> politikasını açın
+            </>
+          }
+        />
       ) : (
         <TuiTable
           columns={cols}

@@ -10,6 +10,7 @@ const GROUPS: { title: string; rows: [string[], string][] }[] = [
       [['F1', '?'], 'Bu yardım'],
       [['F5'], 'Sayfayı yenile'],
       [['F10'], 'Oturumu kapat'],
+      [['F2', '–', 'F6'], 'Ekrana özel — alt şeritte görünür'],
     ],
   },
   {
@@ -19,7 +20,14 @@ const GROUPS: { title: string; rows: [string[], string][] }[] = [
       [['g', 'G'], 'Başa / sona'],
       [['Enter'], 'Seçili satırı aç'],
       [['/'], 'Filtrele (Esc temizler)'],
-      [['s', 'F6'], 'Sırala (kolon döngüsü)'],
+      [['s', 'S'], 'Sırala — kolon döngüsü (artan / azalan)'],
+    ],
+  },
+  {
+    title: 'Görsel',
+    rows: [
+      [['F4'], 'Tam ekran (Akış / Coğrafi)'],
+      [['Esc'], 'Tam ekrandan / diyalogdan çık'],
     ],
   },
 ]
