@@ -92,6 +92,45 @@ func (s *sqlStore) BumpAlertEvent(id, ts int64, message string) error {
 	return err
 }
 
+// ResolveAlertEvent, açık bir olayı çözüldü işaretler (S22.8 — otomatik veya
+// operatör). Zaten resolved ise no-op.
+func (s *sqlStore) ResolveAlertEvent(id, ts int64) error {
+	_, err := s.db.Exec(s.q(`UPDATE alert_events
+		SET state = 'resolved', resolved_ts = ? WHERE id = ? AND state IN ('firing','ack')`), ts, id)
+	return err
+}
+
+// OpenAlertEventsStale, last_ts'i `before`'dan eski olan açık olayları döndürür
+// (S22.8 TTL otomatik çözülme).
+func (s *sqlStore) OpenAlertEventsStale(before int64) ([]AlertEvent, error) {
+	return s.queryAlertEvents(`SELECT `+alertEventCols+` FROM alert_events
+		WHERE state IN ('firing','ack') AND last_ts < ? ORDER BY id`, before)
+}
+
+// OpenAlertEventsByKind, verilen türün tüm açık olaylarını döndürür (S22.8
+// koşul-tabanlı çözülme — anomali).
+func (s *sqlStore) OpenAlertEventsByKind(kind string) ([]AlertEvent, error) {
+	return s.queryAlertEvents(`SELECT `+alertEventCols+` FROM alert_events
+		WHERE state IN ('firing','ack') AND kind = ? ORDER BY id`, kind)
+}
+
+func (s *sqlStore) queryAlertEvents(query string, args ...any) ([]AlertEvent, error) {
+	rows, err := s.db.Query(s.q(query), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AlertEvent{}
+	for rows.Next() {
+		e, err := scanAlertEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 func (s *sqlStore) RecentAlertEvents(limit int) ([]AlertEvent, error) {
 	rows, err := s.db.Query(s.q(`SELECT `+alertEventCols+` FROM alert_events ORDER BY id DESC LIMIT ?`), limit)
 	if err != nil {

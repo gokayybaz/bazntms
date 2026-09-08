@@ -21,6 +21,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -155,6 +156,10 @@ func NormalizeConfig(cfg Config) Config {
 	if cfg.IOC == (IOCConfig{}) { // eski config: "ioc" alani yok → varsayilan (acik)
 		cfg.IOC = DefaultIOCConfig()
 	}
+	if cfg.AutoResolveMin == 0 { // S22.8 öncesi config → otomatik çözülme varsayılanı
+		cfg.AutoResolveMin = 15
+		cfg.NotifyResolve = true
+	}
 	return cfg
 }
 
@@ -261,6 +266,7 @@ func (m *Manager) checkAnomaly(cfg Config) {
 		return
 	}
 	curBucket, cands := m.evalAnomalyCands(ac)
+	m.resolveClearedAnomalies(cfg, curBucket, cands)
 	if len(cands) == 0 {
 		return
 	}
@@ -283,6 +289,27 @@ func (m *Manager) checkAnomaly(cfg Config) {
 			fmt.Sprintf("%s: alışılmadık %s sapması (%s) — %.0f %s, bu zaman dilimi ortalaması %.0f ± %.0f %s (z=%.1f, son %d dk)",
 				anomalyScope(c.dim, c.key), metricLabel(c.metric), direction, c.cur, unit, c.mean, c.std, unit, c.z, ac.WindowMin),
 			fireOpts{Site: m.anomalySite(c.dim, c.key), Severity: sev})
+	}
+}
+
+// resolveClearedAnomalies, şu an değerlendirilen kova dilimine ait açık anomali
+// olaylarından aday olmayanları (z eşiğin altına döndü) çözüldü işaretler
+// (S22.8). Diğer kovaların olayları kendi zaman dilimleri geldiğinde ya da TTL
+// ile kapanır.
+func (m *Manager) resolveClearedAnomalies(cfg Config, curBucket int, cands []anomalyCand) {
+	open, err := m.st.OpenAlertEventsByKind("anomaly")
+	if err != nil || len(open) == 0 {
+		return
+	}
+	firing := make(map[string]bool, len(cands))
+	for _, c := range cands {
+		firing[fmt.Sprintf("%s:%s:%s:%d", c.metric, c.dim, c.key, curBucket)] = true
+	}
+	suffix := fmt.Sprintf(":%d", curBucket)
+	for _, e := range open {
+		if strings.HasSuffix(e.Key, suffix) && !firing[e.Key] {
+			m.resolveEvent(cfg, e, "trafik beklenen banda döndü")
+		}
 	}
 }
 

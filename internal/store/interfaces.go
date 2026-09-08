@@ -77,6 +77,10 @@ type AlertStore interface {
 	// yerine tekrar sayacını artır.
 	OpenAlertEventByKey(kind, key string) (*AlertEvent, error)
 	BumpAlertEvent(id, ts int64, message string) error
+	// otomatik çözülme (S22.8)
+	ResolveAlertEvent(id, ts int64) error
+	OpenAlertEventsStale(before int64) ([]AlertEvent, error)
+	OpenAlertEventsByKind(kind string) ([]AlertEvent, error)
 	IsAlertSeen(kind, key string) (bool, error)
 	MarkAlertSeen(kind, key string) error
 	CountAlertSeen(kind string) (int, error)

@@ -18,6 +18,12 @@ type Config struct {
 	Enabled     bool `json:"enabled"`
 	CooldownMin int  `json:"cooldown_min"`
 
+	// S22.8 — otomatik çözülme. Açık bir olay AutoResolveMin dakika boyunca
+	// yinelenmezse (bump gelmezse) motor "resolved" işaretler. < 0 → kapalı.
+	// NotifyResolve, çözülme bildirimi gönderilsin mi.
+	AutoResolveMin int  `json:"auto_resolve_min"`
+	NotifyResolve  bool `json:"notify_resolve"`
+
 	Bandwidth BandwidthConfig  `json:"bandwidth"`
 	Ports     PortsConfig      `json:"ports"`
 	NewProc   ProcConfig       `json:"new_proc"`
@@ -94,8 +100,10 @@ type Notifiers struct {
 // DefaultConfig, ilk calistirma icin makul ayarlar.
 func DefaultConfig() Config {
 	return Config{
-		Enabled:     true,
-		CooldownMin: 10,
+		Enabled:        true,
+		CooldownMin:    10,
+		AutoResolveMin: 15,
+		NotifyResolve:  true,
 		Bandwidth: BandwidthConfig{
 			Enabled: true, InMbps: 100, OutMbps: 50, Seconds: 10,
 		},
@@ -245,6 +253,10 @@ func (m *Manager) run() {
 			// IOC / tehdit istihbarati domain eslestirmesi: 30 sn'de bir (Faz 6.6)
 			if m.tickN%30 == 1 {
 				m.checkIOC(cfg)
+			}
+			// otomatik çözülme (S22.8): dakikada bir yinelenmeyen açık olayları kapat
+			if m.tickN%60 == 30 {
+				m.sweepAutoResolve(cfg)
 			}
 		}
 	}
@@ -586,6 +598,48 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 
 	if n != nil {
 		n.Deliver(cfg.Notifiers, ev)
+	}
+}
+
+// sweepAutoResolve, AutoResolveMin dakikadır yinelenmeyen açık olayları
+// çözüldü işaretler (S22.8). run() içinde dakikada bir, lider-kapılı.
+func (m *Manager) sweepAutoResolve(cfg Config) {
+	if cfg.AutoResolveMin < 0 {
+		return
+	}
+	mins := cfg.AutoResolveMin
+	if mins == 0 {
+		mins = 15
+	}
+	cutoff := time.Now().Add(-time.Duration(mins) * time.Minute).Unix()
+	stale, err := m.st.OpenAlertEventsStale(cutoff)
+	if err != nil {
+		log.Printf("otomatik cozulme sorgusu hatasi: %v", err)
+		return
+	}
+	for _, e := range stale {
+		m.resolveEvent(cfg, e, fmt.Sprintf("koşul %d dk yinelenmedi", mins))
+	}
+}
+
+// resolveEvent, bir olayı çözüldü işaretler, (etkinse) bildirir ve cooldown'ı
+// temizler ki koşul tekrarlarsa yeni olay oluşabilsin.
+func (m *Manager) resolveEvent(cfg Config, e store.AlertEvent, reason string) {
+	now := time.Now().Unix()
+	if err := m.st.ResolveAlertEvent(e.ID, now); err != nil {
+		log.Printf("uyari cozulme hatasi: %v", err)
+		return
+	}
+	log.Printf("UYARI ÇÖZÜLDÜ [%s] %s (%s)", e.Kind, e.Key, reason)
+	m.mu.Lock()
+	delete(m.lastFire, e.Kind+"|"+e.Key)
+	n := m.notifier
+	m.mu.Unlock()
+	if cfg.NotifyResolve && n != nil {
+		e.State = "resolved"
+		e.ResolvedTs = now
+		e.Message = "[ÇÖZÜLDÜ] " + e.Message + " — " + reason
+		n.Deliver(cfg.Notifiers, e)
 	}
 }
 
