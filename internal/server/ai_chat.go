@@ -58,7 +58,7 @@ func (s *Server) handleAIMessagePost(w http.ResponseWriter, r *http.Request) {
 	// bağlam anlık görüntüsü: ilk turda ya da açıkça istenirse
 	var contextJSON string
 	if firstTurn || req.RefreshContext {
-		snap := s.buildAISnapshot(conv.ScopeKind, conv.ScopeRef, conv.Site)
+		snap := s.BuildAISnapshot(conv.ScopeKind, conv.ScopeRef, conv.Site)
 		if secs := snap.Sections(s.aiReg.Cfg().MaxContextKB); len(secs) > 0 {
 			cb, _ := json.Marshal(map[string]any{"period": snap.Period, "sections": secs})
 			contextJSON = string(cb)

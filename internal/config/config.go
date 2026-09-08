@@ -93,7 +93,7 @@ type HubConfig struct {
 		APIKey  string `koanf:"api_key"`
 		Nightly struct {
 			Enabled    bool     `koanf:"enabled"`
-			Spec       string   `koanf:"spec"`       // cron; boş → "0 6 * * *"
+			Spec       string   `koanf:"spec"`       // scheduler.NextRun biçimi: daily:HH:MM | weekly:gün:HH:MM | interval:dk (boş → daily:06:00)
 			Recipients []string `koanf:"recipients"` // boş → yalnız konuşmaya yazılır
 		} `koanf:"nightly"`
 		Triage struct {

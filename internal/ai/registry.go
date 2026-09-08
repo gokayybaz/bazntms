@@ -149,6 +149,11 @@ func (r *Registry) SaveProvider(rec store.AIProvider, plainKey string) (int64, e
 		rec.BaseURL = DefaultBaseURL(Kind(rec.Kind))
 	}
 	rec.BaseURL = strings.TrimRight(strings.TrimSpace(rec.BaseURL), "/")
+	// egress kilidi kayıt anında da uygulanır (S26.20): ai.allow_cloud=false
+	// iken loopback/özel-ağ dışı bir adres kaydedilemez.
+	if !r.cfg().AllowCloud && rec.Enabled && !IsLocalURL(rec.BaseURL) {
+		return 0, fmt.Errorf("ai.allow_cloud kapalı — yalnızca yerel model adresleri kabul edilir (%s reddedildi)", rec.BaseURL)
+	}
 	if plainKey != "" {
 		if r.cr == nil {
 			return 0, fmt.Errorf("vault yok — API anahtari sifrelenemez")

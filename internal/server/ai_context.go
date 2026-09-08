@@ -15,7 +15,7 @@ import (
 
 const aiContextWindow = 24 * time.Hour
 
-func (s *Server) buildAISnapshot(scope, ref, site string) ai.Snapshot {
+func (s *Server) BuildAISnapshot(scope, ref, site string) ai.Snapshot {
 	snap := ai.Snapshot{Scope: scope, Ref: ref, Period: "son 24 saat"}
 	since := time.Now().Add(-aiContextWindow)
 

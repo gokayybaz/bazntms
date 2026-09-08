@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/ai"
+	"github.com/gokayybaz/bazntms/internal/aijob"
 	"github.com/gokayybaz/bazntms/internal/alert"
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/compliance"
@@ -244,6 +245,10 @@ func main() {
 	// Faz 24-E: sağlayıcı-bağımsız tehdit istihbaratı. -ioc-file verildiyse
 	// localfile sağlayıcısıyla kurulur (domain + IP kara listesi).
 	var tiSvc *threatintel.Service
+	// Faz 26-E: AI motoru + olay-tetikli triyaj. aiReg vault sonrası kurulur;
+	// aiTriage yalnız ai.triage.enabled ise. İkisi de nil olabilir.
+	var aiReg *ai.Registry
+	var aiTriage *ai.Triager
 	if *iocFile != "" {
 		if list, err := ioc.Load(*iocFile); err != nil {
 			slog.Error("IOC listesi yuklenemedi", "file", *iocFile, "err", err)
@@ -267,7 +272,14 @@ func main() {
 		// eş rol). Config uyarı config'inin "incident" bölümünden okunur.
 		incEngine := incident.New(st, func() incident.Config { return alerts.Config().Incident })
 		incEngine.SetLeaderCheck(leaderAlerts.IsLeader)
-		incEngine.SetNotifier(alerts.NotifyIncident)
+		incEngine.SetNotifier(func(in store.Incident, isNew bool) {
+			alerts.NotifyIncident(in, isNew)
+			// Faz 26-E: yeni açılan incident → AI triyaj notu (nil-safe, hız-sınırlı).
+			// Notifier yalnız lider replikada ateşlenir — ayrı lider denetimi gereksiz.
+			if isNew {
+				aiTriage.Enqueue(in)
+			}
+		})
 		incEngine.Start()
 		defer incEngine.Stop()
 	} else {
@@ -336,12 +348,17 @@ func main() {
 		aiCfg := func() ai.Config {
 			return ai.Config{Enabled: true, AllowCloud: allowCloud, MaxContextKB: maxCtxKB, RedactContext: redact}
 		}
-		aiReg := ai.NewRegistry(st, v, aiCfg)
+		aiReg = ai.NewRegistry(st, v, aiCfg)
 		if err := seedAIProvider(aiReg, *llmBaseURL, *llmAPIKey, *llmModel); err != nil {
 			slog.Warn("AI bootstrap sağlayıcı seed edilemedi", "err", err)
 		}
 		srv.SetAIRegistry(aiReg)
 		slog.Info("AI analiz aktif", "bulut_izni", allowCloud)
+
+		if cfg.AI.Triage.Enabled {
+			aiTriage = ai.NewTriager(aiReg, srv.BuildAISnapshot, cfg.AI.Triage.MinSeverity, cfg.AI.Triage.MaxPerHour)
+			slog.Info("AI olay triyajı aktif", "min_severity", cfg.AI.Triage.MinSeverity)
+		}
 	}
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
@@ -485,9 +502,24 @@ func main() {
 	// zamanlanmış işler (S22.18) — lider-kapılı, controller replikasında.
 	if *alertsOn {
 		sched := scheduler.New(st)
-		sched.Register("report", reportjob.Handler(st, geo, reportsDir, func(to []string, subj string, html []byte) error {
+		mailFn := func(to []string, subj string, html []byte) error {
 			return alert.SendHTMLMail(alerts.Config().Notifiers, to, subj, html)
-		}))
+		}
+		sched.Register("report", reportjob.Handler(st, geo, reportsDir, mailFn))
+		// Faz 26-E: gecelik AI filo analizi. ai.nightly.enabled ise iş türü
+		// kaydedilir ve scheduled_jobs satırı bir kez seed edilir.
+		if aiReg != nil && cfg.AI.Nightly.Enabled {
+			sched.Register("ai_report", aijob.Handler(aiReg, srv.BuildAISnapshot, cfg.AI.Nightly.Recipients, aijob.MailFn(mailFn)))
+			spec := cfg.AI.Nightly.Spec
+			if spec == "" {
+				spec = "daily:06:00"
+			}
+			if err := aijob.EnsureJob(st, spec); err != nil {
+				slog.Warn("gecelik AI iş kaydı", "err", err)
+			} else {
+				slog.Info("gecelik AI filo analizi zamanlandı", "spec", spec)
+			}
+		}
 		leaderSched := st.Leader(store.LeaderKeyScheduler, "scheduler")
 		go leaderSched.Run(ctx)
 		sched.SetLeaderCheck(leaderSched.IsLeader)
