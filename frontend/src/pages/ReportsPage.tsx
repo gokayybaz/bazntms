@@ -1,5 +1,7 @@
 import { ReportCard } from '../components/ReportCard'
 import { EnterpriseReportCard } from '../components/EnterpriseReportCard'
+import { ReportAutomationCard } from '../components/ReportAutomationCard'
+import { SLATargetsCard } from '../components/SLATargetsCard'
 import { Panel } from '../components/Panel'
 
 export function ReportsPage() {
@@ -7,10 +9,18 @@ export function ReportsPage() {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Raporlar</h1>
-        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">HTML/PDF rapor üretimi</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">HTML/PDF üretimi · zamanlanmış teslim · SLA hedefleri</span>
       </div>
 
-      <Panel title="Kurumsal Rapor" right={<span className="text-[10px] text-tui-dim">SLA · kapasite · banding</span>}>
+      <Panel title="Zamanlanmış Raporlar &amp; Arşiv" right={<span className="text-[10px] text-tui-dim">scheduler · e-posta teslimi</span>}>
+        <ReportAutomationCard />
+      </Panel>
+
+      <Panel title="SLA Hedefleri" right={<span className="text-[10px] text-tui-dim">global + saha · ihlal → sla_breach</span>}>
+        <SLATargetsCard />
+      </Panel>
+
+      <Panel title="Kurumsal Rapor" right={<span className="text-[10px] text-tui-dim">SLA · kapasite · banding · saha kırılımı</span>}>
         <EnterpriseReportCard />
       </Panel>
 
