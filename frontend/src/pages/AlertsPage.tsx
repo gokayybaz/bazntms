@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { AlertEvent } from '../types'
 import { formatNum } from '../lib/format'
 import { AlertsCard } from '../components/AlertsCard'
+import { AlertEventsPanel } from '../components/AlertEventsPanel'
 import { KIND_LABELS, KIND_STYLES } from '../lib/alertKinds'
 import { Panel } from '../components/Panel'
 
@@ -16,7 +17,10 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <div className="flex flex-wrap items-baseline gap-2">
         <h1 className="text-[13px] font-bold uppercase tracking-[0.06em] text-ink-hi">Uyarılar</h1>
-        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">olay akışı + eşik ayarları + bildirim kanalları</span>
+        <span className="hidden truncate text-[10px] text-tui-dim sm:inline">
+          yaşam döngüsü (kabul / çöz / not) · korelasyon · bakım pencereleri · eşik &amp; bildirim ayarları
+        </span>
+        <span className="ml-auto text-[10px] text-tui-dim">{formatNum(alertEvents.length)} olay</span>
       </div>
 
       {byKind.length > 0 && (
@@ -35,7 +39,9 @@ export function AlertsPage({ alertEvents }: { alertEvents: AlertEvent[] }) {
         </div>
       )}
 
-      <Panel title="Uyarılar" right={<span className="text-[10px] text-tui-dim">{formatNum(alertEvents.length)} olay</span>}>
+      <AlertEventsPanel />
+
+      <Panel title="Eşikler &amp; Bildirim Kanalları" right={<span className="text-[10px] text-tui-dim">yalnız yönetici</span>}>
         <AlertsCard events={alertEvents} />
       </Panel>
     </div>

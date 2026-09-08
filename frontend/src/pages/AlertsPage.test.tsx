@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AlertsPage } from './AlertsPage'
+import { DialogProvider } from '../lib/dialog'
 import type { AlertConfig, AlertEvent } from '../types'
 
 const MOCK_CONFIG: AlertConfig = {
@@ -19,45 +20,55 @@ function ev(id: number, kind: AlertEvent['kind']): AlertEvent {
   return { id, ts: Math.floor(Date.now() / 1000), kind, key: `k${id}`, message: `olay ${id}` }
 }
 
+function renderPage(alertEvents: AlertEvent[]) {
+  return render(
+    <DialogProvider>
+      <AlertsPage alertEvents={alertEvents} />
+    </DialogProvider>,
+  )
+}
+
 describe('AlertsPage', () => {
   beforeEach(() => {
-    // AlertsCard alt bileseni /api/alerts'ten ayar cekiyor — sayfanin
-    // kendi mantigini (byKind gruplama/siralama) test etmek icin gecerli
-    // bir config donduruluyor
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: async () => MOCK_CONFIG } as Response)))
+    // AlertsCard → /api/alerts (config), AlertEventsPanel → /api/v1/alerts/events + /silences
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (typeof url === 'string' && url.includes('/api/v1/alerts/events')) {
+          return Promise.resolve({ ok: true, json: async () => ({ events: [], next_cursor: 0 }) } as Response)
+        }
+        if (typeof url === 'string' && url.includes('/api/v1/alerts/silences')) {
+          return Promise.resolve({ ok: true, json: async () => ({ silences: [] }) } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => MOCK_CONFIG } as Response)
+      }),
+    )
   })
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
   it('olay yokken tur rozeti gostermez, "0 olay" yazar', () => {
-    render(<AlertsPage alertEvents={[]} />)
+    renderPage([])
     expect(screen.getByText('0 olay')).toBeInTheDocument()
     expect(screen.queryByText('bant genişliği')).not.toBeInTheDocument()
   })
 
   it('turlere gore sayar ve rozetleri COK OLANDAN AZA dogru siralar', () => {
     const events = [ev(1, 'bw'), ev(2, 'port'), ev(3, 'port'), ev(4, 'port'), ev(5, 'anomaly')]
-    render(<AlertsPage alertEvents={events} />)
+    renderPage(events)
 
     expect(screen.getByText('5 olay')).toBeInTheDocument()
 
     const badges = screen.getAllByText(/bant genişliği|şüpheli port|anomali/)
-    // "şüpheli port" 3 olayla en onde olmali (buyukten kucuge siralama)
     expect(badges[0]).toHaveTextContent('şüpheli port')
-
-    // "şüpheli port" rozetinin sayaci 3 olmali
     const portBadge = badges[0].closest('span')
     expect(portBadge).toHaveTextContent('3')
   })
 
   it('KIND_LABELS listesinde olmayan bir tur icin ham kind adini gosterir', () => {
-    // backend yeni bir alert kind'i eklenip frontend'in union tipi henuz
-    // guncellenmemisse bile UI cokmemeli — ham kind adi fallback olarak
-    // gosterilir (bkz. AlertsPage: KIND_LABELS[kind] ?? kind)
     const events = [{ id: 1, ts: 0, kind: 'yeni_bilinmeyen_tur', key: 'k1', message: 'x' }] as unknown as AlertEvent[]
-    render(<AlertsPage alertEvents={events} />)
-    // rozet + olay akışı listesi — ikisinde de ham kind fallback'i
+    renderPage(events)
     expect(screen.getAllByText('yeni_bilinmeyen_tur').length).toBeGreaterThan(0)
   })
 })
