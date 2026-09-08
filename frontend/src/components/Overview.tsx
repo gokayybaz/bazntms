@@ -9,6 +9,7 @@ import { Meter } from './Meter'
 import { TuiTable } from './TuiTable'
 import type { TuiColumn } from './TuiTable'
 import { TopologyCard } from './TopologyCard'
+import { HealthCard } from './HealthCard'
 
 // --- yerel API tipleri (DevicesCard/FlowsCard/SyslogCard ile ayni sema) ---
 
@@ -439,7 +440,12 @@ export function Overview({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.1fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {/* ağ sağlık skoru — Faz 25-A */}
+        <Panel title="Ağ Sağlığı" right={<span className="font-mono text-[10px] text-tui-dim">deterministik</span>}>
+          <HealthCard />
+        </Panel>
+
         {/* filo özeti — sayaç satırları (htop üst panel dili) */}
         <Panel title="Filo Özeti">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[11px] sm:grid-cols-3">

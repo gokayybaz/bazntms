@@ -117,3 +117,21 @@ min_abs_delta_qps   5             # dns_qps / l7_qps gürültü tabanı
 ML tabanlı tespit (değişim-noktası, tahmin, otomatik eşik öğrenme) v1.1
 kapsamında değil — model bilinçli olarak istatistiksel (z-skoru / EWMA /
 mevsimsel).
+
+## Ağ sağlık skoru (Faz 25-A)
+
+`internal/health` — 0-100 **deterministik ağırlıklı** skor. **Opak AI skoru
+yok**: her kesinti (deduction) gerekçe + puan taşır ve tekrar üretilebilir.
+
+| Girdi | Ceza | Tavan |
+|---|---|---|
+| agent çevrimdışı oranı | `ceil(oran × 25)` | 25 |
+| bayat agent (>1s görülmemiş) | 3 / adet | 10 |
+| cihaz yoklanamıyor oranı | `ceil(oran × 15)` | 15 |
+| açık kritik uyarı (`state=firing`) | 5 / adet | 20 |
+| açık olay (incident) | 3/5/8 / adet (maks risk <40 / <70 / ≥70) | 25 |
+| arayüz hata+iskarta (24s) | 2/4/7/10 (≥1k / ≥10k / ≥100k) | 10 |
+
+Skor `[0,100]`'e kırpılır (maks toplam ceza 95 → katastrofik durumda ~5).
+`GET /api/v1/health` (~30 sn önbellek); panoda `Ağ Sağlığı` kartı + kurumsal
+raporda `Ağ Sağlık Skoru` bölümü.

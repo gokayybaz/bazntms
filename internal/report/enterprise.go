@@ -11,6 +11,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/health"
+
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
@@ -49,6 +51,10 @@ type EnterpriseData struct {
 	UptimeBreach bool            `json:"uptime_breach"`
 	DeviceBreach bool            `json:"device_breach"`
 	IfaceBreach  bool            `json:"iface_breach"`
+
+	// Ağ sağlık skoru (Faz 25-A) — deterministik, her kesinti açıklanabilir.
+	HealthScore      int                `json:"health_score"`
+	HealthDeductions []health.Deduction `json:"health_deductions,omitempty"`
 
 	TopEndpoints []store.EndpointDelta       `json:"top_endpoints"`
 	TopProcesses []store.ProcessTrafficUsage `json:"top_processes"`
@@ -119,6 +125,30 @@ func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, er
 	if disc, errs, err := st.FleetIfaceHealth(since, site); err == nil {
 		d.IfaceDiscards, d.IfaceErrors = disc, errs
 	}
+
+	// ağ sağlık skoru (Faz 25-A) — mevcut sinyaller + açık kritik uyarı + olay
+	hi := health.Inputs{
+		AgentsTotal: d.AgentTotal, AgentsOnline: d.AgentOnline,
+		DevicesTotal: d.DeviceTotal, DevicesOnline: d.DeviceOK,
+		IfaceErrors: d.IfaceErrors, IfaceDiscards: d.IfaceDiscards,
+	}
+	if evs, _, err := st.QueryAlertEvents(store.AlertEventFilter{Severity: "crit", State: "firing", Site: site, Limit: 200}); err == nil {
+		hi.CritAlertsOpen = len(evs)
+	}
+	if incs, err := st.RecentOpenIncidents(time.Now().Add(-24 * time.Hour)); err == nil {
+		for _, in := range incs {
+			if site != "" && in.Site != site {
+				continue
+			}
+			hi.OpenIncidents++
+			if in.RiskScore > hi.MaxIncidentRisk {
+				hi.MaxIncidentRisk = in.RiskScore
+			}
+		}
+	}
+	hs := health.Compute(hi)
+	d.HealthScore = hs.Score
+	d.HealthDeductions = hs.Deductions
 
 	// kapasite/banding: filo trafik serisi (agent arayuz telemetrisi).
 	// 60 sn kova: percentile'lar icin yeterli cozunurluk.
@@ -289,6 +319,16 @@ const enterpriseTpl = `<!doctype html>
   {{if .Empty}}<p style="border:1px solid var(--line); background:#fffbeb; padding:10px 12px; font-size:12px; color:var(--muted)">
     Filoda trafik/telemetri kaydı yok — agent'lar ve/veya SNMP cihazları veri gönderiyor mu kontrol edin.
   </p>{{end}}
+
+  <h2>Ağ Sağlık Skoru</h2>
+  <div class="kpi">
+    <div><span>Skor</span><b style="color:{{if ge .HealthScore 85}}#15803d{{else if ge .HealthScore 60}}#b45309{{else}}#b91c1c{{end}}">{{.HealthScore}} / 100</b></div>
+  </div>
+  {{if .HealthDeductions}}<table>
+    <tr><th>Kesinti</th><th class="num">Puan</th></tr>
+    {{range .HealthDeductions}}<tr><td>{{.Reason}}</td><td class="num">−{{.Points}}</td></tr>{{end}}
+  </table>{{else}}<p style="font-size:11px;color:#15803d">Tespit edilen sorun yok.</p>{{end}}
+  <p style="font-size:10.5px;color:var(--muted)">Deterministik ağırlıklı — opak AI skoru değil; her kesinti gerekçelidir.</p>
 
   <h2>SLA</h2>
   <div class="kpi">

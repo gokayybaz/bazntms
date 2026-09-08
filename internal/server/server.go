@@ -43,6 +43,7 @@ type Server struct {
 	geo               *geoip.Resolver
 	enrich            *enrich.Service      // Faz 23-E: paylaşılan IP/alan zenginleştirme
 	ti                *threatintel.Service // Faz 24-E: tehdit istihbaratı (nil = pasif)
+	hcache            healthCache          // Faz 25-A: sağlık skoru ~30sn önbellek
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
@@ -250,6 +251,7 @@ func (s *Server) Handler() http.Handler {
 	// normalleştirilmiş ham olay akışı (Faz 24-A) — uyarılardan ayrı (ADR 0010)
 	mux.Handle("GET /api/v1/events", s.requirePerm(PermView, http.HandlerFunc(s.handleEvents)))
 	// olay (incident) korelasyonu (Faz 24-B)
+	mux.Handle("GET /api/v1/health", s.requirePerm(PermView, http.HandlerFunc(s.handleHealth)))
 	mux.Handle("GET /api/v1/incidents", s.requirePerm(PermView, http.HandlerFunc(s.handleIncidentsList)))
 	mux.Handle("GET /api/v1/incidents/{id}", s.requirePerm(PermView, http.HandlerFunc(s.handleIncidentDetail)))
 	mux.Handle("POST /api/v1/incidents/{id}/{action}", s.requirePerm(PermOperate, http.HandlerFunc(s.handleIncidentAction)))

@@ -443,6 +443,17 @@ paths:
         "200":
           description: "{ events: [{type,source,ts,agent_id,device,process,pid,src_ip,src_port,dst_ip,dst_port,proto,domain,severity,count}], next }"
         "404": { description: agent site kapsamı dışında }
+  /api/v1/health:
+    get:
+      tags: [fleet]
+      summary: Ağ sağlık skoru (0-100) + açıklanabilir kesintiler (Faz 25-A)
+      description: >
+        `internal/health` — deterministik ağırlıklı skor. **Opak AI skoru yok**:
+        her kesinti (deduction) gerekçe + puan taşır. Girdiler: agent/cihaz
+        erişilebilirliği, arayüz hata/iskarta, açık kritik uyarı, açık olay,
+        telemetri tazeliği. ~30 sn önbellek.
+      responses:
+        "200": { description: "{ score, deductions: [{reason, points}], inputs }" }
   /api/v1/incidents:
     get:
       tags: [alerts]
