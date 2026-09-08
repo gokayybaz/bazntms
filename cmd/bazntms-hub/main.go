@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -59,6 +60,7 @@ func main() {
 	pruneOn := fl.Bool("prune", true, "veritabani bakimi (eski satirlarin temizligi); coklu replikada YALNIZCA bir hub'da acik olmali")
 	pollInterval := fl.Int("poll-interval", 0, "tum cihazlar icin tek tip poll araligi (sn); 0 = per-device deger. min 5")
 	pprofAddr := fl.String("pprof", "", "net/http/pprof dinleme adresi (ex: 127.0.0.1:6060); bos = kapali")
+	pprofRates := fl.Int("pprof-rates", 0, "0'dan buyukse block + mutex profillemesini acar (SetBlockProfileRate=N ns, SetMutexProfileFraction=N); yalnizca -pprof ile anlamli, kucuk ek yuk (S21.6)")
 	geoipDir := fl.String("geoip-dir", "geoip", "MaxMind GeoLite2 .mmdb dosyalarinin dizini")
 	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
 	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
@@ -499,6 +501,11 @@ func main() {
 	}
 
 	if *pprofAddr != "" {
+		if *pprofRates > 0 {
+			runtime.SetBlockProfileRate(*pprofRates)
+			runtime.SetMutexProfileFraction(*pprofRates)
+			slog.Info("block + mutex profillemesi acik", "rate", *pprofRates)
+		}
 		go func() {
 			slog.Info("pprof dinleniyor", "addr", *pprofAddr)
 			ps := &http.Server{Addr: *pprofAddr, ReadHeaderTimeout: 10 * time.Second}
