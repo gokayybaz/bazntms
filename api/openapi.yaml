@@ -558,8 +558,13 @@ paths:
     get:
       tags: [fleet]
       summary: Canlı ağ haritası modeli (LLDP/CDP/ARP/subnet)
+      description: >
+        links[] öğeleri (Faz 23-D): confidence (discovered|inferred|manual) +
+        opsiyonel telemetry (source_type='device' + local_port bir ifName'e
+        eşleşince: if_name, oper_status, speed_bps, rx_bps, tx_bps, rx_util_pct,
+        tx_util_pct, class, errors, discards). Eşleşme yoksa telemetry alanı yok.
       responses:
-        "200": { description: "{ generated_at, devices[], agents[], links[] }" }
+        "200": { description: "{ generated_at, devices[], agents[], links[{...,confidence,telemetry?}] }" }
 
   /api/v1/devices:
     get:

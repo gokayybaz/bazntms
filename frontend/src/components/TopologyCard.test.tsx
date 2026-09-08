@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TopologyCard } from './TopologyCard'
 
@@ -92,5 +93,25 @@ describe('TopologyCard', () => {
     render(<TopologyCard refreshKey={6} />)
     const router = await screen.findByRole('button', { name: /Router: edge-fw/ })
     expect(router).toHaveAttribute('tabindex', '0')
+  })
+
+  it('SNMP telemetrili kenar: yüksek kullanım aria-label\'a yansır, tıklayınca inspector açılır (Faz 23-D)', async () => {
+    mockFetch({
+      ...BASE,
+      links: [
+        {
+          id: 1, ts: Math.floor(Date.now() / 1000), kind: 'lldp',
+          source_type: 'device', source_id: 1, source_name: 'core-sw', local_port: 'Gi0/1',
+          peer_type: 'device', peer_id: 2, peer_name: 'edge-fw', peer_ip: '', confidence: 'discovered',
+          telemetry: { if_name: 'Gi0/1', oper_status: 1, speed_bps: 1e9, rx_bps: 101_500_000, tx_bps: 15_500_000, rx_util_pct: 81.2, tx_util_pct: 12.4, class: 'ethernet', errors: 0, discards: 4 },
+        },
+      ],
+    })
+    render(<TopologyCard refreshKey={7} />)
+    const edge = await screen.findByRole('button', { name: /Bağlantı core-sw Gi0\/1 → edge-fw, kullanım 81%/ })
+    await userEvent.click(edge)
+    expect(await screen.findByText(/İskarta/)).toBeInTheDocument()
+    expect(screen.getByText(/↓%81.2 ↑%12.4/)).toBeInTheDocument()
+    expect(screen.getByText('keşfedilen')).toBeInTheDocument()
   })
 })

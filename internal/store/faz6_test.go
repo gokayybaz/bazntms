@@ -70,6 +70,44 @@ func TestTopologyLinks(t *testing.T) {
 	}
 }
 
+// TestTopologyConfidence, Faz 23-D: keşif kenarı 'discovered' varsayılır ve
+// rediscovery (upsert) bunu değiştirmez. 'inferred' açıkça geçilebilir; upsert
+// ON CONFLICT confidence'ı KORUR (bir kez işaretlenen kenar downgrade olmasın).
+func TestTopologyConfidence(t *testing.T) {
+	st := openTest(t)
+	now := time.Now().Unix()
+	base := TopologyLink{Ts: now, Kind: "lldp", SourceType: "device", SourceID: 1, SourceName: "sw", LocalPort: "Gi0/1", PeerType: "device", PeerName: "fw", PeerIP: "10.0.0.2"}
+
+	if err := st.UpsertTopologyLink(base); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	base.Ts = now + 120
+	if err := st.UpsertTopologyLink(base); err != nil { // rediscovery
+		t.Fatalf("rediscovery: %v", err)
+	}
+	links, _ := st.RecentTopologyLinks(time.Now().Add(-time.Hour))
+	if len(links) != 1 || links[0].Confidence != "discovered" {
+		t.Fatalf("keşif kenarı 'discovered' olmalı: %+v", links)
+	}
+
+	// açıkça 'inferred' işaretli bir kenar (farklı peer → ayrı satır)
+	inf := base
+	inf.PeerName, inf.PeerIP, inf.Confidence, inf.Kind = "inferred-peer", "10.9.9.9", "inferred", "inferred"
+	if err := st.UpsertTopologyLink(inf); err != nil {
+		t.Fatalf("inferred upsert: %v", err)
+	}
+	links, _ = st.RecentTopologyLinks(time.Now().Add(-time.Hour))
+	var got string
+	for _, l := range links {
+		if l.PeerName == "inferred-peer" {
+			got = l.Confidence
+		}
+	}
+	if got != "inferred" {
+		t.Fatalf("açık 'inferred' korunmalı: %q (%+v)", got, links)
+	}
+}
+
 func TestBaselineStats(t *testing.T) {
 	st := openTest(t)
 	now := time.Now()

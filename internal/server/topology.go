@@ -27,11 +27,31 @@ type topoAgent struct {
 	Online bool   `json:"online"`
 }
 
+// edgeTelemetry, SNMP arayüz telemetrisi bir topoloji kenarına bağlandığında
+// (Faz 23-D) — source_type='device' + local_port bir ifName'e eşleşince.
+type edgeTelemetry struct {
+	IfName     string  `json:"if_name"`
+	OperStatus int     `json:"oper_status"`
+	SpeedBps   uint64  `json:"speed_bps"`
+	RxBps      float64 `json:"rx_bps"`
+	TxBps      float64 `json:"tx_bps"`
+	RxUtilPct  float64 `json:"rx_util_pct"`
+	TxUtilPct  float64 `json:"tx_util_pct"`
+	Class      string  `json:"class"`
+	Errors     uint64  `json:"errors"`   // in + out
+	Discards   uint64  `json:"discards"` // in + out
+}
+
+type topoLink struct {
+	store.TopologyLink
+	Telemetry *edgeTelemetry `json:"telemetry,omitempty"`
+}
+
 type topologyGraph struct {
-	GeneratedAt int64                `json:"generated_at"`
-	Devices     []topoDevice         `json:"devices"`
-	Agents      []topoAgent          `json:"agents"`
-	Links       []store.TopologyLink `json:"links"`
+	GeneratedAt int64        `json:"generated_at"`
+	Devices     []topoDevice `json:"devices"`
+	Agents      []topoAgent  `json:"agents"`
+	Links       []topoLink   `json:"links"`
 }
 
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
@@ -76,11 +96,40 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		links = scoped
 	}
 
+	// Faz 23-D: source_type='device' + local_port bir ifName'e eşleşen kenarlara
+	// canlı SNMP arayüz telemetrisi bağla. Eşleşme yoksa kenar telemetrisiz
+	// render edilir (graf bozulmaz). LatestDeviceIfaces cihaz başına bir kez.
+	ifaceCache := map[int64][]store.DeviceIfaceRate{}
+	tLinks := make([]topoLink, 0, len(links))
+	for _, l := range links {
+		tl := topoLink{TopologyLink: l}
+		if l.SourceType == "device" && l.LocalPort != "" && l.SourceID > 0 {
+			ifs, ok := ifaceCache[l.SourceID]
+			if !ok {
+				ifs, _ = s.store.LatestDeviceIfaces(l.SourceID)
+				ifaceCache[l.SourceID] = ifs
+			}
+			for _, r := range ifs {
+				if r.Name == l.LocalPort {
+					tl.Telemetry = &edgeTelemetry{
+						IfName: r.Name, OperStatus: r.OperStatus, SpeedBps: r.SpeedBitsPS,
+						RxBps: r.RxBps, TxBps: r.TxBps,
+						RxUtilPct: r.RxUtilPct, TxUtilPct: r.TxUtilPct, Class: r.Class,
+						Errors:   r.InErrors + r.OutErrors,
+						Discards: r.InDiscards + r.OutDiscards,
+					}
+					break
+				}
+			}
+		}
+		tLinks = append(tLinks, tl)
+	}
+
 	graph := topologyGraph{
 		GeneratedAt: time.Now().Unix(),
 		Devices:     []topoDevice{},
 		Agents:      []topoAgent{},
-		Links:       links,
+		Links:       tLinks,
 	}
 	now := time.Now().Unix()
 	for _, d := range devices {

@@ -24,20 +24,29 @@ type TopologyLink struct {
 	PeerID     int64  `json:"peer_id"`
 	PeerName   string `json:"peer_name"`
 	PeerIP     string `json:"peer_ip"`
+	// Confidence, kenarın güven düzeyi (Faz 23-D): discovered (SNMP/agent keşfi)
+	// | inferred (trafik çıkarımı — açıkça işaretli) | manual (operatör). Boş →
+	// UpsertTopologyLink "discovered" atar.
+	Confidence string `json:"confidence"`
 }
 
 func (s *sqlStore) UpsertTopologyLink(l TopologyLink) error {
 	if l.Ts == 0 {
 		l.Ts = time.Now().Unix()
 	}
+	if l.Confidence == "" {
+		l.Confidence = "discovered"
+	}
+	// ON CONFLICT confidence'ı KORUR — bir kez 'manual'/'inferred' işaretlenen
+	// kenar rediscovery ile 'discovered'a düşmesin.
 	_, err := s.db.Exec(s.q(`INSERT INTO topology_links
-		(ts, kind, source_type, source_id, source_name, local_port, peer_type, peer_id, peer_name, peer_ip)
-		VALUES (?,?,?,?,?,?,?,?,?,?)
+		(ts, kind, source_type, source_id, source_name, local_port, peer_type, peer_id, peer_name, peer_ip, confidence)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (kind, source_type, source_id, local_port, peer_name, peer_ip) DO UPDATE SET
 			ts = excluded.ts, source_name = excluded.source_name,
 			peer_type = excluded.peer_type, peer_id = excluded.peer_id`),
 		l.Ts, l.Kind, l.SourceType, l.SourceID, l.SourceName, l.LocalPort,
-		l.PeerType, l.PeerID, l.PeerName, l.PeerIP)
+		l.PeerType, l.PeerID, l.PeerName, l.PeerIP, l.Confidence)
 	return err
 }
 
@@ -62,7 +71,7 @@ func (s *sqlStore) SaveAgentSubnets(agentID int64, name string, subnets []string
 // RecentTopologyLinks, son gorulme zamanı penceresindeki kenarları dondurur.
 func (s *sqlStore) RecentTopologyLinks(since time.Time) ([]TopologyLink, error) {
 	rows, err := s.db.Query(s.q(`SELECT id, ts, kind, source_type, source_id, source_name, local_port,
-		peer_type, peer_id, peer_name, peer_ip
+		peer_type, peer_id, peer_name, peer_ip, confidence
 		FROM topology_links WHERE ts >= ? ORDER BY source_type, source_id, kind, local_port`),
 		since.Unix())
 	if err != nil {
@@ -73,7 +82,7 @@ func (s *sqlStore) RecentTopologyLinks(since time.Time) ([]TopologyLink, error) 
 	for rows.Next() {
 		var l TopologyLink
 		if err := rows.Scan(&l.ID, &l.Ts, &l.Kind, &l.SourceType, &l.SourceID, &l.SourceName,
-			&l.LocalPort, &l.PeerType, &l.PeerID, &l.PeerName, &l.PeerIP); err != nil {
+			&l.LocalPort, &l.PeerType, &l.PeerID, &l.PeerName, &l.PeerIP, &l.Confidence); err != nil {
 			return nil, err
 		}
 		out = append(out, l)

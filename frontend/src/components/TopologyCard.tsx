@@ -14,6 +14,18 @@ type TopoAgent = {
   site: string
   online: boolean
 }
+type EdgeTelemetry = {
+  if_name: string
+  oper_status: number
+  speed_bps: number
+  rx_bps: number
+  tx_bps: number
+  rx_util_pct: number
+  tx_util_pct: number
+  class: string
+  errors: number
+  discards: number
+}
 type TopoLink = {
   id: number
   ts: number
@@ -26,6 +38,26 @@ type TopoLink = {
   peer_id: number
   peer_name: string
   peer_ip: string
+  confidence?: string
+  telemetry?: EdgeTelemetry
+}
+
+// kenar durumu — SNMP telemetrisi bağlıysa oper/kullanımdan türer.
+type EdgeState = 'down' | 'critical' | 'warning' | 'normal' | 'unknown'
+function edgeState(t?: EdgeTelemetry): EdgeState {
+  if (!t) return 'unknown'
+  if (t.oper_status === 2) return 'down'
+  const u = Math.max(t.rx_util_pct, t.tx_util_pct)
+  if (u < 0) return 'unknown'
+  if (u >= 90) return 'critical'
+  if (u >= 70) return 'warning'
+  return 'normal'
+}
+function fmtBits(bps: number) {
+  if (bps >= 1e9) return `${(bps / 1e9).toFixed(1)} Gbps`
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(0)} Mbps`
+  if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`
+  return `${Math.round(bps)} bps`
 }
 type Graph = {
   generated_at: number
@@ -59,9 +91,64 @@ function trunc(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
 
+const CONF_LABEL: Record<string, string> = { discovered: 'keşfedilen', inferred: 'çıkarılan', manual: 'elle' }
+
+// LinkInspector — seçili kenarın LINK bloğu (Faz 23-D).
+function LinkInspector({ edge, onClose }: { edge: { link: TopoLink; peerName: string }; onClose: () => void }) {
+  const { link, peerName } = edge
+  const t = link.telemetry
+  const state = edgeState(t)
+  const stateLabel: Record<EdgeState, string> = { down: 'DOWN', critical: 'KRİTİK', warning: 'UYARI', normal: 'NORMAL', unknown: 'BİLİNMİYOR' }
+  const stateTone: Record<EdgeState, string> = {
+    down: 'text-rose-400', critical: 'text-rose-400', warning: 'text-amber-400', normal: 'text-emerald-400', unknown: 'text-tui-dim',
+  }
+  return (
+    <div className="mt-2 border border-rule bg-panel-2/50 p-3 font-mono text-[11px]">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase tracking-[0.06em] text-tui-dim">LINK</span>
+        <span className={`text-[10px] uppercase ${stateTone[state]}`}>{stateLabel[state]}</span>
+        <span className="border border-rule px-1 text-[9px] uppercase text-tui-dim">{CONF_LABEL[link.confidence ?? 'discovered'] ?? link.confidence}</span>
+        <span className="border border-rule px-1 text-[9px] uppercase text-tui-dim">{link.kind}</span>
+        <button type="button" onClick={onClose} className="ml-auto border border-rule-hi px-2 py-0.5 text-[10px] uppercase text-tui-dim hover:text-ink-hi">
+          kapat
+        </button>
+      </div>
+      <p className="text-ink-hi">
+        {link.source_name} {link.local_port && <span className="text-tui-dim">{link.local_port}</span>}
+      </p>
+      <p className="text-ink">→ {peerName}</p>
+      {t ? (
+        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 @sm:grid-cols-3">
+          {(
+            [
+              ['Hız', t.speed_bps > 0 ? fmtBits(t.speed_bps) : '—'],
+              ['Durum', t.oper_status === 1 ? 'up' : 'down'],
+              ['Sınıf', t.class || '—'],
+              ['RX', fmtBits(t.rx_bps * 8)],
+              ['TX', fmtBits(t.tx_bps * 8)],
+              ['Kullanım', t.rx_util_pct >= 0 ? `↓%${t.rx_util_pct.toFixed(1)} ↑%${t.tx_util_pct.toFixed(1)}` : '—'],
+              ['Hatalar', String(t.errors)],
+              ['İskarta', String(t.discards)],
+            ] as [string, string][]
+          ).map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-[9px] uppercase text-tui-dim">{k}</dt>
+              <dd className="text-ink-hi">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="mt-2 text-tui-dim">Bu kenar için SNMP arayüz telemetrisi yok (local_port bir ifName'e eşleşmedi ya da kaynak agent).</p>
+      )}
+    </div>
+  )
+}
+
 export function TopologyCard({ refreshKey }: { refreshKey: number }) {
   const [graph, setGraph] = useState<Graph | null>(null)
   const [error, setError] = useState('')
+  // Faz 23-D: seçili kenar (link inspector). id + peer ile eşleştirilir.
+  const [selEdge, setSelEdge] = useState<{ link: TopoLink; peerName: string } | null>(null)
 
   useEffect(() => {
     fetch('/api/v1/topology')
@@ -122,7 +209,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
         peer.startsWith(d.sys_name + ' ') ||
         d.host === peer_ip_of(peer))
 
-    type Edge = { x1: number; y1: number; x2: number; y2: number; kind: string; label: string }
+    type Edge = { x1: number; y1: number; x2: number; y2: number; kind: string; label: string; link: TopoLink; peerName: string }
     const discoveredEdges: Edge[] = []
     const hosts: { x: number; y: number; label: string; kind: string; source: string; ts: number }[] = []
 
@@ -140,7 +227,11 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
         }
       }
       if (dst && dstId !== l.source_id) {
-        discoveredEdges.push({ x1: src.x, y1: src.y, x2: dst.x, y2: dst.y, kind: l.kind, label: l.local_port || '' })
+        const peerDev = graph.devices.find((d) => d.id === dstId)
+        discoveredEdges.push({
+          x1: src.x, y1: src.y, x2: dst.x, y2: dst.y, kind: l.kind,
+          label: l.local_port || '', link: l, peerName: peerDev?.name ?? l.peer_name,
+        })
       } else {
         // çözümlenmemiş komşu (ARP/LLDP ucu) — kaynağın hub tarafına küçük nokta
         const j = hosts.filter((h) => h.source === String(l.source_id)).length
@@ -176,8 +267,23 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
   // kategorisi (eşik/trafik anlamıyla ilgisiz) için tek başına kullanılıyordu
   // — nötr bir slate tonuna taşındı, ARP'tan (kendi nötr tonu) ayrışsın diye
   // farklı bir açıklık kullanılıyor
-  const edgeColor = (kind: string) =>
+  const kindColor = (kind: string) =>
     kind === 'lldp' ? '#34d399' : kind === 'cdp' ? '#38bdf8' : kind === 'subnet' ? '#94a3b8' : '#475569'
+  // Faz 23-D: telemetri bağlıysa görsel durum; yoksa keşif-türü rengi (nötr).
+  const edgeStyle = (e: { kind: string; link: TopoLink }): { stroke: string; dash?: string; width: number; opacity: number } => {
+    switch (edgeState(e.link.telemetry)) {
+      case 'down':
+        return { stroke: '#f87171', dash: '3 4', width: 1.4, opacity: 0.85 }
+      case 'critical':
+        return { stroke: '#f87171', width: 2.4, opacity: 0.95 }
+      case 'warning':
+        return { stroke: '#fbbf24', width: 2, opacity: 0.9 }
+      case 'normal':
+        return { stroke: '#34d399', width: 2, opacity: 0.9 }
+      default:
+        return { stroke: kindColor(e.kind), width: 1.6, opacity: 0.7 }
+    }
+  }
 
   const { H, HUB, ROUTER, NET, storage, routerDev, hiddenAgents } = layout
 
@@ -232,16 +338,45 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
             {/* keşif ile bulunan zengin bağlantılar (LLDP/CDP/subnet) — spoke'un
                 üstüne; uçlarındaki düğümler zaten kendi erişilebilir adını
                 taşıyor, çizginin kendisi dekoratif */}
-            {layout.discoveredEdges.map((e, i) => (
-              <g key={i} aria-hidden="true">
-                <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={edgeColor(e.kind)} strokeWidth={1.6} strokeOpacity={0.7} />
-                {e.label && (
-                  <text x={(e.x1 + e.x2) / 2} y={(e.y1 + e.y2) / 2 - 4} textAnchor="middle" className="fill-tui-dim" fontSize={8.5}>
-                    {e.label}
-                  </text>
-                )}
-              </g>
-            ))}
+            {layout.discoveredEdges.map((e, i) => {
+              const st = edgeStyle(e)
+              const sel = selEdge?.link.id === e.link.id
+              const mid = { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 }
+              return (
+                <g
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Bağlantı ${e.link.source_name} ${e.label} → ${e.peerName}${e.link.telemetry ? `, kullanım ${Math.round(Math.max(e.link.telemetry.rx_util_pct, e.link.telemetry.tx_util_pct))}%` : ''}`}
+                  onClick={() => setSelEdge(sel ? null : { link: e.link, peerName: e.peerName })}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault()
+                      setSelEdge(sel ? null : { link: e.link, peerName: e.peerName })
+                    }
+                  }}
+                  className="cursor-pointer outline-none [&:focus-visible>line]:stroke-cyan-400"
+                >
+                  {/* geniş görünmez tıklama hedefi */}
+                  <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="transparent" strokeWidth={10} />
+                  <line
+                    x1={e.x1}
+                    y1={e.y1}
+                    x2={e.x2}
+                    y2={e.y2}
+                    stroke={st.stroke}
+                    strokeWidth={sel ? st.width + 1 : st.width}
+                    strokeOpacity={sel ? 1 : st.opacity}
+                    strokeDasharray={st.dash}
+                  />
+                  {e.label && (
+                    <text x={mid.x} y={mid.y - 4} textAnchor="middle" className="fill-tui-dim" fontSize={8.5}>
+                      {e.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
 
             {/* hub — sabit düğüm, değişken veri taşımıyor, dekoratif */}
             <g aria-hidden="true">
@@ -351,7 +486,7 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
                 <title> tooltip, klavye/ekran okuyucu için aria-label eşdeğeri */}
             {layout.hosts.map((h, i) => (
               <g key={i} role="button" tabIndex={0} aria-label={`${h.label} (${h.kind}), ${fmtAgo(h.ts)} önce görüldü`}>
-                <circle cx={h.x} cy={h.y} r={2.2} fill={edgeColor(h.kind)} fillOpacity={0.8}>
+                <circle cx={h.x} cy={h.y} r={2.2} fill={kindColor(h.kind)} fillOpacity={0.8}>
                   <title>
                     {h.label} · {h.kind} · {fmtAgo(h.ts)} önce görüldü
                   </title>
@@ -372,10 +507,21 @@ export function TopologyCard({ refreshKey }: { refreshKey: number }) {
               <line x1={220} y1={-3} x2={236} y2={-3} stroke="#232b3a" strokeWidth={1.3} />
               <text x={240} y={0} className="fill-tui-dim" fontSize={8.5}>hub bağlantısı</text>
               <line x1={318} y1={-3} x2={334} y2={-3} stroke="#0e7490" strokeWidth={2} />
-              <text x={338} y={0} className="fill-tui-dim" fontSize={8.5}>omurga (hub▸router▸net)</text>
+              <text x={338} y={0} className="fill-tui-dim" fontSize={8.5}>omurga</text>
+              <line x1={368} y1={-3} x2={384} y2={-3} stroke="#fbbf24" strokeWidth={2} />
+              <text x={388} y={0} className="fill-tui-dim" fontSize={8.5}>≥%70</text>
+              <line x1={420} y1={-3} x2={436} y2={-3} stroke="#f87171" strokeWidth={2.4} />
+              <text x={440} y={0} className="fill-tui-dim" fontSize={8.5}>≥%90</text>
+              <line x1={472} y1={-3} x2={488} y2={-3} stroke="#f87171" strokeWidth={1.4} strokeDasharray="3 4" />
+              <text x={492} y={0} className="fill-tui-dim" fontSize={8.5}>down</text>
             </g>
           </svg>
           </div>
+
+          {/* link inspector — Faz 23-D (kenara tıkla / Enter) */}
+          {selEdge && (
+            <LinkInspector edge={selEdge} onClose={() => setSelEdge(null)} />
+          )}
           {/* dar ekranlarda içeriğin sağda kesildiğini işaret eden sabit
               kaydırma ipucu — DESIGN.md'nin "Do" kuralı yatay kaydırmayı
               öngörüyor ama hiçbir görsel ipucu yoktu */}
