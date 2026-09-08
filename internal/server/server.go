@@ -226,6 +226,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/alerts/silences", s.requirePerm(PermView, http.HandlerFunc(s.handleSilencesGet)))
 	mux.Handle("POST /api/v1/alerts/silences", s.requirePerm(PermOperate, http.HandlerFunc(s.handleSilencesPost)))
 	mux.Handle("DELETE /api/v1/alerts/silences/{id}", s.requirePerm(PermOperate, http.HandlerFunc(s.handleSilenceDelete)))
+	// filtreli olay listesi + operatör aksiyonları (S22.11)
+	mux.Handle("GET /api/v1/alerts/events", s.requirePerm(PermView, http.HandlerFunc(s.handleAlertEventsV1)))
+	mux.Handle("POST /api/v1/alerts/events/{id}/ack", s.requirePerm(PermOperate, http.HandlerFunc(s.handleAlertEventAck)))
+	mux.Handle("POST /api/v1/alerts/events/{id}/resolve", s.requirePerm(PermOperate, http.HandlerFunc(s.handleAlertEventResolve)))
+	mux.Handle("POST /api/v1/alerts/events/{id}/note", s.requirePerm(PermOperate, http.HandlerFunc(s.handleAlertEventNote)))
 
 	// agent filo uclari (agentAuth: Bearer agent token)
 	mux.HandleFunc("POST /api/v1/agent/hello", s.handleAgentHello)
@@ -671,6 +676,103 @@ func (s *Server) handleAnomalyActive(w http.ResponseWriter, r *http.Request) {
 		devs = kept
 	}
 	writeJSON(w, map[string]any{"deviations": devs})
+}
+
+// --- filtreli olay listesi + operatör aksiyonları (S22.11) ---
+
+func (s *Server) handleAlertEventsV1(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	since, _ := strconv.ParseInt(q.Get("since"), 10, 64)
+	cursor, _ := strconv.ParseInt(q.Get("cursor"), 10, 64)
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	f := store.AlertEventFilter{
+		Kind: q.Get("kind"), Severity: q.Get("severity"), State: q.Get("state"),
+		Site: q.Get("site"), Group: q.Get("group"), Since: since, Cursor: cursor, Limit: limit,
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" {
+		f.Site = scope // site-kapsamlı kimlik yalnız kendi sahasının olaylarını görür
+	}
+	events, next, err := s.alerts.QueryEvents(f)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSONETag(w, r, map[string]any{"events": events, "next_cursor": next})
+}
+
+// alertEventForAction, {id}'yi çözer ve site kapsamını doğrular.
+func (s *Server) alertEventForAction(w http.ResponseWriter, r *http.Request) (*store.AlertEvent, bool) {
+	id, err := parseID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "geçersiz id", http.StatusBadRequest)
+		return nil, false
+	}
+	e, err := s.alerts.EventByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return nil, false
+	}
+	if e == nil {
+		http.Error(w, "bulunamadı", http.StatusNotFound)
+		return nil, false
+	}
+	if scope := SiteScope(identityFromCtx(r)); scope != "" && e.Site != scope {
+		http.Error(w, "bulunamadı", http.StatusNotFound)
+		return nil, false
+	}
+	return e, true
+}
+
+func decodeNote(r *http.Request) string {
+	var body struct {
+		Note string `json:"note"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	return body.Note
+}
+
+func (s *Server) handleAlertEventAck(w http.ResponseWriter, r *http.Request) {
+	e, ok := s.alertEventForAction(w, r)
+	if !ok {
+		return
+	}
+	ident := identityFromCtx(r)
+	by := ""
+	if ident != nil {
+		by = ident.Username
+	}
+	if err := s.alerts.AckEvent(e.ID, by, decodeNote(r)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, ident, "alert.ack", fmt.Sprintf("alert:%d", e.ID), e.Kind)
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleAlertEventResolve(w http.ResponseWriter, r *http.Request) {
+	e, ok := s.alertEventForAction(w, r)
+	if !ok {
+		return
+	}
+	if err := s.alerts.ResolveEventByID(e.ID, *e); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "alert.resolve", fmt.Sprintf("alert:%d", e.ID), e.Kind)
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleAlertEventNote(w http.ResponseWriter, r *http.Request) {
+	e, ok := s.alertEventForAction(w, r)
+	if !ok {
+		return
+	}
+	if err := s.alerts.NoteEvent(e.ID, decodeNote(r)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.audit(r, identityFromCtx(r), "alert.note", fmt.Sprintf("alert:%d", e.ID), "")
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // --- bakım pencereleri (S22.10) ---

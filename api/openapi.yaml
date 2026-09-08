@@ -741,6 +741,69 @@ paths:
                         z: { type: number }
                         n: { type: integer }
 
+  /api/v1/alerts/events:
+    get:
+      tags: [alerts]
+      summary: Filtreli + cursor-sayfalı uyarı olayları (S22.11)
+      description: >
+        Yaşam döngüsü alanlı olaylar. Filtreler joker (boş). Site-kapsamlı
+        kimlik yalnız kendi sahasının olaylarını görür. ETag / If-None-Match
+        destekli.
+      parameters:
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: severity, in: query, schema: { type: string, enum: [info, warn, crit] } }
+        - { name: state, in: query, schema: { type: string, enum: [firing, ack, resolved, silenced] } }
+        - { name: site, in: query, schema: { type: string } }
+        - { name: group, in: query, schema: { type: string } }
+        - { name: since, in: query, schema: { type: integer }, description: "last_ts >= (unix)" }
+        - { name: cursor, in: query, schema: { type: integer }, description: "önceki sayfanın next_cursor'ı" }
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/ifNoneMatch" }
+      responses:
+        "304": { $ref: "#/components/responses/NotModified" }
+        "200":
+          description: "{ events: AlertEvent[], next_cursor: int (0 = son sayfa) } (ETag başlığıyla)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: "#/components/schemas/AlertEvent" } }
+                  next_cursor: { type: integer }
+  /api/v1/alerts/events/{id}/ack:
+    post:
+      tags: [alerts]
+      summary: Olayı kabul et (PermOperate) — opsiyonel not
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string } } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/alerts/events/{id}/resolve:
+    post:
+      tags: [alerts]
+      summary: Olayı çöz (PermOperate)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: "{ ok: true }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/alerts/events/{id}/note:
+    post:
+      tags: [alerts]
+      summary: Olay notunu güncelle (PermOperate)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string } } }
+      responses:
+        "200": { description: "{ ok: true }" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api/v1/alerts/silences:
     get:
       tags: [alerts]
@@ -1101,6 +1164,27 @@ components:
         Retry-After:
           schema: { type: integer }
   schemas:
+    AlertEvent:
+      type: object
+      description: Yaşam döngüsü alanlı uyarı olayı (S22.6)
+      properties:
+        id: { type: integer }
+        ts: { type: integer }
+        kind: { type: string }
+        key: { type: string }
+        message: { type: string }
+        severity: { type: string, enum: [info, warn, crit] }
+        state: { type: string, enum: [firing, ack, resolved, silenced] }
+        site: { type: string }
+        count: { type: integer }
+        first_ts: { type: integer }
+        last_ts: { type: integer }
+        resolved_ts: { type: integer }
+        ack_by: { type: string }
+        ack_ts: { type: integer }
+        note: { type: string }
+        group_id: { type: string }
+        ext_ref: { type: string, description: "bilet kimliği (S22.13/14)" }
     AlertSilence:
       type: object
       properties:

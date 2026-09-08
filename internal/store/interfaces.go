@@ -88,6 +88,11 @@ type AlertStore interface {
 	AddAlertSilence(sl AlertSilence) (int64, error)
 	ListAlertSilences(activeOnly bool, now int64) ([]AlertSilence, error)
 	DeleteAlertSilence(id int64) error
+	// filtreli sorgu + operatör aksiyonları (S22.11)
+	QueryAlertEvents(f AlertEventFilter) ([]AlertEvent, int64, error)
+	AlertEventByID(id int64) (*AlertEvent, error)
+	AckAlertEvent(id int64, by string, ts int64, note string) error
+	SetAlertEventNote(id int64, note string) error
 	IsAlertSeen(kind, key string) (bool, error)
 	MarkAlertSeen(kind, key string) error
 	CountAlertSeen(kind string) (int, error)

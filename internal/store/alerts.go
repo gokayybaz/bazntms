@@ -5,6 +5,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -142,6 +143,94 @@ func (s *sqlStore) queryAlertEvents(query string, args ...any) ([]AlertEvent, er
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// AlertEventFilter, QueryAlertEvents için filtre + cursor sayfalama (S22.11).
+// Boş alanlar joker. Cursor = son sayfanın en küçük id'si (0 = baştan).
+type AlertEventFilter struct {
+	Kind, Severity, State, Site, Group string
+	Since                              int64
+	Cursor                             int64
+	Limit                              int
+}
+
+// QueryAlertEvents, filtreli olay listesi + sonraki sayfa cursor'ı (0 = son sayfa).
+func (s *sqlStore) QueryAlertEvents(f AlertEventFilter) ([]AlertEvent, int64, error) {
+	limit := f.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var where []string
+	var args []any
+	add := func(cond string, v any) { where = append(where, cond); args = append(args, v) }
+	if f.Kind != "" {
+		add("kind = ?", f.Kind)
+	}
+	if f.Severity != "" {
+		add("severity = ?", f.Severity)
+	}
+	if f.State != "" {
+		add("state = ?", f.State)
+	}
+	if f.Site != "" {
+		add("site = ?", f.Site)
+	}
+	if f.Group != "" {
+		add("group_id = ?", f.Group)
+	}
+	if f.Since > 0 {
+		add("last_ts >= ?", f.Since)
+	}
+	if f.Cursor > 0 {
+		add("id < ?", f.Cursor)
+	}
+	q := `SELECT ` + alertEventCols + ` FROM alert_events`
+	if len(where) > 0 {
+		q += " WHERE " + strings.Join(where, " AND ")
+	}
+	q += " ORDER BY id DESC LIMIT ?"
+	args = append(args, limit+1)
+
+	rows, err := s.queryAlertEvents(q, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	var next int64
+	if len(rows) > limit {
+		next = rows[limit-1].ID
+		rows = rows[:limit]
+	}
+	return rows, next, nil
+}
+
+// AlertEventByID, tek olay (site-kapsam denetimi + güncel hâli döndürme).
+func (s *sqlStore) AlertEventByID(id int64) (*AlertEvent, error) {
+	e, err := scanAlertEvent(s.db.QueryRow(s.q(`SELECT `+alertEventCols+` FROM alert_events WHERE id = ?`), id))
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// AckAlertEvent, olayı "kabul edildi" yapar (S22.11). note boş değilse yazılır.
+func (s *sqlStore) AckAlertEvent(id int64, by string, ts int64, note string) error {
+	if note != "" {
+		_, err := s.db.Exec(s.q(`UPDATE alert_events SET state='ack', ack_by=?, ack_ts=?, note=?
+			WHERE id=? AND state <> 'resolved'`), by, ts, note, id)
+		return err
+	}
+	_, err := s.db.Exec(s.q(`UPDATE alert_events SET state='ack', ack_by=?, ack_ts=?
+		WHERE id=? AND state <> 'resolved'`), by, ts, id)
+	return err
+}
+
+// SetAlertEventNote, olayın notunu günceller (S22.11).
+func (s *sqlStore) SetAlertEventNote(id int64, note string) error {
+	_, err := s.db.Exec(s.q(`UPDATE alert_events SET note = ? WHERE id = ?`), note, id)
+	return err
 }
 
 func (s *sqlStore) RecentAlertEvents(limit int) ([]AlertEvent, error) {

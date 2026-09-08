@@ -725,6 +725,37 @@ func (m *Manager) resolveEvent(cfg Config, e store.AlertEvent, reason string) {
 	}
 }
 
+// --- olay sorgu + operatör aksiyonları (server icin, S22.11) ---
+
+func (m *Manager) QueryEvents(f store.AlertEventFilter) ([]store.AlertEvent, int64, error) {
+	return m.st.QueryAlertEvents(f)
+}
+
+func (m *Manager) EventByID(id int64) (*store.AlertEvent, error) {
+	return m.st.AlertEventByID(id)
+}
+
+// AckEvent, bir olayı kabul edilmiş işaretler (operatör + opsiyonel not).
+func (m *Manager) AckEvent(id int64, by, note string) error {
+	return m.st.AckAlertEvent(id, by, time.Now().Unix(), note)
+}
+
+// ResolveEventByID, operatörün elle çözmesi: state=resolved + cooldown temizle
+// (koşul tekrarlarsa yeni olay oluşabilsin). Çözülme bildirimi yapılmaz.
+func (m *Manager) ResolveEventByID(id int64, e store.AlertEvent) error {
+	if err := m.st.ResolveAlertEvent(id, time.Now().Unix()); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	delete(m.lastFire, e.Kind+"|"+e.Key)
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *Manager) NoteEvent(id int64, note string) error {
+	return m.st.SetAlertEventNote(id, note)
+}
+
 // --- bakım pencereleri (server icin, S22.10) ---
 
 func (m *Manager) ListSilences(activeOnly bool) ([]store.AlertSilence, error) {
