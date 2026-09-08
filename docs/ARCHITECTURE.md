@@ -90,7 +90,7 @@ veya HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı) ile iletilir;
 lider-kapılı (uyarı motoruyla aynı lider), ~30 sn'de bir `AlertEventsSince`'i
 agent bazında (`alert_events.agent_id` — 0018) gruplayıp 5 deterministik kurala
 uygular (yeni-süreç+yeni-hedef/ioc, +şüpheli-port, hedef+bant, anomali+bant,
-≥N-şüpheli). **AI/LLM YOK.** Dedup = `correlation_key` ("r<kural>|agent<id>") —
+≥N-şüpheli). **AI/LLM YOK.** Dedup = `correlation_key` (`r<kural>|agent<id>`) —
 anahtar başına tek açık incident; tekrar → severity **yalnız yükselir**, risk
 en yükseği tutar. Risk skoru 0-100 açıklanabilir (kural tabanı + önem + kanıt).
 Bildirim: `alerts.NotifyIncident` sentetik AlertEvent'e çevirip mevcut
@@ -109,7 +109,7 @@ kullanır.
 
 **Opt-in** (`-ai`). AI **danışmandır** — araç çağırmaz, durum değiştirmez;
 deterministik motorlar (anomali, incident, health, `recommend`) yetkili kalır.
-Bkz. [decisions/0014](decisions/0014-ai-analysis.md).
+Bkz. [decisions/0014](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0014-ai-analysis.md).
 
 **Adaptörler** (`Adapter`: `Complete` / `Stream` / `Models`):
 
@@ -230,7 +230,7 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 ## Frontend (`frontend/`)
 
 Vite + React + Tailwind v4 + `react-router-dom`. **Tasarım dili htop/ncurses
-TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](https://github.com/gokayybaz/bazntms/blob/main/frontend/DESIGN.md):
 düz siyah zemin, tek monospace aile, kare köşe (`*{border-radius:0}`), gölge
 yok, klavye-öncelikli. İmza bileşenler: `Meter` (htop eşik çubuğu), `TuiTable`
 (sort/`/` filtre/↑↓-jk klavye-nav kolonlu tablo), `Panel` (tek konteyner —

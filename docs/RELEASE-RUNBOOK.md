@@ -1,7 +1,7 @@
 # Release Runbook — Sürüm Çıkarma
 
 Bakımcı dokümanı. Bir sürümü **üretmek** için (tüketmek için bkz.
-[`UPGRADE-RUNBOOK.md`](UPGRADE-RUNBOOK.md)). Sürüm tümüyle otomatiktir:
+[`UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)). Sürüm tümüyle otomatiktir:
 `vX.Y.Z` etiketini push etmek `.github/workflows/release.yml`'i tetikler ve
 GitHub sürümü artefaktlarıyla birlikte oluşur. Bu doküman **etiketten önce**
 yapılması gerekenleri ve **sonrasında** doğrulanacakları listeler.
@@ -9,7 +9,7 @@ yapılması gerekenleri ve **sonrasında** doğrulanacakları listeler.
 ## 1) Sürüm numarası
 
 SemVer — **v1.0.0'dan itibaren** kararlı sözleşme (bkz.
-[`docs/decisions/0008-v1-scope.md`](decisions/0008-v1-scope.md)):
+[`docs/decisions/0008-v1-scope.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0008-v1-scope.md)):
 
 | Değişiklik | Artış | Örnek |
 |---|---|---|

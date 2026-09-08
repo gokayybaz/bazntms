@@ -4,14 +4,14 @@ Bu projedeki dikkate değer değişiklikler burada tutulur. Biçim
 [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) temellidir; sürümleme
 [SemVer](https://semver.org/lang/tr/) — **v1.0.0'dan itibaren** kırıcı
 `/api/v1` / protokol değişikliği major, geriye uyumlu özellik minor, düzeltme
-patch (bkz. [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md)).
+patch (bkz. [`docs/decisions/0008-v1-scope.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0008-v1-scope.md)).
 Her GitHub sürümü ayrıca `--generate-notes` ile üretilmiş tam commit listesi
 taşır — bu dosya **operatörün önemsediği** başlıkları ve **kırıcı / yükseltme**
 notlarını özetler.
 
 Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışında
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
-— yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md)).
+— yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)).
 
 ## [1.3.0] — 2026-09-08
 
@@ -254,7 +254,7 @@ yok — yükseltmeden önce yedek.
 Faz 21 — **v1.0 sertleştirme + ölçek doğrulama**. Kurumsal kapasite hedefleri
 (`docs/enterprise-plan.html`) sentetik yükle ölçüldü, bulunan darboğazlar
 düzeltildi, sürekli operasyon için sertleştirildi. Tam rapor:
-[`docs/CAPACITY.md`](docs/CAPACITY.md).
+[`docs/CAPACITY.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/CAPACITY.md).
 
 > **Doğrulanan ölçek** (tek-node `deploy/docker-compose.scale.yml`, `target`
 > profili): 5.000 agent @ 30 sn (167 ist/sn, batch p95 6 ms, hata %0) +
@@ -338,12 +338,12 @@ düzeltildi, sürekli operasyon için sertleştirildi. Tam rapor:
   yükseltmeden sonra geçmiş dönem raporları eksik görünür. Bir kez
   `CALL refresh_continuous_aggregate('<ad>', NULL, NULL)` ile geri doldurun
   (saklama penceresi kadar ham veri tarar, saatler sürebilir). Adımlar:
-  [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md).
+  [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md).
 - SQLite / TimescaleDB dışı PostgreSQL kurulumları etkilenmez (cagg'ler
   yalnız TimescaleDB'de kurulur).
 
 ### Karar kaydı
-- [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md) —
+- [`docs/decisions/0008-v1-scope.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0008-v1-scope.md) —
   v1.0 API / protokol kararlılık taahhüdü, SemVer sözleşmesi,
   `protocol_version` uyumluluk politikası, v1 kapsamı **dışında** bırakılanlar
   (ETW L7, macOS Endpoint Security, gerçek KMS zarf şifreleme, çok-kiracılılık).
@@ -394,7 +394,7 @@ Faz 20 — süreç atfı çekirdek düzeyine taşındı. Linux'ta **eBPF**, Wind
   DNS yeterliyse hiçbir şey yapmayın (ETW ile gelir).
 
 ### Karar kaydı
-- [`docs/decisions/0007-attr-backends.md`](docs/decisions/0007-attr-backends.md) —
+- [`docs/decisions/0007-attr-backends.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0007-attr-backends.md) —
   arka uç arayüzü, fentry/CO-RE, ETW'nin elle yazılması (GPL/cgo kütüphaneler
   reddedildi), L7'nin pcap-gated kalması.
 
@@ -466,7 +466,7 @@ görünürlük düzeltmesi.
 - Yok. Ancak **v0.3.3 öncesi kurulmuş agent'lar** derin toplama açık değilse
   `agent.yml`'e `collect.pcap: true` elle eklenmeli (yeniden kurulum mevcut
   config'e dokunmaz) — bkz.
-  [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) "Süreçler / DNS / L7
+  [`docs/TROUBLESHOOTING.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/TROUBLESHOOTING.md) "Süreçler / DNS / L7
   panelleri boş".
 
 ## [0.3.2] — 2026-09-07
