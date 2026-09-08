@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useDialog } from '../lib/dialog'
 import { useHotkeys } from '../lib/useHotkeys'
+import { askAI } from '../lib/ai'
+import { Markdown } from '../lib/markdown'
 import { Panel } from '../components/Panel'
 import type { Incident } from '../components/IncidentsPanel'
 
@@ -77,6 +79,29 @@ export function IncidentDetailPage() {
 
   useHotkeys([{ key: 'Escape', handler: () => navigate('/uyarilar'), allowInField: true }])
 
+  // otomatik AI triyaj notu (Faz 26-E): scope=incident + source=triage konuşması
+  const [triage, setTriage] = useState<{ text: string; ts: number } | null>(null)
+  useEffect(() => {
+    if (!id) return
+    let stop = false
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/v1/ai/conversations?scope=incident&ref=${id}&source=triage`)
+        if (!r.ok) return
+        const convs = (await r.json()) as { id: number }[]
+        if (!convs.length) return
+        const d = await fetch(`/api/v1/ai/conversations/${convs[0].id}`).then((x) => x.json())
+        const last = [...(d.messages ?? [])].reverse().find((m: { role: string }) => m.role === 'assistant')
+        if (!stop && last?.content) setTriage({ text: last.content, ts: last.created_ts })
+      } catch {
+        /* AI kapalı olabilir — yoksay */
+      }
+    })()
+    return () => {
+      stop = true
+    }
+  }, [id])
+
   const doAction = async (action: string, label: string) => {
     if (!id) return
     if ((action === 'resolve' || action === 'close') && !(await confirm(`Bu olay "${label.toLowerCase()}" olarak işaretlensin mi?`, { danger: true }))) return
@@ -117,6 +142,13 @@ export function IncidentDetailPage() {
         <span className={`uppercase ${sevTone}`}>{i.severity}</span>
         <span className="border border-rule px-1.5 py-0.5 uppercase text-tui-dim">{i.status}</span>
         <span className="ml-auto flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => void askAI(navigate, 'incident', id ?? '', 'incident_triage')}
+            className="border border-rx/40 px-2 py-0.5 text-[10px] uppercase text-rx transition hover:bg-rx/10"
+          >
+            AI Triyaj
+          </button>
           {ACTIONS.map((a) => (
             <button
               key={a.v}
@@ -180,6 +212,21 @@ export function IncidentDetailPage() {
           </ol>
         )}
       </Panel>
+
+      {triage && (
+        <Panel
+          title="AI Triyaj"
+          right={<span className="text-[10px] text-tui-dim">otomatik · {clock(triage.ts)}</span>}
+        >
+          <Markdown text={triage.text} />
+          <p className="mt-2 text-[10px] text-tui-dim">
+            AI danışmandır — deterministik korelasyon + risk skoru yetkilidir.{' '}
+            <Link to={`/ai?c=`} className="text-rx hover:underline" onClick={(e) => { e.preventDefault(); void askAI(navigate, 'incident', id ?? '') }}>
+              Sohbete devam et →
+            </Link>
+          </p>
+        </Panel>
+      )}
 
       <Panel title="İlişkili">
         <div className="flex flex-wrap gap-2 text-[11px]">

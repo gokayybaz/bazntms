@@ -34,6 +34,7 @@ import { UsersAdminPage } from './pages/yonetim/UsersAdminPage'
 import { TokensAdminPage } from './pages/yonetim/TokensAdminPage'
 import { EnrollAdminPage } from './pages/yonetim/EnrollAdminPage'
 import { AuditAdminPage } from './pages/yonetim/AuditAdminPage'
+import { AiProvidersAdminPage } from './pages/yonetim/AiProvidersAdminPage'
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'open' | 'locked'>('loading')
@@ -181,6 +182,9 @@ export default function App() {
                 <Route path="kullanicilar" element={<UsersAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
                 <Route path="tokenlar" element={<TokensAdminPage lockedSite={lockedSite} multiSite={multiSite} />} />
                 <Route path="agent-ekle" element={<EnrollAdminPage lockedSite={lockedSite} multiSite={multiSite} publicUrl={publicUrl} />} />
+                {/* AI Sağlayıcı yönetimi sunucuda PermGlobalAdmin — site-admin
+                    rotayı açsa da sayfa 403'ü zarifçe gösterir. */}
+                <Route path="ai" element={<AiProvidersAdminPage />} />
                 <Route path="denetim" element={<AuditAdminPage />} />
               </Route>
 

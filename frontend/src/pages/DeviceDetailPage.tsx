@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { askAI } from '../lib/ai'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
 import { SEV_NAMES, SEV_STYLES } from '../lib/syslogSeverity'
 import { Panel } from '../components/Panel'
@@ -102,6 +103,7 @@ function relTime(unix: number): string {
 
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [device, setDevice] = useState<Device | null>(null)
   const [ifaces, setIfaces] = useState<IfaceRate[]>([])
   const [flows, setFlows] = useState<FlowRow[]>([])
@@ -284,6 +286,13 @@ export function DeviceDetailPage() {
             snmp v{device.snmp_version === 3 ? '3' : '2c'}
           </span>
         )}
+        <button
+          type="button"
+          onClick={() => void askAI(navigate, 'device', id ?? '', 'capacity_view')}
+          className="ml-auto border border-rx/40 px-2 py-0.5 font-mono text-[11px] uppercase text-rx transition hover:bg-rx/10"
+        >
+          AI'ya Sor
+        </button>
       </div>
 
       {device.last_error && (

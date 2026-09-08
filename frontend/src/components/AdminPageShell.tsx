@@ -5,6 +5,7 @@ const ITEMS = [
   { to: '/yonetim/kullanicilar', label: 'Kullanıcılar' },
   { to: '/yonetim/tokenlar', label: 'API Token’ları' },
   { to: '/yonetim/agent-ekle', label: 'Agent Ekle' },
+  { to: '/yonetim/ai', label: 'AI Sağlayıcı' },
   { to: '/yonetim/denetim', label: 'Denetim Kaydı' },
 ]
 

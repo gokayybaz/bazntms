@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Panel } from '../components/Panel'
+import { askAI } from '../lib/ai'
 import { TuiTable, type TuiColumn } from '../components/TuiTable'
 import { AnomalyBandChart, type BaselineRow, type ActivePoint } from '../components/AnomalyBandChart'
 import { usePolledJson } from '../lib/usePolledJson'
@@ -57,6 +59,7 @@ function seasonalBucketNow(seasonality: string): number {
 }
 
 export function AnomalyPage() {
+  const navigate = useNavigate()
   const [dim, setDim] = useState<string>('fleet')
   const [metric, setMetric] = useState<string>('bps')
 
@@ -131,6 +134,13 @@ export function AnomalyPage() {
         <span className="hidden truncate text-[10px] text-tui-dim sm:inline">
           mevsimsel z-skoru baseline · filo / saha / agent · bant genişliği + DNS + süreç trafiği
         </span>
+        <button
+          type="button"
+          onClick={() => void askAI(navigate, 'anomaly', '', 'anomaly_review')}
+          className="ml-auto border border-rx/40 px-2 py-0.5 text-[10px] uppercase text-rx transition hover:bg-rx/10"
+        >
+          Sapmaları Yorumla (AI)
+        </button>
       </div>
 
       <Panel

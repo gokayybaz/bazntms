@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { AgentWithRates, Bucket } from '../types'
 import { formatBits, formatBytes, formatNum } from '../lib/format'
+import { askAI } from '../lib/ai'
 import { Panel } from '../components/Panel'
 import { StatusPill } from '../components/StatusPill'
 import { RangeTabs } from '../components/RangeTabs'
@@ -303,11 +304,18 @@ export function AgentDetailPage() {
         )}
         <button
           type="button"
+          onClick={() => void askAI(navigate, 'agent', id ?? '', 'agent_review')}
+          className="ml-auto border border-rx/40 px-2 py-0.5 text-[11px] uppercase text-rx transition hover:bg-rx/10"
+        >
+          AI'ya Sor
+        </button>
+        <button
+          type="button"
           onClick={handleDeleteClick}
           disabled={deleting}
           aria-label={confirmDelete ? `${agent.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${agent.name} agent'ını sil`}
           title={confirmDelete ? `${agent.name} silinsin mi? Onaylamak için tekrar tıklayın` : `${agent.name} agent'ını sil`}
-          className={`ml-auto border px-2 py-0.5 text-[11px] uppercase transition disabled:opacity-50 ${
+          className={`border px-2 py-0.5 text-[11px] uppercase transition disabled:opacity-50 ${
             confirmDelete ? 'border-rose-400 bg-rose-400 text-ground' : 'border-rose-500/40 text-rose-400 hover:bg-rose-500/10'
           }`}
         >

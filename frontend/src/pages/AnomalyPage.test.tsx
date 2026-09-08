@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { AnomalyPage } from './AnomalyPage'
 
 const BASELINE = {
@@ -39,7 +40,11 @@ afterEach(() => vi.unstubAllGlobals())
 describe('AnomalyPage', () => {
   it('baseline eğrisini ve aktif sapmaları gösterir', async () => {
     mockFetch()
-    render(<AnomalyPage />)
+    render(
+      <MemoryRouter>
+        <AnomalyPage />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('heading', { name: 'Anomali' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('img', { name: /beklenen bant/i })).toBeInTheDocument())
@@ -52,7 +57,11 @@ describe('AnomalyPage', () => {
 
   it('metrik seçiciyi değiştirince baseline yeniden istenir', async () => {
     mockFetch()
-    render(<AnomalyPage />)
+    render(
+      <MemoryRouter>
+        <AnomalyPage />
+      </MemoryRouter>,
+    )
     await waitFor(() => expect(screen.getByRole('img', { name: /beklenen bant/i })).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'DNS sorgu hızı' }))
