@@ -211,6 +211,12 @@ func (m *Manager) run() {
 					m.checkAgentBandwidth(cfg, agents)
 				}
 			}
+			// anomali baseline'i: lider-kapili saatlik rebuild (ilk tick'te de).
+			// S22.1 — degerlendirme basina canli LAG taramasi yerine materyalize
+			// anomaly_baseline tablosu.
+			if cfg.Anomaly.Enabled && (m.tickN == 1 || m.tickN%3600 == 1) {
+				m.rebuildAnomalyBaseline()
+			}
 			// anomali degerlendirmesi: 5 dakikada bir (Faz 6.2)
 			if m.tickN%300 == 1 {
 				m.checkAnomaly(cfg)

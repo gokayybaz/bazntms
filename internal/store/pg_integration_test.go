@@ -244,6 +244,22 @@ func TestPostgresStore(t *testing.T) {
 		t.Fatalf("config okuma: %v %q", err, cfg)
 	}
 
+	// S22.1: materyalize anomali baseline (tx DELETE+INSERT + ? -> $N)
+	if err := st.SaveAnomalyBaseline([]AnomalyBaselineRow{
+		{Dim: "fleet", Metric: "bps", Bucket: 3, N: 200, Mean: 1000, M2: 200 * 400},
+	}); err != nil {
+		t.Fatalf("anomali baseline yaz: %v", err)
+	}
+	if err := st.SaveAnomalyBaseline([]AnomalyBaselineRow{
+		{Dim: "fleet", Metric: "bps", Bucket: 4, N: 210, Mean: 1100, M2: 210 * 441},
+	}); err != nil {
+		t.Fatalf("anomali baseline yeniden kur: %v", err)
+	}
+	ab, err := st.LoadAnomalyBaseline("fleet", "bps")
+	if err != nil || len(ab) != 1 || ab[0].Bucket != 4 || ab[0].Std() != 21 {
+		t.Fatalf("anomali baseline sorgu: %v %+v", err, ab)
+	}
+
 	// baglanti olaylari + temizlik: son ~30 saniyedeki ornekler kalir
 	// (kalan sayi saniye kaymasina bagli; 0'dan fazla, tumunden az olmali)
 	if err := st.InsertConnectionEvents([]ConnectionEvent{{Ts: now, Proto: "tcp", LocalAddr: "a", RemoteAddr: "b", Process: "chrome", Count: 3}}); err != nil {

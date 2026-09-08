@@ -70,6 +70,7 @@ func TestAnomalyFires(t *testing.T) {
 	}
 
 	cfg := DefaultConfig()
+	m.rebuildAnomalyBaseline() // S22.1: materyalize baseline (run() döngüsünün saatlik yaptığı iş)
 	m.checkAnomaly(cfg)
 
 	events := m.RecentEvents(10)
@@ -102,6 +103,7 @@ func TestAnomalyFiresFromFleet(t *testing.T) {
 	// mevcut pencere: son ~5 dk ani yukselis (~800 kbit/sn — baseline'in ~100x)
 	seedIfaceRun(t, st, 1, now.Unix()-300, 12, 30, last, func(int) uint64 { return 3_000_000 })
 
+	m.rebuildAnomalyBaseline()
 	m.checkAnomaly(DefaultConfig())
 
 	found := false
@@ -131,6 +133,7 @@ func TestAnomalyQuietOnNormalTraffic(t *testing.T) {
 		}
 	}
 
+	m.rebuildAnomalyBaseline()
 	m.checkAnomaly(DefaultConfig())
 	for _, e := range m.RecentEvents(10) {
 		if e.Kind == "anomaly" {

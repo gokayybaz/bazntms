@@ -197,6 +197,10 @@ type TopologyStore interface {
 	FleetHourlyBpsStats() ([]HourStat, error)
 	FleetAvgBpsSince(since time.Time) (float64, error)
 	DropStats(since time.Time) (dropped uint64, pps uint64, err error)
+	// materyalize anomali baseline'i (Faz 22 S22.1) — lider-kapili saatlik
+	// rebuild yazar, checkAnomaly canli LAG taramasi yerine buradan okur.
+	SaveAnomalyBaseline(rows []AnomalyBaselineRow) error
+	LoadAnomalyBaseline(dim, metric string) ([]AnomalyBaselineRow, error)
 }
 
 // ComplianceStore, 5651 uyumlu loglama: hash-zincir + Merkle checkpoint +

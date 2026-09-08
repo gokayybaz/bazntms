@@ -112,28 +112,82 @@ func (m *Manager) checkAnomaly(cfg Config) {
 }
 
 // anomalyBaseline, mevcut saat kovasinda >= minSamples ornek iceren ilk
-// baseline'i dondurur: once filo (agent telemetrisi), sonra hub yerel
-// yakalamasi (samples). fleet=true ise karsilastirma da FleetAvgBpsSince ile
-// yapilmali. Iki kaynakta da yeterli veri yoksa (base=nil) motor sessiz kalir.
+// baseline'i dondurur: once filo (dim="fleet"), sonra hub yerel yakalamasi
+// (dim="local"). fleet=true ise karsilastirma da FleetAvgBpsSince ile
+// yapilmali. Iki boyutta da yeterli veri yoksa (base=nil) motor sessiz kalir.
+//
+// Faz 22 S22.1: kaynak artik canli LAG taramasi degil, materyalize
+// anomaly_baseline tablosu (lider-kapili saatlik rebuildAnomalyBaseline yazar).
 func (m *Manager) anomalyBaseline(curHour int, minSamples int64) (base *store.HourStat, fleet bool) {
-	if fs, err := m.st.FleetHourlyBpsStats(); err == nil {
-		if b := hourBucket(fs, curHour); b != nil && b.Count >= minSamples {
-			return b, true
+	if rows, err := m.st.LoadAnomalyBaseline("fleet", "bps"); err == nil {
+		if b := baselineBucket(rows, curHour); b != nil && b.N >= minSamples {
+			return baselineToHourStat(b), true
 		}
 	}
-	if ss, err := m.st.HourlyBpsStats(); err == nil {
-		if b := hourBucket(ss, curHour); b != nil && b.Count >= minSamples {
-			return b, false
+	if rows, err := m.st.LoadAnomalyBaseline("local", "bps"); err == nil {
+		if b := baselineBucket(rows, curHour); b != nil && b.N >= minSamples {
+			return baselineToHourStat(b), false
 		}
 	}
 	return nil, false
 }
 
-func hourBucket(stats []store.HourStat, hour int) *store.HourStat {
-	for i := range stats {
-		if stats[i].Hour == hour {
-			return &stats[i]
+func baselineBucket(rows []store.AnomalyBaselineRow, bucket int) *store.AnomalyBaselineRow {
+	for i := range rows {
+		if rows[i].Bucket == bucket {
+			return &rows[i]
 		}
 	}
 	return nil
+}
+
+// baselineToHourStat, materyalize satiri checkAnomaly'nin bekledigi HourStat'a
+// cevirir. MeanSq'i m2'den geri turetir: MeanSq - Mean^2 == m2/n (popülasyon
+// varyansi) — checkAnomaly std'yi bu farktan hesaplar.
+func baselineToHourStat(r *store.AnomalyBaselineRow) *store.HourStat {
+	return &store.HourStat{
+		Hour:   r.Bucket,
+		Count:  r.N,
+		Mean:   r.Mean,
+		MeanSq: r.M2/float64(r.N) + r.Mean*r.Mean,
+	}
+}
+
+// rebuildAnomalyBaseline, lider-kapili saatlik: materyalize baseline tablosunu
+// filo (agent_iface_samples) ve hub yerel (samples) saat-of-day
+// istatistikleriyle gunceller. checkAnomaly bu tabloyu okur — degerlendirme
+// basina canli LAG taramasi (5.000 agent'ta pahali) yapilmaz.
+func (m *Manager) rebuildAnomalyBaseline() {
+	var rows []store.AnomalyBaselineRow
+	if fs, err := m.st.FleetHourlyBpsStats(); err == nil {
+		rows = append(rows, hourStatsToBaseline("fleet", "bps", fs)...)
+	} else {
+		slog.Debug("anomali baseline: filo istatistikleri okunamadi", "err", err)
+	}
+	if ls, err := m.st.HourlyBpsStats(); err == nil {
+		rows = append(rows, hourStatsToBaseline("local", "bps", ls)...)
+	}
+	if len(rows) == 0 {
+		return // taze kurulum / veri yok — tabloya dokunma
+	}
+	if err := m.st.SaveAnomalyBaseline(rows); err != nil {
+		slog.Warn("anomali baseline yazilamadi", "err", err)
+	}
+}
+
+// hourStatsToBaseline, saatlik istatistikleri (AVG(x), AVG(x^2)) materyalize
+// baseline satirlarina cevirir: m2 = n * (AVG(x^2) - AVG(x)^2).
+func hourStatsToBaseline(dim, metric string, stats []store.HourStat) []store.AnomalyBaselineRow {
+	out := make([]store.AnomalyBaselineRow, 0, len(stats))
+	for _, h := range stats {
+		variance := h.MeanSq - h.Mean*h.Mean
+		if variance < 0 {
+			variance = 0 // kayan nokta artigi
+		}
+		out = append(out, store.AnomalyBaselineRow{
+			Dim: dim, Metric: metric, Key: "", Bucket: h.Hour,
+			N: h.Count, Mean: h.Mean, M2: float64(h.Count) * variance,
+		})
+	}
+	return out
 }
