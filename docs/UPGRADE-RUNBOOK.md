@@ -39,6 +39,25 @@ Notlar:
   Postgres advisory lock ile sıraya alınır.
 - TimescaleDB modunda hypertable/cagg politikaları `if_not_exists` ile
   yeniden kurulur; özel işlem gerekmez.
+- **v1.0'a yükseltme — continuous aggregate geri-doldurması (S21.11).** Bu
+  sürüm yüksek hacimli tablolar için yeni cagg'ler ekler
+  (`flows_dst_1h`, `flows_src_1h`, `agent_iface_1h`, `process_traffic_1h`).
+  Yeni cagg'ler boş oluşturulur; yenileme politikası yalnızca son ~2 günü
+  geriye doldurur. **Mevcut geçmişi (2 gün → retention) raporlarda görmek
+  için** hub'lar ayağa kalktıktan sonra bir kez (tercihen düşük trafik
+  penceresinde) çalıştırın:
+
+  ```sql
+  CALL refresh_continuous_aggregate('flows_dst_1h', NULL, NULL);
+  CALL refresh_continuous_aggregate('flows_src_1h', NULL, NULL);
+  CALL refresh_continuous_aggregate('agent_iface_1h', NULL, NULL);
+  CALL refresh_continuous_aggregate('process_traffic_1h', NULL, NULL);
+  ```
+
+  Bu, retention penceresi kadar ham veriyi bir kez tarar — büyük filolarda
+  saatler sürebilir ve I/O yoğundur. Yeni kurulumlarda gerekmez (veri
+  biriktikçe politika doldurur). Geri-doldurma tamamlanana dek `/api/report`
+  ve `/api/v1/geo` eski dönemi eksik gösterir ama yavaşlamaz.
 
 ## 2) Agent Otomatik Güncelleme (varsayılan — genelde hiçbir şey yapmanız gerekmez)
 
