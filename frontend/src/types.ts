@@ -71,5 +71,10 @@ export interface AlertConfig {
       token: string
       insecure: boolean
     }
+    // S22.14/15: bilet sistemleri
+    jira?: { enabled: boolean; base_url: string; email: string; api_token: string; project: string; issue_type: string; resolve_transition: string }
+    servicenow?: { enabled: boolean; base_url: string; user: string; password: string }
   }
+  // S22.13: bildirim yönlendirme kuralları (opsiyonel)
+  notify_routes?: { severity?: string; kind?: string; site?: string; channels: string[]; continue?: boolean }[]
 }

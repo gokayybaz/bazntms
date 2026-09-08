@@ -174,6 +174,13 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
   const siem = cfg.notifiers.siem ?? { enabled: false, format: '' as const, transport: '' as const, target: '', token: '', insecure: false }
   const patchSiem = (p: Partial<typeof siem>) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, siem: { ...siem, ...p } } })
 
+  const jira = cfg.notifiers.jira ?? { enabled: false, base_url: '', email: '', api_token: '', project: '', issue_type: '', resolve_transition: '' }
+  const patchJira = (p: Partial<typeof jira>) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, jira: { ...jira, ...p } } })
+  const snow = cfg.notifiers.servicenow ?? { enabled: false, base_url: '', user: '', password: '' }
+  const patchSnow = (p: Partial<typeof snow>) => setCfg((c) => c && { ...c, notifiers: { ...c.notifiers, servicenow: { ...snow, ...p } } })
+  const routes = cfg.notify_routes ?? []
+  const setRoutes = (r: typeof routes) => setCfg((c) => c && { ...c, notify_routes: r })
+
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       {eventFeed}
@@ -370,6 +377,97 @@ export function AlertsCard({ events }: { events: AlertEvent[] }) {
             </>
           )}
           <p className="text-[10px] text-tui-dim">CEF/LEEF önem: port 9 · vpn_down 8 · anomali/sdwan 6 · bant/oturum 5 · süreç/hedef 4. syslog facility local0.</p>
+        </Section>
+
+        <Section title="Bilet Sistemleri (Jira / ServiceNow)" status={jira.enabled || snow.enabled ? 'açık' : 'kapalı'} accent="orange">
+          <div className="flex items-center gap-1.5">
+            <Toggle checked={jira.enabled} onChange={(v) => patchJira({ enabled: v })} label="Jira Cloud — grup başına issue, çözülünce geçiş" />
+            <ChannelDot s={notify.jira} />
+          </div>
+          {jira.enabled && (
+            <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
+              <label className={fieldLabelCls}>Base URL
+                <input value={jira.base_url} onChange={(e) => patchJira({ base_url: e.target.value })} placeholder="https://kurum.atlassian.net" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>Proje anahtarı
+                <input value={jira.project} onChange={(e) => patchJira({ project: e.target.value })} placeholder="OPS" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>E-posta (Basic auth)
+                <input value={jira.email} onChange={(e) => patchJira({ email: e.target.value })} placeholder="bot@kurum.com" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>API token
+                <input value={jira.api_token} onChange={(e) => patchJira({ api_token: e.target.value })} type="password" placeholder="•••• (kasada şifreli)" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>Issue type
+                <input value={jira.issue_type} onChange={(e) => patchJira({ issue_type: e.target.value })} placeholder="Task" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>Çözüm geçişi
+                <input value={jira.resolve_transition} onChange={(e) => patchJira({ resolve_transition: e.target.value })} placeholder="Done" className={inputCls} />
+              </label>
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-1.5">
+            <Toggle checked={snow.enabled} onChange={(v) => patchSnow({ enabled: v })} label="ServiceNow — incident aç, çözülünce state=Resolved" />
+            <ChannelDot s={notify.servicenow} />
+          </div>
+          {snow.enabled && (
+            <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
+              <label className={fieldLabelCls}>Instance URL
+                <input value={snow.base_url} onChange={(e) => patchSnow({ base_url: e.target.value })} placeholder="https://kurum.service-now.com" className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>Kullanıcı
+                <input value={snow.user} onChange={(e) => patchSnow({ user: e.target.value })} className={inputCls} />
+              </label>
+              <label className={fieldLabelCls}>Parola
+                <input value={snow.password} onChange={(e) => patchSnow({ password: e.target.value })} type="password" placeholder="•••• (kasada şifreli)" className={inputCls} />
+              </label>
+            </div>
+          )}
+          <p className="text-[10px] text-tui-dim">ext_ref olaya yazılır; korelasyon grubunda tek bilet. Yönlendirme kuralları "jira" / "servicenow" kanallarını hedefleyebilir.</p>
+        </Section>
+
+        <Section title="Bildirim Yönlendirme" status={routes.length ? `${routes.length} kural` : 'kural yok — hepsine'}>
+          <p className="text-[10px] text-tui-dim">
+            Kural yoksa etkin tüm kanallara gider. Yukarıdan aşağı; boş alan = joker; eşleşen kuralın kanallarına gönderilir, "devam" yoksa durur.
+          </p>
+          <div className="space-y-1.5">
+            {routes.map((rt, i) => (
+              <div key={i} className="grid grid-cols-2 items-end gap-1.5 border border-rule p-2 @sm:grid-cols-6">
+                <label className={fieldLabelCls}>önem
+                  <select value={rt.severity ?? ''} onChange={(e) => setRoutes(routes.map((x, j) => (j === i ? { ...x, severity: e.target.value } : x)))} className={inputCls}>
+                    <option value="">herhangi</option>
+                    <option value="info">info</option>
+                    <option value="warn">warn</option>
+                    <option value="crit">crit</option>
+                  </select>
+                </label>
+                <label className={fieldLabelCls}>tür
+                  <input value={rt.kind ?? ''} onChange={(e) => setRoutes(routes.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)))} placeholder="anomaly" className={inputCls} />
+                </label>
+                <label className={fieldLabelCls}>saha
+                  <input value={rt.site ?? ''} onChange={(e) => setRoutes(routes.map((x, j) => (j === i ? { ...x, site: e.target.value } : x)))} className={inputCls} />
+                </label>
+                <label className={`${fieldLabelCls} @sm:col-span-2`}>kanallar (virgüllü)
+                  <input
+                    value={rt.channels.join(',')}
+                    onChange={(e) => setRoutes(routes.map((x, j) => (j === i ? { ...x, channels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } : x)))}
+                    placeholder="slack,jira,pagerduty"
+                    className={inputCls}
+                  />
+                </label>
+                <div className="flex items-center gap-2 pb-1">
+                  <Toggle checked={!!rt.continue} onChange={(v) => setRoutes(routes.map((x, j) => (j === i ? { ...x, continue: v } : x)))} label="devam" />
+                  <button onClick={() => setRoutes(routes.filter((_, j) => j !== i))} className="text-rose-400 hover:underline text-xs">sil</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setRoutes([...routes, { channels: [] }])}
+            className="mt-1 border border-rule px-2.5 py-1 text-[11px] uppercase tracking-[0.04em] text-tui-dim hover:text-ink-hi"
+          >
+            + kural ekle
+          </button>
         </Section>
 
         <div className="flex items-center gap-3">
