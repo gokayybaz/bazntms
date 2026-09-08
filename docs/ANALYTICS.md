@@ -135,3 +135,51 @@ yok**: her kesinti (deduction) gerekçe + puan taşır ve tekrar üretilebilir.
 Skor `[0,100]`'e kırpılır (maks toplam ceza 95 → katastrofik durumda ~5).
 `GET /api/v1/health` (~30 sn önbellek); panoda `Ağ Sağlığı` kartı + kurumsal
 raporda `Ağ Sağlık Skoru` bölümü.
+
+---
+
+# AI Analiz (Faz 26)
+
+**Opt-in** (`-ai`). İstatistiksel/deterministik motorların (yukarıdaki anomali
++ sağlık skoru, incident korelasyonu, `report.recommend`) **üzerinde** bir
+doğal-dil yorum katmanı. AI **danışmandır** — araç çağırmaz, durum
+değiştirmez; o motorlar yetkili kalır. Tam tasarım: `docs/decisions/0014`.
+
+## Sağlayıcılar
+
+| Tür (`kind`) | Uç | Örnek |
+|---|---|---|
+| `openai` / `openai-compat` | `/v1/chat/completions` + `/v1/models` | OpenAI, Ollama, LM Studio, vLLM, OpenRouter, DeepSeek, Groq |
+| `anthropic` | `/v1/messages` (native) | Claude |
+| `ollama` / `lmstudio` | openai-compat + yerel varsayılan adres | anahtar gerekmez |
+
+DB'de (`ai_providers`, `0021`); `api_key` vault-şifreli. Panel: Yönetim > AI
+Sağlayıcı (`yetki:global-admin`). Egress kilidi: `-ai-allow-cloud=false` →
+yalnız loopback/RFC1918.
+
+## Bağlam (token-bütçeli anlık görüntü)
+
+Kapsam (`fleet` | `agent` | `incident` | `anomaly` | `device`) için
+`internal/server/ai_context.go` ilgili `store` + `alert` (anomali) + `health`
+sorgularını çalıştırır → `ai.Snapshot` → kompakt JSON bölümleri. Toplam
+`ai.max_context_kb` (vars. 24) aşılırsa son bölüm kırpılır. Bağlam ilk turda
++ `refresh_context` ile eklenir; `ai_messages.context_json`'a saklanır.
+
+`chunked` mod (gecelik iş): her bölüm ayrı istek → kısa not → final
+birleştirme. Küçük yerel modellerde (3B–7B) bağlam şişmez; ham veri ikinci
+kez gitmez.
+
+## Otomatik analiz
+
+| Tetik | Nasıl |
+|---|---|
+| **Preset butonlar** | `GET /api/v1/ai/presets` — sunucu-tanımlı (Filoyu özetle, Güvenlik taraması, Anomali yorumu, Kapasite görünümü, Bu olayı açıkla, Bu agent'i incele) |
+| **Gecelik** | `internal/aijob` "ai_report" scheduler işi (lider-kapılı, C1). `ai.nightly.spec` (`daily:06:00`). `recipients` → e-posta. `source=nightly` konuşması |
+| **Olay-tetikli triyaj** | `incident.Engine` notifier'ı → `ai.Triager`. Yeni `min_severity`+ incident → kısa triyaj notu, `source=triage` konuşması, IncidentDetailPage'de "AI Triyaj" paneli. Saatlik `max_per_hour` token-bucket |
+
+## Güvenlik
+
+- Prompt injection: veri blokları "güvenilmez gözlem" olarak işaretli;
+  çıktı otomatik aksiyona bağlanmaz.
+- `api_key` hiçbir GET'te düz görünmez; `ai.provider.*` + `ai.analyze` audit'e.
+- RBAC: sohbet `analyze`, sağlayıcı `global-admin`, site-scope süzme.

@@ -15,7 +15,7 @@ main.go
   ├─ store.NewCollector()    örnekleyici (saniye/dakika yazımları)
   ├─ alert.NewManager()      uyarı kural motoru
   ├─ geoip.New()             MMDB / ip-api çözümleyici
-  ├─ ai.NewClient()          OpenAI-uyumlu istemci
+  ├─ ai.NewRegistry()        AI sağlayıcı yönetimi + adaptör (opt-in -ai)
   └─ server.New()            REST + WS + SPA
 ```
 
@@ -105,17 +105,40 @@ hattı yok**. `GET /api/v1/events?type=&agent_id=&device=&since_min=&before=&lim
 kapsam dışı (bkz. ADR); korelasyon motoru (24-B) bu akışı kanıt kaynağı olarak
 kullanır.
 
-## AI istemcisi (`internal/ai`)
+## AI analiz (`internal/ai`, Faz 26)
 
-OpenAI-uyumlu `/chat/completions` çağrıları; iki mod:
+**Opt-in** (`-ai`). AI **danışmandır** — araç çağırmaz, durum değiştirmez;
+deterministik motorlar (anomali, incident, health, `recommend`) yetkili kalır.
+Bkz. [decisions/0014](decisions/0014-ai-analysis.md).
 
-- **Tek seferde**: tüm veri tek JSON olarak gider
-- **Chunked**: 4 veri bölümü ayrı isteklerle → her birinden kısa not → final
-  istekte yalnızca notlar birleştirilir. Ham veri ikinci kez gitmez.
+**Adaptörler** (`Adapter`: `Complete` / `Stream` / `Models`):
 
-Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
-`<think>` bloklarının temizlenmesi, `finish_reason=length` için açıklayıcı hata,
-`/no_think` (Qwen3) ve `-llm-max-tokens` override.
+| Dosya | Kapsam |
+|-------|--------|
+| `openai.go` | OpenAI-uyumlu `/v1/chat/completions` + `/v1/models` — OpenAI, Ollama, LM Studio, vLLM, llama.cpp, OpenRouter, DeepSeek, Groq |
+| `anthropic.go` | Native `/v1/messages` (system üst-alan, farklı SSE olayları, `x-api-key` + `anthropic-version`) |
+
+Hand-rolled `net/http` (SDK bağımlılığı yok — proje deseni). Reasoning
+modelleri: `reasoning_content` / `reasoning` fallback, akan `<think>…</think>`
+filtreleme (parçalar arasına bölünmüş etikete dayanıklı), `finish_reason=length`
+açıklayıcı hata, `no_think` (Qwen3).
+
+**Sağlayıcılar** `ai_providers` tablosunda (`0021`); API anahtarı vault-şifreli
+(server katmanı şifreler — `alert.Crypter` deseni). Panel: Yönetim > AI
+Sağlayıcı (`PermGlobalAdmin`). Egress kilidi: `-ai-allow-cloud=false` → yalnız
+loopback/özel-ağ adresleri (kayıt + çalışma anı).
+
+**Sohbet** `ai_conversations` / `ai_messages` — çok-turlu, `scope_kind`/
+`scope_ref` ile sayfa-farkında (fleet | agent | incident | anomaly | device).
+`POST /api/v1/ai/conversations/{id}/messages` **SSE** akış (`data: {"delta"|
+"done"|"error"}`). Bağlam: `internal/server/ai_context.go` store + alert +
+health sorgularından `ai.Snapshot`; `internal/ai` token-bütçeli kompakt JSON'a
+çevirir. Silme = arşiv (hard-delete yok).
+
+**Otomatik**: (1) sunucu-tanımlı preset butonları, (2) `internal/aijob`
+"ai_report" gecelik scheduler işi (lider-kapılı), (3) `ai.Triager` — yeni
+kritik incident → triyaj notu (`incident.Engine` notifier sarmalayıcısı,
+saatlik hız-sınırlı).
 
 ## Akış toplama (`internal/flows`)
 

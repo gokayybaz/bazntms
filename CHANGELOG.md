@@ -13,6 +13,46 @@ Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışı
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 — yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md)).
 
+## [1.3.0] — 2026-09-08
+
+Faz 26 — **AI analiz**. Monolit döneminde (`d92d0fb:internal/ai`) vardı,
+`9d22e7a`'da silinmişti; geri getirilip çoklu-sağlayıcı + kalıcı sohbet +
+otomatik analiz modeline yükseltildi. **Opt-in** (`-ai`) → geriye uyumlu,
+**minor**. `ProtocolVersion` 1'de kalır. Migrasyon `0021` (`ai_providers`,
+`ai_conversations`, `ai_messages`) hub açılışında otomatik uygulanır.
+
+### Eklendi — Faz 26
+- **AI sohbet sekmesi** (`/ai`) — çok-turlu, SSE streaming, mini-markdown
+  render, sunucu-tanımlı preset butonlar ("Filoyu özetle", "Güvenlik
+  taraması", "Anomali yorumu" …). `yetki:analyze` (viewer göremez).
+- **Çoklu sağlayıcı** — yerel (Ollama, LM Studio) + bulut (OpenAI, Anthropic
+  native, OpenAI-uyumlu: vLLM/OpenRouter/DeepSeek/Groq). Panel: **Yönetim >
+  AI Sağlayıcı** (`yetki:global-admin`) — ekle/düzenle + "Test Et" + canlı
+  model listesi. API anahtarı vault-şifreli, panelde bir daha gösterilmez.
+- **Sayfa-farkında "AI'ya Sor"** — Agent / Cihaz / Anomali / Olay detay
+  sayfalarından ilgili bağlamla sohbet açar. IncidentDetailPage'de otomatik
+  "AI Triyaj" notu paneli.
+- **Otomatik analiz**: (1) preset butonlar, (2) gecelik filo analizi
+  (`ai.nightly` — `internal/aijob` scheduler işi, lider-kapılı, opsiyonel
+  e-posta), (3) olay-tetikli triyaj (`ai.triage` — yeni kritik incident →
+  triyaj notu, saatlik hız-sınırlı).
+- **AI danışmandır** — araç çağırmaz, durum değiştirmez; deterministik
+  motorlar (anomali, incident, health, `recommend`) yetkili kalır (ADR 0014).
+
+### Güvenlik — Faz 26
+- **Egress kilidi** `-ai-allow-cloud=false` → yalnız loopback/RFC1918 model
+  adresleri (kayıt + çalışma anı). Self-hosted / hava boşluklu kurulum: veri
+  ağdan çıkmaz.
+- Prompt injection sınırı: telemetri verisi "güvenilmez gözlem" olarak
+  işaretli, çıktı otomatik aksiyona bağlanmaz.
+- `ai.provider.*` + `ai.analyze` denetim zincirine (`api_key` maskeli).
+
+### Geriye uyum — Faz 26
+- `-llm-base-url` / `-llm-api-key` / `-llm-model` + `LLM_*` / `OPENAI_*`
+  env korunur — `ai_providers` boşsa ilk açılışta bir `bootstrap` sağlayıcı
+  seed eder. `-llm-max-tokens` / `-llm-no-think` bayrakları kaldırıldı
+  (sağlayıcı `opts`'una taşındı).
+
 ## [1.2.0] — 2026-09-08
 
 Faz 23 — **Gözlemlenebilirlik derinliği** · Faz 24 — **Tespit & korelasyon** ·

@@ -29,11 +29,11 @@
 | `-updates-dir` | — (repo doluysa `updates`) | Agent güncelleme kanalı dizini (`<dir>/<channel>/manifest.json` + binary'ler). Boş bırakılırsa `-update-github-repo` doluyken `updates`, değilse kanal kapalı. Bkz. [UPGRADE-RUNBOOK.md](UPGRADE-RUNBOOK.md) §2 |
 | `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
 | `-enroll-token` | — | **Bootstrap** agent enrollment token'ı. Boşsa rastgele üretilip loglanır. Yalnızca ilk kurulum için — sızarsa hub'ı yeniden başlatmadan iptal edilemez. Kalıcı token'lar: panel > Yönetim > Agent Ekle (bkz. aşağıda) |
-| `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
-| `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
-| `-llm-model` | — | Varsayılan model. UI'dan da seçilebilir |
-| `-llm-max-tokens` | `0` | İstek başına token limiti (0 = dahili varsayılanlar: parça 1500, final 2500, tek seferde 3000) |
-| `-llm-no-think` | `false` | Qwen3 serisi modellerde düşünme modunu kapatır (sistem mesajına `/no_think` ekler) |
+| `-ai` | `false` | AI analiz sekmesi + `/api/v1/ai/*` uçları (Faz 26). Sağlayıcılar: panel > Yönetim > AI Sağlayıcı |
+| `-ai-allow-cloud` | `true` | `false` → yalnız yerel (loopback/RFC1918) model adresleri kabul edilir — bulut sağlayıcı **egress kilidi** (self-hosted / hava boşluklu) |
+| `-llm-base-url` | — | **Bootstrap** AI sağlayıcısı adresi (OpenAI-uyumlu; `http://localhost:11434/v1` Ollama). `ai_providers` tablosu boşsa ilk açılışta bir kez seed edilir |
+| `-llm-api-key` | — | Bootstrap sağlayıcı API anahtarı. Yerel modeller için gerekmez |
+| `-llm-model` | — | Bootstrap sağlayıcı varsayılan modeli (`qwen2.5:7b`, `gpt-4o-mini` …) |
 | `-record-dir` | `captures` | PCAP kayıt dosyalarının yazılacağı dizin |
 | `-record-max-mb` | `100` | PCAP dosya başına üst boyut; aşıldığında otomatik yeni dosyaya geçer (rotasyon) |
 | `-geoip-dir` | `geoip` | MaxMind GeoLite2 `.mmdb` dosyalarının aranacağı dizin |
@@ -44,62 +44,57 @@
 | Değişken | Karşılığı | Not |
 |----------|----------|-----|
 | `AUTH_PASSWORD` | `-auth-password` | |
-| `LLM_BASE_URL` / `OPENAI_BASE_URL` | `-llm-base-url` | |
-| `LLM_API_KEY` / `OPENAI_API_KEY` | `-llm-api-key` | |
-| `LLM_MODEL` | `-llm-model` | Varsayılan: `gpt-4o-mini` |
-| `LLM_MAX_TOKENS` | `-llm-max-tokens` | |
-| `LLM_NO_THINK` | `-llm-no-think` | `1` veya `true` |
+| `LLM_BASE_URL` / `OPENAI_BASE_URL` | `-llm-base-url` | bootstrap sağlayıcı |
+| `LLM_API_KEY` / `OPENAI_API_KEY` | `-llm-api-key` | bootstrap sağlayıcı |
+| `LLM_MODEL` | `-llm-model` | bootstrap sağlayıcı |
+| `BAZNTMS_AI__*` | `ai.*` YAML | `BAZNTMS_AI__NIGHTLY__ENABLED` vb. |
 
 Bayraklar ortam değişkenlerinden önceliklidir.
 
-## AI Kurulumu
+## AI Kurulumu (Faz 26)
 
-### Ollama (yerel)
+`-ai` ile aç. Sağlayıcılar **panelden** eklenir (Yönetim > AI Sağlayıcı);
+API anahtarları vault ile şifreli saklanır. `-llm-*` bayrakları yalnız
+**bootstrap** için (tablo boşsa ilk sağlayıcıyı seed eder — geriye uyum).
+
+### Yerel model (önerilen — veri ağdan çıkmaz)
 
 ```bash
 ollama pull qwen2.5:7b
-sudo ./bazntms -llm-base-url http://localhost:11434/v1
+./bazntms-hub -ai -ai-allow-cloud=false -llm-base-url http://localhost:11434/v1 -llm-model qwen2.5:7b
 ```
 
-Yerel adres görüldüğünde API anahtarı zorunluluğu otomatik kalkar. Kurulu
-modeller `/api/ai/models` üzerinden arayüze listelenir.
+Yerel adreslerde (`localhost` / `127.0.0.1` / RFC1918) API anahtarı gerekmez.
+LM Studio: `http://localhost:1234/v1`. vLLM / llama.cpp / OpenRouter: `kind=openai-compat`.
 
-### LM Studio
+### Bulut sağlayıcı
 
-Uygulamada "Local Server" sekmesinden sunucuyu başlatın:
+`-ai-allow-cloud=true` (varsayılan) iken panelden ekleyin: `kind=openai`
+(`api_key` gir) veya `kind=anthropic`. Egress kilidi açıksa (`=false`) bulut
+adresleri hem kayıtta hem çalışma anında reddedilir.
 
-```bash
-sudo ./bazntms -llm-base-url http://localhost:1234/v1
+### Reasoning modelleri (Qwen3, DeepSeek-R1)
+
+`<think>…</think>` blokları ve `reasoning_content` yedeği otomatik temizlenir.
+Sağlayıcı `opts.no_think` (Qwen3 düşünmeyi kapat) + `opts.max_tokens` panelden
+ayarlanır.
+
+### YAML örneği (`ai:` bloğu)
+
+```yaml
+ai:
+  enabled: true
+  allow_cloud: false          # yalnız yerel model adresleri
+  max_context_kb: 24
+  nightly:
+    enabled: true
+    spec: "daily:06:00"       # daily:HH:MM | weekly:gün:HH:MM | interval:dk
+    recipients: ["ops@example.com"]
+  triage:
+    enabled: true
+    min_severity: crit        # yeni kritik incident → otomatik triyaj notu
+    max_per_hour: 10
 ```
-
-### llama.cpp server / vLLM / OpenRouter / OpenAI
-
-```bash
-# llama.cpp
-sudo ./bazntms -llm-base-url http://localhost:8080/v1 -llm-model model-adi
-
-# Bulut servisler
-LLM_API_KEY=sk-... ./bazntms
-```
-
-### Reasoning modelleri (Qwen3, DeepSeek-R1 vb.)
-
-Bu modeller final cevaptan önce uzun düşünme metni üretir; token limiti
-düşünmede biterse boş yanıt döner. Sunucu `reasoning_content` alanını ve
-`<think>...</think>` bloklarını otomatik destekler. Ek ayarlar:
-
-```bash
--llm-no-think            # Qwen3: düşünmeyi kapat (çok daha hızlı)
--llm-max-tokens 4000     # düşünmeye alan bırak
-```
-
-### Parça parça gönderme (chunked)
-
-Analiz verisi 4 bölüme ayrılır: (1) trafik özeti + protokoller, (2) en yoğun
-hedefler, (3) en aktif süreçler, (4) DNS sorguları. `chunked: true` iken her
-bölüm ayrı istekle gider ve modelden yalnızca kısa not alınır; son istekte
-yalnızca notlar birleştirilerek final analiz üretilir. Ham veri modele hiçbir
-zaman ikinci kez gönderilmez — küçük modellerde (3B–7B) context şişmez.
 
 ## GeoIP Kurulumu
 
@@ -141,7 +136,8 @@ zaman çözümlenmez.
 | `alert_events` | olay anında | uyarı geçmişi |
 | `alert_seen` | kalıcı | yeni süreç/hedef kurallarının "görüldü" işaretleri |
 | `alert_config` | PUT ile | uyarı ayarları (JSON, tek satır) |
-| `insights` | analizle | AI analiz sonuçları |
+| `ai_conversations` / `ai_messages` | sohbet anında | AI analiz oturumları (arşiv; prune 90 gün) |
+| `ai_providers` | panelden | AI sağlayıcı profilleri (`api_key` vault-şifreli) |
 
 Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 `-db` ile taşınabilir; boyut kontrolü için `ls -la <db>*` (WAL dahil).

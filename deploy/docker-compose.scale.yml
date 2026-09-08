@@ -84,6 +84,12 @@ services:
       - "-mock-devices" # Faz 21 yük testi: bazntms-loadgen -mode device (vendor=mock)
       - "-pprof" # Faz 21: profil için (compose ağı içinden; bkz. scripts/profile.sh)
       - "0.0.0.0:6060"
+      - "-ai" # Faz 26: AI analiz. Yerel model için `ai` profilini de ayağa kaldırın:
+      - "-ai-allow-cloud=false" #   docker compose -f deploy/docker-compose.scale.yml --profile ai up -d --build
+      - "-llm-base-url" #   ai_providers boşsa bootstrap sağlayıcı (ollama servisi)
+      - "http://ollama:11434/v1"
+      - "-llm-model"
+      - "${AI_MODEL:-qwen2.5:0.5b}"
     # /data kalıcı: vault.key. Volume olmadan her recreate yeni master key üretir
     # → DB'deki AES-GCM şifreli cihaz kimlikleri çözülemez. İki replika AYNI
     # named volume'u paylaşır (vault.key ortak).
@@ -222,6 +228,24 @@ services:
   # --- gözlemlenebilirlik (opsiyonel: --profile obs) — Faz 21 S21.7 ---
   # Prometheus hub-controller + hub-ingest replikalarını Docker DNS ile keşfeder;
   # Grafana "bazNTMS — Kapasite" dashboard'unu otomatik yükler.
+  # --- yerel AI modeli (Faz 26) — opsiyonel; `--profile ai` ile ---
+  # İlk çalıştırmada modeli çeker (birkaç dk). Küçük model (0.5B) yalnız duman
+  # testi içindir — gerçek analiz için qwen2.5:7b vb. kullanın (AI_MODEL env).
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ai"]
+    volumes:
+      - ollamadata:/root/.ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'ollama serve & sleep 3 && ollama pull "${AI_MODEL:-qwen2.5:0.5b}" && wait'
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q . || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   prometheus:
     image: prom/prometheus:v3.1.0
     profiles: ["obs"]
@@ -254,5 +278,6 @@ services:
 volumes:
   tsdata:
   ctldata: # hub-controller /data — vault.key kalıcılığı
+  ollamadata: # Faz 26: çekilen modeller (--profile ai)
   promdata:
   grafanadata:

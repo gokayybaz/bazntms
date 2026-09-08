@@ -216,34 +216,47 @@ Kontrol sırası:
    etiketli host adlarını (`lb` gibi) eler — gerçek FQDN hedeflerine giden
    trafik gerekir.
 
-## AI analizi sorunları
+## AI analizi sorunları (Faz 26)
 
-### "AI yapilandirilmamis"
+### "AI analiz kapalı" / `/ai` sekmesi görünmüyor
 
-`-llm-base-url` verin (ör. `http://localhost:11434/v1`) veya `LLM_API_KEY`
-ayarlayın. Yerel adreslerde (localhost/127.0.0.1) anahtar gerekmez.
+- Hub `-ai` bayrağıyla başlatılmalı.
+- Sekme yalnız `PermAnalyze` olan rollere (admin / site-admin / netops /
+  analyst) görünür — `viewer` göremez.
 
-### "Bu dönem için veritabanında kayıt yok"
+### "etkin AI sağlayıcısı yok"
 
-Veriler yalnızca **yakalama açıkken** birikir. Yakalamayı başlatıp birkaç dakika
-bekleyin ya da daha uzun dönem (1 saat / 24 saat) seçin.
+Yönetim > AI Sağlayıcı'dan bir model ekleyin (yerel: Ollama/LM Studio; bulut:
+OpenAI/Anthropic). Ya da `-llm-base-url` ile bootstrap seed edin.
 
-### "AI boş yanıt döndü" / "düşünme aşamasında token limitini aştı"
+### "ai.allow_cloud kapalı — yalnızca yerel model adresleri kabul edilir"
 
-Reasoning modeller (Qwen3, DeepSeek-R1) cevaptan önce uzun düşünme üretir:
+Egress kilidi açık (`-ai-allow-cloud=false`). Bulut sağlayıcı kullanmak için
+`=true` yapın; yerel model için Ollama/LM Studio adresini kullanın.
 
-```bash
--llm-no-think            # düşünmeyi kapat (en hızlı)
--llm-max-tokens 4000     # veya limiti artır
-```
+### "AI boş yanıt döndü" / "token limitini aştı"
 
-`reasoning_content` ve `<think>` blokları otomatik desteklenir.
+Reasoning modeller (Qwen3, DeepSeek-R1) cevaptan önce uzun düşünme üretir.
+Sağlayıcı düzenleme dialog'unda `no_think=1` (Qwen3) ya da `max_tokens`
+artırın. `reasoning_content` + `<think>` blokları otomatik temizlenir.
 
-### "AI servisine ulasilamadi"
+### "AI servisine ulaşılamadı" / "Test Et" başarısız
 
-- LM Studio/Ollama'nın yerel sunucusu çalışıyor mu? (`curl localhost:11434/v1/models`)
+- Yerel sunucu çalışıyor mu? (`curl localhost:11434/v1/models`)
 - Ollama'da model çekilmiş mi? (`ollama pull qwen2.5:7b`)
-- Anahtarsız uzak servis kullanılıyorsa `Enabled()` değildir; anahtar ekleyin
+- Docker'da hub → host Ollama: `-llm-base-url http://host.docker.internal:11434/v1`
+
+### Sohbet akışı "donuyor" (nginx LB arkasında)
+
+`deploy/nginx/lb.conf`'ta `/api/v1/ai/` konumunda `proxy_buffering off` var mı?
+Hub `X-Accel-Buffering: no` gönderir ama LB tamponu bunu ezebilir.
+
+### Gecelik analiz / triyaj notu üretilmiyor
+
+- `ai.nightly.enabled` / `ai.triage.enabled` YAML'de açık mı?
+- Çoklu controller: yalnız **lider** replika çalıştırır (scheduler C1).
+- Triyaj yalnız `min_severity` ve üstü **yeni** incident'lara; saatlik
+  `max_per_hour` sınırı var (aşımda log satırı).
 
 ## GeoIP
 
