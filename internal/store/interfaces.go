@@ -184,6 +184,11 @@ type DeviceStore interface {
 	LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
 	SaveFlows(rows []FlowRow) error
 	TopFlows(since time.Time, limit int, site string) ([]FlowRow, error)
+	// NetFlow konuşma toplama (Faz 23-B) — 5'li / uç-çifti, ham flows üstünde
+	// sunucu-tarafı GROUP BY.
+	FlowConversations(since time.Time, by, sortBy string, limit int, site string) ([]FlowConversation, error)
+	FlowConversationDetail(since time.Time, src, dst, proto string, limit int, site string) ([]FlowRow, error)
+	FlowActorsForConversation(since time.Time, ipA, ipB string) ([]FlowActor, error)
 	SaveSyslogEvent(e SyslogEvent) error
 	RecentSyslog(limit int, site string) ([]SyslogEvent, error)
 

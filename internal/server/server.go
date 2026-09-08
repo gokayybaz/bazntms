@@ -275,6 +275,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/devices/{id}/sdwan", s.handleDeviceSDWAN)
 	mux.HandleFunc("GET /api/v1/devices/{id}/policies", s.handleDevicePolicies)
 	mux.HandleFunc("GET /api/v1/flows", s.handleFlows)
+	mux.HandleFunc("GET /api/v1/flows/conversations", s.handleFlowConversations)
+	mux.HandleFunc("GET /api/v1/flows/conversation", s.handleFlowConversationDetail)
 	mux.HandleFunc("GET /api/v1/syslog", s.handleSyslogEvents)
 	mux.HandleFunc("GET /api/v1/topology", s.handleTopology)
 

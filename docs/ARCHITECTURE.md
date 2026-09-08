@@ -119,6 +119,20 @@ sFlow **örnekleme tabanlıdır**: cihaz her N. paketin başlığını kopyalar.
 Counter sample'lar (arayüz sayaçları) şimdilik atlanır. Çıktı NetFlow ile aynı
 `flows` tablosuna, aynı `FlowRow` şemasıyla yazılır.
 
+**Konuşma toplama (Faz 23-B, `internal/store/flow_conversations.go`):**
+`GET /api/v1/flows/conversations` ham `flows`'u bir zaman penceresinde
+(`15m|1h|6h|24h`) **sunucu-tarafı** toplar — `by=5tuple`
+(src,dst,src_port,dst_port,proto) ya da `by=pair` (uç-çifti, A→B ve B→A Go
+tarafında birleştirilir, kanonik `Src` = sözlüksel küçük uç). `sort` ∈
+octets|packets|flows|last_seen. **Yeni cagg yok** (src/dst yüksek kardinalite —
+`pg.go` `flows_1h` notu): görünüm ham `flows` retention penceresiyle (vars. 7g)
+sınırlı; `pair` modu birleştirme öncesi `flowConvoPairCap=2000` grup çeker.
+`0015` migrasyonu `idx_flows_convo (ts,src,dst,proto)` + `idx_flows_pair
+(src,dst,ts)` ekler. Drill-down `GET /api/v1/flows/conversation?src=&dst=` ham
+akışları + uç GeoIP/ASN (`s.geo`) + `process_traffic.remote_ip` eşleşmesiyle
+ilişkili agent/süreç döndürür. Frontend `TopConversationsCard` → `/cihazlar`.
+Ham NetFlow görünümü (`/api/v1/flows`, `FlowsCard`) değişmedi.
+
 ## Sunucu (`internal/server`)
 
 - `ServeMux` (Go 1.22+ metot kalıpları) + `logRequest` middleware
@@ -221,7 +235,7 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 | `/` | Dashboard (`Overview` bileşeni) — meter bandı + log-tail + filo/topoloji/cihazlar | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
 | `/agentlar/:id/surec/:ad` | Süreç detayı (Faz 23-A) — Süreç Trafiği tablosunda `Enter`; özet/uzak hedefler/canlı bağlantılar/uygulama görünürlüğü (DNS+SNI+Host)/zaman çizelgesi. `Esc` → agent | `GET /api/v1/agents/:id/processes/:ad` (tek uç, sunucu-tarafı toplama) |
-| `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
+| `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay + **Top Konuşmalar** (Faz 23-B — NetFlow 5'li/uç-çifti toplama, `Enter` → drill-down) | `GET /api/v1/devices[/…]`, `GET /api/v1/flows[/conversations][/conversation]`, FortiGate için `FortiPanel` |
 | `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
 | `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |

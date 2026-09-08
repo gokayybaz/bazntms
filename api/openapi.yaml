@@ -671,6 +671,89 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Flow" }
+  /api/v1/flows/conversations:
+    get:
+      tags: [devices]
+      summary: NetFlow konuşma toplama — 5'li ya da uç-çifti top-talker (Faz 23-B)
+      description: >
+        Ham `flows` bir zaman penceresinde konuşmalara toplanır (sunucu-tarafı
+        GROUP BY). Yeni cagg yok; görünüm ham `flows` retention penceresiyle
+        sınırlı. RBAC site scope: yalnız o siteye kayıtlı exporter'ların akışları.
+      parameters:
+        - name: window
+          in: query
+          schema: { type: string, enum: ["15m", "1h", "6h", "24h"], default: "15m" }
+        - name: by
+          in: query
+          schema: { type: string, enum: [pair, 5tuple], default: pair }
+          description: pair = A↔B yön birleşik; 5tuple = (src,dst,src_port,dst_port,proto)
+        - name: sort
+          in: query
+          schema: { type: string, enum: [octets, packets, flows, last_seen], default: octets }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200":
+          description: Konuşma dizisi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    src: { type: string }
+                    dst: { type: string }
+                    src_port: { type: integer }
+                    dst_port: { type: integer }
+                    proto: { type: string }
+                    flows: { type: integer }
+                    packets: { type: integer }
+                    octets: { type: integer }
+                    first_seen: { type: integer }
+                    last_seen: { type: integer }
+  /api/v1/flows/conversation:
+    get:
+      tags: [devices]
+      summary: Tek konuşma drill-down — ham akışlar + GeoIP/ASN + süreç korelasyonu
+      parameters:
+        - name: src
+          in: query
+          required: true
+          schema: { type: string }
+        - name: dst
+          in: query
+          required: true
+          schema: { type: string }
+        - name: proto
+          in: query
+          schema: { type: string }
+        - name: window
+          in: query
+          schema: { type: string, enum: ["15m", "1h", "6h", "24h"], default: "15m" }
+        - { $ref: "#/components/parameters/limit" }
+      responses:
+        "200":
+          description: Ham akışlar + ilişkili agent/süreç + uç GeoIP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  flows:
+                    type: array
+                    items: { $ref: "#/components/schemas/Flow" }
+                  actors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        agent_id: { type: integer }
+                        agent_name: { type: string }
+                        process: { type: string }
+                        ip: { type: string }
+                  src_info: { type: object }
+                  dst_info: { type: object }
+        "400": { description: src ve dst zorunlu }
   /api/v1/syslog:
     get:
       tags: [devices]

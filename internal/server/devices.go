@@ -267,6 +267,67 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, flows)
 }
 
+// flowConvoWindow, konuşma pencereleri: 15m (vars.) | 1h | 6h | 24h.
+func flowConvoWindow(w string) time.Time {
+	d := 15 * time.Minute
+	switch w {
+	case "1h":
+		d = time.Hour
+	case "6h":
+		d = 6 * time.Hour
+	case "24h":
+		d = 24 * time.Hour
+	}
+	return time.Now().Add(-d)
+}
+
+// handleFlowConversations, ham NetFlow kayıtlarını konuşmalara toplar (Faz
+// 23-B). ?window=15m|1h|6h|24h &by=5tuple|pair &sort=octets|packets|flows|last_seen.
+func (s *Server) handleFlowConversations(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	by := q.Get("by")
+	if by != "5tuple" {
+		by = "pair"
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	list, err := s.store.FlowConversations(flowConvoWindow(q.Get("window")), by, q.Get("sort"), limit, SiteScope(identityFromCtx(r)))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, list)
+}
+
+// handleFlowConversationDetail, tek bir konuşmanın ham akışları + GeoIP/ASN +
+// süreç korelasyonu. ?src=&dst=[&proto=&window=].
+func (s *Server) handleFlowConversationDetail(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	src, dst := q.Get("src"), q.Get("dst")
+	if src == "" || dst == "" {
+		http.Error(w, "src ve dst gerekli", http.StatusBadRequest)
+		return
+	}
+	since := flowConvoWindow(q.Get("window"))
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	site := SiteScope(identityFromCtx(r))
+	rows, err := s.store.FlowConversationDetail(since, src, dst, q.Get("proto"), limit, site)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	actors, err := s.store.FlowActorsForConversation(since, src, dst)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := map[string]any{"flows": rows, "actors": actors}
+	if s.geo != nil {
+		resp["src_info"] = s.geo.Lookup(src)
+		resp["dst_info"] = s.geo.Lookup(dst)
+	}
+	writeJSON(w, resp)
+}
+
 func (s *Server) handleSyslogEvents(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	events, err := s.store.RecentSyslog(limit, SiteScope(identityFromCtx(r)))

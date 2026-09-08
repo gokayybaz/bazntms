@@ -1,6 +1,7 @@
 import { DevicesCard } from '../components/DevicesCard'
 import { FlowsCard } from '../components/FlowsCard'
 import { SyslogCard } from '../components/SyslogCard'
+import { TopConversationsCard } from '../components/TopConversationsCard'
 import { Panel } from '../components/Panel'
 
 export function DevicesPage({ refreshKey }: { refreshKey: number }) {
@@ -16,7 +17,7 @@ export function DevicesPage({ refreshKey }: { refreshKey: number }) {
           <DevicesCard refreshKey={refreshKey} />
         </Panel>
         <div className="space-y-3">
-          <Panel title="NetFlow v5 Akışları" right={<span className="font-mono text-[10px] text-tui-dim">son 15 dk · top 20</span>}>
+          <Panel title="Ham NetFlow Akışları" right={<span className="font-mono text-[10px] text-tui-dim">v5/v9/IPFIX/sFlow · son 15 dk · top 20</span>}>
             <FlowsCard />
           </Panel>
           <Panel title="Syslog Olayları" right={<span className="font-mono text-[10px] text-tui-dim">RFC3164</span>}>
@@ -24,6 +25,10 @@ export function DevicesPage({ refreshKey }: { refreshKey: number }) {
           </Panel>
         </div>
       </div>
+
+      <Panel title="Top Konuşmalar" right={<span className="font-mono text-[10px] text-tui-dim">NetFlow → 5'li / uç-çifti toplama</span>}>
+        <TopConversationsCard />
+      </Panel>
     </div>
   )
 }
