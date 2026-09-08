@@ -100,6 +100,12 @@
           <ServiceControl Id='BazntmsAgentServiceControl' Name='bazntms-agent'
                           Stop='both' Remove='uninstall' Wait='yes' />
         </Component>
+        <!-- Npcap sessiz kurulum betigi (L7/SNI gorunurlugu icin — bkz.
+             install-npcap.ps1 basligi). RunNpcapSetup CustomAction bunu
+             deferred/SYSTEM calistirir. -->
+        <Component Id='NpcapSetupScript' Guid='D4E5F6A7-8B9C-0D1E-2F30-445566778899'>
+          <File Id='NpcapSetupScriptFile' Source='$(var.NPCAPSCRIPT)' Name='install-npcap.ps1' KeyPath='yes' />
+        </Component>
         <Directory Id='CONFIGDIR' Name='config'>
           <Component Id='AgentConfig' Guid='A1D2E3F4-5B6C-4D7E-8F90-112233445566'>
             <File Id='AgentConfigExample' Source='$(var.CONF)' Name='agent.yml.example' KeyPath='yes' />
@@ -114,6 +120,7 @@
       <ComponentRef Id='AgentConfig' />
       <ComponentRef Id='AgentDataConfig' />
       <ComponentRef Id='AgentRegConfig' />
+      <ComponentRef Id='NpcapSetupScript' />
     </Feature>
 
     <!-- ================= Kurulum sihirbazi ================= -->
@@ -224,8 +231,31 @@
     <CustomAction Id='StartAgentService' Directory='INSTALLFOLDER'
                   ExeCommand='&quot;[SystemFolder]sc.exe&quot; start bazntms-agent'
                   Execute='deferred' Impersonate='no' Return='ignore' />
+
+    <!-- Npcap sessiz kurulumu (L7/SNI gorunurlugu icin). Deferred CA'lar
+         yalnizca [CustomActionData]'ya erisebildiginden komut satiri once
+         immediate bir SetProperty ile paketlenir; property adi deferred CA
+         Id'siyle ayni oldugu icin MSI onu otomatik CustomActionData yapar.
+         [#NpcapSetupScriptFile] = kurulan betigin tam yolu. powershell.exe
+         SYSTEM baglaminda calisir (Impersonate='no'); Return='ignore' +
+         betigin kendi 'exit 0' garantisi → Npcap kurulamasa bile MSI biter,
+         agent ETW'ye duser. NOT REMOVE: kaldirmada calismaz (Npcap'i
+         kaldirmayiz — baska araclar kullaniyor olabilir). -->
+    <!-- @Id = SET EDILEN property (deferred CA ile ayni ad → otomatik
+         CustomActionData). @Action = SET EDEN CA'nin adi (deferred CA ile
+         cakismasin diye ayri). -->
+    <SetProperty Id='RunNpcapSetup' Action='SetNpcapSetupCmd' Sequence='execute' Before='RunNpcapSetup'
+                 Value='&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[#NpcapSetupScriptFile]&quot;' />
+    <CustomAction Id='RunNpcapSetup' Directory='INSTALLFOLDER'
+                  ExeCommand='[CustomActionData]'
+                  Execute='deferred' Impersonate='no' Return='ignore' />
+
     <InstallExecuteSequence>
       <Custom Action='ConfigAgentRecovery' After='InstallServices' Condition='NOT REMOVE' />
+      <!-- Npcap, servis baslatilmadan ONCE kurulmali ki agent ilk acilista
+           pcap arka ucunu bulabilsin. InstallFiles'tan sonra (betik dosyasi
+           yerinde), StartServices/StartAgentService'ten once. -->
+      <Custom Action='RunNpcapSetup' After='InstallFiles' Condition='NOT REMOVE' />
       <Custom Action='StartAgentService' After='StartServices' Condition='HUBURL' />
     </InstallExecuteSequence>
   </Package>

@@ -21,6 +21,9 @@ data:
       enabled: {{ .Values.replicaRoles.prune.enabled }}
     retention_hours: {{ .Values.config.retention_hours }}
     telemetry_interval: {{ .Values.config.telemetry_interval }}
+    {{- if hasKey .Values.config "agent_pcap" }}
+    agent_pcap: {{ .Values.config.agent_pcap }}
+    {{- end }}
     log:
       level: {{ .Values.config.log.level }}
       format: {{ .Values.config.log.format }}

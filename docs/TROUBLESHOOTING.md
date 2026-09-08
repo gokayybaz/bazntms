@@ -8,17 +8,18 @@ alanında + agent detay sayfasındaki rozet'te görünür.
 
 | Platform | `auto` sırası | Gereksinim |
 |----------|--------------|-----------|
-| Linux    | **eBPF** → pcap | eBPF: kernel ≥ 5.8 + `/sys/kernel/btf/vmlinux` + `CAP_BPF`/`CAP_SYS_ADMIN` (veya root). pcap: `CAP_NET_RAW` + `libpcap` |
-| Windows  | **ETW** → pcap | ETW: yükseltilmiş süreç (SYSTEM servis veya yönetici). pcap: [Npcap](https://npcap.com) |
+| Linux    | **eBPF** (+ L7 için yardımcı pcap) → pcap | eBPF: kernel ≥ 5.8 + `/sys/kernel/btf/vmlinux` + `CAP_BPF`/`CAP_SYS_ADMIN` (veya root). pcap + L7 yardımcı: `CAP_NET_RAW` + `libpcap` |
+| Windows  | **pcap** (MSI Npcap'i kurar) → ETW | Npcap ([npcap.com](https://npcap.com), MSI otomatik kurar). Npcap yoksa ETW: yükseltilmiş süreç — L7 akmaz |
 | macOS    | pcap | `sudo` (`/dev/bpf*` root dışında kapalı) |
 
 Kontrol listesi:
 
-1. **Agent `collect.pcap: true` mi?** Paketlenmiş kurulumlar (deb/rpm/MSI/.pkg)
-   `agent.yml`'e yazar; elle kurdıysanız `collect.pcap: true` ekleyin (veya `-pcap`).
-   Kapalıysa motor hiç başlamaz — `agent.log`: `derin toplama kapali`.
-2. **Hub politikası açık mı?** Hub `-agent-pcap` ile başlatılmalı; kapalıysa
-   `agent.log`: `PCAP politikasi hub tarafinda kapali`.
+1. **Derin toplama v1.3.0'dan beri varsayılan açık** — `collect.pcap` /
+   `-pcap` gerekmez. `agent.log`'da `surec atfi kapali — collect.method=off`
+   görüyorsanız `agent.yml`'de `collect.method: off` var demektir; kaldırın.
+2. **Hub politikası açık mı?** `-agent-pcap` v1.3.0'dan beri varsayılan açık.
+   `agent.log`: `PCAP politikasi hub tarafinda kapali` → hub `-agent-pcap=false`
+   ile başlatılmış (veya `hub.yaml`'de `agent_pcap: false`); kaldırın.
 3. **`agent.log`'da hangi yöntem seçildi?** `süreç atfı aktif  yöntem=ebpf`
    gibi bir satır olmalı. `yöntem=pcap` ise eBPF/ETW ortamı uygun değildir —
    aynı log satırındaki `not=` alanı nedeni söyler (`kernel 5.4 < 5.8` vb.).
@@ -29,19 +30,24 @@ Kontrol listesi:
    yükseltilmemiş`. Servis olarak kurulduysa SYSTEM'dir; elle çalıştırıyorsanız
    "Yönetici olarak çalıştır".
 
-### Windows'ta Npcap gerekli mi?
+### Windows'ta Npcap
 
-**Süreç trafiği + DNS için hayır** — ETW çekirdek sağlayıcılarıyla toplanır.
-Npcap yalnız şunlar için gerekir:
+**v1.3.0'dan beri MSI kurulumu Npcap'i sessizce indirip kurar**
+(`deploy/msi/install-npcap.ps1` — `npcap.com`'dan, SHA-256 + Authenticode
+imza doğrulamalı) ve agent `collect.method: pcap` ile gelir → **L7 (SNI/Host)
+Windows'ta da çalışır.**
 
-- **L7 (SNI/Host) paneli** — payload gerektirir, ETW taşımaz. `-collect-method=pcap`
-  + Npcap ile alınır (o zaman süreç trafiği + DNS de pcap'ten gelir).
-- **Ham `-record`** (paket dökümü)
-- **Tek-makine hub yakalaması** (`bazntms-hub -capture=true` navbar'da; ölçek
-  modunda kapalı)
+Npcap kurulamazsa (internet yok, imza/hash uyuşmadı) MSI yine başarıyla biter;
+agent otomatik **ETW**'ye düşer → süreç trafiği + DNS akar, **L7 akmaz**.
+`agent.log`: `pcap arka ucu (L7/SNI dahil) icin Npcap gerekir`. Elle kurup
+servisi yeniden başlatın (`sc stop bazntms-agent && sc start bazntms-agent`),
+ya da geçici olarak `-collect-method=etw`.
 
-Npcap kurulu değilken agent çökmesez — ETW ile çalışmaya devam eder.
-**Derleme için Npcap SDK / mingw-w64 GEREKMEZ** (Windows agent `CGO_ENABLED=0`).
+Hava boşluklu / internet erişimi olmayan Windows makineleri: Npcap'i önceden
+kurun, MSI kurulumu onu tespit edip atlar.
+
+**Derleme için Npcap SDK / mingw-w64 GEREKMEZ** (Windows agent `CGO_ENABLED=0`;
+`wpcap.dll` çalışma anında yüklenir, gopacket Npcap dizinini otomatik bulur).
 
 ### Arayüz listesi boş / seçilen arayüz trafik göstermiyor
 

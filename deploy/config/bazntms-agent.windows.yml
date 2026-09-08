@@ -1,0 +1,38 @@
+# bazNTMS agent — Windows MSI ile kurulan varsayilan yapilandirma.
+# Konum: C:\ProgramData\bazntms\agent.yml (MSI bu dosyayi buraya kopyalar;
+# yeniden kurulum/yukseltme mevcut dosyaya DOKUNMAZ).
+#
+# Hub adresi / kayit belirteci / site: MSI sihirbazindaki "Sunucu Ayarlari"
+# ekranindan (veya `msiexec /qn HUBURL=... ENROLLTOKEN=... SITE=...`) alinir
+# ve HKLM\SOFTWARE\bazNTMS\Agent kayit defterine yazilir — agent oncelikle
+# oradan okur, bu dosyadaki bos degerler yalnizca yedektir.
+
+hub:
+  url: ""
+  token: ""   # yalnizca ilk kayit icin gerekli
+
+agent:
+  name: ""      # bos → hostname
+  site: ""
+
+collect:
+  interval_seconds: 30
+  # Windows'ta L7 (TLS SNI / HTTP Host) uygulama gorunurlugu icin `pcap`
+  # yontemi + Npcap gerekir. MSI kurulumu Npcap'i otomatik (sessiz) kurdugu
+  # icin bu ayar hazir gelir. Npcap bir sekilde yoksa agent net bir uyari
+  # basar ve `-collect-method=etw` ile surec trafigi + DNS (L7 haric) yine
+  # akar. Derin toplamayi tamamen kapatmak icin: method: off
+  method: pcap
+  pcap_interface: auto
+  # ham PCAP kaydi (hub politikasi da acik olmali)
+  pcap_record: false
+  pcap_dir: C:\ProgramData\bazntms\captures
+
+# otomatik guncelleme — VARSAYILAN ACIK (hub guncelleme kanalindan; SHA-256,
+# varsa ed25519). Kapatmak icin:
+# update:
+#   disabled: true
+
+log:
+  level: info
+  format: json

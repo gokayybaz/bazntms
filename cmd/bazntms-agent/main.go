@@ -176,20 +176,17 @@ func main() {
 		// pcap_enabled) ve kayitli agent enrollment'i tekrarlamadigi icin
 		// baslangicta client.PCAPEnabled() bayat olabilir — bu yuzden atif
 		// motoru sabit degil, asagidaki syncAttr ile dongude ac/kapat yonetilir.
-		pcapWant := *pcapFlag || cfg.Collect.PCAP
-		// atif arka ucu yontemi: flag > config > "" (seçici "auto" sayar).
-		attrMethod := firstNonEmpty(*collectMethod, cfg.Collect.Method)
-		switch attrMethod {
-		case "off":
-			pcapWant = false // "off" derin toplamayı da kapatır
-		case "":
-			// yontem belirtilmemis — eski davranis: collect.pcap / -pcap gecerli.
-		default:
-			// Acik bir yontem (auto|ebpf|pcap|etw) = "derin toplama istiyorum".
-			// eBPF/ETW Npcap/libpcap gerektirmez; collect.pcap: true zorunlulugu
-			// kaldirildi (Faz 20). Yalniz hub politikasi (PCAPEnabled) hala kisitlar.
-			pcapWant = true
-		}
+		// Derin toplama (surec trafigi + DNS + L7 gorunurlugu) VARSAYILAN ACIK
+		// (v1.3.0): config dosyasi olmadan kurulan agent'lar da atif motorunu
+		// calistirir. Kapatmak icin tek yol collect.method: off (veya
+		// -collect-method=off). Hub tarafinda -agent-pcap politikasi da acik
+		// olmali — o da v1.3.0'dan beri varsayilan acik.
+		// atif arka ucu yontemi: flag > config > "auto".
+		attrMethod, pcapWant := deepCollectMethod(*collectMethod, cfg.Collect.Method)
+		// -pcap / collect.pcap: derin toplama artik varsayilan acik oldugundan
+		// islevsiz; eski komut satirlari ve config'ler kirilmasin diye bayrak
+		// tanimli kalir ama yok sayilir (bkz. CHANGELOG v1.3.0 yukseltme notu).
+		_ = pcapFlag
 		attrIface := *pcapIface
 		if attrIface == "" {
 			attrIface = cfg.Collect.PCAPInterface
@@ -232,7 +229,7 @@ func main() {
 				attrTried = false
 				attrOffLogged = true // "durduruldu" yeterli; ayrica "devre disi" yazma
 			case !allow && attrEng == nil && pcapWant && !attrOffLogged:
-				slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub'i -agent-pcap ile baslatin")
+				slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub -agent-pcap=false ile baslatilmis; politikayi acmak icin bu bayragi kaldirin (varsayilan acik)")
 				attrOffLogged = true
 				attrTried = false
 			}
@@ -242,12 +239,9 @@ func main() {
 		// trafigi / DNS / L7 gorunurlugunun neden bos oldugu loglardan
 		// anlasilmadigi icin burada bir kez acikca belirt.
 		if !pcapWant {
-			if attrMethod == "off" {
-				slog.Info("surec atfi kapali — collect.method=off")
-			} else {
-				slog.Info("derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok",
-					"cozum", "agent.yml'de collect.pcap: true yapin (veya -pcap ile baslatin); hub'da da -agent-pcap acik olmali")
-			}
+			// pcapWant yalnizca collect.method: off iken false olur.
+			slog.Info("surec atfi kapali — collect.method=off",
+				"cozum", "L7 / surec trafigi / DNS gorunurlugu istiyorsaniz collect.method satirini kaldirin (varsayilan: auto)")
 		}
 		syncAttr()
 
@@ -453,6 +447,16 @@ func minInt(a, b int) int {
 	return b
 }
 
+// deepCollectMethod, atif arka ucu yontemini cozer (flag > config > "auto")
+// ve derin toplamanin (surec trafigi + DNS + L7) istenip istenmedigini
+// dondurur. Derin toplama v1.3.0'dan beri VARSAYILAN ACIK — yalnizca yontem
+// acikca "off" iken kapanir. Eski `-pcap` / `collect.pcap` bayraklarinin
+// artik bir etkisi yoktur.
+func deepCollectMethod(flagMethod, cfgMethod string) (method string, want bool) {
+	method = firstNonEmpty(flagMethod, cfgMethod, "auto")
+	return method, method != "off"
+}
+
 // firstNonEmpty, bos olmayan ilk degeri dondurur.
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
@@ -477,7 +481,7 @@ func pcapErrHint(err error) string {
 	msg := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(msg, "wpcap.dll"):
-		return "pcap arka ucu icin Npcap gerekir (https://npcap.com). Sürec trafigi + DNS ETW ile Npcap'siz calisir (-collect-method=etw / auto); Npcap yalniz L7 (SNI/Host) ve ham -record icin lazim"
+		return "pcap arka ucu (L7/SNI dahil) icin Npcap gerekir — MSI kurulumu bunu otomatik kurar; elle kurmak icin https://npcap.com. Gecici cozum: -collect-method=etw ile surec trafigi + DNS Npcap'siz akar (L7 olmadan)"
 	case strings.Contains(msg, "error opening adapter"),
 		strings.Contains(msg, "system cannot find the device"),
 		strings.Contains(msg, "birim etiketi"):

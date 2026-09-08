@@ -31,3 +31,29 @@ func TestPcapErrHint(t *testing.T) {
 		t.Fatalf("nil hata icin ipucu donmemeliydi, gelen: %q", got)
 	}
 }
+
+// TestDeepCollectMethod, v1.3.0 varsayilanini kilitler: derin toplama
+// config/flag olmadan da acik; yalnizca method: off kapatir.
+func TestDeepCollectMethod(t *testing.T) {
+	cases := []struct {
+		name, flag, cfg, wantMethod string
+		wantWant                    bool
+	}{
+		{"config yok, flag yok -> auto+acik", "", "", "auto", true},
+		{"config auto", "", "auto", "auto", true},
+		{"config pcap", "", "pcap", "pcap", true},
+		{"config ebpf", "", "ebpf", "ebpf", true},
+		{"config off -> kapali", "", "off", "off", false},
+		{"flag off config auto -> flag kazanir", "off", "auto", "off", false},
+		{"flag pcap config off -> flag kazanir", "pcap", "off", "pcap", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, w := deepCollectMethod(tc.flag, tc.cfg)
+			if m != tc.wantMethod || w != tc.wantWant {
+				t.Fatalf("deepCollectMethod(%q,%q) = (%q,%v); beklenen (%q,%v)",
+					tc.flag, tc.cfg, m, w, tc.wantMethod, tc.wantWant)
+			}
+		})
+	}
+}

@@ -71,9 +71,10 @@ jobs:
 
       # Windows: CGO_ENABLED=0. gopacket/pcap cgo kullanmaz (wpcap.dll runtime
       # syscall), ETW tuketicisi saf Go advapi32 syscall, modernc.org/sqlite
-      # saf Go — Npcap SDK / mingw toolchain GEREKMEZ. Calisma zamaninda:
-      # surec trafigi + DNS Windows'ta ETW ile Npcap'siz toplanir; Npcap
-      # yalnizca L7 (SNI/Host) veya ham -record icin gerekir.
+      # saf Go — Npcap SDK / mingw toolchain GEREKMEZ (derleme). Calisma
+      # zamaninda: L7 (SNI/Host) icin Npcap gerekir; MSI kurulumu bunu
+      # otomatik kurar (deploy/msi/install-npcap.ps1). Npcap yoksa agent
+      # ETW'ye duser → surec trafigi + DNS akar, L7 akmaz.
       - name: Build binaries
         env:
           CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
@@ -176,10 +177,13 @@ jobs:
         shell: pwsh
         run: |
           $version = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          # CONF: Windows'a ozel seed config (collect.method: pcap → L7/SNI acik).
+          # NPCAPSCRIPT: kurulumda Npcap'i sessizce kuran yardimci betik.
           wix build -arch x64 -o bazntms-agent-amd64.msi `
             -d VERSION=$version `
             -d EXE=bazntms-agent-windows-amd64.exe `
-            -d CONF=deploy\config\bazntms-agent.yml.example `
+            -d CONF=deploy\config\bazntms-agent.windows.yml `
+            -d NPCAPSCRIPT=deploy\msi\install-npcap.ps1 `
             -ext WixToolset.UI.wixext `
             deploy\msi\bazntms-agent.wxs
 

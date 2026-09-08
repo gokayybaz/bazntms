@@ -39,6 +39,7 @@ type HubConfig struct {
 	PublicURL         string `koanf:"public_url"`         // panelin dış adresi — WS origin allowlist + OIDC redirect (B5)
 	VaultKeySource    string `koanf:"vault_key_source"`   // file | env (B8 — master anahtar kaynağı)
 	TelemetryInterval int    `koanf:"telemetry_interval"`
+	AgentPCAP         *bool  `koanf:"agent_pcap"` // agent derin toplama politikasi (surec/DNS/L7 + ham PCAP) — bos/atlanmis = ACIK; kapatmak: false
 	NATS              struct {
 		URL         string `koanf:"url"`           // bos = kuyruk kapali (dogrudan store yazimi)
 		MaxAgeHours int    `koanf:"max_age_hours"` // JetStream stream mesaj yasi siniri (0 → 24)
@@ -154,6 +155,7 @@ var hubFlagKeys = map[string]string{
 	"public_url":               "public-url",
 	"vault_key_source":         "vault-key-source",
 	"telemetry_interval":       "telemetry-interval",
+	"agent_pcap":               "agent-pcap",
 	"nats.url":                 "nats",
 	"nats.max_age_hours":       "queue-max-age-hours",
 	"capture.enabled":          "capture",

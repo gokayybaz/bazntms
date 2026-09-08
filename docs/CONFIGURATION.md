@@ -15,6 +15,7 @@
 | `-public-url` | — | Panelin dış adresi (ör. `https://ntms.example.com`). İki yerde kullanılır: **(1)** WebSocket handshake origin izin listesi (Cross-Site WebSocket Hijacking'e karşı — `-tls-hosts` + `localhost`/`127.0.0.1`/`[::1]` de eklenir; ikisi de boşsa tüm origin'ler kabul edilir + uyarı loglanır). **(2)** OIDC `redirect_url` boşsa `<public-url>/api/auth/oidc/callback` varsayılır. (B5) |
 | `-nats` | — | NATS JetStream adresi. Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
+| `-agent-pcap` | `true` | Agent'larda derin toplama (süreç trafiği + DNS + L7/SNI) ve ham PCAP kaydı politikası. **v1.3.0'dan beri varsayılan açık.** Filo genelinde kapatmak: `-agent-pcap=false` (veya `hub.yaml` / Helm `agent_pcap: false`). Agent tarafında ayrıca `collect.method: off` ile tek tek kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |

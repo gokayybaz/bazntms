@@ -23,19 +23,24 @@ agent:
 
 collect:
   interval_seconds: 30
-  # derin toplama: surec bazli trafik + DNS + L7 (SNI/Host) gorunurlugu.
-  # Bu paneller yalnizca bu acikken dolar; hub tarafinda da `-agent-pcap`
-  # politikasi acik olmali (tek basina zorla baslatmaz, izin verir).
-  pcap: true
-  # atif arka ucu:
-  #   auto (varsayilan) — Linux: eBPF (kernel >= 5.8 + BTF) -> pcap
-  #                       Windows: ETW (SYSTEM/yonetici) -> pcap
+  # Derin toplama (surec bazli trafik + DNS + L7/SNI gorunurlugu) v1.3.0'dan
+  # beri VARSAYILAN ACIK — asagidaki `method` satirini hic yazmasaniz da
+  # `auto` calisir. Hub tarafinda `-agent-pcap` politikasi da v1.3.0'dan beri
+  # varsayilan acik. Bu paneli tamamen kapatmak icin: method: off
+  #
+  # atif arka ucu (method):
+  #   auto (varsayilan) — Linux: eBPF (kernel >= 5.8 + BTF) + L7 icin dar
+  #                       kapsamli yardimci pcap handle (CAP_NET_RAW)
   #                       macOS: pcap
-  #   ebpf | etw | pcap  — zorla (kurulamazsa hata, dusme yok)
-  #   off               — atfi tamamen kapat
-  # eBPF/ETW cekirdek duzeyinde toplar: CAP_NET_RAW / Npcap gerekmez.
-  # L7 (SNI/Host) payload gerektirir → yalnizca pcap; ETW modunda yoktur
-  # (gerekiyorsa method: pcap + Npcap).
+  #                       Windows: ETW (SYSTEM/yonetici) — L7 YOK
+  #   pcap              — her platformda tam pcap; L7 dahil. Linux: libpcap +
+  #                       CAP_NET_RAW; Windows: Npcap (MSI otomatik kurar)
+  #   ebpf | etw        — zorla (kurulamazsa hata, dusme yok)
+  #   off               — derin toplamayi tamamen kapat
+  #
+  # Windows'ta L7 (SNI/Host) istiyorsaniz method: pcap yapin — MSI kurulumu
+  # Npcap'i otomatik kurdugu icin hazir gelir. (MSI ile kurulan agent.yml
+  # zaten method: pcap ile gelir.)
   method: auto
   # yalnizca method pcap iken kullanilir. auto: ilk yonlendirilebilir arayuz;
   # Windows'ta friendly ad ("Ethernet") otomatik \Device\NPF_{GUID}'a cevrilir.

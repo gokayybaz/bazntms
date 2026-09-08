@@ -22,8 +22,10 @@ export interface OSOption {
 
 // seedYaml, paket kurulumundan ÖNCE /etc/bazntms/agent.yml'i yazar (postinstall
 // mevcut dosyaya dokunmaz, o yüzden burada yazdığımız her şey nihai config'tir).
-// collect.pcap açık olmalı — yoksa süreç trafiği / DNS / L7 panelleri boş kalır
-// (attr motoru başlamaz). Hub tarafında -agent-pcap politikası da açık olmalı.
+// Derin toplama (süreç trafiği + DNS + L7/SNI görünürlüğü) v1.3.0'dan beri
+// VARSAYILAN AÇIK — `collect.method: auto` (Linux: eBPF + L7 yardımcı pcap
+// handle; macOS: pcap). Kapatmak isteyen `collect.method: off` yazar. Hub
+// politikası `-agent-pcap` de v1.3.0'dan beri varsayılan açık.
 const seedYaml = (p: InstallParams) =>
   [
     "sudo mkdir -p /etc/bazntms",
@@ -33,7 +35,7 @@ const seedYaml = (p: InstallParams) =>
     `  token: ${p.token}`,
     ...(p.site ? ['agent:', `  site: ${p.site}`] : []),
     'collect:',
-    '  pcap: true',
+    '  method: auto   # derin toplama + L7 açık (kapatmak: off)',
     'EOF',
   ].join('\n')
 

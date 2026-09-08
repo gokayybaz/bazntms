@@ -21,6 +21,25 @@ otomatik analiz modeline yükseltildi. **Opt-in** (`-ai`) → geriye uyumlu,
 **minor**. `ProtocolVersion` 1'de kalır. Migrasyon `0021` (`ai_providers`,
 `ai_conversations`, `ai_messages`) hub açılışında otomatik uygulanır.
 
+Ayrıca — **agent derin toplama & L7 görünürlüğü tüm kurulumlarda varsayılan
+açık** hale getirildi (ayrı iş kolu). Davranış değişikliği ama yeni bayrak /
+uç kaldırılmadı → **minor**; aşağıdaki yükseltme notuna bakın.
+
+### ⚠ Yükseltme notu — derin toplama varsayılan açık
+- **Agent**: süreç trafiği + DNS + L7/SNI atıf motoru artık **varsayılan
+  çalışır** — `collect.pcap: true` veya `-pcap` gerekmez (yok sayılır ama
+  kabul edilir). Kapatmanın tek yolu `collect.method: off`. `collect.pcap:
+  false` yazan mevcut kurulumlar yükseltmeden sonra **derin toplamayı açar**;
+  istemiyorsanız `collect.method: off` yapın.
+- **Hub**: `-agent-pcap` politikası artık **varsayılan `true`**. Filo
+  genelinde derin toplamayı kapatmak için hub'ı `-agent-pcap=false` ile
+  başlatın (veya hub.yaml'de `agent_pcap: false`).
+- **Windows**: MSI kurulumu artık **Npcap'i sessizce indirip kurar**
+  (`npcap.com`, SHA-256 + Authenticode doğrulamalı) ve agent `collect.method:
+  pcap` ile gelir → L7/SNI Windows'ta da çalışır. Npcap indirilemezse kurulum
+  yine başarılı biter, agent ETW'ye düşer (süreç trafiği + DNS akar, L7 akmaz).
+  İnternet erişimi olmayan Windows ana makineleri için Npcap'i önceden kurun.
+
 ### Eklendi — Faz 26
 - **AI sohbet sekmesi** (`/ai`) — çok-turlu, SSE streaming, mini-markdown
   render, sunucu-tanımlı preset butonlar ("Filoyu özetle", "Güvenlik
@@ -52,6 +71,24 @@ otomatik analiz modeline yükseltildi. **Opt-in** (`-ai`) → geriye uyumlu,
   env korunur — `ai_providers` boşsa ilk açılışta bir `bootstrap` sağlayıcı
   seed eder. `-llm-max-tokens` / `-llm-no-think` bayrakları kaldırıldı
   (sağlayıcı `opts`'una taşındı).
+
+### Değişti — agent derin toplama & L7 (tüm kurulum yolları)
+- **`collect.method` varsayılanı `auto`** (config yoksa da). `pcapWant` artık
+  yalnızca `method: off` iken kapanır; süreç/DNS/L7 panelleri kutudan çıktığı
+  gibi dolar. `cmd/bazntms-agent` + `internal/config`.
+- **Hub `-agent-pcap` varsayılanı `true`** + yeni `agent_pcap` hub.yaml /
+  Helm config anahtarı (kapatmak için `false`).
+- **Windows MSI**: `deploy/msi/install-npcap.ps1` — kurulumda Npcap sessiz
+  kurulur (deferred/SYSTEM CustomAction, SHA-256 `npcap-1.88` + Authenticode
+  "Nmap Software LLC" doğrulaması, `exit 0` garantili → MSI'ı asla düşürmez).
+  Windows seed config'i ayrıldı: `deploy/config/bazntms-agent.windows.yml`
+  (`method: pcap`).
+- **Enroll sihirbazı** (`agentInstall.ts`) seed YAML: `collect.pcap: true` →
+  `collect.method: auto` + açıklayıcı yorum.
+- **Helm**: DaemonSet `agent.pcap` (varsayılan `true`) artık `NET_RAW` +
+  `NET_ADMIN` capability ekliyor; `values.config.agent_pcap` → configmap.
+- **deb/rpm/macOS** postinstall + `bazntms-agent.yml.example`: zaten
+  `pcap: true` idi, açıklamalar güncellendi (yeni varsayılana atıf).
 
 ## [1.2.0] — 2026-09-08
 
@@ -629,7 +666,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...v0.4.0

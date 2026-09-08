@@ -95,6 +95,18 @@ korur. ETW ile kısmi L7 (`Microsoft-Windows-WinINet`/`WinHTTP`/`Schannel` —
 OS HTTP yığını app'leri kapsar, Chromium/Firefox/Electron hariç) mümkün ama
 descope edildi (ayrı faz).
 
+**Güncelleme (v1.3.0, 2026-09-08):** "Npcap'i kullanıcı elle kursun" kararı
+**geri alındı**. Windows MSI kurulumu artık Npcap'i sessizce indirip kurar
+(`deploy/msi/install-npcap.ps1` — deferred/SYSTEM CustomAction, sabit sürüm +
+SHA-256 + Authenticode "Nmap Software LLC" doğrulaması, `exit 0` garantili) ve
+Windows agent `collect.method: pcap` ile gelir → **L7/SNI tüm platformlarda
+varsayılan çalışır.** Npcap indirilemezse (hava boşluğu, imza/hash hatası) MSI
+yine başarılı biter ve agent ETW'ye düşer. Gerekçe: kullanıcı geri bildirimi —
+"tam görünürlük varsayılan olmalı, Npcap engeli kabul edilemez"; NSIS `/S`
+sessiz kurulumu + gopacket'in Npcap-dizini otomatik bulması bunu güvenilir
+kıldı. Aynı sürümde agent derin toplama + hub `-agent-pcap` politikası da
+varsayılan açığa çekildi.
+
 ### 5. eBPF DNS: yalnız yanıtlar
 
 `skb_consume_udp`'de (recv) yakalanır; yanıt soru bölümünü taşıdığından her

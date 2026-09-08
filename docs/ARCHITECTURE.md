@@ -409,9 +409,13 @@ inode ↔ `/proc/[pid]/fd`, macOS `lsof -F`, Windows `netstat -ano` + gopsutil.
 eBPF/ETW'de PID doğrudan çekirdek olayından gelir (`bpf_get_current_pid_tgid` /
 `EventHeader.ProcessId`), süreç adı `comm` / gopsutil ile.
 
-Hub politikası (`-agent-pcap`) + agent isteği (`-pcap` / `collect.pcap`) ikisi
-de açıkken çalışır; hiçbir arka uç kurulamazsa atıf devre dışı kalır, temel
-telemetri aksamaz. Ham PCAP kaydı (`-record`) her zaman pcap ister.
+Hub politikası (`-agent-pcap`, **v1.3.0'dan beri varsayılan açık**) + agent
+tarafında derin toplama (**v1.3.0'dan beri varsayılan açık**; kapatmak:
+`collect.method: off`) ikisi de açıkken çalışır; hiçbir arka uç kurulamazsa
+atıf devre dışı kalır, temel telemetri aksamaz. Eski `-pcap` / `collect.pcap`
+bayrakları yok sayılır (kabul edilir, etkisi yoktur). Ham PCAP kaydı
+(`-record`) her zaman pcap ister. Windows'ta MSI kurulumu Npcap'i otomatik
+kurar (`deploy/msi/install-npcap.ps1`), agent `collect.method: pcap` ile gelir.
 
 **Süreç detayı (Faz 23-A):** `GET /api/v1/agents/:id/processes/:ad` tek bir
 sürecin (ad bazlı — PID zamanla değişir) tüm ağ etkinliğini **sunucu-tarafı

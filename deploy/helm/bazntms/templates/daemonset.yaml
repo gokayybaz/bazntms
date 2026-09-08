@@ -24,6 +24,13 @@ spec:
         - name: agent
           image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          {{- if .Values.agent.pcap }}
+          # Derin toplama (surec trafigi + DNS + L7/SNI): pcap arka ucu +
+          # eBPF L7 yardimci handle NET_RAW; promiscuous mode NET_ADMIN ister.
+          securityContext:
+            capabilities:
+              add: ["NET_RAW", "NET_ADMIN"]
+          {{- end }}
           args:
             - "-hub-url"
             - "http://{{ include "bazntms.fullname" . }}:{{ .Values.service.port }}"

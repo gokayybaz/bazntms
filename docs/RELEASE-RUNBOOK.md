@@ -109,9 +109,24 @@ sudo ./bazntms-agent -collect-method=ebpf -pcap -hub-url http://localhost:8080 -
 - [ ] DNS paneli doluyor — `Resolve-DnsName example.com` sonrası domain görünüyor
 - [ ] Agent'ı durdur → `logman query -ets` artık `bazNTMS-Attr` göstermiyor (temiz `Stop`)
 - [ ] Agent'ı çökert + yeniden başlat → "already exists" hatası yok (yetim oturum temizleniyor)
-- [ ] **Npcap KURULU DEĞİL** → süreç trafiği + DNS yine akıyor (ETW pcap'e bağlı değil)
-- [ ] `-collect-method=pcap` + Npcap yok → "Npcap kurulu degil" ipucu; `-record` aynı ipucu
+- [ ] **Npcap KURULU DEĞİL** → süreç trafiği + DNS yine akıyor (ETW pcap'e bağlı değil), L7 boş
+- [ ] `-collect-method=pcap` + Npcap yok → "Npcap gerekir" ipucu; `-record` aynı ipucu
 - [ ] Yükseltilmemiş kullanıcı → log "ETW atlandı: süreç yükseltilmemiş", `yöntem=pcap` (veya Npcap yoksa temel telemetri)
+
+### Windows MSI — Npcap otomatik kurulumu (v1.3.0+)
+
+> Npcap sürümü `deploy/msi/install-npcap.ps1` içinde sabit (`$NpcapVersion` +
+> `$NpcapSha256`). **Yeni Npcap çıktığında** ikisini de güncelleyin: dosyayı
+> indirip `shasum -a 256` ile hash'i doğrulayın, `npcap.com/dist/` listesinden
+> sürümü teyit edin. Windows seed config `deploy/config/bazntms-agent.windows.yml`
+> (`method: pcap`) MSI'a `-d CONF=` ile bağlıdır.
+
+- [ ] **Temiz Windows VM, Npcap yok** → MSI kur → `C:\ProgramData\bazntms\npcap-install.log`:
+      "SHA-256 dogrulandi" + "Authenticode dogrulandi: …Nmap Software LLC…" + "kurulumu dogrulandi"
+- [ ] Kurulumdan sonra `Get-Service npcap` var, agent log `süreç atfı aktif  yöntem=pcap`, L7 paneli SNI gösteriyor
+- [ ] **Npcap zaten kurulu** → log "Npcap zaten kurulu — atlaniyor", MSI hızlı biter
+- [ ] **İnternet yok** (indirme başarısız) → MSI **yine başarılı biter**, log "indirilemedi", agent ETW'ye düşüyor
+- [ ] SHA/imza kasıtlı bozulsa (test) → "kurulum iptal", MSI yine başarılı, dosya siliniyor
 - [ ] Port/adres doğru yönde: **TCP** hem send hem recv `uzak = daddr:dport`;
       **UDP** send=daddr, recv=saddr. Port big-endian (443/53 — 47873 değil).
       Uzak IP host'un kendi IP'si veya multicast (`224.*`/`239.*`/`ff0x::`)

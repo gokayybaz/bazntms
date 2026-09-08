@@ -100,17 +100,18 @@ Tarayıcıdan `http://localhost:8080` → giriş yap → arayüz seç → **Yaka
 
 ### Gereksinimler
 
-| Platform | Süreç atfı (agent) | Çalıştırma | Derleme |
-|----------|-------------------|-----------|---------|
-| Linux    | **eBPF** (kernel ≥ 5.8 + BTF) → pcap | `CAP_BPF`/`CAP_PERFMON`, eskisi `sudo` / `cap_net_raw` | `libpcap-dev` |
-| Windows  | **ETW** (SYSTEM / yönetici) → pcap | yükseltilmiş süreç | (gerek yok) |
-| macOS    | pcap | `sudo` (BPF erişimi) | Xcode CLT |
+| Platform | Süreç atfı + L7 (agent) | Çalıştırma | Derleme |
+|----------|------------------------|-----------|---------|
+| Linux    | **eBPF** (kernel ≥ 5.8 + BTF) + L7 için dar kapsamlı yardımcı pcap | `CAP_NET_RAW` + `CAP_NET_ADMIN` (paket kurulumları verir) | `libpcap-dev` |
+| Windows  | **pcap** (MSI Npcap'i otomatik kurar) — L7 dahil | yükseltilmiş süreç (SYSTEM servis) | (gerek yok) |
+| macOS    | pcap — L7 dahil | `sudo` (BPF erişimi) | Xcode CLT |
 
-> Agent Linux'ta eBPF, Windows'ta ETW ile **çekirdek düzeyinde** süreç trafiği +
-> DNS toplar — Windows'ta **Npcap gerekmez**. [Npcap](https://npcap.com) yalnız
-> L7 (SNI/Host) görünürlüğü, ham `-record` veya tek-makine hub yakalaması için
-> lazım; kernel/BTF yoksa Linux otomatik pcap'e düşer. `collect.method` ile
-> zorlanır (`auto` | `ebpf` | `pcap` | `etw` | `off`).
+> **v1.3.0'dan beri derin toplama (süreç trafiği + DNS + L7/SNI) tüm kurulum
+> yollarında varsayılan AÇIK.** Linux'ta eBPF çekirdek düzeyinde sayım yapar,
+> L7 (SNI/Host) için dar filtreli bir yardımcı pcap handle açılır. Windows'ta
+> MSI kurulumu [Npcap](https://npcap.com)'i sessizce kurar ve agent `pcap`
+> yöntemiyle gelir (Npcap yoksa ETW'ye düşer — L7 hariç her şey akar).
+> Kapatmak: `collect.method: off`. Hub politikası `-agent-pcap` de varsayılan açık.
 
 - Go **1.22+** (yeni `http.ServeMux` kalıpları için)
 - Node.js **18+** (yalnızca frontend derlemek için)

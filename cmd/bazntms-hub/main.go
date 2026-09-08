@@ -86,7 +86,7 @@ func main() {
 	queueMaxAgeH := fl.Int("queue-max-age-hours", 24, "JetStream stream mesaj yasi siniri (saat) — tuketilmeyen mesajlar bu sureden sonra dusurulur")
 	queueWorkers := fl.Int("queue-workers", 4, "JetStream store-writer paralel worker sayisi (yuksek flow hacmi / patlama icin artirin)")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
-	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
+	agentPCAP := fl.Bool("agent-pcap", true, "agent'larda derin toplama (surec trafigi + DNS + L7) ve ham PCAP kaydina izin ver (politika) — VARSAYILAN ACIK; kapatmak: -agent-pcap=false")
 	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
 	tlsDir := fl.String("tls-dir", "pki", "CA + sunucu sertifikasi dizini (ca.crt/ca.key/server.crt/server.key)")
 	tlsCert := fl.String("tls-cert", "", "operator sunucu sertifikasi (PEM); bos = CA'dan otomatik uret")
@@ -293,7 +293,9 @@ func main() {
 	)
 
 	if *agentPCAP {
-		slog.Info("agent PCAP politikasi acik")
+		slog.Info("agent derin toplama politikasi acik (surec trafigi + DNS + L7 + ham PCAP) — kapatmak: -agent-pcap=false")
+	} else {
+		slog.Info("agent derin toplama politikasi KAPALI (-agent-pcap=false) — surec/DNS/L7 panelleri bos kalir")
 	}
 	vaultProvider, err := vault.ProviderFor(*vaultKeySource, *vaultKeyFile)
 	if err != nil {
