@@ -7,6 +7,8 @@ package flows
 import (
 	"encoding/binary"
 	"net"
+	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/gokayybaz/bazntms/internal/metrics"
@@ -15,6 +17,11 @@ import (
 const (
 	v5HeaderSize = 24
 	v5RecordSize = 48
+
+	flowRcvBuf      = 8 << 20 // SO_RCVBUF: burst'te çekirdek kuyruğu (best-effort)
+	flowQueueDepth  = 4096    // reader → worker kanal derinliği
+	flowDefWorkers  = 4
+	flowMaxDatagram = 65535
 )
 
 type Collector struct {
@@ -25,8 +32,24 @@ type Collector struct {
 	// cihaz eşleştirmesini korumak için kullanılır.
 	ExporterIP string
 	OnFlows    func(device string, rows []Row)
+	// Workers, ayrıştırma + OnFlows worker sayısı (0 → 4). Reader goroutine
+	// yalnızca ReadFromUDP yapar (S21.9 — 50k flow/sn'de sync OnFlows çağrısı
+	// reader'ı bloklayıp çekirdek buffer'ını taşırıyordu).
+	Workers int
 
 	templates *TemplateCache // v9/IPFIX sablon onbellegi (Listen'de kurulur)
+
+	packets   chan *pkt
+	pool      sync.Pool
+	wg        sync.WaitGroup
+	closeOnce sync.Once
+}
+
+// pkt, reader'dan worker'a taşınan ham datagram (havuzlanır).
+type pkt struct {
+	buf  [flowMaxDatagram]byte
+	n    int
+	peer netip.Addr
 }
 
 type Row struct {
@@ -41,7 +64,8 @@ type Row struct {
 	Octets  uint64
 }
 
-// Listen, UDP dinleyicisini baslatir; her paket icin OnFlows cagrılır.
+// Listen, UDP dinleyicisini baslatir: bir reader goroutine datagram okur,
+// N worker ayrıştırıp OnFlows çağırır.
 func (c *Collector) Listen(addr string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -51,42 +75,82 @@ func (c *Collector) Listen(addr string) error {
 	if err != nil {
 		return err
 	}
+	_ = conn.SetReadBuffer(flowRcvBuf) // best-effort; OS sınırlayabilir
 	c.Conn = conn
 	if c.templates == nil {
 		c.templates = NewTemplateCache()
 	}
-	go func() {
-		buf := make([]byte, 65535)
-		for {
-			n, peer, err := conn.ReadFromUDP(buf)
-			if err != nil {
-				return
-			}
-			exporterKey := peer.IP.String()
-			device := exporterKey
-			if c.ExporterIP != "" {
-				device = c.ExporterIP
-			}
-			kind := datagramKind(buf[:n])
-			rows := c.parse(buf[:n], device, exporterKey, time.Now())
-			switch {
-			case len(rows) > 0:
-				metrics.AddFlowsReceived(kind, len(rows))
-				if c.OnFlows != nil {
-					c.OnFlows(device, rows)
-				}
-			case kind == "unknown":
-				metrics.IncFlowsDropped("unknown_version")
-			case n < 4:
-				metrics.IncFlowsDropped("short")
-			default:
-				// bilinen protokol ama 0 satır: şablon henüz gelmedi, bozuk kayıt
-				// veya yalnız-sayaç sFlow örneği
-				metrics.IncFlowsDropped("empty_parse")
-			}
-		}
-	}()
+	c.pool.New = func() any { return new(pkt) }
+	c.packets = make(chan *pkt, flowQueueDepth)
+
+	workers := c.Workers
+	if workers <= 0 {
+		workers = flowDefWorkers
+	}
+	for i := 0; i < workers; i++ {
+		c.wg.Add(1)
+		go c.worker()
+	}
+	c.wg.Add(1)
+	go c.reader()
 	return nil
+}
+
+// reader, yalnızca datagram okur ve worker kanalına verir. Kanal doluysa
+// datagram düşürülür (reader bloklanırsa çekirdek UDP buffer'ı taşar — bu
+// katmanda görünmez; burada sayılır).
+func (c *Collector) reader() {
+	defer c.wg.Done()
+	defer close(c.packets)
+	for {
+		p := c.pool.Get().(*pkt)
+		n, ap, err := c.Conn.ReadFromUDPAddrPort(p.buf[:])
+		if err != nil {
+			c.pool.Put(p)
+			return // conn kapandı
+		}
+		p.n = n
+		p.peer = ap.Addr()
+		select {
+		case c.packets <- p:
+		default:
+			c.pool.Put(p)
+			metrics.IncFlowsDropped("queue_full")
+		}
+	}
+}
+
+func (c *Collector) worker() {
+	defer c.wg.Done()
+	for p := range c.packets {
+		c.process(p.buf[:p.n], p.peer)
+		c.pool.Put(p)
+	}
+}
+
+func (c *Collector) process(data []byte, peer netip.Addr) {
+	exporterKey := peer.Unmap().String()
+	device := exporterKey
+	if c.ExporterIP != "" {
+		device = c.ExporterIP
+	}
+	kind := datagramKind(data)
+	rows := c.parse(data, device, exporterKey, time.Now())
+	switch {
+	case len(rows) > 0:
+		metrics.AddFlowsReceived(kind, len(rows))
+		if c.OnFlows != nil {
+			c.OnFlows(device, rows)
+		}
+	case kind == "unknown":
+		metrics.IncFlowsDropped("unknown_version")
+	case len(data) < 4:
+		metrics.IncFlowsDropped("short")
+	default:
+		// bilinen protokol ama 0 satır: şablon henüz gelmedi, bozuk kayıt
+		// veya yalnız-sayaç sFlow örneği
+		metrics.IncFlowsDropped("empty_parse")
+	}
 }
 
 // datagramKind, ham datagramı protokol etiketine sınıflandırır (metrik için;
@@ -131,10 +195,15 @@ func (c *Collector) parse(payload []byte, device, exporterKey string, receivedAt
 	return nil
 }
 
+// Close, reader'ı (conn kapatarak) ve worker'ları durdurur; hepsi çıkana
+// kadar bekler.
 func (c *Collector) Close() {
-	if c.Conn != nil {
-		_ = c.Conn.Close()
-	}
+	c.closeOnce.Do(func() {
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+		c.wg.Wait()
+	})
 }
 
 // ParseV5, NetFlow v5 paketini cozer (test edilebilir saf fonksiyon).

@@ -50,11 +50,12 @@ type template struct {
 }
 
 // TemplateCache, exporter'lardan gelen NetFlow v9 / IPFIX sablonlarini tutar.
-// Es zamanli erisim guvenli. Bayat sablonlar (24 saat gorulmeyen) periyodik
-// temizlenmez — exporter yeniden gonderdiginde uzerine yazilir, sayilari
-// sinirlidir (exporter × template ID).
+// Es zamanli erisim guvenli. Okuma baskin (her veri kaydi bir get, sablonlar
+// nadir gelir) → RWMutex (S21.9 — coklu flow worker). Bayat sablonlar
+// (24 saat gorulmeyen) periyodik temizlenmez — exporter yeniden gonderdiginde
+// uzerine yazilir, sayilari sinirlidir (exporter × template ID).
 type TemplateCache struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	m  map[templateKey]template
 }
 
@@ -68,9 +69,9 @@ func (c *TemplateCache) put(k templateKey, t template) {
 }
 
 func (c *TemplateCache) get(k templateKey) (template, bool) {
-	c.mu.Lock()
+	c.mu.RLock()
 	t, ok := c.m[k]
-	c.mu.Unlock()
+	c.mu.RUnlock()
 	return t, ok
 }
 
