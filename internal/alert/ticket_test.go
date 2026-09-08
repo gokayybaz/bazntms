@@ -131,11 +131,12 @@ func TestTicketRespectsRouting(t *testing.T) {
 
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
+	// -race altında yüklü CI runner'da gevşek pay
+	for i := 0; i < 400; i++ {
 		if cond() {
 			return
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatal("koşul zaman aşımına uğradı")
 }

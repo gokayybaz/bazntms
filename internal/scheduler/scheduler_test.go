@@ -68,7 +68,9 @@ func TestSchedulerRunsAndAdvances(t *testing.T) {
 	s.Start()
 	defer s.Stop()
 
-	deadline := time.After(2 * time.Second)
+	// -race + paralel paket binary'leri altında yüklü CI runner'ında goroutine
+	// zamanlaması gecikebilir — gevşek pay.
+	deadline := time.After(15 * time.Second)
 	for runs.Load() == 0 {
 		select {
 		case <-deadline:
@@ -76,7 +78,7 @@ func TestSchedulerRunsAndAdvances(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	time.Sleep(60 * time.Millisecond) // ikinci sweep de gelsin
+	time.Sleep(150 * time.Millisecond) // ikinci sweep de gelsin
 
 	if n := runs.Load(); n != 1 {
 		t.Fatalf("kaçırılan iş 1 kez çalışmalı (gelecekteki henüz değil), %d", n)
