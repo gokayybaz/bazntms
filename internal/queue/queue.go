@@ -77,7 +77,17 @@ func Connect(url string, maxAge time.Duration) (*Queue, error) {
 	if err != nil {
 		return nil, err
 	}
-	js, err := jetstream.New(nc)
+	// Flow yayını asenkron (S21.E — 200k flow/sn patlaması): senkron Publish
+	// worker'ı her PubAck'te bloklar → collector kanalı taşar. Asenkron +
+	// bounded pending pencere yüksek throughput verir; pencere dolunca yayın
+	// bloklar (backpressure), ack hatası err handler'da sayılır.
+	js, err := jetstream.New(nc,
+		jetstream.WithPublishAsyncMaxPending(8192),
+		jetstream.WithPublishAsyncErrHandler(func(_ jetstream.JetStream, _ *nats.Msg, e error) {
+			slog.Warn("kuyruk: asenkron yayın ack hatası", "err", e)
+			metrics.IncFlowsDropped("publish_nak")
+		}),
+	)
 	if err != nil {
 		nc.Close()
 		return nil, err
@@ -113,15 +123,15 @@ func (q *Queue) PublishTelemetry(agentID int64, version, remoteIP string, ts int
 	return err
 }
 
-// PublishFlows, NetFlow satirlarini toplu olarak kuyruga aktarir.
+// PublishFlows, NetFlow satirlarini kuyruga ASENKRON aktarir (yuksek hacim).
+// Pending pencere dolarsa yayin bloklar — collector worker'i yavaslar,
+// kaybetmez.
 func (q *Queue) PublishFlows(rows []store.FlowRow) error {
 	data, err := json.Marshal(rows)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err = q.js.Publish(ctx, subFlows, data)
+	_, err = q.js.PublishAsync(subFlows, data)
 	return err
 }
 
@@ -387,11 +397,19 @@ func ackMsg(msg jetstream.Msg) {
 	}
 }
 
-// Close, processor'u ve NATS baglantisini kapatir.
+// Close, processor'u ve NATS baglantisini kapatir. Bekleyen asenkron flow
+// yayinlari once bosaltilir (kayip onleme).
 func (q *Queue) Close() {
 	if q.cancel != nil {
 		q.cancel()
 		<-q.done
+	}
+	if q.js != nil {
+		select {
+		case <-q.js.PublishAsyncComplete():
+		case <-time.After(10 * time.Second):
+			slog.Warn("kuyruk: bekleyen asenkron yayinlar 10 sn'de bosalmadi")
+		}
 	}
 	if q.nc != nil {
 		q.nc.Close()
