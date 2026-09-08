@@ -511,11 +511,22 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if days <= 0 || days > 90 {
 		days = 7
 	}
-	// Faz 6.4: kurumsal rapor (SLA/kapasite/banding)
+	// Faz 6.4: kurumsal rapor (SLA/kapasite/banding). S22.20: ?site= saha
+	// kırılımı + ?format=pdf.
 	if r.URL.Query().Get("type") == "enterprise" {
-		data, err := report.BuildEnterprise(s.store, days)
+		data, err := report.BuildEnterprise(s.store, days, r.URL.Query().Get("site"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if r.URL.Query().Get("format") == "pdf" {
+			pdfBytes, perr := data.RenderEnterprisePDF()
+			if perr != nil {
+				http.Error(w, "PDF üretilemedi: "+perr.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/pdf")
+			w.Write(pdfBytes)
 			return
 		}
 		htmlBytes, err := data.RenderEnterpriseHTML()

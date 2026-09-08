@@ -96,11 +96,14 @@ func render(st store.Store, geo *geoip.Resolver, p Payload) (body []byte, format
 	format = "html"
 	switch p.Type {
 	case "enterprise":
-		d, e := report.BuildEnterprise(st, p.Days)
+		d, e := report.BuildEnterprise(st, p.Days, p.Site)
 		if e != nil {
 			return nil, "", false, e
 		}
-		// enterprise PDF: S22.20 (şimdilik HTML)
+		if p.Format == "pdf" {
+			b, pe := d.RenderEnterprisePDF()
+			return b, "pdf", d.Empty, pe
+		}
 		b, re := d.RenderEnterpriseHTML()
 		return b, "html", d.Empty, re
 	case "compliance":

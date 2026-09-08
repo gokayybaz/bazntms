@@ -862,6 +862,7 @@ paths:
         - { name: type, in: query, schema: { type: string, enum: [traffic, enterprise, compliance] } }
         - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 7 } }
         - { name: format, in: query, schema: { type: string, enum: [html, pdf], default: html } }
+        - { name: site, in: query, schema: { type: string }, description: "enterprise: saha kırılımı (S22.20)" }
       responses:
         "200":
           description: Rapor

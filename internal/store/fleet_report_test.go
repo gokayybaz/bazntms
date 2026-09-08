@@ -52,7 +52,7 @@ func TestFleetTrafficBuckets(t *testing.T) {
 	st, _ := fleetSeed(t)
 	since := time.Now().Add(-3 * time.Hour)
 
-	buckets, err := st.FleetTrafficBuckets(since, 300)
+	buckets, err := st.FleetTrafficBuckets(since, 300, "")
 	if err != nil {
 		t.Fatalf("buckets: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestFleetTopEndpointsFallback(t *testing.T) {
 
 func TestFleetIfaceHealthEmpty(t *testing.T) {
 	st, _ := fleetSeed(t)
-	disc, errs, err := st.FleetIfaceHealth(time.Now().Add(-3 * time.Hour))
+	disc, errs, err := st.FleetIfaceHealth(time.Now().Add(-3*time.Hour), "")
 	if err != nil {
 		t.Fatalf("iface health: %v", err)
 	}

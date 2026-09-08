@@ -67,7 +67,7 @@ func Build(st store.Store, geo *geoip.Resolver, days int) (*Data, error) {
 	if days >= 2 {
 		bs = 3600
 	}
-	buckets, err := st.FleetTrafficBuckets(since, bs)
+	buckets, err := st.FleetTrafficBuckets(since, bs, "")
 	if err != nil {
 		return nil, fmt.Errorf("filo trafik serisi: %w", err)
 	}

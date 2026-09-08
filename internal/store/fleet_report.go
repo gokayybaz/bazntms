@@ -21,8 +21,10 @@ import (
 // Sayac gerilemesi (arayuz/agent reset) → o adim 0 katki verir.
 
 // FleetTrafficBuckets, tum agent arayuzlerinin toplam verimini `bucketSecs`
-// saniyelik kovalara indirir. Bucket.In/Out bayt/sn, Pps paket/sn.
-func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucket, error) {
+// saniyelik kovalara indirir. Bucket.In/Out bayt/sn, Pps paket/sn. site boş
+// değilse yalnız o sahanın agent'ları (S22.20 — saha raporu; cagg hızlı yolu
+// atlanır, ham LAG taraması).
+func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int, site string) ([]Bucket, error) {
 	if bucketSecs <= 0 {
 		bucketSecs = 300
 	}
@@ -40,7 +42,7 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 	// oku (S21.11 — 5000 agent'ta ham LAG taraması 200M satır). Kova saatlik
 	// olduğundan cagg'in ilk/son sayaç farkı doğrudan kullanılır; sayaç
 	// sıfırlanması CASE ile 0.
-	if s.ts && bucketSecs >= 3600 {
+	if s.ts && bucketSecs >= 3600 && site == "" {
 		if r2, e2 := s.db.Query(s.q(`SELECT bucket,
 				COALESCE(SUM(CASE WHEN rx_last >= rx_first THEN rx_last - rx_first ELSE 0 END), 0),
 				COALESCE(SUM(CASE WHEN tx_last >= tx_first THEN tx_last - tx_first ELSE 0 END), 0),
@@ -63,6 +65,13 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 		}
 	}
 
+	siteClause := ""
+	args := []any{bucketSecs, bucketSecs, since.Unix()}
+	if site != "" {
+		siteClause = ` AND agent_id IN (SELECT id FROM agents WHERE site = ?)`
+		args = append(args, site)
+	}
+	args = append(args, maxDt, int64(maxIfaceBps))
 	q := `SELECT (d.ts / ?) * ? AS bucket,
 			COALESCE(SUM(d.rx_d), 0), COALESCE(SUM(d.tx_d), 0), COALESCE(SUM(d.pk_d), 0)
 		FROM (
@@ -75,13 +84,13 @@ func (s *sqlStore) FleetTrafficBuckets(since time.Time, bucketSecs int) ([]Bucke
 					THEN (rx_packets + tx_packets) - LAG(rx_packets + tx_packets) OVER w ELSE 0 END AS pk_d,
 				ts - LAG(ts) OVER w AS dt
 			FROM agent_iface_samples
-			WHERE ts >= ?
+			WHERE ts >= ?` + siteClause + `
 			WINDOW w AS (PARTITION BY agent_id, name ORDER BY ts)
 		) d
 		WHERE d.dt > 0 AND d.dt <= ?
 			AND (d.rx_d + d.tx_d) * 8 <= d.dt * ?
 		GROUP BY bucket ORDER BY bucket`
-	rows, err := s.db.Query(s.q(q), bucketSecs, bucketSecs, since.Unix(), maxDt, int64(maxIfaceBps))
+	rows, err := s.db.Query(s.q(q), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +282,13 @@ func scanEndpointVolumes(rows *sql.Rows) ([]EndpointDelta, error) {
 // FleetIfaceHealth, donemdeki SNMP cihaz arayuzlerinin toplam iskarta ve hata
 // sayaci artislari (ifIn/OutDiscards, ifIn/OutErrors). Kurumsal raporun
 // "paket dusme" SLA satirinin filo karsiligi — cihaz yoksa 0/0 doner.
-func (s *sqlStore) FleetIfaceHealth(since time.Time) (discards uint64, errs uint64, err error) {
+func (s *sqlStore) FleetIfaceHealth(since time.Time, site string) (discards uint64, errs uint64, err error) {
+	siteClause := ""
+	args := []any{since.Unix()}
+	if site != "" {
+		siteClause = ` AND device_id IN (SELECT id FROM devices WHERE site = ?)`
+		args = append(args, site)
+	}
 	q := `SELECT COALESCE(SUM(disc_d), 0), COALESCE(SUM(err_d), 0)
 		FROM (
 			SELECT
@@ -283,10 +298,10 @@ func (s *sqlStore) FleetIfaceHealth(since time.Time) (discards uint64, errs uint
 					THEN (in_errors + out_errors) - LAG(in_errors + out_errors) OVER w ELSE 0 END AS err_d,
 				ts - LAG(ts) OVER w AS dt
 			FROM device_iface_samples
-			WHERE ts >= ?
+			WHERE ts >= ?` + siteClause + `
 			WINDOW w AS (PARTITION BY device_id, if_index ORDER BY ts)
 		) d
 		WHERE d.dt > 0`
-	err = s.db.QueryRow(s.q(q), since.Unix()).Scan(&discards, &errs)
+	err = s.db.QueryRow(s.q(q), args...).Scan(&discards, &errs)
 	return discards, errs, err
 }

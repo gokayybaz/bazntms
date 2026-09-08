@@ -17,6 +17,7 @@ import (
 type EnterpriseData struct {
 	GeneratedAt time.Time `json:"generated_at"`
 	Days        int       `json:"days"`
+	Site        string    `json:"site,omitempty"` // "" = filo geneli (S22.20)
 
 	// SLA
 	AgentTotal    int     `json:"agent_total"`
@@ -49,7 +50,8 @@ type EnterpriseData struct {
 }
 
 // BuildEnterprise, son `days` gun icin SLA/kapasite/banding modelini kurar.
-func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
+// site boş değilse rapor o sahaya kırpılır (S22.20).
+func BuildEnterprise(st store.Store, days int, site string) (*EnterpriseData, error) {
 	if days <= 0 {
 		days = 30
 	}
@@ -57,11 +59,12 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	d := &EnterpriseData{
 		GeneratedAt: time.Now(),
 		Days:        days,
+		Site:        site,
 		AlertCounts: map[string]int{},
 	}
 
 	// SLA: agent online orani
-	agents, err := st.ListAgents(2*time.Minute, "")
+	agents, err := st.ListAgents(2*time.Minute, site)
 	if err != nil {
 		return nil, fmt.Errorf("agent filosu: %w", err)
 	}
@@ -76,7 +79,7 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	}
 
 	// SLA: cihaz poll basarisi (son hatasi olmayan + guncel poll)
-	devices, err := st.ListDevices("")
+	devices, err := st.ListDevices(site)
 	if err != nil {
 		return nil, fmt.Errorf("cihazlar: %w", err)
 	}
@@ -94,13 +97,13 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 
 	// SLA: SNMP cihaz arayuz iskarta/hata sayaclari (eski `samples.dropped`
 	// karsiligi — coklu-hub'da hicbir hub paket yakalamadigi icin)
-	if disc, errs, err := st.FleetIfaceHealth(since); err == nil {
+	if disc, errs, err := st.FleetIfaceHealth(since, site); err == nil {
 		d.IfaceDiscards, d.IfaceErrors = disc, errs
 	}
 
 	// kapasite/banding: filo trafik serisi (agent arayuz telemetrisi).
 	// 60 sn kova: percentile'lar icin yeterli cozunurluk.
-	buckets, err := st.FleetTrafficBuckets(since, 60)
+	buckets, err := st.FleetTrafficBuckets(since, 60, site)
 	if err != nil {
 		return nil, fmt.Errorf("filo trafik serisi: %w", err)
 	}
@@ -125,7 +128,7 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	}
 
 	// onceki donem [since-period, since) — buyume karsilastirmasi
-	prevAll, _ := st.FleetTrafficBuckets(since.Add(-time.Duration(days)*24*time.Hour), 60)
+	prevAll, _ := st.FleetTrafficBuckets(since.Add(-time.Duration(days)*24*time.Hour), 60, site)
 	sinceUnix := since.Unix()
 	var prevBytes float64
 	for _, b := range prevAll {
@@ -142,10 +145,10 @@ func BuildEnterprise(st store.Store, days int) (*EnterpriseData, error) {
 	d.P50Bps, d.P95Bps, d.P99Bps = pcts[0], pcts[1], pcts[2]
 
 	// top listeler
-	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 10, ""); err != nil {
+	if d.TopEndpoints, err = st.FleetTopEndpoints(since, 10, site); err != nil {
 		return nil, fmt.Errorf("hedefler: %w", err)
 	}
-	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10, ""); err != nil {
+	if d.TopProcesses, err = st.TopProcessTraffic(since, 0, 10, site); err != nil {
 		return nil, fmt.Errorf("surecler: %w", err)
 	}
 	d.Empty = len(buckets) == 0 && len(d.TopEndpoints) == 0 && d.AgentTotal == 0
@@ -210,7 +213,7 @@ const enterpriseTpl = `<!doctype html>
 <div class="page">
   <header>
     <h1>bazNTMS — Kurumsal Rapor</h1>
-    <div class="sub">SLA · kapasite · banding — son {{.Days}} gün · üretilme {{.GeneratedAt.Format "02.01.2006 15:04"}}
+    <div class="sub">SLA · kapasite · banding — {{if .Site}}saha: {{.Site}} · {{end}}son {{.Days}} gün · üretilme {{.GeneratedAt.Format "02.01.2006 15:04"}}
       {{if gt .DataWindowDays 0.0}}· veri penceresi ~{{printf "%.1f" .DataWindowDays}} gün{{end}}</div>
   </header>
 

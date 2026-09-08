@@ -164,7 +164,7 @@ func TestRenderPDF(t *testing.T) {
 }
 
 func TestBuildEnterprise(t *testing.T) {
-	d, err := BuildEnterprise(seededStore(t), 30)
+	d, err := BuildEnterprise(seededStore(t), 30, "")
 	if err != nil {
 		t.Fatalf("build enterprise: %v", err)
 	}
@@ -186,5 +186,22 @@ func TestBuildEnterprise(t *testing.T) {
 	}
 	if !strings.Contains(string(html), "Kurumsal Rapor") || !strings.Contains(string(html), "Süreç Bazlı Trafik") {
 		t.Fatalf("enterprise HTML govdesi beklenenden farkli")
+	}
+	// S22.20: PDF çıktı
+	pdf, err := d.RenderEnterprisePDF()
+	if err != nil || len(pdf) < 3000 {
+		t.Fatalf("enterprise PDF: %v (%d bayt)", err, len(pdf))
+	}
+	if string(pdf[:4]) != "%PDF" {
+		t.Fatalf("PDF sihirli baytları yok")
+	}
+
+	// S22.20: bilinmeyen saha → boş rapor (kırılım çalışıyor)
+	ds, err := BuildEnterprise(seededStore(t), 30, "olmayan-saha")
+	if err != nil {
+		t.Fatalf("build (site): %v", err)
+	}
+	if ds.AgentTotal != 0 || ds.TotalGB != 0 || ds.Site != "olmayan-saha" {
+		t.Fatalf("saha kırılımı filtrelemedi: %+v", ds)
 	}
 }
