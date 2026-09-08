@@ -45,9 +45,10 @@ type AnomalyConfig struct {
 	MaxSurfaced    int     `json:"max_surfaced"`      // tek degerlendirmede en cok kac uyari (vars. 8)
 	MinAbsDeltaBps float64 `json:"min_abs_delta_bps"` // bps/proc_bps gurultu tabani (vars. 500000)
 
-	// S22.4 — bps disi metrikler
-	Metrics        []string `json:"metrics"`           // "bps" | "dns_qps" | "proc_bps" (vars. ucu)
-	MinAbsDeltaQps float64  `json:"min_abs_delta_qps"` // dns_qps gurultu tabani (vars. 5)
+	// S22.4 — bps disi metrikler. Faz 24-D: "l7_qps" (TLS SNI / HTTP Host
+	// gozlem hizi — endpoint-temas sicramasi).
+	Metrics        []string `json:"metrics"`           // bps | dns_qps | proc_bps | l7_qps
+	MinAbsDeltaQps float64  `json:"min_abs_delta_qps"` // dns_qps / l7_qps gurultu tabani (vars. 5)
 
 	// S22.7 — z-buyuklugune gore dinamik onem: |z| >= CritZ ise uyari "crit"
 	// (aksi "warn"). 0 → varsayilan.
@@ -55,11 +56,11 @@ type AnomalyConfig struct {
 }
 
 // knownMetrics, gecerli Metrics degerleri.
-var knownMetrics = map[string]bool{"bps": true, "dns_qps": true, "proc_bps": true}
+var knownMetrics = map[string]bool{"bps": true, "dns_qps": true, "proc_bps": true, "l7_qps": true}
 
 // minAbsDelta, bir metrigin mutlak-delta gurultu tabani (birimi metrige gore).
 func (a AnomalyConfig) minAbsDelta(metric string) float64 {
-	if metric == "dns_qps" {
+	if metric == "dns_qps" || metric == "l7_qps" {
 		return a.MinAbsDeltaQps
 	}
 	return a.MinAbsDeltaBps
@@ -81,7 +82,7 @@ func DefaultAnomalyConfig() AnomalyConfig {
 		PerAgent:       true,
 		MaxSurfaced:    8,
 		MinAbsDeltaBps: 500_000,
-		Metrics:        []string{"bps", "dns_qps", "proc_bps"},
+		Metrics:        []string{"bps", "dns_qps", "proc_bps", "l7_qps"},
 		MinAbsDeltaQps: 5,
 		CritZ:          5,
 	}
@@ -393,13 +394,18 @@ func metricLabel(metric string) string {
 		return "DNS sorgu hızı"
 	case "proc_bps":
 		return "süreç trafiği"
+	case "l7_qps":
+		return "L7 endpoint teması"
 	}
 	return metric
 }
 
 func metricUnit(metric string) string {
-	if metric == "dns_qps" {
+	switch metric {
+	case "dns_qps":
 		return "sorgu/sn"
+	case "l7_qps":
+		return "gözlem/sn"
 	}
 	return "bps"
 }

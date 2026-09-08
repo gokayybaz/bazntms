@@ -36,10 +36,13 @@ const METRICS = [
   { id: 'bps', label: 'Bant genişliği' },
   { id: 'dns_qps', label: 'DNS sorgu hızı' },
   { id: 'proc_bps', label: 'Süreç trafiği' },
+  { id: 'l7_qps', label: 'L7 endpoint teması' },
 ] as const
 
 function fmtVal(metric: string, v: number): string {
-  return metric === 'dns_qps' ? `${v.toFixed(v < 10 ? 1 : 0)} sorgu/sn` : formatBits(v)
+  if (metric === 'dns_qps') return `${v.toFixed(v < 10 ? 1 : 0)} sorgu/sn`
+  if (metric === 'l7_qps') return `${v.toFixed(v < 10 ? 1 : 0)} gözlem/sn`
+  return formatBits(v)
 }
 
 function seasonalBucketNow(seasonality: string): number {

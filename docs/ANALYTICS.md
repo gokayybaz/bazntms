@@ -36,6 +36,14 @@ z = (şu_anki_pencere − baseline.mean) / baseline.std
 | `bps` | bit/sn | arayüz sayaç LAG delta ×8 | hacim sıçraması |
 | `dns_qps` | sorgu/sn | `agent_dns.queries` | DNS tünelleme / DGA |
 | `proc_bps` | bit/sn | `process_traffic` bytes ×8 | süreç bazlı sızdırma |
+| `l7_qps` | gözlem/sn | `l7_endpoints.hits` | endpoint-temas sıçraması ≈ yeni/alışılmadık hedef aktivitesi (Faz 24-D) |
+
+**Ertelenen metrikler (Faz 24-D analizi):** `conn_count` (`agent_conn_latest`'te
+zaman damgası yok — şema değişikliği gerekir), `iface_util` (agent değil cihaz
+boyutu + hız-oranı hesabı gerekir), `new_dest_rate` (yenilik-oranı materyalize
+moment modeline oturmuyor), `pps` (yalnız hub-yerel `samples`, çoklu-hub'da
+boş). Bunlar ayrı bir iş — `l7_qps` "yeni hedef aktivitesi" sinyalini pratikte
+karşılar.
 
 ### Mevsimsel kova (`seasonality`)
 
@@ -99,9 +107,9 @@ min_samples         120
 window_min          5             # karşılaştırma penceresi
 per_site / per_agent  true
 max_surfaced        8
-metrics             [bps, dns_qps, proc_bps]
+metrics             [bps, dns_qps, proc_bps, l7_qps]
 min_abs_delta_bps   500000        # bps/proc_bps gürültü tabanı
-min_abs_delta_qps   5             # dns_qps gürültü tabanı
+min_abs_delta_qps   5             # dns_qps / l7_qps gürültü tabanı
 ```
 
 ## Kapsam dışı

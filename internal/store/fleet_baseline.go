@@ -52,6 +52,10 @@ func metricSource(metric string) (table, valExpr string, lag, ok bool) {
 		return "agent_dns", "d.queries", false, true
 	case "proc_bps":
 		return "process_traffic", "(d.bytes_in + d.bytes_out) * 8", false, true
+	case "l7_qps":
+		// L7 (TLS SNI / HTTP Host) gözlem hızı — endpoint-temas sıçraması
+		// ≈ alışılmadık / yeni hedef aktivitesi (Faz 24-D).
+		return "l7_endpoints", "d.hits", false, true
 	}
 	return "", "", false, false
 }
