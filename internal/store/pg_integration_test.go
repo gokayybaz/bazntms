@@ -343,6 +343,17 @@ func TestPostgresStore(t *testing.T) {
 	if due, _ := st.DueScheduledJobs(now); len(due) != 0 {
 		t.Fatalf("koşumdan sonra due olmamalı")
 	}
+	// S22.19: rapor arşivi
+	raID, err := st.InsertReportArchive(ReportArchive{Kind: "enterprise", Site: "dc1", Days: 30, Format: "html", Path: "/data/reports/x.html", Size: 123, GeneratedTs: now, Status: "ok", JobID: sjID})
+	if err != nil || raID == 0 {
+		t.Fatalf("report archive: %v %d", err, raID)
+	}
+	if l, _ := st.ListReportArchive("dc1", 10); len(l) != 1 || l[0].Kind != "enterprise" {
+		t.Fatalf("archive list: %+v", l)
+	}
+	if paths, err := st.PruneReportArchive(now + 1); err != nil || len(paths) != 1 {
+		t.Fatalf("prune: %v %v", err, paths)
+	}
 	if err := st.DeleteScheduledJob(sjID); err != nil {
 		t.Fatalf("delete job: %v", err)
 	}

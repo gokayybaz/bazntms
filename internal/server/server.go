@@ -42,6 +42,7 @@ type Server struct {
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
+	reportsDir        string         // zamanlanmis rapor dosya dizini (Faz 22 S22.19)
 	compliance        ComplianceInfo // 5651 uyum durumu (Faz 9)
 	enrollToken       string
 	telemetryInterval int
@@ -207,6 +208,13 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /api/report", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReport)))
+	// zamanlanmış raporlar + arşiv (S22.19)
+	mux.Handle("GET /api/v1/reports/archive", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportArchiveList)))
+	mux.Handle("GET /api/v1/reports/archive/{id}", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportArchiveGet)))
+	mux.Handle("GET /api/v1/reports/schedules", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportSchedulesList)))
+	mux.Handle("POST /api/v1/reports/schedules", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportSchedulePost)))
+	mux.Handle("DELETE /api/v1/reports/schedules/{id}", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportScheduleDelete)))
+	mux.Handle("POST /api/v1/reports/generate", s.requirePerm(PermAnalyze, http.HandlerFunc(s.handleReportGenerate)))
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)

@@ -35,6 +35,11 @@ type SchedulerStore interface {
 	MarkScheduledJobRun(id, ranAt, nextRun int64, status string) error
 	SetScheduledJobEnabled(id int64, enabled bool, nextRun int64) error
 	DeleteScheduledJob(id int64) error
+	// rapor teslim geçmişi (S22.19)
+	InsertReportArchive(a ReportArchive) (int64, error)
+	ListReportArchive(site string, limit int) ([]ReportArchive, error)
+	ReportArchiveByID(id int64) (*ReportArchive, error)
+	PruneReportArchive(before int64) ([]string, error)
 }
 
 // ClusterStore, çoklu replika koordinasyonu (C1, Faz 15): tek-sahipli roller

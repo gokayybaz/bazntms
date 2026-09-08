@@ -870,6 +870,73 @@ paths:
             application/pdf: { schema: { type: string, format: binary } }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /api/v1/reports/archive:
+    get:
+      tags: [reports]
+      summary: Zamanlanmış rapor teslim geçmişi (S22.19) — yetki:analyze
+      responses:
+        "200":
+          description: "{ archive: ReportArchive[] } (dosya yolu maskeli)"
+  /api/v1/reports/archive/{id}:
+    get:
+      tags: [reports]
+      summary: Arşivlenmiş bir raporu indir (HTML/PDF)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200":
+          description: Rapor içeriği
+          content:
+            text/html: { schema: { type: string } }
+            application/pdf: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/reports/schedules:
+    get:
+      tags: [reports]
+      summary: Rapor zamanlamaları (scheduled_jobs kind=report)
+      responses:
+        "200": { description: "{ schedules: [...] }" }
+    post:
+      tags: [reports]
+      summary: Rapor zamanlaması oluştur — yetki:analyze
+      description: "spec: interval:<dk> | daily:HH:MM | weekly:<gün>:HH:MM | monthly:<1-31>:HH:MM"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                spec: { type: string }
+                payload:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [enterprise, compliance, traffic] }
+                    days: { type: integer }
+                    site: { type: string }
+                    format: { type: string, enum: [html, pdf] }
+                    email: { type: array, items: { type: string } }
+      responses:
+        "200": { description: "{ id, next_run_ts }" }
+        "400": { description: "geçersiz spec" }
+  /api/v1/reports/schedules/{id}:
+    delete:
+      tags: [reports]
+      summary: Rapor zamanlaması sil
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      responses:
+        "200": { description: "{ ok: true }" }
+  /api/v1/reports/generate:
+    post:
+      tags: [reports]
+      summary: Raporu şimdi üret + arşivle (+ alıcı varsa e-postala) — yetki:analyze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { type: { type: string }, days: { type: integer }, site: { type: string }, format: { type: string }, email: { type: array, items: { type: string } } } }
+      responses:
+        "200": { description: "{ archive: ReportArchive }" }
+
   /api/v1/users:
     get:
       tags: [rbac]

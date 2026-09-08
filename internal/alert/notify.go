@@ -246,6 +246,58 @@ func sendEmail(nf Notifiers, subject, body string) error {
 	return conn.Quit()
 }
 
+// SendHTMLMail, alert SMTP yapılandırmasını kullanarak `to` alıcılarına bir
+// HTML e-posta gönderir (Faz 22 S22.19 — zamanlanmış rapor teslimi). EmailHost
+// boşsa hata döner.
+func SendHTMLMail(nf Notifiers, to []string, subject string, html []byte) error {
+	if nf.EmailHost == "" {
+		return fmt.Errorf("smtp yapılandırılmamış (alert bildirim ayarları)")
+	}
+	if len(to) == 0 {
+		return nil
+	}
+	port := nf.EmailPort
+	if port == 0 {
+		port = 587
+	}
+	conn, err := smtp.Dial(fmt.Sprintf("%s:%d", nf.EmailHost, port))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	if ok, _ := conn.Extension("STARTTLS"); ok {
+		if err := conn.StartTLS(&tls.Config{ServerName: nf.EmailHost}); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
+	if nf.EmailUser != "" {
+		if err := conn.Auth(smtp.PlainAuth("", nf.EmailUser, nf.EmailPass, nf.EmailHost)); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+	}
+	if err := conn.Mail(nf.EmailFrom); err != nil {
+		return err
+	}
+	for _, addr := range to {
+		if err := conn.Rcpt(addr); err != nil {
+			return err
+		}
+	}
+	w, err := conn.Data()
+	if err != nil {
+		return err
+	}
+	hdr := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
+		nf.EmailFrom, strings.Join(to, ", "), subject)
+	if _, err := w.Write(append([]byte(hdr), html...)); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return conn.Quit()
+}
+
 func postJSON(url string, payload any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

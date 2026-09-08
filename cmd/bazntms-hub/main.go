@@ -37,6 +37,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/metrics"
 	"github.com/gokayybaz/bazntms/internal/pki"
 	"github.com/gokayybaz/bazntms/internal/queue"
+	"github.com/gokayybaz/bazntms/internal/reportjob"
 	"github.com/gokayybaz/bazntms/internal/scheduler"
 	"github.com/gokayybaz/bazntms/internal/server"
 	"github.com/gokayybaz/bazntms/internal/store"
@@ -294,7 +295,9 @@ func main() {
 		}
 		slog.Info("SSO (OIDC) aktif", "issuer", cfg.OIDC.Issuer, "client_id", cfg.OIDC.ClientID)
 	}
+	reportsDir := filepath.Join(filepath.Dir(*dbPath), "reports")
 	srv := server.New(static, engine, st, *dbPath, alerts, geo, *authPassword, *enrollToken, *telemetryInterval, *agentPCAP, v, sink, oidcOpts)
+	srv.SetReportsDir(reportsDir)
 	if q != nil {
 		q.SetDeadLetterHook(srv.IngestDead) // C4: DLQ metriği (bazntms_ingest_dead_total)
 	}
@@ -435,9 +438,11 @@ func main() {
 	}
 
 	// zamanlanmış işler (S22.18) — lider-kapılı, controller replikasında.
-	// İş türü handler'ları aşağıda kaydedilir (S22.19: rapor teslimi).
 	if *alertsOn {
 		sched := scheduler.New(st)
+		sched.Register("report", reportjob.Handler(st, geo, reportsDir, func(to []string, subj string, html []byte) error {
+			return alert.SendHTMLMail(alerts.Config().Notifiers, to, subj, html)
+		}))
 		leaderSched := st.Leader(store.LeaderKeyScheduler, "scheduler")
 		go leaderSched.Run(ctx)
 		sched.SetLeaderCheck(leaderSched.IsLeader)
