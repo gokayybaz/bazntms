@@ -77,6 +77,27 @@ Diğer ~40 `audit()` çağrısı yalnızca oto-yakalanan
 `RecentAuditEvents` artık bunun sarmalayıcısı. `GET /api/v1/audit` query
 paramları; `AuditCard` süzgeç barı + satır seçince öncesi/sonrası paneli.
 
+## Ek: çoklu-replika (HA) yazım serileştirmesi
+
+v2 zincir doğrulaması, üretim scale DB'sinde **önceden var olan** bir çatalı
+ortaya çıkardı: `InsertAuditEvent` yalnız process-içi `auditMu` ile
+kilitleniyordu. `deploy/docker-compose.scale.yml` 2× `hub-controller` çalıştırır
+— iki controller aynı anda denetim olayı yazınca ikisi de aynı son satırı
+`prev` olarak okuyup aynı `prev_hash` ile INSERT eder → zincir çatallanır
+(`SELECT prev_hash, count(*) ... HAVING count(*)>1` → 28 çatal noktası).
+
+**Çözüm:** [[0005-controller-ha]] advisory-lock presedanı. `InsertAuditEvent`
+artık oku-hesapla-yaz'ı tek transaction'da yapar; pg modunda transaction'ın
+başında `pg_advisory_xact_lock(auditChainLockKey)` (8823201, `LeaderKey*` ile
+çakışmaz) alır — kilit commit/rollback'te otomatik bırakılır. SQLite tek süreç
+olduğundan `auditMu` yeterli, kilit no-op. Test: `TestAuditChainConcurrent`
+(SQLite regresyon), `TestPostgresAuditChainConcurrent` (2× ayrı Store instance
+= 2 controller; kilitsiz 59 çatal, kilitle 0).
+
+Geçmiş çatallı satırlar append-only olduğu için düzeltilmez;
+`VerifyAuditChain` ilk çatal noktasında `ok=false` döndürmeye devam eder
+(canlı DB için beklenen). `AppendComplianceLog` aynı desende — ayrı iş.
+
 ## Sonuçlar
 
 - Eski DB'ler sorunsuz yükselir; ilk v2 yazımından sonra zincir yeni formülle

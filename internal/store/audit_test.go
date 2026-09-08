@@ -2,6 +2,7 @@ package store
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -99,6 +100,61 @@ func TestQueryAuditEventsFilters(t *testing.T) {
 	all, _ := st.RecentAuditEvents(100, "")
 	if len(all) != 4 {
 		t.Fatalf("RecentAuditEvents: 4 beklenirdi, gelen %d", len(all))
+	}
+}
+
+// TestAuditChainConcurrent, çok sayıda goroutine aynı anda InsertAuditEvent
+// çağırınca zincir tek-yönlü kalmalı: her prev_hash en fazla bir kez
+// kullanılmalı (çatal yok) ve VerifyAuditChain sağlam demeli. SQLite'ta
+// process-içi auditMu bunu zaten sağlar (tek süreç) — bu test regresyon
+// koruması; asıl kazanç pg yolunda (bkz. TestPostgresAuditChainConcurrent).
+func TestAuditChainConcurrent(t *testing.T) {
+	st := openTest(t)
+
+	const workers, each = 8, 25
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers*each)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < each; i++ {
+				if _, err := st.InsertAuditEvent(AuditEvent{
+					Username: "admin", Role: "admin", Action: "login",
+					ActorType: "user", Result: "ok",
+				}); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("eşzamanlı ekleme: %v", err)
+	}
+
+	ok, brokenAt, checked, err := st.VerifyAuditChain()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if !ok {
+		t.Fatalf("eşzamanlı yazımdan sonra zincir çatallandı (kayıt #%d)", brokenAt)
+	}
+	if checked != workers*each {
+		t.Fatalf("%d kayıt beklenirdi, doğrulanan: %d", workers*each, checked)
+	}
+
+	// hiçbir prev_hash birden fazla kez kullanılmamış olmalı (çatal göstergesi)
+	rows, err := st.(*sqlStore).db.Query(
+		`SELECT COUNT(*) FROM audit_events GROUP BY prev_hash HAVING COUNT(*) > 1`)
+	if err != nil {
+		t.Fatalf("çatal sorgu: %v", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		t.Fatal("çatal noktası bulundu: bir prev_hash birden çok kayıtta")
 	}
 }
 

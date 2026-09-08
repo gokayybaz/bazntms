@@ -494,3 +494,72 @@ func TestPostgresConcurrentMigration(t *testing.T) {
 		}
 	}
 }
+
+// TestPostgresAuditChainConcurrent, deploy/docker-compose.scale.yml'deki 2×
+// hub-controller senaryosunu yeniden uretir: AYRI iki Store instance'i (ayri
+// baglanti havuzlari = ayri process'ler gibi; her birinin kendi process-ici
+// auditMu'su var) ayni anda denetim olayi yazar. Advisory lock olmadan ikisi
+// de ayni son satiri prev olarak okuyup ayni prev_hash ile INSERT eder →
+// zincir catallanir (canli scale DB'sinde 28 catal noktasi gozlendi). Kilitle
+// zincir tek-yonlu kalir; VerifyAuditChain saglam donmeli.
+func TestPostgresAuditChainConcurrent(t *testing.T) {
+	dsn := pgContainerDSN(t, "postgres:16-alpine")
+
+	stA, err := Open(dsn)
+	if err != nil {
+		t.Fatalf("controller A: %v", err)
+	}
+	defer stA.Close()
+	stB, err := Open(dsn)
+	if err != nil {
+		t.Fatalf("controller B: %v", err)
+	}
+	defer stB.Close()
+
+	const each = 60
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2*each)
+	write := func(st Store, action string) {
+		defer wg.Done()
+		for i := 0; i < each; i++ {
+			if _, err := st.InsertAuditEvent(AuditEvent{
+				Username: "admin", Role: "admin", Action: action,
+				ActorType: "user", Result: "ok",
+			}); err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}
+	wg.Add(2)
+	go write(stA, "login")
+	go write(stB, "login")
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("eszamanli ekleme: %v", err)
+	}
+
+	// catal noktasi olmamali
+	var forks int
+	if err := stA.(*sqlStore).db.QueryRow(`
+		SELECT COUNT(*) FROM (
+			SELECT prev_hash FROM audit_events GROUP BY prev_hash HAVING COUNT(*) > 1
+		) f`).Scan(&forks); err != nil {
+		t.Fatalf("catal sorgu: %v", err)
+	}
+	if forks != 0 {
+		t.Fatalf("%d catal noktasi (prev_hash birden cok kayitta)", forks)
+	}
+
+	ok, brokenAt, checked, err := stA.VerifyAuditChain()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if !ok {
+		t.Fatalf("zincir catallandi (kayit #%d)", brokenAt)
+	}
+	if checked != 2*each {
+		t.Fatalf("%d kayit beklenirdi, dogrulanan: %d", 2*each, checked)
+	}
+}

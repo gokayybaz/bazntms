@@ -234,32 +234,64 @@ func auditHash(prev string, e AuditEvent) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// InsertAuditEvent, kaydi zincire ekler. Eşzamanli yazimlarda zincir
-// tutarliligi icin kilitlenir.
+// auditChainLockKey, denetim hash-zincirini çoklu-replika (HA) dağıtımda
+// serileştiren Postgres advisory lock anahtarı (rastgele sabit; migrateLockKey /
+// LeaderKey* ailesinden, onlarla çakışmaz). deploy/docker-compose.scale.yml 2×
+// hub-controller çalıştırır: process-içi auditMu yalnız o süreçteki
+// goroutine'leri serileştirir — iki controller aynı anda denetim olayı yazınca
+// ikisi de aynı son satırı `prev` olarak okur, ikisi de o prev_hash ile INSERT
+// eder → zincir çatallanır. pg_advisory_xact_lock yazımı süreçler arası da
+// gerçekten seri hale getirir (kilit tx commit/rollback'te otomatik bırakılır).
+const auditChainLockKey = 8823201
+
+// InsertAuditEvent, kaydi zincire ekler. Process-ici eszamanli yazimlar auditMu
+// ile, coklu-replika (pg) yazimlari transaction-scoped advisory lock ile
+// serilestirilir; oku-hesapla-yaz tek transaction icinde yapilir.
 func (s *sqlStore) InsertAuditEvent(e AuditEvent) (int64, error) {
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
 
-	var prev string
-	err := s.db.QueryRow(s.q(`SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1`)).Scan(&prev)
-	if err != nil && err != sql.ErrNoRows {
-		return 0, err
-	}
-	e.PrevHash = prev
 	e.Ts = time.Now().Unix()
 	if len(e.UserAgent) > 256 {
 		e.UserAgent = e.UserAgent[:256]
 	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// pg modu: coklu hub-controller replikasinin ayni anda yazmasini serilestir.
+	// SQLite tek surec → auditMu yeterli, kilit no-op.
+	if s.pg {
+		if _, err := tx.Exec(s.q(`SELECT pg_advisory_xact_lock(?)`), auditChainLockKey); err != nil {
+			return 0, err
+		}
+	}
+
+	var prev string
+	err = tx.QueryRow(s.q(`SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1`)).Scan(&prev)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, err
+	}
+	e.PrevHash = prev
 	e.Hash = auditHash(prev, e)
 
 	var id int64
-	err = s.db.QueryRow(s.q(`INSERT INTO audit_events
+	err = tx.QueryRow(s.q(`INSERT INTO audit_events
 		(ts, username, role, site, action, target, detail, ip, prev_hash, hash,
 		 actor_type, request_id, user_agent, result, before_json, after_json)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
 		e.Ts, e.Username, e.Role, e.Site, e.Action, e.Target, e.Detail, e.IP, e.PrevHash, e.Hash,
 		e.ActorType, e.RequestID, e.UserAgent, e.Result, e.BeforeJSON, e.AfterJSON).Scan(&id)
-	return id, err
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 // AuditFilter, denetim kaydı sorgusu için isteğe bağlı süzgeçler. Boş alan
