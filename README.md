@@ -44,7 +44,8 @@ tek dosya, kurulum gerektirmez.
 - **Depo seçimi**: `-db` dosya yolu → SQLite, `postgres://` DSN → PostgreSQL/TimescaleDB (pgx)
 - **NATS JetStream kuyruğu**: ingest → processor ayrışması, replay/kayıp toleransı, çoklu replika ingest
 - **Kubernetes dağıtımı**: Helm chart (`deploy/helm/bazntms`) + çok-mimari konteyner imajları (`ghcr.io/gokayybaz/bazntms-{hub,agent}`, amd64+arm64, digest-sabit temel imajlar), tek-node docker-compose demo (`deploy/docker-compose.yml`), k8s olmadan ölçek mimarisi (N × ingest + kontrolcü + LB: `deploy/docker-compose.scale.yml`)
-- **Yük testi**: `bazntms-loadgen` sentetik agent filosu + k6 senaryosu (`loadtest/`)
+- **Yük testi**: `bazntms-loadgen` (agent + sentetik NetFlow/IPFIX/sFlow + mock cihaz filosu) + `scripts/loadtest.sh` birleşik koşucu + k6 senaryosu (`loadtest/`)
+- **Doğrulanmış ölçek**: 5.000 agent @ 30 sn (p95 6 ms) · ≥50.000 flow/sn (kayıpsız) · 1.000 cihaz / 60 sn (poll döngüsü 0.2 sn) — bkz. [`docs/CAPACITY.md`](docs/CAPACITY.md)
 
 ### Dağıtım ve operasyon
 - **Yönetim CLI**: `bazntmsctl setup` (kurulum sihirbazı), `update keygen/sign` (ed25519 imza kanalı)
