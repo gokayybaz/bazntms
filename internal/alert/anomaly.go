@@ -160,6 +160,9 @@ func NormalizeConfig(cfg Config) Config {
 		cfg.AutoResolveMin = 15
 		cfg.NotifyResolve = true
 	}
+	if cfg.CorrelateWindowSec == 0 { // S22.9 öncesi config → korelasyon varsayılanı
+		cfg.CorrelateWindowSec = 120
+	}
 	return cfg
 }
 

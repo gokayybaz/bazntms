@@ -81,6 +81,9 @@ type AlertStore interface {
 	ResolveAlertEvent(id, ts int64) error
 	OpenAlertEventsStale(before int64) ([]AlertEvent, error)
 	OpenAlertEventsByKind(kind string) ([]AlertEvent, error)
+	// korelasyon (S22.9)
+	OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error)
+	SetAlertEventGroup(id int64, groupID string) error
 	IsAlertSeen(kind, key string) (bool, error)
 	MarkAlertSeen(kind, key string) error
 	CountAlertSeen(kind string) (int, error)

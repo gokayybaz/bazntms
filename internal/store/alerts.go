@@ -114,6 +114,19 @@ func (s *sqlStore) OpenAlertEventsByKind(kind string) ([]AlertEvent, error) {
 		WHERE state IN ('firing','ack') AND kind = ? ORDER BY id`, kind)
 }
 
+// OpenAlertEventsBySiteSince, verilen sahada last_ts >= since olan açık
+// olayları döndürür (S22.9 korelasyon penceresi).
+func (s *sqlStore) OpenAlertEventsBySiteSince(site string, since int64) ([]AlertEvent, error) {
+	return s.queryAlertEvents(`SELECT `+alertEventCols+` FROM alert_events
+		WHERE state IN ('firing','ack') AND site = ? AND last_ts >= ? ORDER BY id`, site, since)
+}
+
+// SetAlertEventGroup, bir olayın korelasyon grubunu atar (S22.9).
+func (s *sqlStore) SetAlertEventGroup(id int64, groupID string) error {
+	_, err := s.db.Exec(s.q(`UPDATE alert_events SET group_id = ? WHERE id = ?`), groupID, id)
+	return err
+}
+
 func (s *sqlStore) queryAlertEvents(query string, args ...any) ([]AlertEvent, error) {
 	rows, err := s.db.Query(s.q(query), args...)
 	if err != nil {

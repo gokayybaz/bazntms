@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,6 +24,10 @@ type Config struct {
 	// NotifyResolve, çözülme bildirimi gönderilsin mi.
 	AutoResolveMin int  `json:"auto_resolve_min"`
 	NotifyResolve  bool `json:"notify_resolve"`
+
+	// S22.9 — korelasyon. Aynı sahada CorrelateWindowSec içinde ateşlenen
+	// olaylar ortak group_id alır (panelde tek kök-neden). 0/<0 → kapalı.
+	CorrelateWindowSec int `json:"correlate_window_sec"`
 
 	Bandwidth BandwidthConfig  `json:"bandwidth"`
 	Ports     PortsConfig      `json:"ports"`
@@ -100,10 +105,11 @@ type Notifiers struct {
 // DefaultConfig, ilk calistirma icin makul ayarlar.
 func DefaultConfig() Config {
 	return Config{
-		Enabled:        true,
-		CooldownMin:    10,
-		AutoResolveMin: 15,
-		NotifyResolve:  true,
+		Enabled:            true,
+		CooldownMin:        10,
+		AutoResolveMin:     15,
+		NotifyResolve:      true,
+		CorrelateWindowSec: 120,
 		Bandwidth: BandwidthConfig{
 			Enabled: true, InMbps: 100, OutMbps: 50, Seconds: 10,
 		},
@@ -587,6 +593,7 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 		Ts: now, Kind: kind, Key: key, Message: message,
 		Severity: sev, State: "firing", Site: opt.Site,
 		Count: 1, FirstTs: now, LastTs: now,
+		GroupID: m.correlate(cfg, opt.Site, now),
 	}
 	id, err := m.st.InsertAlertEvent(ev)
 	if err != nil {
@@ -599,6 +606,32 @@ func (m *Manager) fireCtx(kind, key, message string, opt fireOpts) {
 	if n != nil {
 		n.Deliver(cfg.Notifiers, ev)
 	}
+}
+
+// correlate, yeni bir olay için korelasyon grubu belirler (S22.9): aynı sahada
+// CorrelateWindowSec içinde açık bir olay varsa onun group_id'sini (yoksa
+// oluşturup peer'lara da atayarak) döndürür. Site "" veya pencere kapalıysa "".
+func (m *Manager) correlate(cfg Config, site string, now int64) string {
+	if site == "" || cfg.CorrelateWindowSec <= 0 {
+		return ""
+	}
+	peers, err := m.st.OpenAlertEventsBySiteSince(site, now-int64(cfg.CorrelateWindowSec))
+	if err != nil || len(peers) == 0 {
+		return ""
+	}
+	for _, p := range peers {
+		if p.GroupID != "" {
+			return p.GroupID
+		}
+	}
+	// gruba henüz bağlanmamış eş(ler) var → en eskisini çapa yapıp yeni grup kur
+	gid := "g-" + strconv.FormatInt(peers[0].ID, 36)
+	for _, p := range peers {
+		if err := m.st.SetAlertEventGroup(p.ID, gid); err != nil {
+			log.Printf("korelasyon grup atama hatasi: %v", err)
+		}
+	}
+	return gid
 }
 
 // sweepAutoResolve, AutoResolveMin dakikadır yinelenmeyen açık olayları
