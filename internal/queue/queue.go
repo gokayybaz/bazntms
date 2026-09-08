@@ -198,21 +198,58 @@ func (q *Queue) pendingLoop(ctx context.Context, cons jetstream.Consumer) {
 
 func (q *Queue) workerLoop(ctx context.Context, cons jetstream.Consumer, st store.Store) {
 	for ctx.Err() == nil {
-		batch, err := cons.Fetch(128, jetstream.FetchMaxWait(time.Second))
+		batch, err := cons.Fetch(256, jetstream.FetchMaxWait(time.Second))
 		if err != nil {
 			continue // bos cekim veya gecici hata
 		}
 		n := 0
+		// Flow mesajları fetch içinde birleştirilir: 200k flow/sn patlamasında
+		// mesaj-başına SaveFlows (7000+ INSERT/sn) store-writer'ı boğuyordu.
+		// Aynı fetch'teki tüm subFlows kayıtları tek çok-satırlı INSERT'e
+		// toplanır, sonra hepsi topluca ack edilir (S21.8 ertelenen parça).
+		var flowRows []store.FlowRow
+		var flowMsgs []jetstream.Msg
 		for msg := range batch.Messages() {
 			if ctx.Err() != nil {
 				return
 			}
-			q.handle(msg, st)
 			n++
+			if msg.Subject() == subFlows {
+				var rows []store.FlowRow
+				if err := json.Unmarshal(msg.Data(), &rows); err != nil {
+					slog.Error("kuyruk: flow cozumlenemedi", "err", err)
+					termMsg(msg)
+					continue
+				}
+				flowRows = append(flowRows, rows...)
+				flowMsgs = append(flowMsgs, msg)
+				continue
+			}
+			q.handle(msg, st)
 		}
+		q.flushFlows(st, flowRows, flowMsgs)
 		if n > 0 {
 			metrics.ObserveQueueBatch(n)
 		}
+	}
+}
+
+// flushFlows, birikmiş flow kayıtlarını tek çağrıda yazar ve mesajları
+// topluca ack eder. Yazım hata verirse mesajlar tek tek retry edilir
+// (JetStream yeniden teslim eder).
+func (q *Queue) flushFlows(st store.Store, rows []store.FlowRow, msgs []jetstream.Msg) {
+	if len(msgs) == 0 {
+		return
+	}
+	if err := st.SaveFlows(rows); err != nil {
+		slog.Error("kuyruk: toplu flow yazimi hatasi — mesajlar tek tek yeniden denenecek", "mesaj", len(msgs), "err", err)
+		for _, m := range msgs {
+			q.retry(m, err)
+		}
+		return
+	}
+	for _, m := range msgs {
+		ackMsg(m)
 	}
 }
 
@@ -270,6 +307,8 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			}
 		}
 	case subFlows:
+		// workerLoop subFlows'u kendisi toplu işler; bu tek-mesaj yolu yalnız
+		// güvenlik ağı (ör. gelecekte doğrudan çağrı).
 		var rows []store.FlowRow
 		if err := json.Unmarshal(msg.Data(), &rows); err != nil {
 			slog.Error("kuyruk: flow cozumlenemedi", "err", err)

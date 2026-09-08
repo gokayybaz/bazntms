@@ -123,6 +123,8 @@ services:
       - "-agent-pcap" # agent'lar buraya (lb uzerinden) enroll olur — asil politika burasi
       - "-enroll-token"
       - "scale-enroll-token"
+      - "-queue-workers"
+      - "8" # Faz 21: 200k flow/sn patlamasında store-writer throughput
       - "-pprof"
       - "0.0.0.0:6060"
     environment:

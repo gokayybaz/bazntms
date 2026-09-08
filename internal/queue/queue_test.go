@@ -139,6 +139,49 @@ func TokenHashForTest() string {
 	return store.TokenHash("queue-test-token")
 }
 
+// countFlowsStore, SaveFlows çağrı sayısını + toplam satır sayısını sayar.
+type countFlowsStore struct {
+	store.Store
+	calls atomic.Int64
+	rows  atomic.Int64
+}
+
+func (c *countFlowsStore) SaveFlows(rows []store.FlowRow) error {
+	c.calls.Add(1)
+	c.rows.Add(int64(len(rows)))
+	return c.Store.SaveFlows(rows)
+}
+
+// TestQueueFlowBatching (S21.8/S21.E): çok sayıda flow mesajı tek fetch'te
+// birleştirilir — SaveFlows çağrı sayısı mesaj sayısından belirgin az olmalı.
+func TestQueueFlowBatching(t *testing.T) {
+	q, raw := natsQueueForNoProcessor(t)
+	cs := &countFlowsStore{Store: raw}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := q.RunProcessor(ctx, cs, 2); err != nil {
+		t.Fatalf("processor: %v", err)
+	}
+
+	now := time.Now().Unix()
+	const n = 300
+	for i := 0; i < n; i++ {
+		if err := q.PublishFlows([]store.FlowRow{
+			{Ts: now, Device: "fw", Src: "10.0.0.1", Dst: "9.9.9.9", DstPort: 53, Proto: "udp", Octets: uint64(i + 1), Packets: 1},
+		}); err != nil {
+			t.Fatalf("publish %d: %v", i, err)
+		}
+	}
+
+	waitFor(t, func() bool { return cs.rows.Load() >= n }, "flow'lar store'a yazilmadi")
+
+	calls := cs.calls.Load()
+	if calls >= n {
+		t.Fatalf("SaveFlows %d kez çağrıldı (%d mesaj) — birleştirme çalışmıyor", calls, n)
+	}
+	t.Logf("%d flow mesajı → %d SaveFlows çağrısı (~%.0f mesaj/çağrı)", n, calls, float64(n)/float64(calls))
+}
+
 // failFlowsStore, SaveFlows'u kalici olarak hataya dusuren sarmalayici (DLQ testi).
 type failFlowsStore struct {
 	store.Store

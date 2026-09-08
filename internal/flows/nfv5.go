@@ -19,9 +19,11 @@ const (
 	v5RecordSize = 48
 
 	flowRcvBuf     = 8 << 20 // SO_RCVBUF: burst'te çekirdek kuyruğu (best-effort)
-	flowQueueDepth = 1024    // reader → worker kanal derinliği (~0.5 sn @ 50k/sn;
-	//                          her *pkt 64KB → en fazla ~64MB tampon, GC pool'u temizler)
-	flowDefWorkers  = 4
+	flowQueueDepth = 4096    // reader → worker kanal derinliği. 200k flow/sn
+	//                          patlamasında 1024 taşıyordu (S21.13 fazla küçüktü);
+	//                          her *pkt 64KB → ~256MB worst-case, GOMEMLIMIT + GC
+	//                          pool temizliği sınırlar.
+	flowDefWorkers  = 6
 	flowMaxDatagram = 65535
 )
 

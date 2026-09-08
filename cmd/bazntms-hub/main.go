@@ -73,6 +73,7 @@ func main() {
 	mockDevices := fl.Bool("mock-devices", false, "olcek testi: vendor=mock cihaz eklemeye izin ver (sentetik SNMP filosu — bazntms-loadgen -mode device)")
 	sessionStore := fl.String("session-store", "memory", "panel oturum deposu: memory (tek replika) | db (paylasimli `sessions` tablosu — coklu controller replikasi icin, A4)")
 	queueMaxAgeH := fl.Int("queue-max-age-hours", 24, "JetStream stream mesaj yasi siniri (saat) — tuketilmeyen mesajlar bu sureden sonra dusurulur")
+	queueWorkers := fl.Int("queue-workers", 4, "JetStream store-writer paralel worker sayisi (yuksek flow hacmi / patlama icin artirin)")
 	telemetryInterval := fl.Int("telemetry-interval", 30, "agent telemetri araligi (saniye)")
 	agentPCAP := fl.Bool("agent-pcap", false, "agent'larda derin toplama ve PCAP kaydina izin ver (politika)")
 	tlsOn := fl.Bool("tls", false, "HTTPS + agent karsilikli TLS (mTLS): hub kendi CA'sini uretir, agent CSR'larini enrollment'ta imzalar")
@@ -203,7 +204,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer q.Close()
-		if err := q.RunProcessor(ctx, st, 4); err != nil {
+		if err := q.RunProcessor(ctx, st, *queueWorkers); err != nil {
 			slog.Error("kuyruk processor baslatilamadi", "err", err)
 			os.Exit(1)
 		}
