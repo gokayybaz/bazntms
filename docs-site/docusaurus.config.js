@@ -78,7 +78,8 @@ const config = {
             label: 'Demo',
             position: 'right',
             className: 'navbar__item--demo',
-            target: '_self',
+            target: '_blank',
+            rel: 'noreferrer',
           },
           {
             to: '/docs/reference/changelog',
