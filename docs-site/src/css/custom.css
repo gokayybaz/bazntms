@@ -1,103 +1,49 @@
-/* bazNTMS docs-site teması — Strapi'nin tasarım dili uygulandı.
-   Ölçülen kaynak değerler (strapi.io + docs.strapi.io):
-   yapı/tipografi/ölçek Strapi'den; vurgu rengi projenin kendi cyan'ı
-   (DESIGN.md → birincil marka vurgusu). #22d3ee beyaz üstünde 1.8:1
-   verdiği için açık yüzeylerde cyan-700 (#0e7490, 5.4:1) kullanılır,
-   parlak ton koyu temaya ayrılır. Koyu vitrin #030712.
-   Karakteristik: hiçbir yerde saf siyah metin ya da saf beyaz panel yok —
-   nötrler cyana doğru kaydırılmış. Marketing Poppins, docs Inter,
-   kod JetBrains Mono (Strapi de aynı ayrımı yapıyor). */
+/* ============================================================================
+   bazNTMS docs-site — ürünün kendi arayüzüyle (frontend/DESIGN.md,
+   "htop çok-panelli terminal") aynı tasarım dili.
+
+   Düz fosfor-siyahı zemin (#0a0d13), tek JetBrains Mono aile (uzun makale
+   prose'u sistem sans-serif'e döner — DESIGN.md typography.prose), kare köşe,
+   gölge yok, blur yok. 7 renkli sabit-anlam sözleşmesi: cyan=birincil/link, violet=tx,
+   emerald=sağlıklı, amber=uyarı, rose=kritik. Tek koyu tema — açık tema
+   dalı yok (docusaurus.config.js: disableSwitch).
+
+   Karakteristik: reverse-video başlık şeritleri (bg-cyan text-ground),
+   box-drawing panel aksanı, köşeli-parantez ölçer dili, hareketsiz CRT
+   tarama çizgisi. Docusaurus kabuğu (navbar/sidebar/TOC/footer/makale)
+   Infima değişkenleri + hedefli sınıf override'larıyla bu dile taşındı.
+   ========================================================================== */
 
 :root {
-  --brand-accent: #0e7490;
-  --brand-accent-dark: #0b5a70;
-  --brand-accent-100: #e6f7fb;
-  --brand-ink: #164e63;
-  --brand-ink-soft: #4a6f80;
-  --brand-paper-tint: #f1fafc;
-  --brand-line: #dceef4;
-  --brand-line-strong: #c5e2eb;
-  --brand-night: #030712;
+  /* --- TUI yüzey tokenleri (frontend/src/index.css @theme ile birebir) --- */
+  --tui-ground: #0a0d13;
+  --tui-panel: #10141d;
+  --tui-panel-2: #151b27;
+  --tui-rule: #232b3a;
+  --tui-rule-hi: #35485f;
+  --tui-ink: #ced7e3;
+  --tui-ink-hi: #f1f5fa;
+  --tui-dim: #8794a8;
 
-  --ifm-color-primary: #0e7490;
-  --ifm-color-primary-dark: #0b5a70;
-  --ifm-color-primary-darker: #0a4f61;
-  --ifm-color-primary-darkest: #083f4e;
-  --ifm-color-primary-light: #128aab;
-  --ifm-color-primary-lighter: #159fc4;
-  --ifm-color-primary-lightest: #22d3ee;
+  /* --- 7 renk sabit-anlam --- */
+  --tui-rx: #22d3ee;   /* rx / birincil / seçim / link */
+  --tui-tx: #a78bfa;   /* tx */
+  --tui-emerald: #34d399; /* sağlıklı / düşük yük / tip */
+  --tui-amber: #fbbf24;   /* uyarı / orta yük */
+  --tui-rose: #fb7185;    /* kritik / yüksek yük / danger */
+  --tui-sky: #38bdf8;     /* süreç-alarm / ağ ucu */
+  --tui-orange: #fb923c;  /* harici entegrasyon (vendor) */
 
-  --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --ifm-heading-font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --ifm-code-font-size: 92%;
+  --tui-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+    'DejaVu Sans Mono', monospace;
+  /* uzun makale prose'u — DESIGN.md typography.prose: sistem sans-serif */
+  --tui-prose: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell,
+    'Helvetica Neue', sans-serif;
 
-  --ifm-font-color-base: #164e63;
-  --ifm-heading-color: #083344;
-  --ifm-background-color: #ffffff;
-  --ifm-background-surface-color: #f1fafc;
-  --ifm-navbar-background-color: #ffffff;
-  --ifm-footer-background-color: #030712;
-  --ifm-toc-border-color: #dceef4;
-  --ifm-hr-border-color: #dceef4;
-  --ifm-blockquote-color: #4a6f80;
+  /* landing kabuk genişliği (index.module.css --shell ile eş) */
+  --tui-shell: 1320px;
 
-  /* Strapi'nin yarıçap ölçeği: 8px kontroller, 16px kartlar */
-  --ifm-button-border-radius: 8px;
-  --ifm-global-radius: 8px;
-  --ifm-code-border-radius: 6px;
-
-  --ifm-heading-font-weight: 600;
-  --ifm-h1-font-size: 2.5rem;
-}
-
-/* Başlıklar Poppins ve sıkı harf aralığı — Strapi'de -0.025em ölçüldü */
-.markdown h1,
-.markdown h2,
-.markdown h3,
-.markdown h4,
-h1, h2, h3 {
-  font-family: var(--ifm-heading-font-family);
-  letter-spacing: -0.025em;
-}
-
-.markdown > h1 {
-  font-size: 2.5rem;
-  line-height: 1.2;
-}
-
-/* Docusaurus varsayılan kod bloğu kenarlığı Strapi'de hairline */
-.theme-code-block,
-pre code {
-  border-radius: 8px;
-}
-
-/* yalnızca doküman içeriğindeki SATIR İÇİ kod — kod bloklarının
-   (pre > code) kendi sözdizimi teması ezilmesin */
-.markdown :not(pre) > code {
-  border: 1px solid var(--brand-line);
-  background-color: var(--brand-accent-100);
-  color: var(--brand-ink);
-}
-
-.navbar {
-  border-bottom: 1px solid var(--brand-line);
-  box-shadow: none;
-}
-
-.menu__link--active {
-  background-color: var(--brand-accent-100);
-  color: var(--brand-accent);
-  font-weight: 600;
-}
-
-.table-of-contents {
-  border-left-color: var(--brand-line);
-}
-
-/* ---------- koyu tema ---------- */
-
-html[data-theme='dark'] {
+  /* ---------- Infima eşlemesi ---------- */
   --ifm-color-primary: #22d3ee;
   --ifm-color-primary-dark: #0ec3e0;
   --ifm-color-primary-darker: #0eaecb;
@@ -106,77 +52,754 @@ html[data-theme='dark'] {
   --ifm-color-primary-lighter: #67e8f9;
   --ifm-color-primary-lightest: #a5f0fb;
 
-  --ifm-background-color: #030712;
-  --ifm-background-surface-color: #08131c;
-  --ifm-font-color-base: #d3e6ec;
-  --ifm-heading-color: #eefafd;
-  --ifm-navbar-background-color: #030712;
-  --ifm-footer-background-color: #030712;
-  --ifm-card-background-color: #08131c;
-  --ifm-toc-border-color: #17323f;
-  --ifm-hr-border-color: #17323f;
-  --ifm-blockquote-color: #8fabb6;
+  --ifm-background-color: #0a0d13;
+  --ifm-background-surface-color: #10141d;
+
+  --ifm-font-family-base: var(--tui-mono);
+  --ifm-heading-font-family: var(--tui-mono);
+  --ifm-font-family-monospace: var(--tui-mono);
+  --ifm-font-size-base: 15px;
+  --ifm-line-height-base: 1.6;
+
+  --ifm-font-color-base: #ced7e3;
+  --ifm-font-color-secondary: #8794a8;
+  --ifm-heading-color: #f1f5fa;
+  --ifm-heading-font-weight: 600;
+  --ifm-h1-font-size: 2rem;
+  --ifm-h2-font-size: 1.5rem;
+  --ifm-h3-font-size: 1.2rem;
+
+  --ifm-link-color: #22d3ee;
+  --ifm-link-hover-color: #67e8f9;
+  --ifm-link-decoration: none;
+  --ifm-link-hover-decoration: underline;
+
+  /* kare köşe — her yer */
+  --ifm-global-radius: 0px;
+  --ifm-button-border-radius: 0px;
+  --ifm-code-border-radius: 0px;
+  --ifm-pre-border-radius: 0px;
+  --ifm-card-border-radius: 0px;
+  --ifm-alert-border-radius: 0px;
+  --ifm-badge-border-radius: 0px;
+  --ifm-pagination-nav-border-radius: 0px;
+  --ifm-tabs-padding-vertical: 0.5rem;
+
+  --ifm-global-shadow-lw: none;
+  --ifm-global-shadow-md: none;
+  --ifm-global-shadow-tl: none;
+
+  /* nötr çizgiler */
+  --ifm-toc-border-color: #232b3a;
+  --ifm-hr-border-color: #232b3a;
+  --ifm-hr-height: 1px;
+  --ifm-color-emphasis-100: #10141d;
+  --ifm-color-emphasis-200: #151b27;
+  --ifm-color-emphasis-300: #232b3a;
+  --ifm-color-emphasis-400: #35485f;
+  --ifm-color-emphasis-600: #8794a8;
+
+  /* navbar */
+  --ifm-navbar-background-color: #0a0d13;
+  --ifm-navbar-shadow: none;
+  --ifm-navbar-height: 3.25rem;
+  --ifm-navbar-link-color: #8794a8;
+  --ifm-navbar-link-hover-color: #f1f5fa;
+  --ifm-navbar-item-padding-horizontal: 0.85rem;
+
+  /* sidebar menüsü */
+  --ifm-menu-color: #8794a8;
+  --ifm-menu-color-active: #0a0d13;
+  --ifm-menu-color-background-active: #22d3ee;
+  --ifm-menu-color-background-hover: #151b27;
+  --ifm-menu-link-padding-vertical: 0.4rem;
+  --ifm-menu-link-padding-horizontal: 0.75rem;
+
+  /* footer */
+  --ifm-footer-background-color: #0a0d13;
+  --ifm-footer-color: #8794a8;
+  --ifm-footer-link-color: #8794a8;
+  --ifm-footer-link-hover-color: #22d3ee;
+  --ifm-footer-title-color: #f1f5fa;
+  --ifm-footer-padding-vertical: 2.5rem;
+
+  /* kod */
+  --ifm-code-font-size: 88%;
+  --ifm-code-background: #151b27;
+  --ifm-code-padding-vertical: 0.1rem;
+  --ifm-code-padding-horizontal: 0.35rem;
+
+  /* tablo — başlık reverse-video, gövde hairline + zebra */
+  --ifm-table-border-color: #232b3a;
+  --ifm-table-head-background: #22d3ee;
+  --ifm-table-head-color: #0a0d13;
+  --ifm-table-stripe-background: #10141d;
+  --ifm-table-background: transparent;
+  --ifm-table-cell-padding: 0.5rem 0.75rem;
+
+  /* blockquote — sol 2px rule-hi, panel zemin, italik değil */
+  --ifm-blockquote-color: #8794a8;
+  --ifm-blockquote-border-color: #35485f;
+  --ifm-blockquote-border-left-width: 2px;
+  --ifm-blockquote-padding-horizontal: 1rem;
+  --ifm-blockquote-font-size: 0.9rem;
+
+  /* admonition semantik renkleri → 7 renk sözleşmesi */
+  --ifm-color-info: #22d3ee;
+  --ifm-color-success: #34d399;
+  --ifm-color-warning: #fbbf24;
+  --ifm-color-danger: #fb7185;
+  --ifm-color-secondary: #35485f;
+
+  --ifm-breadcrumb-color-active: #22d3ee;
+  --ifm-breadcrumb-item-background-active: #151b27;
+  --ifm-breadcrumb-separator-size: 0.5rem;
+
+  --ifm-tabs-color: #8794a8;
+  --ifm-tabs-color-active: #22d3ee;
+  --ifm-tabs-color-active-border: #22d3ee;
+
+  --ifm-scrollbar-track-background-color: #10141d;
+  --ifm-scrollbar-thumb-background-color: #35485f;
+  --ifm-scrollbar-thumb-hover-background-color: #8794a8;
+
+  --docusaurus-highlighted-code-line-bg: rgba(53, 72, 95, 0.35);
+  --ifm-pre-background: #0d111a;
+  --ifm-pre-color: #ced7e3;
+  --prism-background-color: #0d111a;
 }
 
-html[data-theme='dark'] .markdown :not(pre) > code {
-  border-color: #17323f;
-  background-color: rgba(34, 211, 238, 0.12);
-  color: #a5f0fb;
+/* Docusaurus her zaman data-theme='dark' basar (disableSwitch + defaultMode
+   dark); palet yine de burada tekrarlanır ki hiçbir renk yalnızca media/
+   [data-theme] bloğunda tanımlı kalmasın. */
+html[data-theme='dark'] {
+  --ifm-background-color: #0a0d13;
+  --ifm-background-surface-color: #10141d;
+  --ifm-color-primary: #22d3ee;
+  --ifm-color-primary-dark: #0ec3e0;
+  --ifm-color-primary-darker: #0eaecb;
+  --ifm-color-primary-darkest: #0e8fa8;
+  --ifm-color-primary-light: #48dcf2;
+  --ifm-color-primary-lighter: #67e8f9;
+  --ifm-color-primary-lightest: #a5f0fb;
+  --ifm-font-color-base: #ced7e3;
+  --ifm-heading-color: #f1f5fa;
+  --ifm-navbar-background-color: #0a0d13;
+  --ifm-footer-background-color: #0a0d13;
+  --ifm-card-background-color: #10141d;
+  --ifm-toc-border-color: #232b3a;
+  --ifm-hr-border-color: #232b3a;
+  --ifm-color-emphasis-100: #10141d;
+  --ifm-color-emphasis-200: #151b27;
+  --ifm-color-emphasis-300: #232b3a;
+  --ifm-color-emphasis-400: #35485f;
 }
 
-html[data-theme='dark'] .navbar {
-  border-bottom: 1px solid #17323f;
+html {
+  color-scheme: dark;
+  background: var(--tui-ground);
 }
 
-html[data-theme='dark'] .menu__link--active {
-  background-color: rgba(34, 211, 238, 0.16);
-  color: #67e8f9;
+body {
+  background: var(--tui-ground);
+  font-family: var(--tui-mono);
 }
 
-/* Navbar içeriği, bulunduğu sayfanın sütun genişliğine hizalanır.
-   Landing 1248px'lik ortalanmış bir kapsayıcı kullanıyor; navbar ise
-   tam genişlikte 16px padding'le duruyordu, yani logo başlıktan ~97px
-   solda kalıyordu. Dokümanlarda düzen tam genişlik (kenar çubuğu x=0),
-   orada navbar olduğu gibi kalmalı — bu yüzden kural landing rotasına
-   kapsanıyor. */
-html:has(.landing-root) .navbar {
-  padding-left: 0;
-  padding-right: 0;
+/* ---------- kare köşe: hedefli nötrleştirme ---------- */
+.navbar,
+.navbar__inner,
+.navbar-sidebar,
+.menu__link,
+.menu__list-item-collapsible,
+.button,
+.card,
+.alert,
+.theme-admonition,
+.tabs__item,
+.theme-code-block,
+.theme-code-block pre,
+pre,
+code,
+.pagination-nav__link,
+.breadcrumbs__item--active .breadcrumbs__link,
+.badge,
+img,
+.footer {
+  border-radius: 0 !important;
 }
+
+/* ---------- CRT tarama çizgisi (frontend/src/index.css body::after) ----------
+   1px koyu satır her 3px'te bir. Saf siyahta görünmez; panel/metinde hafif
+   fosfor koyulaşması. Hareketsiz → reduced-motion'da da kalır. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.13) 0,
+    rgba(0, 0, 0, 0.13) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* terminal seçimi: dolu cyan blok, zemin rengi metin */
+::selection {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+}
+
+/* özel kaydırma çubuğu (WebKit) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--tui-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--tui-rule-hi);
+  border: 2px solid var(--tui-panel);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--tui-dim);
+}
+
+/* odak halkası — cyan, kare */
+*:focus-visible {
+  outline: 2px solid var(--tui-rx);
+  outline-offset: 1px;
+}
+
+/* ============================ NAVBAR ============================ */
+
+.navbar {
+  border-bottom: 1px solid var(--tui-rule);
+  box-shadow: none;
+}
+
+.navbar__brand {
+  margin-right: 1.5rem;
+}
+
+.navbar__title {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--tui-ink-hi);
+  text-transform: none;
+}
+
+.navbar__logo {
+  height: 1.4rem;
+}
+
+.navbar__link {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.navbar__link--active {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.navbar__link--active:hover {
+  color: var(--tui-ground);
+}
+
+/* sürüm rozeti — [v1.3.0] */
+.navbar__item--version {
+  border: 1px solid var(--tui-rule-hi);
+  color: var(--tui-dim);
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.35rem;
+}
+.navbar__item--version::before {
+  content: '[';
+  color: var(--tui-rule-hi);
+}
+.navbar__item--version::after {
+  content: ']';
+  color: var(--tui-rule-hi);
+}
+.navbar__item--version:hover {
+  border-color: var(--tui-rx);
+  color: var(--tui-rx);
+}
+
+.navbar-sidebar {
+  background: var(--tui-ground);
+  border-right: 1px solid var(--tui-rule);
+}
+.navbar-sidebar__brand {
+  box-shadow: none;
+  border-bottom: 1px solid var(--tui-rule);
+}
+
+/* ============================ DOC SAYFA DÜZENİ ============================ */
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--tui-rule) !important;
+}
+
+.theme-doc-sidebar-container > div > a,
+.theme-doc-sidebar-container [class*='sidebarLogo'] {
+  border-bottom: 1px solid var(--tui-rule);
+}
+
+/* sidebar menüsü — mono, hairline ayraç, aktif reverse-video */
+.menu {
+  font-size: 0.8rem;
+  padding: 0.75rem 0.5rem !important;
+}
+
+.menu__list .menu__list {
+  border-left: 1px solid var(--tui-rule);
+  margin-left: 0.4rem;
+  padding-left: 0.35rem;
+}
+
+.menu__link {
+  line-height: 1.35;
+}
+
+.menu__link:hover {
+  color: var(--tui-ink-hi);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+  font-weight: 600;
+}
+
+.menu__list-item-collapsible {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tui-dim);
+}
+.menu__list-item-collapsible:hover {
+  background: var(--tui-panel-2);
+}
+.menu__list-item-collapsible .menu__link--active {
+  background: transparent;
+  color: var(--tui-ink-hi);
+}
+
+.menu__caret::before,
+.menu__link--sublist-caret::after {
+  background: var(--tui-rule-hi);
+}
+
+/* ============================ TOC ============================ */
+
+.table-of-contents {
+  font-size: 0.72rem;
+}
+
+/* Infima'nın __left-border'ı kalır; rengi --ifm-toc-border-color'dan (#232b3a) */
+
+.table-of-contents__link {
+  color: var(--tui-dim);
+}
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+  color: var(--tui-rx);
+}
+.table-of-contents__link--active {
+  font-weight: 600;
+}
+
+/* TOC üstü başlık ("İçindekiler") */
+.table-of-contents::before {
+  content: '┤ İÇİNDEKİLER ├';
+  display: block;
+  padding: 0 0 0.6rem 0.75rem;
+  color: var(--tui-rule-hi);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+/* ============================ MAKALE GÖVDESİ ============================ */
+
+/* uzun prose → sistem sans-serif (DESIGN.md typography.prose). Başlıklar mono kalır. */
+.markdown p,
+.markdown li,
+.markdown td,
+.markdown blockquote,
+.markdown .footnotes {
+  font-family: var(--tui-prose);
+}
+
+.markdown {
+  --ifm-h1-vertical-rhythm-top: 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-family: var(--tui-mono);
+  letter-spacing: -0.02em;
+  color: var(--tui-ink-hi);
+}
+
+.markdown > h1:first-child,
+.theme-doc-markdown .markdown > h1,
+article .markdown > h1 {
+  font-size: 1.9rem;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+}
+
+.markdown h2 {
+  margin-top: 2.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--tui-rule);
+  font-size: 1.4rem;
+}
+
+.markdown h3 {
+  margin-top: 2rem;
+  font-size: 1.12rem;
+  color: var(--tui-rx);
+}
+
+.markdown a {
+  text-underline-offset: 3px;
+  text-decoration-color: var(--tui-rule-hi);
+}
+.markdown a:hover {
+  text-decoration-color: var(--tui-rx);
+}
+
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--tui-rule);
+  margin: 2.5rem 0;
+}
+
+/* satır içi kod — panel-2 zemin, hairline kenar */
+.markdown :not(pre) > code {
+  border: 1px solid var(--tui-rule);
+  background-color: var(--tui-panel-2);
+  color: var(--tui-ink-hi);
+  font-size: 0.85em;
+}
+
+/* --- kod bloğu --- */
+.theme-code-block {
+  border: 1px solid var(--tui-rule);
+  box-shadow: none !important;
+}
+.theme-code-block pre,
+.markdown pre {
+  border: 0;
+}
+.theme-code-block .prism-code,
+.theme-code-block pre.prism-code,
+.theme-code-block > div {
+  font-size: 0.82rem;
+  background-color: #0d111a !important;
+}
+div[class*='codeBlockTitle'] {
+  border-bottom: 1px solid var(--tui-rule) !important;
+  background: var(--tui-panel-2) !important;
+  color: var(--tui-dim) !important;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.theme-code-block button[class*='copyButton'] {
+  border: 1px solid var(--tui-rule-hi) !important;
+  background: var(--tui-panel) !important;
+  color: var(--tui-dim);
+}
+.theme-code-block button[class*='copyButton']:hover {
+  color: var(--tui-rx);
+  border-color: var(--tui-rx) !important;
+}
+
+/* --- tablo: başlık reverse-video cyan, gövde hairline + zebra --- */
+.markdown table {
+  display: table;
+  width: 100%;
+  border: 1px solid var(--tui-rule);
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.82rem;
+}
+.markdown table thead {
+  background: var(--tui-rx);
+}
+.markdown table thead tr {
+  border-bottom: 0;
+}
+.markdown table th {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+  font-family: var(--tui-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.72rem;
+  border: 0;
+  border-right: 1px solid rgba(10, 13, 19, 0.25);
+}
+.markdown table th:last-child {
+  border-right: 0;
+}
+.markdown table td {
+  border: 1px solid var(--tui-rule);
+}
+.markdown table tr:nth-child(2n) {
+  background: var(--tui-panel);
+}
+.markdown table code {
+  font-size: 0.8em;
+}
+
+/* tablo yatay taşarsa kendi kutusunda kayar (sayfa gövdesi kaymaz) */
+.markdown .table-wrapper,
+.markdown > table {
+  overflow-x: auto;
+  display: block;
+}
+
+/* --- blockquote (senkron sayfaların "Kaynak:" notu buradan) --- */
+.markdown blockquote {
+  background: var(--tui-panel);
+  border-left: 2px solid var(--tui-rule-hi);
+  color: var(--tui-dim);
+  font-style: normal;
+}
+.markdown blockquote a {
+  color: var(--tui-rx);
+}
+
+/* --- admonition: hairline kutu + semantik renk, italik/kalın sol-kenar YOK
+   (dashboard StatusPill/Panel dili — kalın renkli sol-kenar kalıbı yok) --- */
+.theme-admonition {
+  border: 1px solid var(--tui-rule-hi);
+  border-left-width: 1px;
+  background: var(--tui-panel);
+  box-shadow: none;
+}
+.theme-admonition .admonitionHeading_node,
+.theme-admonition [class*='admonitionHeading'] {
+  font-family: var(--tui-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+}
+.admonition-icon svg,
+[class*='admonitionIcon'] svg {
+  fill: currentColor;
+}
+.theme-admonition-note,
+.theme-admonition-info {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.06);
+}
+.theme-admonition-note [class*='admonitionHeading'],
+.theme-admonition-info [class*='admonitionHeading'] {
+  color: var(--tui-rx);
+}
+.theme-admonition-tip {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.06);
+}
+.theme-admonition-tip [class*='admonitionHeading'] {
+  color: var(--tui-emerald);
+}
+.theme-admonition-warning,
+.theme-admonition-caution {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.06);
+}
+.theme-admonition-warning [class*='admonitionHeading'],
+.theme-admonition-caution [class*='admonitionHeading'] {
+  color: var(--tui-amber);
+}
+.theme-admonition-danger {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.06);
+}
+.theme-admonition-danger [class*='admonitionHeading'] {
+  color: var(--tui-rose);
+}
+
+/* ============================ BREADCRUMB / PAGINATION ============================ */
+
+.breadcrumbs__link {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: transparent;
+  color: var(--tui-dim);
+}
+.breadcrumbs__item--active .breadcrumbs__link {
+  background: var(--tui-panel-2);
+  color: var(--tui-rx);
+}
+.breadcrumbs__item:not(:last-child)::after {
+  opacity: 0.5;
+}
+
+.pagination-nav__link {
+  border: 1px solid var(--tui-rule);
+  background: var(--tui-panel);
+}
+.pagination-nav__link:hover {
+  border-color: var(--tui-rx);
+  background: var(--tui-panel-2);
+}
+.pagination-nav__sublabel {
+  color: var(--tui-dim);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pagination-nav__label {
+  font-family: var(--tui-mono);
+  font-size: 0.85rem;
+  color: var(--tui-ink-hi);
+}
+.pagination-nav__link--next .pagination-nav__label::after {
+  content: ' ›';
+  color: var(--tui-rx);
+}
+.pagination-nav__link--prev .pagination-nav__label::before {
+  content: '‹ ';
+  color: var(--tui-rx);
+}
+
+/* ============================ KARTLAR (generated-index) ============================ */
+
+.card {
+  border: 1px solid var(--tui-rule);
+  background: var(--tui-panel);
+  box-shadow: none !important;
+}
+.card:hover {
+  border-color: var(--tui-rule-hi);
+}
+article h2 a,
+.card h2 {
+  font-family: var(--tui-mono);
+}
+
+/* ============================ TABS ============================ */
+
+.tabs {
+  border-bottom: 1px solid var(--tui-rule);
+}
+.tabs__item {
+  border-bottom: 2px solid transparent;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tabs__item--active {
+  border-bottom-color: var(--tui-rx);
+  color: var(--tui-rx);
+}
+
+/* ============================ FOOTER ============================ */
+
+.footer {
+  border-top: 1px solid var(--tui-rule);
+  font-size: 0.8rem;
+}
+.footer__title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tui-dim);
+}
+.footer__link-item {
+  color: var(--tui-dim);
+}
+.footer__link-item:hover {
+  color: var(--tui-rx);
+}
+.footer__copyright {
+  color: var(--tui-rule-hi);
+  font-size: 0.72rem;
+  margin-top: 1.5rem;
+}
+
+/* ============================ BUTTON (docs içeriğinde geçen) ============================ */
+
+.button {
+  border: 1px solid var(--tui-rule-hi);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.button--primary {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+  border-color: var(--tui-rx);
+}
+.button--primary:hover {
+  background: var(--tui-ink-hi);
+  border-color: var(--tui-ink-hi);
+  color: var(--tui-ground);
+}
+.button--secondary {
+  background: transparent;
+  color: var(--tui-ink);
+}
+
+/* ============================ LANDING (index.js) NAVBAR HİZASI ============================
+   Landing 1320px'lik ortalanmış kapsayıcı kullanır; navbar tam genişlikte
+   duruyordu. Landing rotasında navbar'ı aynı sütun kenarına hizala. */
 
 html:has(.landing-root) .navbar__inner {
-  max-width: 1248px;
+  max-width: var(--tui-shell);
   margin: 0 auto;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-left: 20px;
+  padding-right: 20px;
 }
-
-@media (max-width: 720px) {
-  html:has(.landing-root) .navbar__inner {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-}
-
-/* Aynı hizalama, :has() olmadan. Docusaurus üretim çıktısında landing
-   rotasının <html>'ine plugin-pages sınıfını basıyor (doküman
-   sayfalarında yok). Ayrı kural olarak duruyor: :has() desteklemeyen
-   tarayıcıda yalnızca üstteki blok düşer, bu geçerli kalır. */
-html.plugin-pages .navbar {
-  padding-left: 0;
-  padding-right: 0;
-}
-
 html.plugin-pages .navbar__inner {
-  max-width: 1248px;
+  max-width: var(--tui-shell);
   margin: 0 auto;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+/* landing kendi zemini + üst boşluğu yönetir */
+html:has(.landing-root) .main-wrapper,
+html.plugin-pages .main-wrapper {
+  background: var(--tui-ground);
 }
 
 @media (max-width: 720px) {
+  html:has(.landing-root) .navbar__inner,
   html.plugin-pages .navbar__inner {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
+}
+
+/* ============================ REDUCED MOTION ============================ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  /* tarama çizgisi hareketsiz — kalır */
 }

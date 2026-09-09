@@ -202,32 +202,51 @@ Aynı şemayla gövde; kaydeder ve anında uygular. → `{"ok":true}`
 
 ---
 
-## AI Analizi
+## AI Analizi (Faz 26 — `-ai` ile açık)
 
-### `GET /api/ai/status`
+Çok-turlu sohbet + çoklu sağlayıcı (yerel + bulut). Sohbet `yetki:analyze`,
+sağlayıcı CRUD `yetki:global-admin`. `api_key` hiçbir yanıtta düz görünmez.
+Tam şema: `GET /api/openapi.yaml` (`ai` tag). AI **danışmandır** — otomatik
+aksiyon yok (bkz. `docs/decisions/0014`).
 
-`{"enabled":true,"model":"gpt-4o-mini"}` — `enabled`, MMDB/bayraklar gibi
-yapılandırmaya bağlıdır; yerel adres varsa anahtar gerekmez.
+### `GET /api/v1/ai/status`
 
-### `GET /api/ai/models`
+`{"enabled":true,"providers":[…],"default_provider":1,"default_model":"…","has_ready_provider":true}`
+— AI kapalıysa `{"enabled":false}`.
 
-OpenAI-uyumlu `/models` ucunu sorgular: `{"ok":true,"models":[{"id":"qwen2.5:7b"}]}`
+### `GET /api/v1/ai/presets`
 
-### `POST /api/ai/analyze`
+Sunucu-tanımlı hazır analiz butonları: `{"presets":[{"id","label","scopes","task"}]}`
+
+### `GET /api/v1/ai/conversations?scope=&ref=&source=&archived=`
+
+Sohbet oturumları (site-kapsamlı süzülür). `POST` ile oluştur:
+`{"scope_kind":"fleet","scope_ref":"","provider_id":0}` → `{"ok":true,"id":N}`
+
+### `GET /api/v1/ai/conversations/{id}` · `DELETE` (= arşivle)
+
+`{"conversation":{…},"messages":[{role,content,tokens_in,tokens_out,error,created_ts}]}`
+
+### `POST /api/v1/ai/conversations/{id}/messages` — SSE
 
 ```json
-{"minutes": 60, "model": "qwen2.5:7b", "chunked": true}
+{"content": "filo nasıl görünüyor?", "preset": "fleet_summary", "refresh_context": false}
 ```
 
-- `model` boşsa sunucu varsayılanı kullanılır
-- `chunked: true`: parça parça mod (önerilen; küçük modeller için)
+`text/event-stream` döner; her satır `data: {"delta":"…"}`, sonda
+`data: {"done":true,"tokens_in":N,"tokens_out":M}` ya da `data: {"error":"…"}`.
+Kullanıcı + asistan mesajı kalıcı yazılır; ilk turda kapsam bağlamı eklenir.
 
-**200:** `{"ok":true,"id":1,"model":"...","summary":"1) ... 4) ..."}`
-Dönemde veri yoksa: `{"ok":false,"error":"Bu dönem için veritabanında kayıt yok. ..."}`
+### `GET /api/v1/ai/providers` · `POST` · `PUT /{id}` · `DELETE /{id}` — `yetki:global-admin`
 
-### `GET /api/ai/insights`
+Liste: `{id,name,kind,base_url,default_model,enabled,has_key,is_local}` — `api_key` YOK.
+Yazma gövdesi: `{name,kind,base_url,api_key,default_model,enabled,no_think,max_tokens,temperature}`.
+`kind`: `openai` | `anthropic` | `ollama` | `lmstudio` | `openai-compat`.
+`api_key` boş + `PUT` → mevcut anahtar korunur.
 
-Kayıtlı analizler (son 10): `{id, ts, model, period_minutes, summary}`
+### `POST /api/v1/ai/providers/{id}/test` · `GET /api/v1/ai/providers/{id}/models`
+
+Test: `{"ok":true,"latency_ms":120,"models":["…"]}` ya da `{"ok":false,"error":"…"}`.
 
 ---
 
@@ -660,9 +679,12 @@ TOKEN=$(curl -s -X POST localhost:8080/api/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"gizliSifre123"}' | jq -r .token)
 
-curl -s -H "Authorization: Bearer $TOKEN" localhost:8080/api/status | jq '.bps_in'
-curl -s -H "Authorization: Bearer $TOKEN" -X POST localhost:8080/api/capture/start \
-  -H 'Content-Type: application/json' -d '{"device":"en0"}'
-curl -s -H "Authorization: Bearer $TOKEN" -X POST localhost:8080/api/ai/analyze \
-  -H 'Content-Type: application/json' -d '{"minutes":60,"chunked":true}' | jq -r .summary
+curl -s -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/agents | jq length
+
+# AI sohbet (SSE) — yeni oturum aç, filo özeti preset'i gönder
+CID=$(curl -s -H "Authorization: Bearer $TOKEN" -X POST localhost:8080/api/v1/ai/conversations \
+  -H 'Content-Type: application/json' -d '{"scope_kind":"fleet"}' | jq -r .id)
+curl -sN -H "Authorization: Bearer $TOKEN" -X POST \
+  localhost:8080/api/v1/ai/conversations/$CID/messages \
+  -H 'Content-Type: application/json' -d '{"preset":"fleet_summary"}'
 ```

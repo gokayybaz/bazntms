@@ -22,7 +22,7 @@ main.go
   ├─ store.NewCollector()    örnekleyici (saniye/dakika yazımları)
   ├─ alert.NewManager()      uyarı kural motoru
   ├─ geoip.New()             MMDB / ip-api çözümleyici
-  ├─ ai.NewClient()          OpenAI-uyumlu istemci
+  ├─ ai.NewRegistry()        AI sağlayıcı yönetimi + adaptör (opt-in -ai)
   └─ server.New()            REST + WS + SPA
 ```
 
@@ -82,7 +82,8 @@ bir `sysmon.ListConnections()` ile:
 | `port` | kurulan bağlantının uzak portu şüpheli listede mi |
 | `proc` | `alert_seen` tablosuna karşı yeni süreç; ilk çalıştırmada taban çizgisi sessizce atılır |
 | `target` | ilk kez ≥ X MB trafik gören uzak IP; kalıcı görüldü işareti |
-| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları `-ioc-file` kara listesinde mi (`internal/ioc` — tam + üst alan eşleşmesi, mtime ile hot-reload). İmza tabanlı DPI değil; bir hash-set lookup |
+| `ioc` | agent'ın gördüğü L7 (SNI/Host) + DNS alan adları tehdit istihbaratına (`internal/threatintel`, Faz 24-E — sağlayıcı-bağımsız; `-ioc-file` → `localfile` sağlayıcı, domain + **IP** kara listesi, mtime hot-reload) sorulur; suspicious/malicious → uyarı (itibar + kaynak taşır). İmza tabanlı DPI değil; **oto-blok yok** |
+| `iface_util` | SNMP arayüz verimi güvenilir hızın (ifSpeed/ifHighSpeed) `warn_pct`/`crit_pct` eşiğini `sustain_sec` boyunca aşma (Faz 23-C, `internal/alert/iface.go`). loopback/tünel atlanır |
 
 Her olay `kind|key` başına cooldown (varsayılan 10 dk) tabi tutulur; geçenler
 `alert_events`'e yazılır ve `Notifier` ile (masaüstü, Telegram, Discord, Slack,
@@ -92,17 +93,59 @@ CEF (ArcSight) / LEEF (QRadar) / JSON'a formatlanıp RFC3164 syslog (UDP/TCP)
 veya HTTP POST (Splunk HEC, ServiceNow, jenerik toplayıcı) ile iletilir;
 `notifiers.siem` altından yapılandırılır.
 
-## AI istemcisi (`internal/ai`)
+**Olay (incident) korelasyon motoru (`internal/incident`, Faz 24-B):**
+lider-kapılı (uyarı motoruyla aynı lider), ~30 sn'de bir `AlertEventsSince`'i
+agent bazında (`alert_events.agent_id` — 0018) gruplayıp 5 deterministik kurala
+uygular (yeni-süreç+yeni-hedef/ioc, +şüpheli-port, hedef+bant, anomali+bant,
+≥N-şüpheli). **AI/LLM YOK.** Dedup = `correlation_key` (`r<kural>|agent<id>`) —
+anahtar başına tek açık incident; tekrar → severity **yalnız yükselir**, risk
+en yükseği tutar. Risk skoru 0-100 açıklanabilir (kural tabanı + önem + kanıt).
+Bildirim: `alerts.NotifyIncident` sentetik AlertEvent'e çevirip mevcut
+kanallardan. Bkz. `docs/decisions/0011-incident-engine.md`.
 
-OpenAI-uyumlu `/chat/completions` çağrıları; iki mod:
+**Normalleştirilmiş olay akışı (`internal/store/events.go`, Faz 24-A):**
+uyarılar (`alert_events`) ile ham gözlemler ayrılır (ADR 0010). `QueryEvents`
+mevcut kaynak tabloları (`agent_dns`, `l7_endpoints`, `flows`, `syslog_events`,
+`connection_events`) `UNION ALL` ile tek normalize şemaya sunar — **yeni yazma
+hattı yok**. `GET /api/v1/events?type=&agent_id=&device=&since_min=&before=&limit=`
+(ts-imleçli). `EventStore` alt-arayüzü. `process.started` / `connection.opened`
+kapsam dışı (bkz. ADR); korelasyon motoru (24-B) bu akışı kanıt kaynağı olarak
+kullanır.
 
-- **Tek seferde**: tüm veri tek JSON olarak gider
-- **Chunked**: 4 veri bölümü ayrı isteklerle → her birinden kısa not → final
-  istekte yalnızca notlar birleştirilir. Ham veri ikinci kez gitmez.
+## AI analiz (`internal/ai`, Faz 26)
 
-Reasoning modelleri için: `message.reasoning_content` / `reasoning` fallback,
-`<think>` bloklarının temizlenmesi, `finish_reason=length` için açıklayıcı hata,
-`/no_think` (Qwen3) ve `-llm-max-tokens` override.
+**Opt-in** (`-ai`). AI **danışmandır** — araç çağırmaz, durum değiştirmez;
+deterministik motorlar (anomali, incident, health, `recommend`) yetkili kalır.
+Bkz. [decisions/0014](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0014-ai-analysis.md).
+
+**Adaptörler** (`Adapter`: `Complete` / `Stream` / `Models`):
+
+| Dosya | Kapsam |
+|-------|--------|
+| `openai.go` | OpenAI-uyumlu `/v1/chat/completions` + `/v1/models` — OpenAI, Ollama, LM Studio, vLLM, llama.cpp, OpenRouter, DeepSeek, Groq |
+| `anthropic.go` | Native `/v1/messages` (system üst-alan, farklı SSE olayları, `x-api-key` + `anthropic-version`) |
+
+Hand-rolled `net/http` (SDK bağımlılığı yok — proje deseni). Reasoning
+modelleri: `reasoning_content` / `reasoning` fallback, akan `<think>…</think>`
+filtreleme (parçalar arasına bölünmüş etikete dayanıklı), `finish_reason=length`
+açıklayıcı hata, `no_think` (Qwen3).
+
+**Sağlayıcılar** `ai_providers` tablosunda (`0021`); API anahtarı vault-şifreli
+(server katmanı şifreler — `alert.Crypter` deseni). Panel: Yönetim > AI
+Sağlayıcı (`PermGlobalAdmin`). Egress kilidi: `-ai-allow-cloud=false` → yalnız
+loopback/özel-ağ adresleri (kayıt + çalışma anı).
+
+**Sohbet** `ai_conversations` / `ai_messages` — çok-turlu, `scope_kind`/
+`scope_ref` ile sayfa-farkında (fleet | agent | incident | anomaly | device).
+`POST /api/v1/ai/conversations/{id}/messages` **SSE** akış (`data: {"delta"|
+"done"|"error"}`). Bağlam: `internal/server/ai_context.go` store + alert +
+health sorgularından `ai.Snapshot`; `internal/ai` token-bütçeli kompakt JSON'a
+çevirir. Silme = arşiv (hard-delete yok).
+
+**Otomatik**: (1) sunucu-tanımlı preset butonları, (2) `internal/aijob`
+"ai_report" gecelik scheduler işi (lider-kapılı), (3) `ai.Triager` — yeni
+kritik incident → triyaj notu (`incident.Engine` notifier sarmalayıcısı,
+saatlik hız-sınırlı).
 
 ## Akış toplama (`internal/flows`)
 
@@ -126,6 +169,20 @@ sFlow **örnekleme tabanlıdır**: cihaz her N. paketin başlığını kopyalar.
 Counter sample'lar (arayüz sayaçları) şimdilik atlanır. Çıktı NetFlow ile aynı
 `flows` tablosuna, aynı `FlowRow` şemasıyla yazılır.
 
+**Konuşma toplama (Faz 23-B, `internal/store/flow_conversations.go`):**
+`GET /api/v1/flows/conversations` ham `flows`'u bir zaman penceresinde
+(`15m|1h|6h|24h`) **sunucu-tarafı** toplar — `by=5tuple`
+(src,dst,src_port,dst_port,proto) ya da `by=pair` (uç-çifti, A→B ve B→A Go
+tarafında birleştirilir, kanonik `Src` = sözlüksel küçük uç). `sort` ∈
+octets|packets|flows|last_seen. **Yeni cagg yok** (src/dst yüksek kardinalite —
+`pg.go` `flows_1h` notu): görünüm ham `flows` retention penceresiyle (vars. 7g)
+sınırlı; `pair` modu birleştirme öncesi `flowConvoPairCap=2000` grup çeker.
+`0015` migrasyonu `idx_flows_convo (ts,src,dst,proto)` + `idx_flows_pair
+(src,dst,ts)` ekler. Drill-down `GET /api/v1/flows/conversation?src=&dst=` ham
+akışları + uç GeoIP/ASN (`s.geo`) + `process_traffic.remote_ip` eşleşmesiyle
+ilişkili agent/süreç döndürür. Frontend `TopConversationsCard` → `/cihazlar`.
+Ham NetFlow görünümü (`/api/v1/flows`, `FlowsCard`) değişmedi.
+
 ## Sunucu (`internal/server`)
 
 - `ServeMux` (Go 1.22+ metot kalıpları) + `logRequest` middleware
@@ -133,6 +190,15 @@ Counter sample'lar (arayüz sayaçları) şimdilik atlanır. Çıktı NetFlow il
   `/api/auth/status`, OIDC ve `/api/openapi.{yaml,json}` + `/api/docs` muaf;
   statik dosyalar açık (SPA kabuğu). Sabit zamanlı şifre karşılaştırma, IP
   bazlı deneme sınırı, HttpOnly cookie + Bearer token
+- **Denetim kaydı** (`audit_events`, Faz 5.3 + **v2 Faz 25-C**): append-only
+  SHA-256 hash zinciri. v2 kayıtları `actor_type` (user/legacy/token/oidc),
+  `request_id` (observe middleware'inin `X-Request-Id`'si — slog ile
+  korelasyon), `user_agent`, `result` (ok/error/denied) ve yapılandırma
+  değişikliklerinde `before_json`/`after_json` durum farkı taşır (sır alanları
+  `redactAuditJSON` ile `•••`). Hash zinciri stabil: v2 segmenti yalnız bir
+  v2 alanı doluyken katılır → eski kayıtlar aynen doğrulanır (ADR 0012).
+  `GET /api/v1/audit` süzgeçli (`QueryAuditEvents`: actor/action/resource/ip/
+  result/tarih); `/api/v1/audit/verify` zinciri baştan sona doğrular.
 - **API sözleşmesi** (`api/openapi.yaml`, `internal/server/openapi.go`): elle
   bakımlı OpenAPI 3.1 şeması binary'ye gömülür; `/api/openapi.yaml` (ham),
   `/api/openapi.json` (yaml→json) ve `/api/docs` (tek dosya, CDN'siz gezgin)
@@ -171,7 +237,7 @@ mTLS'te agent'lar hub'a doğrudan ya da L4 passthrough LB ile bağlanmalı.
 ## Frontend (`frontend/`)
 
 Vite + React + Tailwind v4 + `react-router-dom`. **Tasarım dili htop/ncurses
-TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](../frontend/DESIGN.md):
+TUI** (Faz 17) — tam ayrıntı [`frontend/DESIGN.md`](https://github.com/gokayybaz/bazntms/blob/main/frontend/DESIGN.md):
 düz siyah zemin, tek monospace aile, kare köşe (`*{border-radius:0}`), gölge
 yok, klavye-öncelikli. İmza bileşenler: `Meter` (htop eşik çubuğu), `TuiTable`
 (sort/`/` filtre/↑↓-jk klavye-nav kolonlu tablo), `Panel` (tek konteyner —
@@ -227,12 +293,14 @@ istemci tarafı routing ek backend desteği gerektirmeden çalışır.
 |------|-------|--------------|
 | `/` | Dashboard (`Overview` bileşeni) — meter bandı + log-tail + filo/topoloji/cihazlar | agent/cihaz/flow/syslog özet — kendi polling'i + WS filo özeti (`useLive`) |
 | `/agentlar`, `/agentlar/:id` | Agent listesi + derin detay | `GET /api/v1/agents[/…][/history]` |
-| `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay | `GET /api/v1/devices[/…]`, FortiGate için `FortiPanel` |
+| `/agentlar/:id/surec/:ad` | Süreç detayı (Faz 23-A) — Süreç Trafiği tablosunda `Enter`; özet/uzak hedefler/canlı bağlantılar/uygulama görünürlüğü (DNS+SNI+Host)/zaman çizelgesi. `Esc` → agent | `GET /api/v1/agents/:id/processes/:ad` (tek uç, sunucu-tarafı toplama) |
+| `/cihazlar`, `/cihazlar/:id` | Cihaz listesi + derin detay + **Top Konuşmalar** (Faz 23-B — NetFlow 5'li/uç-çifti toplama, `Enter` → drill-down) | `GET /api/v1/devices[/…]`, `GET /api/v1/flows[/conversations][/conversation]`, FortiGate için `FortiPanel` |
 | `/akis` | Canlı Trafik Şeması (`TrafficFlowCard` → animasyonlu SVG) — panodan ayrı sekme, rAF yalnız burada. `F4` tam ekran; admin'e `F3` "Düzenle" → agent'ları switch/AP cihazlarına gruplar (`agents.uplink_device_id`), okları ara katman üzerinden çizer | `GET /api/v1/agents`, `/flows`, `/syslog`, `/agents/:id`, `/devices`; `PUT /api/v1/agents/:id/uplink`, `POST /api/v1/devices` |
 | `/cografi` | Coğrafi Trafik (`GeoMapCard` → dünya haritası balonları) — panodan ayrı sekme | `GET /api/v1/geo` |
-| `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer) | `GET /api/v1/topology` |
-| `/uyarilar` | Olay akışı + eşik/bildirim ayarları | `alertEvents` (WS) + `GET/PUT /api/alerts` |
-| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite) + uyumluluk raporları | `GET /api/report?type=…` |
+| `/topoloji` | Ağ topolojisi (SVG, yatay: client ▸ hub ▸ cihaz ▸ router ▸ internet; Router `kind` router/firewall cihazından türer). Faz 23-D: SNMP-destekli kenarlar canlı telemetri (util → renk/durum: normal/uyarı≥%70/kritik≥%90/down), `Enter`/tık → link inspector (hız/RX/TX/kullanım/hata/iskarta), güven rozeti | `GET /api/v1/topology` (kenar `telemetry` = `local_port` ↔ `LatestDeviceIfaces` eşleşmesi; `confidence` = discovered\|inferred\|manual, `0017`) |
+| `/uyarilar` | Alt sekmeler: **Alarmlar** (yaşam döngüsü tablosu + eşik/bildirim ayarları) · **Olaylar** (Faz 24-B/C — korele incident listesi + `/uyarilar/olay/:id` detay: özet/korelasyon/kanıt zaman çizelgesi/RELATED/ACTIONS; sekmede açık-sayı rozeti) · **Olay Akışı** (Faz 24-A — normalleştirilmiş ham gözlem, ADR 0010) | `GET /api/v1/alerts/{events,silences}` + `POST .../events/:id/{ack,resolve,note}` + `GET/PUT /api/alerts` · `GET /api/v1/events` · `GET /api/v1/incidents[/:id]` + `POST .../{ack,investigate,resolve,close}` |
+| `/anomali` | Anomali paneli — mevsimsel "beklenen ±2σ bant vs gerçek" grafiği (elle SVG) + aktif sapmalar (filo/saha/agent × bps/dns/proc) | `GET /api/v1/anomaly/{baseline,active}` |
+| `/raporlar` | Ağ trafiği + kurumsal (SLA/kapasite/saha kırılımı, PDF) + uyumluluk raporları · zamanlanmış teslim + arşiv · SLA hedefleri | `GET /api/report?type=…` · `GET/POST/DELETE /api/v1/reports/*` · `/api/v1/sla/targets` |
 | `/uyumluluk`, `/uyumluluk/{risk,soa,politikalar,denetimler,yonetisim}` | 5651 + ISO 27001 ISMS | `GET/POST/PUT /api/v1/isms/*`, paylaşılan tip/yardımcılar `lib/isms.tsx`'te |
 | `*` | 404 | — |
 
@@ -269,6 +337,26 @@ boştur). Protokol/hacim dağılımı (`FleetProtocolTotals`) TimescaleDB modund
 protokol trendi 1 yıl tutulur (30/90 günlük rapor doğru çıkar). Diğer filo
 ham tabloları (`agent_iface_samples`, `process_traffic`) için cagg yok — o
 metriklerde pratik rapor penceresi hâlâ retention süresiyle sınırlı.
+
+Kurumsal rapor (Faz 25-B) ayrıca **yönetici özeti** (KPI ızgarası: ağ sağlık
+skoru + erişilebilirlik + açık olay + kapasite riski), **ağ sağlık skoru**
+bölümü (`internal/health`, 25-A), **top konuşmalar** (NetFlow, 23-B),
+**DNS / uygulama görünürlüğü** (süreç-atıflı DNS + TLS SNI/HTTP Host), **açık
+olaylar** (incident korelasyonu, 24-B) ve **öneriler** taşır. Öneriler
+`recommend()` — eşik-tabanlı **deterministik şablonlar**, LLM yok; her madde
+bir metriğe ve eşiğe bağlıdır. Ek bölümler best-effort doldurulur (kaynak
+eksikse bölüm zarifçe "veri yok" der, rapor 500 vermez).
+
+**Hedef zenginleştirme (`internal/enrich`, Faz 23-E):** paylaşılan `Service`
+uzak IP → `{private, country, asn, org}` (geoip.Resolver'a devreder — o zaten
+100k LRU önbellekli; RFC1918/ULA/loopback → `private=true`, lookup yok) ve alan
+adı → `{normalized, registrable, category}` (`x/net/publicsuffix` eTLD+1 +
+opsiyonel `-domain-category-file`, bounded önbellek) döndürür. Süreç detayı
+hedefleri (`/api/v1/agents/:id/processes/:ad`), NetFlow konuşma drill-down'ı
+(`/api/v1/flows/conversation`), coğrafi harita ve anlık `GET /api/v1/enrich?ip=&domain=`
+hepsi bu servisi kullanır. Frontend ortak render: `lib/enrich.tsx`
+(`IpBadge`/`DomainBadge` — RFC1918 → `YEREL` pill). Zenginleştirme salt
+okuma-yolu; hata/eksik veri ingest'i bloklamaz.
 
 **Coğrafi trafik haritası (`/api/v1/geo` → `Overview` `GeoMapCard`):**
 `store.FleetTopEndpoints` ile çıkarılan uzak uç noktalar `geoip.Resolver`
@@ -328,9 +416,25 @@ inode ↔ `/proc/[pid]/fd`, macOS `lsof -F`, Windows `netstat -ano` + gopsutil.
 eBPF/ETW'de PID doğrudan çekirdek olayından gelir (`bpf_get_current_pid_tgid` /
 `EventHeader.ProcessId`), süreç adı `comm` / gopsutil ile.
 
-Hub politikası (`-agent-pcap`) + agent isteği (`-pcap` / `collect.pcap`) ikisi
-de açıkken çalışır; hiçbir arka uç kurulamazsa atıf devre dışı kalır, temel
-telemetri aksamaz. Ham PCAP kaydı (`-record`) her zaman pcap ister.
+Hub politikası (`-agent-pcap`, **v1.3.0'dan beri varsayılan açık**) + agent
+tarafında derin toplama (**v1.3.0'dan beri varsayılan açık**; kapatmak:
+`collect.method: off`) ikisi de açıkken çalışır; hiçbir arka uç kurulamazsa
+atıf devre dışı kalır, temel telemetri aksamaz. Eski `-pcap` / `collect.pcap`
+bayrakları yok sayılır (kabul edilir, etkisi yoktur). Ham PCAP kaydı
+(`-record`) her zaman pcap ister. Windows'ta MSI kurulumu Npcap'i otomatik
+kurar (`deploy/msi/install-npcap.ps1`), agent `collect.method: pcap` ile gelir.
+
+**Süreç detayı (Faz 23-A):** `GET /api/v1/agents/:id/processes/:ad` tek bir
+sürecin (ad bazlı — PID zamanla değişir) tüm ağ etkinliğini **sunucu-tarafı
+toplayarak** tek yanıtta döndürür: kimlik/özet (ilk-son görülme, PID'ler, bayt,
+son-kova hız), uzak hedefler (`process_traffic` → `GROUP BY remote_ip,port,proto`
++ opportunistik GeoIP/ASN), canlı bağlantılar (`agent_conn_latest` süreç
+filtreli — **yaş türetilemez**, o tabloda ts yok), uygulama görünürlüğü
+(`agent_dns` ∪ `l7_endpoints`), zaman çizelgesi (ilk görülme · DNS/L7 ilk
+temas · trafik sıçraması = kova toplamı > ort.+3σ · key'inde süreç adı geçen
+`alert_events`). Yeni tablo/pipeline yok; RBAC site scope (`agentInScope`).
+Store metotları `internal/store/process_detail.go`, frontend
+`frontend/src/pages/ProcessDetailPage.tsx`.
 
 ## Veri akışı özeti
 

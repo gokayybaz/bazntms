@@ -11,23 +11,257 @@ Bu projedeki dikkate değer değişiklikler burada tutulur. Biçim
 [Keep a Changelog](https://keepachangelog.com/tr/1.1.0/) temellidir; sürümleme
 [SemVer](https://semver.org/lang/tr/) — **v1.0.0'dan itibaren** kırıcı
 `/api/v1` / protokol değişikliği major, geriye uyumlu özellik minor, düzeltme
-patch (bkz. [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md)).
+patch (bkz. [`docs/decisions/0008-v1-scope.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0008-v1-scope.md)).
 Her GitHub sürümü ayrıca `--generate-notes` ile üretilmiş tam commit listesi
 taşır — bu dosya **operatörün önemsediği** başlıkları ve **kırıcı / yükseltme**
 notlarını özetler.
 
 Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışında
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
-— yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md)).
+— yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)).
 
-## [Yayımlanmamış]
+## [1.3.0] — 2026-09-08
+
+Faz 26 — **AI analiz**. Monolit döneminde (`d92d0fb:internal/ai`) vardı,
+`9d22e7a`'da silinmişti; geri getirilip çoklu-sağlayıcı + kalıcı sohbet +
+otomatik analiz modeline yükseltildi. **Opt-in** (`-ai`) → geriye uyumlu,
+**minor**. `ProtocolVersion` 1'de kalır. Migrasyon `0021` (`ai_providers`,
+`ai_conversations`, `ai_messages`) hub açılışında otomatik uygulanır.
+
+Ayrıca — **agent derin toplama & L7 görünürlüğü tüm kurulumlarda varsayılan
+açık** hale getirildi (ayrı iş kolu). Davranış değişikliği ama yeni bayrak /
+uç kaldırılmadı → **minor**; aşağıdaki yükseltme notuna bakın.
+
+### ⚠ Yükseltme notu — derin toplama varsayılan açık
+- **Agent**: süreç trafiği + DNS + L7/SNI atıf motoru artık **varsayılan
+  çalışır** — `collect.pcap: true` veya `-pcap` gerekmez (yok sayılır ama
+  kabul edilir). Kapatmanın tek yolu `collect.method: off`. `collect.pcap:
+  false` yazan mevcut kurulumlar yükseltmeden sonra **derin toplamayı açar**;
+  istemiyorsanız `collect.method: off` yapın.
+- **Hub**: `-agent-pcap` politikası artık **varsayılan `true`**. Filo
+  genelinde derin toplamayı kapatmak için hub'ı `-agent-pcap=false` ile
+  başlatın (veya hub.yaml'de `agent_pcap: false`).
+- **Windows**: MSI kurulumu artık **Npcap'i sessizce indirip kurar**
+  (`npcap.com`, SHA-256 + Authenticode doğrulamalı) ve agent `collect.method:
+  pcap` ile gelir → L7/SNI Windows'ta da çalışır. Npcap indirilemezse kurulum
+  yine başarılı biter, agent ETW'ye düşer (süreç trafiği + DNS akar, L7 akmaz).
+  İnternet erişimi olmayan Windows ana makineleri için Npcap'i önceden kurun.
+
+### Eklendi — Faz 26
+- **AI sohbet sekmesi** (`/ai`) — çok-turlu, SSE streaming, mini-markdown
+  render, sunucu-tanımlı preset butonlar ("Filoyu özetle", "Güvenlik
+  taraması", "Anomali yorumu" …). `yetki:analyze` (viewer göremez).
+- **Çoklu sağlayıcı** — yerel (Ollama, LM Studio) + bulut (OpenAI, Anthropic
+  native, OpenAI-uyumlu: vLLM/OpenRouter/DeepSeek/Groq). Panel: **Yönetim >
+  AI Sağlayıcı** (`yetki:global-admin`) — ekle/düzenle + "Test Et" + canlı
+  model listesi. API anahtarı vault-şifreli, panelde bir daha gösterilmez.
+- **Sayfa-farkında "AI'ya Sor"** — Agent / Cihaz / Anomali / Olay detay
+  sayfalarından ilgili bağlamla sohbet açar. IncidentDetailPage'de otomatik
+  "AI Triyaj" notu paneli.
+- **Otomatik analiz**: (1) preset butonlar, (2) gecelik filo analizi
+  (`ai.nightly` — `internal/aijob` scheduler işi, lider-kapılı, opsiyonel
+  e-posta), (3) olay-tetikli triyaj (`ai.triage` — yeni kritik incident →
+  triyaj notu, saatlik hız-sınırlı).
+- **AI danışmandır** — araç çağırmaz, durum değiştirmez; deterministik
+  motorlar (anomali, incident, health, `recommend`) yetkili kalır (ADR 0014).
+
+### Güvenlik — Faz 26
+- **Egress kilidi** `-ai-allow-cloud=false` → yalnız loopback/RFC1918 model
+  adresleri (kayıt + çalışma anı). Self-hosted / hava boşluklu kurulum: veri
+  ağdan çıkmaz.
+- Prompt injection sınırı: telemetri verisi "güvenilmez gözlem" olarak
+  işaretli, çıktı otomatik aksiyona bağlanmaz.
+- `ai.provider.*` + `ai.analyze` denetim zincirine (`api_key` maskeli).
+
+### Geriye uyum — Faz 26
+- `-llm-base-url` / `-llm-api-key` / `-llm-model` + `LLM_*` / `OPENAI_*`
+  env korunur — `ai_providers` boşsa ilk açılışta bir `bootstrap` sağlayıcı
+  seed eder. `-llm-max-tokens` / `-llm-no-think` bayrakları kaldırıldı
+  (sağlayıcı `opts`'una taşındı).
+
+### Değişti — agent derin toplama & L7 (tüm kurulum yolları)
+- **`collect.method` varsayılanı `auto`** (config yoksa da). `pcapWant` artık
+  yalnızca `method: off` iken kapanır; süreç/DNS/L7 panelleri kutudan çıktığı
+  gibi dolar. `cmd/bazntms-agent` + `internal/config`.
+- **Hub `-agent-pcap` varsayılanı `true`** + yeni `agent_pcap` hub.yaml /
+  Helm config anahtarı (kapatmak için `false`).
+- **Windows MSI**: `deploy/msi/install-npcap.ps1` — kurulumda Npcap sessiz
+  kurulur (deferred/SYSTEM CustomAction, SHA-256 `npcap-1.88` + Authenticode
+  "Nmap Software LLC" doğrulaması, `exit 0` garantili → MSI'ı asla düşürmez).
+  Windows seed config'i ayrıldı: `deploy/config/bazntms-agent.windows.yml`
+  (`method: pcap`).
+- **Enroll sihirbazı** (`agentInstall.ts`) seed YAML: `collect.pcap: true` →
+  `collect.method: auto` + açıklayıcı yorum.
+- **Helm**: DaemonSet `agent.pcap` (varsayılan `true`) artık `NET_RAW` +
+  `NET_ADMIN` capability ekliyor; `values.config.agent_pcap` → configmap.
+- **deb/rpm/macOS** postinstall + `bazntms-agent.yml.example`: zaten
+  `pcap: true` idi, açıklamalar güncellendi (yeni varsayılana atıf).
+
+## [1.2.0] — 2026-09-08
+
+Faz 23 — **Gözlemlenebilirlik derinliği** · Faz 24 — **Tespit & korelasyon** ·
+Faz 25 — **Operasyonel olgunluk**. Tümü geriye uyumlu (yeni uç / tablo / alan)
+→ **minor**. `ProtocolVersion` 1'de kalır. Migrasyonlar `0015`–`0020` hub
+açılışında otomatik uygulanır.
+
+### ⚠ Yükseltme notu — Faz 25-D
+- `POST /api/v1/enroll-tokens` gövdesinde `expires_in_days` **atlanmış / 0**
+  artık **1 gün** demek (eskiden: süresiz). Süresiz token için `-1` gönderin.
+  Yeni token'lar ayrıca varsayılan **tek kullanımlık** (`max_uses` 1). Mevcut
+  DB token'ları migrasyonla `max_uses=0` (sınırsız) alır — davranış değişmez.
+
+### Eklendi — Faz 25 (operasyonel olgunluk)
+- **Ağ sağlık skoru** (25-A). `internal/health` — 0-100 **deterministik
+  ağırlıklı**, her kesinti açıklanabilir (agent offline / bayat telemetri /
+  cihaz offline / kritik uyarı / açık olay riski / arayüz hata+iskarta).
+  **Opak AI skoru değil.** `GET /api/v1/health` (~30 sn önbellek); panoda
+  `Ağ Sağlığı` kartı + kurumsal raporda bölüm.
+- **Kurumsal rapor v2** (25-B). `/api/report?type=enterprise` — yönetici özeti
+  (KPI ızgarası), ağ sağlık skoru, top konuşmalar (NetFlow), DNS / uygulama
+  görünürlüğü, açık olaylar (incident), **öneriler**. Öneriler `recommend()` —
+  8 eşik-tabanlı **deterministik şablon**, LLM yok; her madde bir metriğe
+  bağlı. Ek bölümler best-effort (kaynak eksik → "veri yok", 500 yok).
+- **Denetim kaydı v2** (25-C). `audit_events` + `actor_type` / `request_id`
+  (log korelasyonu) / `user_agent` / `result` (ok/error/denied) ve
+  yapılandırma değişikliklerinde `before_json` / `after_json` durum farkı
+  (sır alanları `•••` maskeli). Hash zinciri stabil — v2 segmenti yalnız bir
+  v2 alanı doluyken katılır, eski kayıtlar aynen doğrulanır (ADR 0012).
+  `GET /api/v1/audit` süzgeçli (actor/action/resource/ip/result/tarih);
+  `AuditCard` süzgeç barı + öncesi/sonrası paneli. Migrasyon `0019`.
+  Ayrıca: `InsertAuditEvent` **ve** `AppendComplianceLog` (5651 log zinciri)
+  çoklu-replika (HA) yazımında pg advisory-lock + tek-transaction ile
+  serileştirildi (2× hub-controller hash zincirini çatallıyordu).
+- **Enrollment token sertleştirme** (25-D). `enroll_tokens` + `max_uses`
+  (atomik `ConsumeEnrollToken` — eş zamanlı agent'lar son slotu paylaşamaz),
+  `allowed_cidrs` (kaynak-IP kısıtı — soket peer'ine göre), `created_by`,
+  `revoked_at`. `handleAgentHello` ayrık 4xx: 401 geçersiz/iptal/süre, 403
+  CIDR, 409 max_uses. `enroll_token.used` denetlenir. Migrasyon `0020`.
+  ADR 0013. **Bkz. yükseltme notu.**
+- **UI tutarlılık** (25-E). `PanelState` bileşeni (yükleniyor/boş/hata bandı —
+  ~70 elle varyant tekilleştirildi). `TuiTable` seçili satır klavye odağında
+  htop tarzı belirgin imleç. `HelpOverlay` güncellendi.
+
+### Eklendi — Faz 24 (tespit & korelasyon)
+- **Normalleştirilmiş olay akışı** (24-A). `GET /api/v1/events` — ham gözlemler
+  (dns.query / tls.sni_observed / http.host_observed / netflow.flow /
+  syslog.received / connection.seen) uyarılardan ayrı bir okuma modelinde
+  (mevcut kaynak tablolar UNION ALL — yeni yazma hattı yok, ADR 0010).
+  `/uyarilar` → `Olay Akışı` sekmesi.
+- **Olay (incident) korelasyon motoru** (24-B/C). `internal/incident` —
+  lider-kapılı, 5 deterministik kural (yeni-süreç + yeni-hedef/ioc /
+  şüpheli-port / hedef+bant / anomali+bant / ≥N-şüpheli), risk skoru 0-100
+  açıklanabilir, dedup = correlation_key. **AI/LLM yok** (ADR 0011). Migrasyon
+  `0018` (`alert_events.agent_id` + `incidents` + `incident_evidence`).
+  `GET/POST /api/v1/incidents[/:id][/ack|investigate|resolve|close]` (denetimli).
+  `/uyarilar` → `Olaylar` sekmesi + `/uyarilar/olay/:id` detay (kanıt zaman
+  çizelgesi).
+- **Anomali metriği `l7_qps`** (24-D). TLS SNI / HTTP Host gözlem hızı —
+  endpoint-temas sıçraması ≈ alışılmadık / yeni hedef aktivitesi. `/anomali`
+  metrik seçicisine eklendi.
+- **Tehdit istihbaratı adaptörü** (24-E). Sağlayıcı-bağımsız
+  `internal/threatintel` — `Provider` arayüzü, IP + domain, itibar enum'u
+  (trusted…malicious), TTL önbellek. `-ioc-file` artık `localfile` sağlayıcısı
+  (domain + **IP** kara listesi). `GET /api/v1/threatintel?ip=&domain=`.
+  Süreç detayı hedefleri + akış drill-down'ında itibar pill'i. **Oto-blok yok**
+  — observability-first. `ioc` uyarısı itibar/kaynak taşır.
+
+### Eklendi — Faz 23 (gözlemlenebilirlik derinliği)
+- **Süreç detayı & derin inceleme** (23-A). Agent → Süreç Trafiği → `Enter` →
+  tek bir sürecin (ad bazlı) tüm ağ etkinliği tek ekranda: kimlik/özet, uzak
+  hedefler (ip:port/proto toplama + GeoIP/ASN), canlı bağlantılar, uygulama
+  görünürlüğü (DNS + TLS SNI + HTTP Host), zaman çizelgesi (ilk temas / DNS-L7
+  ilk görülme / trafik sıçraması / ilişkili uyarılar). `GET /api/v1/agents/:id/
+  processes/:ad` — yeni telemetri hattı yok, mevcut tablolar sunucu-tarafı
+  toplanır. Rota `/agentlar/:id/surec/:ad`.
+- **NetFlow konuşma toplama** (23-B). Ham `flows` → 5'li / uç-çifti konuşmalar
+  (`GET /api/v1/flows/conversations`), pencere 15dk–24s, sıralama
+  bytes/packets/flows/last-seen. Drill-down (`GET /api/v1/flows/conversation`):
+  ham akışlar + uç GeoIP/ASN + `process_traffic` ile ilişkili agent/süreç.
+  `/cihazlar` altında `Top Konuşmalar` (ham NetFlow görünümü değişmedi).
+  Migrasyon `0015` (`idx_flows_convo`, `idx_flows_pair`).
+- **Arayüz kapasitesi & kullanım** (23-C). SNMP `ifType` (IANAifType) +
+  `ifHighSpeed` toplanır; `class` (ethernet/wifi/loopback/tunnel/vpn/bridge/
+  vlan/ppp/unknown) + `rx/tx_util_pct` (yalnız güvenilir hız + oper=up).
+  `iface_util` uyarısı: `warn_pct` (70) / `crit_pct` (90) eşiği `sustain_sec`
+  (300) boyunca aşılırsa; loopback/tünel atlanır (`iface` config bölümü).
+  `LatestDeviceIfaces` sayaç-geri-gitme koruması (SNMP restart/wrap → sahte
+  sıçrama yok). Migrasyon `0016`. `DeviceDetailPage` TÜR / UTİL kolonları.
+- **Topoloji canlı bağlantı telemetrisi** (23-D). SNMP-destekli kenarlara
+  (`local_port` ↔ ifName) canlı arayüz telemetrisi bağlanır → görsel durum
+  (normal/uyarı≥%70/kritik≥%90/down), `Enter`/tık → link inspector, güven
+  düzeyi rozeti (`confidence`: discovered/inferred/manual). Migrasyon `0017`.
+- **Hedef zenginleştirme** (23-E). Paylaşılan `internal/enrich` servisi: uzak IP
+  → ülke/ASN/org + özel/genel (RFC1918→`YEREL`); alan → normalize + kayıtlı-alan
+  (eTLD+1) + kategori (`-domain-category-file`). `GET /api/v1/enrich?ip=&domain=`.
+  Süreç detayı hedefleri + konuşma drill-down + harita aynı servisi kullanır;
+  frontend ortak `lib/enrich.tsx`.
+
+## [1.1.0] — 2026-09-08
+
+Faz 22 — **İleri Analiz & operasyonel derinlik**. `docs/enterprise-plan.html` →
+"İleri Analiz ve Kurumsal Özellikler" başlığı: anomali motoru site/cihaz bazına
+çıktı, uyarılara yaşam döngüsü geldi, bilet sistemlerine bağlandı, kurumsal
+raporlar zamanlanabilir oldu. Tüm değişiklikler geriye uyumlu (yeni tablo / uç /
+alan) → **minor** (ADR 0008). `ProtocolVersion` 1'de kalır.
+
+### Eklendi
+- **Anomali motoru v2.** Saat-of-day z-skoru baseline'ı → mevsimsel (hafta
+  içi/sonu × saat, opsiyonel gün-of-week) + EWMA gün ağırlığı (yavaş drift'e
+  uyum). Materyalize `anomaly_baseline` tablosu + lider-kapılı saatlik rebuild
+  → değerlendirme başına canlı `LAG` taraması yok. **Çok boyutlu:** filo / saha /
+  agent; **çok metrikli:** arayüz bant genişliği + DNS sorgu hızı + süreç
+  trafiği (tünelleme / DGA / sızdırma erken sinyali). `|z| ≥ crit_z` → "crit".
+  Yeni `/anomali` sayfası: elle-SVG "beklenen ±2σ bandı vs gerçek" grafiği +
+  aktif sapmalar tablosu. `GET /api/v1/anomaly/{baseline,active}`.
+- **Uyarı yaşam döngüsü.** `alert_events` artık severity / state
+  (firing → ack → resolved) / site / tekrar sayacı / korelasyon grubu taşır.
+  Aynı koşul tekrar ateşlenirse yeni satır değil `count++` (dedup). Otomatik
+  çözülme: koşul `auto_resolve_min` dakika yinelenmezse kapanır (anomali için
+  koşul-tabanlı da). Aynı sahada `correlate_window_sec` içinde ateşlenen
+  olaylar ortak `group_id`. **Bakım pencereleri** (`alert_silences`) — kind /
+  site / anahtar eşleşmesi + zaman aralığı; eşleşen uyarı bildirilmez.
+  Filtreli + sayfalı `GET /api/v1/alerts/events` + `POST .../:id/{ack,resolve,
+  note}`. Yeniden yazılmış Uyarılar sayfası (filtre çubuğu, işlem dialogu).
+- **Bildirim yönlendirme + bilet sistemleri.** `notify_routes` — matcher
+  (severity / kind / site) → kanal listesi + `continue`; kural yoksa mevcut
+  "etkinlerin hepsine" davranışı. **Jira Cloud** (REST v3) + **ServiceNow**
+  (Table API `incident`): uyarı grubu ilk ateşlendiğinde issue/incident açılır
+  (`ext_ref`), grup çözüldüğünde geçiş yapar. API token / parola kimlik
+  kasasında şifreli. (PagerDuty kanal id'si tanınır, gönderim ileride.)
+- **Zamanlanmış kurumsal raporlar + SLA.** `internal/scheduler` — hub-içi
+  lider-kapılı çalıştırıcı (harici bağımlılık yok; `daily:HH:MM` /
+  `weekly:<gün>:HH:MM` / `monthly:<n>:HH:MM` / `interval:<dk>`; kaçırılan koşu
+  bir kez telafi edilir). Rapor teslim hattı: üretilen rapor
+  `<data>/reports/`'a yazılır + arşivlenir + (alıcı varsa) e-postalanır.
+  **Enterprise rapor PDF** + `?site=` saha kırılımı (site-admin artık kendi
+  kurumsal + uyumluluk raporunu çekebilir). **SLA hedefleri** (`sla_targets`,
+  global + saha) — kurumsal raporda hedef-vs-gerçek + ihlal vurgusu; ihlalde
+  `sla_breach` uyarısı (crit). Raporlar sayfasına zamanlama editörü + arşiv +
+  SLA hedef ayarları. `GET/POST/DELETE /api/v1/reports/*`, `/api/v1/sla/targets`.
+
+### Şema
+
+`0009`–`0014` migrasyonları hub açılışında otomatik uygulanır (sqlite +
+postgres): `anomaly_baseline`, `alert_events` yaşam döngüsü sütunları,
+`alert_silences`, `scheduled_jobs`, `report_archive`, `sla_targets`. Geri alma
+yok — yükseltmeden önce yedek.
+
+### Düzeltildi
+- **Agent 401 kendini-onarma sayacı restart'ta sıfırlanıyordu.** Hub veritabanı
+  yeniden yaratıldığında (ya da kayıt silindiğinde) kayıtlı agent token'ı kalıcı
+  401 döner; agent 3 ardışık 401'den sonra enroll token'ıyla yeniden kaydolur.
+  Bu sayaç bellekte tutulduğu için sık yeniden başlayan (crash-loop, launchd
+  `KeepAlive`, art arda kurulum) bir agent eşiğe hiç ulaşamıyor ve sonsuza dek
+  401 atıyordu. Sayaç artık `bazntms-agent.state.json` içinde tutuluyor
+  (`auth_fail_streak`) — restart'ları aşar, başarılı telemetride / yeniden
+  enroll'de sıfırlanır.
 
 ## [1.0.0] — 2026-09-08
 
 Faz 21 — **v1.0 sertleştirme + ölçek doğrulama**. Kurumsal kapasite hedefleri
 (`docs/enterprise-plan.html`) sentetik yükle ölçüldü, bulunan darboğazlar
 düzeltildi, sürekli operasyon için sertleştirildi. Tam rapor:
-[`docs/CAPACITY.md`](docs/CAPACITY.md).
+[`docs/CAPACITY.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/CAPACITY.md).
 
 > **Doğrulanan ölçek** (tek-node `deploy/docker-compose.scale.yml`, `target`
 > profili): 5.000 agent @ 30 sn (167 ist/sn, batch p95 6 ms, hata %0) +
@@ -111,12 +345,12 @@ düzeltildi, sürekli operasyon için sertleştirildi. Tam rapor:
   yükseltmeden sonra geçmiş dönem raporları eksik görünür. Bir kez
   `CALL refresh_continuous_aggregate('<ad>', NULL, NULL)` ile geri doldurun
   (saklama penceresi kadar ham veri tarar, saatler sürebilir). Adımlar:
-  [`docs/UPGRADE-RUNBOOK.md`](docs/UPGRADE-RUNBOOK.md).
+  [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md).
 - SQLite / TimescaleDB dışı PostgreSQL kurulumları etkilenmez (cagg'ler
   yalnız TimescaleDB'de kurulur).
 
 ### Karar kaydı
-- [`docs/decisions/0008-v1-scope.md`](docs/decisions/0008-v1-scope.md) —
+- [`docs/decisions/0008-v1-scope.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0008-v1-scope.md) —
   v1.0 API / protokol kararlılık taahhüdü, SemVer sözleşmesi,
   `protocol_version` uyumluluk politikası, v1 kapsamı **dışında** bırakılanlar
   (ETW L7, macOS Endpoint Security, gerçek KMS zarf şifreleme, çok-kiracılılık).
@@ -167,7 +401,7 @@ Faz 20 — süreç atfı çekirdek düzeyine taşındı. Linux'ta **eBPF**, Wind
   DNS yeterliyse hiçbir şey yapmayın (ETW ile gelir).
 
 ### Karar kaydı
-- [`docs/decisions/0007-attr-backends.md`](docs/decisions/0007-attr-backends.md) —
+- [`docs/decisions/0007-attr-backends.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0007-attr-backends.md) —
   arka uç arayüzü, fentry/CO-RE, ETW'nin elle yazılması (GPL/cgo kütüphaneler
   reddedildi), L7'nin pcap-gated kalması.
 
@@ -239,7 +473,7 @@ görünürlük düzeltmesi.
 - Yok. Ancak **v0.3.3 öncesi kurulmuş agent'lar** derin toplama açık değilse
   `agent.yml`'e `collect.pcap: true` elle eklenmeli (yeniden kurulum mevcut
   config'e dokunmaz) — bkz.
-  [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) "Süreçler / DNS / L7
+  [`docs/TROUBLESHOOTING.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/TROUBLESHOOTING.md) "Süreçler / DNS / L7
   panelleri boş".
 
 ## [0.3.2] — 2026-09-07
@@ -439,7 +673,9 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
+[1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/gokayybaz/bazntms/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/gokayybaz/bazntms/compare/v0.3.2...v0.3.3

@@ -107,7 +107,7 @@ bazntmsctl update keygen -out updates/keys
 
 # 2. Sürüm imzala (release binary'leri ile)
 bazntmsctl update sign -key updates/keys/seed.key \
-  -out updates/stable -version v0.3.1 \
+  -out updates/stable -version v1.3.0 \
   bazntms-agent-linux-amd64 bazntms-agent-linux-arm64 \
   bazntms-agent-windows-amd64.exe bazntms-agent-darwin-arm64
 
@@ -134,7 +134,7 @@ sudo dpkg -i bazntms-agent-amd64.deb     # veya: rpm -U bazntms-agent-amd64.rpm
 
 ```bash
 # Chart appVersion imaj etiketini de taşır — yeni chart sürümü = yeni imajlar
-helm upgrade bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 0.3.3 \
+helm upgrade bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 1.3.0 \
   --reuse-values
 # DaemonSet agent'ları da günceller (agent.enabled=true ise pod'lar yeniden kurulur)
 ```

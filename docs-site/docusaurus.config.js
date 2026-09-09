@@ -7,6 +7,10 @@ const { themes } = require('prism-react-renderer');
 // Deploy: .github/workflows/docs.yml — docs-site/** değişince otomatik.
 // Kendi alan adınızı kullanmak için: url + baseUrl'i güncelleyin ve
 // docs-site/static/CNAME dosyasına alan adınızı yazın.
+//
+// Tema: ürünün kendi arayüzüyle (frontend/DESIGN.md — "htop çok-panelli
+// terminal") aynı dil. Tek koyu tema, tek mono aile, kare köşe. Açık tema
+// dalı yok — DESIGN.md kuralı ("Don't açık tema dalı açma").
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'bazNTMS',
@@ -33,19 +37,25 @@ const config = {
       },
     },
     {
+      // Tek aile: JetBrains Mono her yerde. Uzun makale prose'u sistem
+      // sans-serif'e döner (DESIGN.md typography.prose — ayrı web-font yok).
       tagName: 'link',
       attributes: {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400..600&family=JetBrains+Mono:wght@400..600&family=Poppins:wght@500;600;700&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&display=swap',
       },
     },
   ],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      colorMode: { defaultMode: 'light', respectPrefersColorScheme: true },
-      // kod blokları her iki temada da koyu — landing'deki <pre> ile aynı
-      // okuma deneyimi (Docusaurus varsayılanı zaten palenight'tı)
+      colorMode: {
+        defaultMode: 'dark',
+        disableSwitch: true,
+        respectPrefersColorScheme: false,
+      },
+      // Kod blokları koyu — landing'deki <pre> ve dashboard ile aynı okuma
+      // deneyimi. Her iki slot da aynı tema (tek tema).
       prism: { theme: themes.palenight, darkTheme: themes.palenight },
       navbar: {
         title: 'bazNTMS',
@@ -55,6 +65,12 @@ const config = {
           { to: '/docs/reference/api', label: 'API', position: 'left' },
           { to: '/docs/reference/upgrading', label: 'Güncelleme', position: 'left' },
           { to: '/docs/reference/troubleshooting', label: 'Sorun Giderme', position: 'left' },
+          {
+            to: '/docs/reference/changelog',
+            label: 'v1.3.0',
+            position: 'right',
+            className: 'navbar__item--version',
+          },
           {
             href: 'https://github.com/gokayybaz/bazntms',
             label: 'GitHub',
@@ -89,6 +105,7 @@ const config = {
                 label: 'GitHub',
                 href: 'https://github.com/gokayybaz/bazntms',
               },
+              { label: 'Değişiklik Günlüğü', to: '/docs/reference/changelog' },
             ],
           },
         ],

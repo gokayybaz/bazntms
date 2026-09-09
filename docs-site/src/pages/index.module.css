@@ -1,63 +1,37 @@
-/* Landing page — Strapi'nin (strapi.io) tasarım dili uygulandı.
-   Ölçülen değerler: kapsayıcı 1248px, okuma sütunu ~700px, tip ölçeği
-   43/33/21/17/15, yarıçap 8px kontrol / 16px kart. Strapi'nin indigosu
-   yerine projenin kendi cyan'ı (DESIGN.md → birincil marka vurgusu).
-   Ritim koyu→açık→koyu: vitrin bölümleri (#030712) bazNTMS'in NOC
-   kimliğini ve anlam renklerini taşır, içerik bölümleri Strapi'nin
-   cyan tipografisiyle açık zeminde okunur. */
+/* ============================================================================
+   Landing page — frontend/DESIGN.md "htop çok-panelli terminal" dili.
+   Düz fosfor-siyahı zemin, tek JetBrains Mono aile, kare köşe, gölge/blur/
+   gradyan YOK. 7 renk sabit-anlam (cyan=rx/link, violet=tx, emerald=sağlıklı,
+   amber=uyarı, rose=kritik). Renk tokenleri custom.css'teki --tui-* ile eş.
+   ========================================================================== */
 
 .page {
-  /* Vurgu cyan (DESIGN.md: birincil marka rengi). #22d3ee beyaz üstünde
-     1.8:1 veriyor — metin/CTA olamaz; açık yüzeylerde cyan-700 kullanılır,
-     parlak ton koyu yüzeylere ayrılır. Nötrler cyana doğru kaydırıldı. */
-  --accent: #0e7490;
-  --accent-dark: #0b5a70;
-  --accent-100: #e6f7fb;
-  --on-accent: #ffffff;
-  --ink: #164e63;
-  --ink-strong: #083344;
-  --ink-soft: #4a6f80;
-  --paper: #ffffff;
-  --paper-tint: #f1fafc;
-  --line: #dceef4;
-  --line-strong: #c5e2eb;
+  --shell: 1320px;
+  --pad: 20px;
 
-  /* koyu vitrin — her iki temada da koyu kalır */
-  --night: #030712;
-  --night-raise: #08131c;
-  --night-line: #17323f;
-  --night-ink: #eefafd;
-  --night-soft: #8fabb6;
+  /* uzun açıklama satırları — DESIGN.md typography.prose: sistem sans-serif */
+  --prose: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell,
+    'Helvetica Neue', sans-serif;
 
-  /* ürünün anlam sözleşmesi (DESIGN.md) — yalnızca veri yüzeylerinde */
+  --ground: #0a0d13;
+  --panel: #10141d;
+  --panel-2: #151b27;
+  --rule: #232b3a;
+  --rule-hi: #35485f;
+  --ink: #ced7e3;
+  --ink-hi: #f1f5fa;
+  --dim: #8794a8;
   --rx: #22d3ee;
   --tx: #a78bfa;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --critical: #fb7185;
+  --emerald: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
 
-  --shell: 1248px;
-  --prose: 700px;
-  --pad: 24px;
-
-  font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: var(--paper);
+  background: var(--ground);
   color: var(--ink);
-}
-
-:global([data-theme='dark']) .page {
-  --paper: #030712;
-  --paper-tint: #0b1020;
-  --line: #17323f;
-  --line-strong: #22485a;
-  --ink: #d3e6ec;
-  --ink-strong: #eefafd;
-  --ink-soft: #8fabb6;
-  --accent: #22d3ee;
-  --accent-dark: #67e8f9;
-  --accent-100: rgba(34, 211, 238, 0.14);
-  /* parlak cyan zeminde beyaz metin okunmaz — koyu mürekkep (8.9:1) */
-  --on-accent: #04252e;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .shell {
@@ -67,827 +41,609 @@
   padding-right: var(--pad);
 }
 
-/* ---------- ortak tipografi ---------- */
-
-.eyebrow {
-  display: inline-block;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--accent);
+/* alt sabit şerit sayfayı kapatmasın */
+.page {
+  padding-bottom: 44px;
 }
 
-.h2 {
-  margin: 0 0 12px;
-  font-size: clamp(28px, 3.4vw, 43px);
-  line-height: 1.18;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-  color: var(--ink-strong);
+/* ---------- anlam renkleri (paylaşılan util) ---------- */
+.fgRx { color: var(--rx); }
+.fgTx { color: var(--tx); }
+.fgEmerald { color: var(--emerald); }
+.fgAmber { color: var(--amber); }
+.fgRose { color: var(--rose); }
+.fgRule { color: var(--rule); }
+.dimText { color: var(--dim); }
+
+/* ============================ PANEL ============================ */
+
+.panel {
+  border: 1px solid var(--rule);
+  background: var(--panel);
 }
 
-.lede {
-  margin: 0;
-  max-width: var(--prose);
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-}
-
-.sectionHead {
+.panelHead {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule);
 }
 
-/* ---------- düğmeler (Strapi: 8px yarıçap, 8/24 padding, 15px/500) --- */
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-hi);
+}
+.panelTitle span[aria-hidden] {
+  color: var(--rule-hi);
+}
 
-.btn {
+.panelRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.panelBody {
+  padding: 14px;
+}
+
+/* ============================ METER ============================ */
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.meterLabel {
+  width: 30px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.meterBar {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 1;
+  white-space: pre;
+}
+.meterBracket {
+  flex-shrink: 0;
+  color: var(--rule-hi);
+}
+.meterTrack {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.meterValue {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================ BRACKET (link/buton) ============================ */
+
+.bracket {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 20px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.4;
-  text-decoration: none;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.btnPrimary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.btnPrimary:hover {
-  background: var(--accent-dark);
-  color: var(--on-accent);
-  text-decoration: none;
-}
-
-.btnGhostDark {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: #ffffff;
-}
-.btnGhostDark:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
-  text-decoration: none;
-}
-
-.btnGhost {
-  border-color: var(--line-strong);
+  gap: 4px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule-hi);
   color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease;
 }
-.btnGhost:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-100);
+.bracket:hover {
+  border-color: var(--rx);
+  color: var(--rx);
   text-decoration: none;
 }
-
-.ctas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+.bracketEdge {
+  color: var(--rule-hi);
+}
+.bracket:hover .bracketEdge {
+  color: var(--rx);
 }
 
-/* ---------- HERO (koyu vitrin) ---------- */
+.bracketPrimary {
+  background: var(--rx);
+  border-color: var(--rx);
+  color: var(--ground);
+}
+.bracketPrimary .bracketEdge {
+  color: rgba(10, 13, 19, 0.55);
+}
+.bracketPrimary:hover {
+  background: var(--ink-hi);
+  border-color: var(--ink-hi);
+  color: var(--ground);
+}
+.bracketPrimary:hover .bracketEdge {
+  color: rgba(10, 13, 19, 0.55);
+}
+
+/* ============================ COPY ============================ */
+
+.copy {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--rule-hi);
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.copy:hover {
+  color: var(--rx);
+  border-color: var(--rx);
+}
+.copyError {
+  color: var(--rose);
+  border-color: var(--rose);
+}
+
+/* ============================ HERO ============================ */
 
 .hero {
-  background: var(--night);
-  color: var(--night-ink);
-  padding: 72px 0 0;
+  padding-top: 28px;
+  padding-bottom: 64px;
+  border-bottom: 1px solid var(--rule);
 }
 
-/* koyu vitrin yüzeyleri her iki temada da koyu kalır: buradaki vurgu
-   her zaman parlak cyan (#030712 üstünde 11.1:1) */
-.hero .eyebrow {
-  color: #22d3ee;
+.topStrip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 11px;
+  color: var(--dim);
+  flex-wrap: wrap;
 }
 
-/* Birincil CTA koyu zeminde cyan-700 ile sönük kalıyordu — parlak ton +
-   koyu mürekkep (8.9:1) hem okunur hem birincil eylem gibi duruyor. */
-.hero .btnPrimary,
-.showcase .btnPrimary,
-.bottom .btnPrimary {
-  background: #22d3ee;
-  color: #04252e;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rx);
 }
-.hero .btnPrimary:hover,
-.showcase .btnPrimary:hover,
-.bottom .btnPrimary:hover {
-  background: #67e8f9;
-  color: #04252e;
+.brand b {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-hi);
+}
+.glyph {
+  width: 15px;
+  height: 15px;
 }
 
-/* bento: dış çerçeve yok, yalnızca hücreleri ayıran hairline'lar.
-   Çerçeve kalkınca sol iç boşluk da sıfırlandı — başlık artık alttaki
-   bölümlerle aynı sütun kenarına hizalanıyor. */
+.wsPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--emerald);
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+.wsDot {
+  width: 6px;
+  height: 6px;
+  background: var(--emerald);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.28; }
+}
+
+.stripMeters {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.stripMeters .meter {
+  gap: 6px;
+}
+.stripMeters .meterLabel {
+  width: auto;
+}
+
+.stripRight {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.verTag {
+  border: 1px solid var(--rule-hi);
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--dim);
+}
+.verTag::before { content: '['; color: var(--rule-hi); }
+.verTag::after { content: ']'; color: var(--rule-hi); }
+
+.clock {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.95em;
+  margin-left: 3px;
+  background: var(--rx);
+  vertical-align: text-bottom;
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
 .heroGrid {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 40px;
+  margin-top: 40px;
+  align-items: start;
 }
 
 .heroMain {
-  padding: 8px 24px 44px 0;
   min-width: 0;
 }
 
 .title {
-  margin: 20px 0 0;
-  font-size: clamp(32px, 4.2vw, 43px);
-  line-height: 1.25;
-  font-weight: 600;
-  letter-spacing: -0.025em;
+  margin: 0;
+  font-size: clamp(24px, 3.1vw, 34px);
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink-hi);
   text-wrap: balance;
-  color: #ffffff;
-}
-.title em {
-  font-style: normal;
-  color: #22d3ee;
 }
 
-.heroSub {
+.lede {
   margin: 20px 0 0;
-  max-width: 46ch;
-  font-size: 15px;
+  max-width: 52ch;
+  font-family: var(--prose);
+  font-size: 14px;
   line-height: 1.65;
-  color: var(--night-soft);
-}
-.heroSub b {
-  font-weight: 600;
-  color: #ffffff;
+  color: var(--dim);
 }
 
-/* kopyalanabilir kurulum komutu — Strapi'nin hero kalıbı */
 .cmd {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 28px;
-  padding: 12px 12px 12px 16px;
-  border: 1px solid var(--night-line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: 10px;
+  margin-top: 26px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
 }
-
+.cmdSigil {
+  color: var(--emerald);
+  flex-shrink: 0;
+}
 .cmdText {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
-  color: #ffffff;
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   white-space: nowrap;
-  min-width: 0;
-  /* Infima'nın genel code stilini koyu zeminde sıfırla */
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-hi);
   background: none;
   border: 0;
   padding: 0;
-  /* kaydırma çubuğu koyu zeminde açık bir şerit olarak görünüyordu;
-     komutun tamamına kopyala düğmesinden ulaşılıyor */
   scrollbar-width: none;
 }
-.cmdText::-webkit-scrollbar {
-  display: none;
-}
-
-.asideTop code {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--night-line);
-  border-radius: 5px;
-  padding: 1px 6px;
-  color: #ffffff;
-}
-
-.cmdCopy {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--night-line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--night-soft);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-.cmdCopy:hover {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.4);
-}
+.cmdText::-webkit-scrollbar { display: none; }
 
 .heroCtas {
-  margin-top: 24px;
-}
-
-/* sağ taraf: 2×2 kart ızgarası (hairline hücre yerine ayrı kartlar) */
-.heroAside {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  /* kartlar sol sütunun yüksekliğinde dikey ortalanır; satırlar eşit */
-  align-content: center;
-  grid-auto-rows: 1fr;
-  padding-left: 44px;
-  min-width: 0;
-}
-
-.cell {
-  padding: 20px;
-  min-width: 0;
-  /* satırlar 1fr olduğu için kartlar uzuyor — içerik dikeyde ortalanır */
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border: 1px solid var(--night-line);
-  border-radius: 16px;
-  background: var(--night-raise);
-  animation: statIn 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
-  transition: border-color 0.2s ease, transform 0.2s ease;
-}
-.cell:hover {
-  border-color: rgba(34, 211, 238, 0.4);
-  transform: translateY(-2px);
-}
-
-@keyframes statIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
-}
-
-.cellValue {
-  display: block;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: clamp(26px, 2.3vw, 36px);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  color: #ffffff;
-  font-variant-numeric: tabular-nums;
-}
-
-.cellLabel {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--night-soft);
-}
-
-/* ---------- hero izi (rx/tx) ---------- */
-
-.wireWrap {
-  margin-top: 24px;
-  border: 1px solid var(--night-line);
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.wireHead {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--night-line);
+  gap: 12px;
+  margin-top: 24px;
 }
-
-.wireLabel {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+.heroMeta {
   font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--night-soft);
+  color: var(--dim);
 }
 
-.readout {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--night-soft);
+.heroAside {
+  min-width: 0;
 }
-.readout b {
-  font-weight: 500;
+.asideMeters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.asideNote {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+/* ---------- throughput izi ---------- */
+
+.trace {
+  border: 1px solid var(--rule);
+  background: var(--ground);
+}
+.traceHead {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 11px;
+  color: var(--dim);
+}
+.traceHead b {
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.kRx b { color: var(--rx); }
-.kTx b { color: var(--tx); }
-
-.swatch {
+.swatchRx, .swatchTx {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border-radius: 2px;
-  margin-right: 7px;
+  margin-right: 5px;
+  vertical-align: baseline;
 }
-.swRx { background: var(--rx); }
-.swTx { background: var(--tx); }
+.swatchRx { background: var(--rx); }
+.swatchTx { background: var(--tx); }
 
-.wireCanvas {
+.traceSvg {
   display: block;
   width: 100%;
-  height: 190px;
+  height: 150px;
 }
 
-.wireFoot {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 28px 0 72px;
-  font-size: 12px;
-  color: var(--night-soft);
-}
-
-/* ---------- açık bölümler ---------- */
+/* ============================ SECTION ORTAK ============================ */
 
 .section {
-  padding: 96px 0;
+  padding: 72px 0;
 }
-
 .sectionTint {
-  background: var(--paper-tint);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  padding: 72px 0;
+  background: var(--panel);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
 }
 
-/* bento kart ızgarası */
-/* 4 grup var: 3'lü ızgarada sonuncusu tek başına alt satıra düşüyordu */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-
-.card {
-  padding: 28px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--paper);
-  min-width: 0;
-}
-
-.cardDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  display: inline-block;
-}
-.cyan { background: var(--rx); }
-.violet { background: var(--tx); }
-.rose { background: var(--critical); }
-.emerald { background: var(--ok); }
-
-.cardHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 20px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--line);
-}
-
-.cardGroup {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--accent);
-}
-
-.item {
-  padding: 20px 0;
-  border-bottom: 1px solid var(--line);
-}
-.item:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.item h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  color: var(--ink-strong);
-}
-
-.item p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-}
-
-/* ---------- 5651 zinciri ---------- */
-
-.chain {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--paper);
-}
-
-.link {
-  padding: 20px 18px;
-  border-right: 1px solid var(--line);
-  min-width: 0;
-}
-.link:last-child { border-right: 0; }
-
-.linkTag {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 8px;
-}
-
-.linkValue {
-  display: block;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
-  color: var(--ink-strong);
-}
-.chainDone { color: #0f9d63; }
-
-:global([data-theme='dark']) .chainDone { color: var(--ok); }
-
-.notes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px;
-  margin-top: 32px;
-}
-.notes h3 {
-  margin: 0 0 8px;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--ink-strong);
-}
-.notes p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
-  color: var(--ink-soft);
-}
-.notes code {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
-  padding: 1px 5px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background: var(--accent-100);
-  color: var(--ink);
-}
-
-/* ---------- panel vitrin (koyu) ---------- */
-
-.showcase {
-  background: var(--night);
-  padding: 96px 0;
-}
-.showcase .h2 { color: #ffffff; }
-.showcase .lede { color: var(--night-soft); }
-.showcase .eyebrow { color: #22d3ee; }
-
-/* ---------- mimari ---------- */
-
-.svgScroll { overflow-x: auto; }
-
-.archSvg {
-  display: block;
-  width: 100%;
-  min-width: 760px;
-}
-.archNode { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
-.archHub { fill: var(--accent-100); stroke: var(--accent); stroke-width: 1.2; }
-.archFlow path { fill: none; stroke: var(--line-strong); stroke-width: 1.2; stroke-dasharray: 4 7; }
-.archText { fill: var(--ink-strong); font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; }
-.archSub { fill: var(--ink-soft); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
-.archHubText { fill: var(--accent); font-family: 'Poppins', sans-serif; font-size: 15px; font-weight: 600; }
-.archGroup, .archLabel { fill: var(--ink-soft); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; }
-.archDotRx { fill: var(--rx); }
-.archDotTx { fill: var(--tx); }
-
-/* ---------- kurulum ---------- */
-
-.steps { display: grid; gap: 20px; }
-
-.step {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--paper);
-}
-
-.stepHead {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--line);
-}
-
-.stepBadge {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 13px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stepLabel {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink-strong);
-  margin-right: auto;
-}
-
-.step pre {
-  margin: 0;
-  padding: 20px;
-  overflow-x: auto;
-  background: var(--night);
-  border: 0;
-  border-radius: 0;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  line-height: 1.75;
-  color: #e6e6ff;
-  white-space: pre;
-}
-
-.copy {
-  flex: none;
-  padding: 6px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink-soft);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-.copy:hover { color: var(--accent); border-color: var(--accent); }
-.copyError { color: var(--critical); border-color: var(--critical); }
-
-.hint {
-  margin: 24px 0 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-}
-.hint a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
-.hint code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.92em;
-  padding: 1px 5px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background: var(--accent-100);
-}
-
-/* ---------- v0.3.0 rozetleri ---------- */
-
-.badges { display: flex; flex-wrap: wrap; gap: 10px; }
-.badge {
-  padding: 7px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--accent-100);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-/* ---------- alt CTA (koyu) ---------- */
-
-.bottom {
-  background: var(--night);
-  padding: 88px 0;
-  text-align: center;
-}
-.bottomTitle {
-  margin: 0 0 12px;
-  font-size: clamp(28px, 3.6vw, 43px);
-  line-height: 1.18;
+.h2 {
+  margin: 0 0 10px;
+  font-size: clamp(19px, 2.3vw, 26px);
+  line-height: 1.25;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #ffffff;
+  letter-spacing: -0.02em;
+  color: var(--ink-hi);
   text-wrap: balance;
 }
-.bottomText {
-  margin: 0 auto;
-  max-width: 56ch;
-  font-size: 17px;
+
+.sectionLede {
+  margin: 0 0 32px;
+  max-width: 64ch;
+  font-family: var(--prose);
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--dim);
+}
+.sectionLede code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  background: var(--panel-2);
+  color: var(--ink-hi);
+}
+
+.hint {
+  margin: 22px 0 0;
+  font-family: var(--prose);
+  font-size: 12.5px;
   line-height: 1.6;
-  color: var(--night-soft);
+  color: var(--dim);
 }
-.bottomCtas { justify-content: center; margin-top: 32px; }
-.bottomRisk { margin: 28px 0 0; font-size: 13px; color: var(--night-soft); }
-
-/* ---------- responsive ----------
-   Strapi mobilde: tek sütun, h1 43→33px, ray kenarlıkları çerçeve
-   olarak kalır, logo/istatistik şeritleri çok sütunlu kalmaya devam eder. */
-
-@media (max-width: 1000px) {
-  .chain { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .link:nth-child(3n) { border-right: 0; }
-  .link:nth-child(-n + 3) { border-bottom: 1px solid var(--line); }
-  .heroGrid { grid-template-columns: 1fr; }
-  .heroMain {
-    padding-right: 0;
-    padding-bottom: 36px;
-  }
-  .heroAside { padding-left: 0; }
+.hint a {
+  color: var(--rx);
+  text-underline-offset: 3px;
+}
+.hint code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  background: var(--panel-2);
+  color: var(--ink-hi);
 }
 
-@media (max-width: 720px) {
-  .page { --pad: 16px; }
-  .hero { padding-top: 40px; }
-  .section, .showcase { padding: 64px 0; }
-  .cards { grid-template-columns: minmax(0, 1fr); }
-  .chain { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .link:nth-child(3n) { border-right: 1px solid var(--line); }
-  .link:nth-child(2n) { border-right: 0; }
-  .link:nth-last-child(-n + 2) { border-bottom: 0; }
-  .link { border-bottom: 1px solid var(--line); }
-  .notes { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .heroMain { padding: 4px 0 32px; }
-  .sectionHead { margin-bottom: 32px; }
-  .wireCanvas { height: 150px; }
-  .bottom { padding: 64px 0; }
+/* ============================ TUI TABLE ============================ */
+
+.tableWrap {
+  /* table-layout: fixed + colgroup → tablo hiçbir zaman kabı aşmaz;
+     overflow-x yalnızca aşırı dar ekranda son çare */
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  /* Infima her <table>'a alt boşluk + display:block veriyor; kabı tam
+     doldurması için burada sıfırlanır (aksi halde sağ/alt hairline boşluğu) */
+  font-size: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .btn, .copy, .cmdCopy { transition: none; }
-  .cell { animation: none; transition: none; }
-  .cell:hover { transform: none; }
-}
-
-/* ---------- temsilî panel (koyu vitrin içinde) ----------
-   Ürünün kendi panelini alıntılıyor: stat kutuları DESIGN.md'deki Triad
-   kalıbını (Label → Data → Caption) ve sol kenar anlam rengini korur. */
-
-.panel {
-  border: 1px solid var(--night-line);
-  border-radius: 16px;
-  background: var(--night-raise);
-  overflow: hidden;
-}
-
-.panelBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--night-line);
-}
-
-.panelUrl {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+.tuiTable {
+  display: table;
+  width: 100%;
+  margin: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
   font-size: 12px;
-  color: var(--night-soft);
 }
 
-.panelLive {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: var(--ok);
+/* Infima'nın tüm hücrelere verdiği 1px kenarı sıfırla — yalnızca bilinçli
+   ayraçlar kalsın (satır üstü çizgisi, başlık şerit ayracı) */
+.tuiTable th,
+.tuiTable td {
+  border: 0;
 }
 
-.pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--ok);
-  animation: panelPulse 2s ease-in-out infinite;
+/* colgroup sütun genişlikleri — yüzde, her tabloda toplam 100 */
+.colAlan { width: 15%; }
+.colTerm { width: 22%; }
+.colMech { width: 63%; }
+.colScaleKey { width: 16%; }
+.colHalf { width: 42%; }
+.tuiTable thead th {
+  background: var(--rx);
+  color: var(--ground);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10.5px;
+  text-align: left;
+  padding: 7px 12px;
+  border-right: 1px solid rgba(10, 13, 19, 0.22);
+}
+.tuiTable thead th:last-child { border-right: 0; }
+
+.tuiTable td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--rule);
+  vertical-align: top;
+  overflow-wrap: anywhere;
 }
 
-@keyframes panelPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+.grpCell {
+  font-weight: 600;
+  color: var(--ink-hi);
+  border-left: 2px solid var(--rule-hi);
+  background: var(--panel-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 10.5px;
+}
+.grp_rx .grpCell { border-left-color: var(--rx); }
+.grp_tx .grpCell { border-left-color: var(--tx); }
+.grp_rose .grpCell { border-left-color: var(--rose); }
+.grp_emerald .grpCell { border-left-color: var(--emerald); }
+
+.termCell {
+  font-weight: 600;
+  color: var(--ink-hi);
+}
+.mechCell {
+  font-family: var(--prose);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--dim);
 }
 
-.panelStats {
+/* ============================ PANEL VİTRİN ============================ */
+
+.showcase {
+  max-width: 880px;
+}
+.showcase .panelBody {
+  padding: 0;
+}
+
+.tiles {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: 1px solid var(--night-line);
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--rule);
 }
-
 .tile {
-  padding: 16px 18px 18px;
-  border-left: 2px solid transparent;
-  border-right: 1px solid var(--night-line);
+  padding: 12px 14px 14px;
+  border-left: 2px solid var(--rule-hi);
+  border-right: 1px solid var(--rule);
   min-width: 0;
 }
 .tile:last-child { border-right: 0; }
-
-.sCyan { border-left-color: var(--rx); }
-.sViolet { border-left-color: var(--tx); }
-.sEmerald { border-left-color: var(--ok); }
-.sAmber { border-left-color: var(--warn); }
+.edge_emerald { border-left-color: var(--emerald); }
+.edge_rx { border-left-color: var(--rx); }
+.edge_tx { border-left-color: var(--tx); }
+.edge_amber { border-left-color: var(--amber); }
 
 .tileLabel {
   display: block;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--night-soft);
+  color: var(--dim);
 }
-
 .tileValue {
   display: block;
-  margin-top: 7px;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #ffffff;
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink-hi);
   font-variant-numeric: tabular-nums;
 }
-
-.tileCaption {
+.tileCap {
   display: block;
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--night-soft);
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--dim);
 }
 
-.panelBody {
+.showBody {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  border-bottom: 1px solid var(--night-line);
+  grid-template-columns: 1.4fr 1fr;
 }
-
-.panelCard {
-  padding: 16px 18px 18px;
-  border-right: 1px solid var(--night-line);
+.showCol {
+  padding: 14px;
+  border-right: 1px solid var(--rule);
   min-width: 0;
 }
-.panelCard:last-child { border-right: 0; }
+.showCol:last-child { border-right: 0; }
 
-.panelCardHead {
+.showColHead {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
-}
-
-.panelCardTitle {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  gap: 10px;
+  margin: 4px 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--night-soft);
+  color: var(--dim);
+}
+.showCol .showColHead:not(:first-child) {
+  margin-top: 16px;
 }
 
-.panelUnit {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: var(--night-soft);
-}
-
-.spark {
-  display: block;
-  width: 100%;
-  height: 84px;
+.sparkRow {
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 1px;
+  word-break: break-all;
 }
 
 .epList {
@@ -895,217 +651,411 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 .epList li { min-width: 0; }
-
 .epRow {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
-
 .epHost {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: #ffffff;
+  font-size: 11.5px;
+  color: var(--ink-hi);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
-
 .epMeta {
-  flex: none;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  color: var(--night-soft);
+  flex-shrink: 0;
+  font-size: 9.5px;
+  color: var(--dim);
 }
-
 .epBar {
-  margin-top: 5px;
+  margin-top: 4px;
   height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  overflow: hidden;
+  background: var(--rule);
 }
 .epBar i {
   display: block;
   height: 100%;
   background: var(--rx);
-  transition: width 0.9s linear;
 }
 
 .feed {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: 10px;
 }
 .feed li {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--night-line);
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--night-soft);
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
   min-width: 0;
 }
-.feed li:last-child { border-bottom: 0; }
-
 .feedDot {
   width: 5px;
   height: 5px;
-  border-radius: 999px;
-  flex: none;
+  flex-shrink: 0;
   background: currentColor;
 }
-.proc { color: #38bdf8; }
-.warn { color: var(--warn); }
-.crit { color: var(--critical); }
+.feed_proc { color: var(--sky, #38bdf8); }
+.feed_warn { color: var(--amber); }
+.feed_crit { color: var(--rose); }
 
-@media (max-width: 860px) {
-  .panelStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tile:nth-child(2n) { border-right: 0; }
-  .tile:nth-child(-n + 2) { border-bottom: 1px solid var(--night-line); }
-  .panelBody { grid-template-columns: minmax(0, 1fr); }
-  .panelCard { border-right: 0; border-bottom: 1px solid var(--night-line); }
-  .panelCard:last-child { border-bottom: 0; }
+/* ============================ 5651 ZİNCİRİ ============================ */
+
+.chain {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--rule);
+  background: var(--panel);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .pulse { animation: none; }
-  .epBar i { transition: none; }
+.link {
+  flex: 1 1 150px;
+  padding: 14px 14px;
+  border-right: 1px solid var(--rule);
+  min-width: 0;
 }
-
-/* ---------- ölçek karşılaştırması ---------- */
-
-.scale {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--paper);
-  overflow: hidden;
-}
-
-.scaleHead,
-.scaleRow {
-  display: grid;
-  grid-template-columns: 9.5rem minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: 24px;
-  padding: 14px 24px;
-  align-items: baseline;
-}
-
-.scaleHead {
-  border-bottom: 1px solid var(--line);
-  background: var(--paper-tint);
-}
-
-.scaleColSingle,
-.scaleColScaled {
+.linkArrow {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--rule-hi);
+  border-right: 1px solid var(--rule);
   font-size: 12px;
+}
+.linkTag {
+  display: block;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--rx);
+  margin-bottom: 6px;
 }
-.scaleColSingle { color: var(--ink-soft); }
-.scaleColScaled { color: var(--accent); }
-
-.scaleRow {
-  border-bottom: 1px solid var(--line);
-}
-.scaleRow:last-child { border-bottom: 0; }
-
-.scaleKey {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.scaleSingle {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-  min-width: 0;
-}
-
-.scaleScaled {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-strong);
-  font-weight: 500;
-  min-width: 0;
-}
-
-/* satır içi mini başlıklar yalnızca dar ekranda görünür */
-.scaleMini { display: none; }
-
-@media (max-width: 860px) {
-  .scaleHead { display: none; }
-  .scaleRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-    padding: 18px 20px;
-  }
-  .scaleMini {
-    display: block;
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-style: normal;
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-soft);
-    margin-bottom: 3px;
-  }
-  .scaleScaled .scaleMini { color: var(--accent); }
-}
-
-/* ---------- buton ikonları ---------- */
-
-.icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
+.linkValue {
   display: block;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-hi);
+}
+.linkDone .linkTag { color: var(--emerald); }
+.linkDone .linkValue { color: var(--emerald); }
+
+.notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 28px;
+}
+.noteH {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-hi);
+}
+.notes p {
+  margin: 0;
+  font-family: var(--prose);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+.notes code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.88em;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  background: var(--panel-2);
+  color: var(--ink-hi);
 }
 
-.btnLabel {
-  /* iki ikon arasında kalan metin; ikonlar sabit genişlikte olduğu için
-     etiket ortada durur */
-  flex: 1 1 auto;
-  text-align: center;
-  white-space: nowrap;
-}
+/* ============================ MİMARİ ============================ */
 
-/* stat kartındaki canlı mini spark — sayı sabit, hareket sistemin
-   çalıştığını anlatır (bkz. index.js'teki gerekçe) */
-.cellSpark {
+.archScroll {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  padding: 16px;
+}
+.archSvg {
   display: block;
   width: 100%;
-  height: 26px;
-  margin-top: 14px;
-  overflow: visible;
+  min-width: 720px;
+}
+.archNode {
+  fill: var(--ground);
+  stroke: var(--rule-hi);
+  stroke-width: 1;
+}
+.archHub {
+  fill: rgba(34, 211, 238, 0.08);
+  stroke: var(--rx);
+  stroke-width: 1.2;
+}
+.archFlow path {
+  fill: none;
+  stroke: var(--rule-hi);
+  stroke-width: 1.1;
+  stroke-dasharray: 3 6;
+}
+.archText {
+  fill: var(--ink-hi);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+.archSub {
+  fill: var(--dim);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+}
+.archHubText {
+  fill: var(--rx);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+.archGroup, .archLabel {
+  fill: var(--dim);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+.archDotRx { fill: var(--rx); }
+.archDotTx { fill: var(--tx); }
+
+/* ============================ KURULUM ============================ */
+
+.steps {
+  display: grid;
+  gap: 18px;
+}
+.step {
+  border: 1px solid var(--rule);
+  background: var(--panel);
+}
+.stepHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.stepBadge {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rx);
+  color: var(--ground);
+  font-size: 12px;
+  font-weight: 700;
+}
+.stepLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-hi);
+  margin-right: auto;
+}
+.stepPre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  background: var(--ground);
+  border: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre;
 }
 
-/* uç nokta nabzı — "şu an akıyor" sinyali */
-.sparkTip {
-  animation: tipPulse 1.6s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
+/* ============================ v1.3.0 ROZETLERİ ============================ */
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.badge {
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  background: var(--panel-2);
+  font-size: 11.5px;
+  color: var(--ink);
+}
+.badge::before {
+  content: '+ ';
+  color: var(--emerald);
 }
 
-@keyframes tipPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+/* ============================ ALT ============================ */
+
+.bottom {
+  padding: 72px 0 80px;
+  text-align: center;
+}
+.bottomTitle {
+  margin: 0 0 12px;
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink-hi);
+}
+.bottomText {
+  margin: 0 auto;
+  max-width: 54ch;
+  font-family: var(--prose);
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--dim);
+}
+.bottom .heroCtas {
+  justify-content: center;
+  margin-top: 26px;
+}
+.bottomRisk {
+  margin: 24px 0 0;
+  font-size: 11px;
+  color: var(--rule-hi);
+}
+
+/* ============================ ALT EKRAN ŞERİDİ (FnKeyBar) ============================ */
+
+.screenBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  background: #0a0d13;
+  border-top: 1px solid var(--rule);
+}
+.screenBarInner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  font-size: 10px;
+  scrollbar-width: none;
+}
+.screenBarInner::-webkit-scrollbar { display: none; }
+
+.screenKey {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.screenKey:hover {
+  color: var(--ink-hi);
+  background: var(--panel-2);
+}
+.screenNum {
+  color: var(--rx);
+  font-weight: 700;
+}
+/* aktif ekran: panel-2 zemin + parlak metin + cyan üst aksan çizgisi —
+   TuiTable'ın cyan reverse-video başlığıyla çakışmaması için dolu cyan DEĞİL */
+.screenKeyActive {
+  background: var(--panel-2);
+  color: var(--ink-hi);
+  box-shadow: inset 0 2px 0 0 var(--rx);
+}
+
+.screenBarSpacer {
+  flex: 1;
+  min-width: 8px;
+  border-right: 1px solid var(--rule);
+}
+.screenAction {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-left: 1px solid var(--rule);
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.screenAction:hover {
+  color: var(--rx);
+  text-decoration: none;
+}
+
+/* ============================ RESPONSIVE ============================ */
+
+@media (max-width: 996px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .showBody {
+    grid-template-columns: 1fr;
+  }
+  .showCol {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .showCol:last-child { border-bottom: 0; }
+  .notes {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .page { --pad: 14px; }
+  .section, .sectionTint { padding: 48px 0; }
+  .hero { padding-bottom: 44px; }
+  .bottom { padding: 48px 0 64px; }
+  .tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .tile:nth-child(2n) { border-right: 0; }
+  .tile:nth-child(-n + 2) { border-bottom: 1px solid var(--rule); }
+  /* dar ekranda ALAN/YETENEK sütunlarını daralt, MEKANİZMA'ya yer aç */
+  .colAlan { width: 76px; }
+  .colTerm { width: 27%; }
+  .colMech { width: auto; }
+  .colScaleKey { width: 76px; }
+  .colHalf { width: auto; }
+  .tuiTable { font-size: 11.5px; }
+  .tuiTable td { padding: 8px 9px; }
+  .mechCell { font-size: 11.5px; }
+  .chain .link { flex-basis: 100%; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .chain .linkArrow { display: none; }
+  .stripMeters { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cellSpark { opacity: 0.6; }
-  .sparkTip { animation: none; }
+  .wsDot, .cursor { animation: none; }
+  .bracket, .copy, .screenKey { transition: none; }
 }

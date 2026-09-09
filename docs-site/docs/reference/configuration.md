@@ -16,31 +16,32 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/CONFIGURATI
 | `-db` | `bazntms.db` | **SQLite** dosya yolu **veya** `postgres://` DSN (DSN verilirse PostgreSQL/TimescaleDB modu) |
 | `-retention-hours` | `168` (7 gün) | Ham zaman-serisi saklama süresi. TimescaleDB modunda native chunk-drop retention politikası, ayrıca 15 dk'da bir `Maintainer` (capture'dan bağımsız) siler |
 | `-agent-archive-days` | `30` | Bu kadar gün çevrimdışı kalan agent'lar `Maintainer` tarafından tam cascade ile silinir (kayıt + iface/conn/process/L7/DNS/subnet/`alert_seen`). `0` = kapalı. Makine kimliği (`machine_id`) sayesinde geri dönen bir makine temiz bir kayıt olarak yeniden enroll olur |
-| `-multi-site` | `false` | Çoklu-saha (MSP) modu: `site` sert bir yetki sınırı olur. Agent kaydı **site-bağlı** enroll token ister (statik `-enroll-token` ve site'siz DB token'ları reddedilir); enroll token üretimi `site` alanı zorunlu; `site-admin` rolü yalnız kendi sahasını yönetir. Bkz. [DEPLOYMENT-MODEL.md](DEPLOYMENT-MODEL.md) |
-| `-session-store` | `memory` | Panel oturum deposu. `memory` = süreç-içi (tek controller replikası). `db` = paylaşımlı `sessions` tablosu — **birden çok controller replikası** aynı oturumları görür, biri yeniden başlasa kullanıcı düşmez, logout replikalar arası anında. Yalnızca `sha256(çerez token'ı)` saklanır. Postgres modu önerilir (A4). Bkz. [decisions/0004-shared-sessions.md](decisions/0004-shared-sessions.md) |
+| `-multi-site` | `false` | Çoklu-saha (MSP) modu: `site` sert bir yetki sınırı olur. Agent kaydı **site-bağlı** enroll token ister (statik `-enroll-token` ve site'siz DB token'ları reddedilir); enroll token üretimi `site` alanı zorunlu; `site-admin` rolü yalnız kendi sahasını yönetir. Bkz. [DEPLOYMENT-MODEL.md](https://github.com/gokayybaz/bazntms/blob/main/docs/DEPLOYMENT-MODEL.md) |
+| `-session-store` | `memory` | Panel oturum deposu. `memory` = süreç-içi (tek controller replikası). `db` = paylaşımlı `sessions` tablosu — **birden çok controller replikası** aynı oturumları görür, biri yeniden başlasa kullanıcı düşmez, logout replikalar arası anında. Yalnızca `sha256(çerez token'ı)` saklanır. Postgres modu önerilir (A4). Bkz. [decisions/0004-shared-sessions.md](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0004-shared-sessions.md) |
 | `-queue-max-age-hours` | `24` | JetStream stream mesaj yaşı sınırı. Tüketilmeyen mesajlar bu süreden sonra düşer. `MaxDeliver` (10) denemeden sonra da başarısız kalan mesaj `ingest.dead` DLQ konusuna taşınır (`bazntms_ingest_dead_total{subject}` metriği; `nats stream view` ile incelenir). (C4) |
 | `-public-url` | — | Panelin dış adresi (ör. `https://ntms.example.com`). İki yerde kullanılır: **(1)** WebSocket handshake origin izin listesi (Cross-Site WebSocket Hijacking'e karşı — `-tls-hosts` + `localhost`/`127.0.0.1`/`[::1]` de eklenir; ikisi de boşsa tüm origin'ler kabul edilir + uyarı loglanır). **(2)** OIDC `redirect_url` boşsa `<public-url>/api/auth/oidc/callback` varsayılır. (B5) |
 | `-nats` | — | NATS JetStream adresi. Boşsa kuyruk kapalı: ingest doğrudan store'a yazar. Örn: `nats://localhost:4222` |
 | `-capture` | `true` | Hub'ın kendi paket yakalaması/collector'u. Çoklu replika ingest'te kapatılır |
+| `-agent-pcap` | `true` | Agent'larda derin toplama (süreç trafiği + DNS + L7/SNI) ve ham PCAP kaydı politikası. **v1.3.0'dan beri varsayılan açık.** Filo genelinde kapatmak: `-agent-pcap=false` (veya `hub.yaml` / Helm `agent_pcap: false`). Agent tarafında ayrıca `collect.method: off` ile tek tek kapatılır |
 | `-alerts` | `true` | Uyarı kural motoru. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-poller` | `true` | SNMP cihaz poller'ı. Çoklu replikada yalnızca bir replikada açık olmalı |
 | `-prune` | `true` | Veritabanı bakımı (eski satır temizliği + retention). Çoklu replikada **yalnızca bir** hub'da açık olmalı |
 | `-tls` | `false` | HTTPS + agent karşılıklı TLS (mTLS). Hub kendi CA'sını üretir, agent CSR'larını enrollment'ta imzalar. `-tls-dir`/`-tls-hosts`/`-tls-cert`/`-tls-key` |
 | `-vault-key-file` | `vault.key` | Kimlik kasası master anahtar dosyası (32 bayt hex; yoksa üretilir). `-vault-key-source=file` iken kullanılır |
-| `-vault-key-source` | `file` | Master anahtar kaynağı. `file` = `-vault-key-file`. `env` = `BAZNTMS_VAULT_MASTER_KEY` (hex/base64, 32 bayt) — **anahtar diske hiç yazılmaz**; k8s Secret / AWS Secrets Manager / GCP Secret Manager / HashiCorp Vault agent tarafından ortam değişkeni olarak enjekte edilir. (B8, [decisions/0006](decisions/0006-vault-key-provider.md)) |
+| `-vault-key-source` | `file` | Master anahtar kaynağı. `file` = `-vault-key-file`. `env` = `BAZNTMS_VAULT_MASTER_KEY` (hex/base64, 32 bayt) — **anahtar diske hiç yazılmaz**; k8s Secret / AWS Secrets Manager / GCP Secret Manager / HashiCorp Vault agent tarafından ortam değişkeni olarak enjekte edilir. (B8, [decisions/0006](https://github.com/gokayybaz/bazntms/blob/main/docs/decisions/0006-vault-key-provider.md)) |
 | `-flow-port` | — | NetFlow v5/v9 + IPFIX + **sFlow v5** UDP dinleme portu (örn. `2055`). Üçü de datagram versiyonundan ayrılır; v9/IPFIX şablonları exporter başına önbelleklenir |
 | `-sflow-port` | — | sFlow v5 için ayrı UDP portu (örn. `6343`). `-flow-port` zaten sFlow'u da kabul eder; bu yalnızca farklı portta dinlemek için |
 | `-ioc-file` | — | Tehdit istihbaratı domain kara listesi. Eşleşen L7 (SNI/Host) veya DNS trafiği `kind:"ioc"` uyarısı üretir. hosts / AdBlock / düz metin formatları; dosya `mtime` değişince otomatik yeniden yüklenir (2 dk yoklama) |
 | `-update-github-repo` | `gokayybaz/bazntms` | Agent binary'lerini çekecek GitHub deposu (`owner/name`). Hub bu deponun **en son release'ini** `-update-github-interval`'da bir yoklar, yeni sürümde `bazntms-agent-*` asset'lerini `-updates-dir`'e indirir, SHA-256 hesaplar, `manifest.json` yazar → agent'lar otomatik günceller. **Boş** = GitHub senkronu kapalı; yalnızca elle hazırlanmış (`bazntmsctl update sign`) `-updates-dir` içeriği sunulur. Rate-limit için `GITHUB_TOKEN` ortam değişkeni okunur |
 | `-update-github-interval` | `30m` | GitHub release yoklama aralığı |
-| `-updates-dir` | — (repo doluysa `updates`) | Agent güncelleme kanalı dizini (`<dir>/<channel>/manifest.json` + binary'ler). Boş bırakılırsa `-update-github-repo` doluyken `updates`, değilse kanal kapalı. Bkz. [UPGRADE-RUNBOOK.md](UPGRADE-RUNBOOK.md) §2 |
+| `-updates-dir` | — (repo doluysa `updates`) | Agent güncelleme kanalı dizini (`<dir>/<channel>/manifest.json` + binary'ler). Boş bırakılırsa `-update-github-repo` doluyken `updates`, değilse kanal kapalı. Bkz. [UPGRADE-RUNBOOK.md](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md) §2 |
 | `-auth-password` | — | Arayüz şifresi (bootstrap). Boşsa kimlik doğrulama kapalı. `AUTH_PASSWORD` de geçerli. Etkin bir `admin` RBAC kullanıcısı oluşunca devre dışı kalır (bkz. RBAC) |
 | `-enroll-token` | — | **Bootstrap** agent enrollment token'ı. Boşsa rastgele üretilip loglanır. Yalnızca ilk kurulum için — sızarsa hub'ı yeniden başlatmadan iptal edilemez. Kalıcı token'lar: panel > Yönetim > Agent Ekle (bkz. aşağıda) |
-| `-llm-base-url` | — | OpenAI-uyumlu AI servisi adresi. Örn: `http://localhost:11434/v1` (Ollama), `http://localhost:1234/v1` (LM Studio) |
-| `-llm-api-key` | — | AI API anahtarı. Yerel modeller için gerekmez |
-| `-llm-model` | — | Varsayılan model. UI'dan da seçilebilir |
-| `-llm-max-tokens` | `0` | İstek başına token limiti (0 = dahili varsayılanlar: parça 1500, final 2500, tek seferde 3000) |
-| `-llm-no-think` | `false` | Qwen3 serisi modellerde düşünme modunu kapatır (sistem mesajına `/no_think` ekler) |
+| `-ai` | `false` | AI analiz sekmesi + `/api/v1/ai/*` uçları (Faz 26). Sağlayıcılar: panel > Yönetim > AI Sağlayıcı |
+| `-ai-allow-cloud` | `true` | `false` → yalnız yerel (loopback/RFC1918) model adresleri kabul edilir — bulut sağlayıcı **egress kilidi** (self-hosted / hava boşluklu) |
+| `-llm-base-url` | — | **Bootstrap** AI sağlayıcısı adresi (OpenAI-uyumlu; `http://localhost:11434/v1` Ollama). `ai_providers` tablosu boşsa ilk açılışta bir kez seed edilir |
+| `-llm-api-key` | — | Bootstrap sağlayıcı API anahtarı. Yerel modeller için gerekmez |
+| `-llm-model` | — | Bootstrap sağlayıcı varsayılan modeli (`gemma3`, `qwen2.5:7b`, `gpt-4o-mini` …) |
 | `-record-dir` | `captures` | PCAP kayıt dosyalarının yazılacağı dizin |
 | `-record-max-mb` | `100` | PCAP dosya başına üst boyut; aşıldığında otomatik yeni dosyaya geçer (rotasyon) |
 | `-geoip-dir` | `geoip` | MaxMind GeoLite2 `.mmdb` dosyalarının aranacağı dizin |
@@ -51,62 +52,57 @@ custom_edit_url: https://github.com/gokayybaz/bazntms/edit/main/docs/CONFIGURATI
 | Değişken | Karşılığı | Not |
 |----------|----------|-----|
 | `AUTH_PASSWORD` | `-auth-password` | |
-| `LLM_BASE_URL` / `OPENAI_BASE_URL` | `-llm-base-url` | |
-| `LLM_API_KEY` / `OPENAI_API_KEY` | `-llm-api-key` | |
-| `LLM_MODEL` | `-llm-model` | Varsayılan: `gpt-4o-mini` |
-| `LLM_MAX_TOKENS` | `-llm-max-tokens` | |
-| `LLM_NO_THINK` | `-llm-no-think` | `1` veya `true` |
+| `LLM_BASE_URL` / `OPENAI_BASE_URL` | `-llm-base-url` | bootstrap sağlayıcı |
+| `LLM_API_KEY` / `OPENAI_API_KEY` | `-llm-api-key` | bootstrap sağlayıcı |
+| `LLM_MODEL` | `-llm-model` | bootstrap sağlayıcı |
+| `BAZNTMS_AI__*` | `ai.*` YAML | `BAZNTMS_AI__NIGHTLY__ENABLED` vb. |
 
 Bayraklar ortam değişkenlerinden önceliklidir.
 
-## AI Kurulumu
+## AI Kurulumu (Faz 26)
 
-### Ollama (yerel)
+`-ai` ile aç. Sağlayıcılar **panelden** eklenir (Yönetim > AI Sağlayıcı);
+API anahtarları vault ile şifreli saklanır. `-llm-*` bayrakları yalnız
+**bootstrap** için (tablo boşsa ilk sağlayıcıyı seed eder — geriye uyum).
 
-```bash
-ollama pull qwen2.5:7b
-sudo ./bazntms -llm-base-url http://localhost:11434/v1
-```
-
-Yerel adres görüldüğünde API anahtarı zorunluluğu otomatik kalkar. Kurulu
-modeller `/api/ai/models` üzerinden arayüze listelenir.
-
-### LM Studio
-
-Uygulamada "Local Server" sekmesinden sunucuyu başlatın:
+### Yerel model (önerilen — veri ağdan çıkmaz)
 
 ```bash
-sudo ./bazntms -llm-base-url http://localhost:1234/v1
+ollama pull gemma3
+./bazntms-hub -ai -ai-allow-cloud=false -llm-base-url http://localhost:11434/v1 -llm-model gemma3
 ```
 
-### llama.cpp server / vLLM / OpenRouter / OpenAI
+Yerel adreslerde (`localhost` / `127.0.0.1` / RFC1918) API anahtarı gerekmez.
+LM Studio: `http://localhost:1234/v1`. vLLM / llama.cpp / OpenRouter: `kind=openai-compat`.
 
-```bash
-# llama.cpp
-sudo ./bazntms -llm-base-url http://localhost:8080/v1 -llm-model model-adi
+### Bulut sağlayıcı
 
-# Bulut servisler
-LLM_API_KEY=sk-... ./bazntms
+`-ai-allow-cloud=true` (varsayılan) iken panelden ekleyin: `kind=openai`
+(`api_key` gir) veya `kind=anthropic`. Egress kilidi açıksa (`=false`) bulut
+adresleri hem kayıtta hem çalışma anında reddedilir.
+
+### Reasoning modelleri (Qwen3, DeepSeek-R1)
+
+`<think>…</think>` blokları ve `reasoning_content` yedeği otomatik temizlenir.
+Sağlayıcı `opts.no_think` (Qwen3 düşünmeyi kapat) + `opts.max_tokens` panelden
+ayarlanır.
+
+### YAML örneği (`ai:` bloğu)
+
+```yaml
+ai:
+  enabled: true
+  allow_cloud: false          # yalnız yerel model adresleri
+  max_context_kb: 24
+  nightly:
+    enabled: true
+    spec: "daily:06:00"       # daily:HH:MM | weekly:gün:HH:MM | interval:dk
+    recipients: ["ops@example.com"]
+  triage:
+    enabled: true
+    min_severity: crit        # yeni kritik incident → otomatik triyaj notu
+    max_per_hour: 10
 ```
-
-### Reasoning modelleri (Qwen3, DeepSeek-R1 vb.)
-
-Bu modeller final cevaptan önce uzun düşünme metni üretir; token limiti
-düşünmede biterse boş yanıt döner. Sunucu `reasoning_content` alanını ve
-`<think>...</think>` bloklarını otomatik destekler. Ek ayarlar:
-
-```bash
--llm-no-think            # Qwen3: düşünmeyi kapat (çok daha hızlı)
--llm-max-tokens 4000     # düşünmeye alan bırak
-```
-
-### Parça parça gönderme (chunked)
-
-Analiz verisi 4 bölüme ayrılır: (1) trafik özeti + protokoller, (2) en yoğun
-hedefler, (3) en aktif süreçler, (4) DNS sorguları. `chunked: true` iken her
-bölüm ayrı istekle gider ve modelden yalnızca kısa not alınır; son istekte
-yalnızca notlar birleştirilerek final analiz üretilir. Ham veri modele hiçbir
-zaman ikinci kez gönderilmez — küçük modellerde (3B–7B) context şişmez.
 
 ## GeoIP Kurulumu
 
@@ -148,7 +144,8 @@ zaman çözümlenmez.
 | `alert_events` | olay anında | uyarı geçmişi |
 | `alert_seen` | kalıcı | yeni süreç/hedef kurallarının "görüldü" işaretleri |
 | `alert_config` | PUT ile | uyarı ayarları (JSON, tek satır) |
-| `insights` | analizle | AI analiz sonuçları |
+| `ai_conversations` / `ai_messages` | sohbet anında | AI analiz oturumları (arşiv; prune 90 gün) |
+| `ai_providers` | panelden | AI sağlayıcı profilleri (`api_key` vault-şifreli) |
 
 Saklama süresi: `-retention-hours` (varsayılan 168 saat = 7 gün). DB dosyası
 `-db` ile taşınabilir; boyut kontrolü için `ls -la <db>*` (WAL dahil).

@@ -65,6 +65,19 @@ Notlar:
   saatler sürebilir ve I/O yoğundur. Yeni kurulumlarda gerekmez (veri
   biriktikçe politika doldurur). Geri-doldurma tamamlanana dek `/api/report`
   ve `/api/v1/geo` eski dönemi eksik gösterir ama yavaşlamaz.
+- **v1.3.0'a yükseltme — derin toplama & L7 varsayılan açık.** Hub
+  `-agent-pcap` politikası ve agent tarafında süreç/DNS/L7 atıf motoru artık
+  **varsayılan çalışır**. Yükseltmeden sonra süreç trafiği / DNS / L7
+  panelleri **kendiliğinden dolmaya başlar** (agent'lar root/SYSTEM çalışır)
+  ve süreç-atıflı tablolara yazım artar — kapasite planlaması için
+  `docs/CAPACITY.md`. İstemiyorsanız: hub `-agent-pcap=false` (veya `hub.yaml`
+  / Helm `agent_pcap: false`), ya da agent başına `agent.yml` →
+  `collect.method: off`. Eski `collect.pcap: false` **artık yok sayılır**;
+  kapatmak için `method: off` gerekir.
+- **v1.3.0 — Windows agent'ta L7 için Npcap.** MSI yükseltmesi Npcap yoksa
+  onu sessizce indirip kurar (SHA-256 + Authenticode doğrulamalı). İnternet
+  erişimi olmayan Windows ana makinelerinde önce Npcap'i elle kurun; MSI onu
+  tespit edip atlar, aksi halde agent ETW'ye düşer (L7 hariç her şey akar).
 
 ## 2) Agent Otomatik Güncelleme (varsayılan — genelde hiçbir şey yapmanız gerekmez)
 
@@ -101,7 +114,7 @@ bazntmsctl update keygen -out updates/keys
 
 # 2. Sürüm imzala (release binary'leri ile)
 bazntmsctl update sign -key updates/keys/seed.key \
-  -out updates/stable -version v0.3.1 \
+  -out updates/stable -version v1.3.0 \
   bazntms-agent-linux-amd64 bazntms-agent-linux-arm64 \
   bazntms-agent-windows-amd64.exe bazntms-agent-darwin-arm64
 
@@ -128,7 +141,7 @@ sudo dpkg -i bazntms-agent-amd64.deb     # veya: rpm -U bazntms-agent-amd64.rpm
 
 ```bash
 # Chart appVersion imaj etiketini de taşır — yeni chart sürümü = yeni imajlar
-helm upgrade bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 0.3.3 \
+helm upgrade bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 1.3.0 \
   --reuse-values
 # DaemonSet agent'ları da günceller (agent.enabled=true ise pod'lar yeniden kurulur)
 ```

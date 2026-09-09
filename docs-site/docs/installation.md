@@ -46,7 +46,7 @@ docker compose -f deploy/docker-compose.scale.yml --profile loadgen up -d loadge
 Yayınlanmış chart (OCI, ghcr.io) — `--version` sürüm etiketidir (`v` yok):
 
 ```bash
-helm install bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 0.3.3 \
+helm install bazntms oci://ghcr.io/gokayybaz/charts/bazntms --version 1.3.0 \
   --set config.database.path="postgres://..." \
   --set config.nats.url="nats://..." \
   --set auth.existingSecret=bazntms-auth
@@ -63,6 +63,12 @@ Release sayfasındaki MSI'ı **çift tıklayınca gerçek bir kurulum sihirbazı
 açılır: karşılama ekranından sonra Hub adresi / kayıt (enroll) belirteci /
 site alanlarını dolduran bir "Sunucu Ayarları" ekranı gelir — terminal
 gerekmez.
+
+MSI kurulum sırasında [Npcap](https://npcap.com)'i **sessizce indirip
+kurar** (`npcap.com`, SHA-256 + Authenticode doğrulamalı) ve agent
+`collect.method: pcap` ile gelir → süreç trafiği + DNS + L7/SNI Windows'ta
+da çalışır. Npcap indirilemezse kurulum yine başarılı biter; agent ETW'ye
+düşer (L7 hariç her şey akar).
 
 Yönetilen/GPO/sessiz dağıtım için komut satırından da aynı property'ler
 verilebilir (sihirbaz o zaman atlanır):
@@ -83,4 +89,12 @@ sc start bazntms-agent
 - MSI, servisi kurulum anında başlatmaz — hub bilgisi girilmeden başlayan
   servis hata verip kurulumu düşürür (hata 1920) diye tasarım gereği.
 
-Kaynaklar: `docs/CONFIGURATION.md`, `deploy/`.
+## AI analiz (opt-in)
+
+AI analiz varsayılan **kapalıdır**. Hub'ı `-ai` ile başlatıp
+`/yonetim/ai` ekranından bir sağlayıcı (OpenAI-uyumlu servis — Ollama,
+LM Studio, llama.cpp, OpenAI… — veya Anthropic) tanımlayın; token vault'ta
+şifreli saklanır. Egress kilidi açıksa hub yalnızca tanımlı sağlayıcı
+adreslerine bağlanır.
+
+Ayrıntı: [Yapılandırma referansı](/docs/reference/configuration).

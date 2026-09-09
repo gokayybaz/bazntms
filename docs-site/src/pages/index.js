@@ -3,746 +3,301 @@ import Layout from '@theme/Layout';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './index.module.css';
 
-/* Landing page — "ölçüm aleti" yönü: koyu zemin, mono ray, datasheet.
-   Renk sözleşmesi ürünün kendi panelinden geliyor (bkz. depo kökündeki
-   DESIGN.md → Colors): cyan=rx/görünürlük, violet=tx/toplama,
-   rose=kritik/uyumluluk, emerald=sağlıklı/ölçek. Dekoratif renk yok. */
+/* ============================================================================
+   Landing page — ürünün kendi arayüzüyle (frontend/DESIGN.md, "htop
+   çok-panelli terminal") aynı dil. Sayfa bir bazNTMS ekranı gibi okunur:
+   üstte TuiHeader benzeri şerit, panel panel aşağı inen ekranlar, altta sabit
+   numaralı ekran şeridi (1–7 tuşuyla gezilir, tıpkı dashboard'daki TabBar).
+   Kare köşe, tek mono aile, gölge/blur/gradyan yok. 7 renk sabit-anlam.
+   Dekoratif hiçbir renk yok — her renk panelde gördüğünüz anlamı taşır.
+   ========================================================================== */
 
-/* 12 yetenek, 4 tematik grup — ikon kartı yerine datasheet satırı olarak
-   okunuyor: mono terim → birincil tanım → dim ayrıntı. */
-const CAPABILITY_GROUPS = [
+const REPO = 'https://github.com/gokayybaz/bazntms';
+const QUICK_CMD = 'docker compose -f deploy/docker-compose.yml up --build';
+
+/* alt şerit: numaralı ekranlar (dashboard TabBar karşılığı) */
+const SCREENS = [
+  { id: 'ust', label: 'ÜST' },
+  { id: 'yetenekler', label: 'YETENEK' },
+  { id: 'panel', label: 'PANEL' },
+  { id: 'uyumluluk', label: '5651' },
+  { id: 'mimari', label: 'MİMARİ' },
+  { id: 'olcek', label: 'ÖLÇEK' },
+  { id: 'kurulum', label: 'KURULUM' },
+];
+
+/* 12 yetenek — datasheet satırı: ALAN → YETENEK → MEKANİZMA. Grup başına
+   sol-kenar anlam rengi (Triad Rule — frontend Overview stat tile ile aynı). */
+const CAPABILITIES = [
   {
-    label: 'Görünürlük',
-    accent: 'cyan',
-    items: [
-      {
-        term: 'Trafik',
-        desc: 'Paket bazlı ölçüm, yön tespiti ve protokol dağılımı',
-        note: 'En yoğun uç noktalar GeoIP/ASN ile zenginleştirilip dünya haritasında hacme göre görselleştirilir.',
-      },
-      {
-        term: 'L7 görünürlük',
-        desc: 'Süreç bazlı TLS ClientHello SNI + HTTP Host çıkarımı',
-        note: 'DNS sorgu/yanıt takibiyle birlikte — imza tabanlı DPI olmadan “hangi süreç, hangi alan adına” sorusunun cevabı.',
-      },
-      {
-        term: 'Topoloji',
-        desc: 'LLDP/CDP/ARP keşfi ve agent subnet bildirimleriyle otomatik harita',
-        note: 'client → hub → cihaz → router → internet zinciri, gerçek trafik akışıyla birlikte tek bakışta.',
-      },
+    group: 'Görünürlük',
+    accent: 'rx',
+    rows: [
+      [
+        'Trafik ölçümü',
+        'Paket bazlı yön / protokol / port dağılımı; en yoğun uç noktalar GeoIP + ASN ile dünya haritasında hacme göre.',
+      ],
+      [
+        'L7 + DNS görünürlüğü',
+        'Süreç bazlı TLS ClientHello SNI + HTTP Host + DNS sorgu/yanıt — imza tabanlı DPI yok, "hangi süreç hangi alan adına".',
+      ],
+      [
+        'Topoloji',
+        'LLDP/CDP/ARP keşfi + agent subnet bildirimi → client → hub → cihaz → router → internet zinciri otomatik haritada.',
+      ],
     ],
   },
   {
-    label: 'Toplama & entegrasyon',
-    accent: 'violet',
-    items: [
-      {
-        term: 'Agent filosu',
-        desc: 'Enrollment, toplu telemetri ve offline disk kuyruğu ile 5.000 agent’a kadar ölçek',
-        note: 'Agent↔hub trafiği karşılıklı TLS (mTLS) ile korunur, sertifikalar kendini yeniler.',
-      },
-      {
-        term: 'Akış toplama',
-        desc: 'NetFlow v5/v9, IPFIX ve sFlow v5 tek toplayıcıda',
-        note: 'Şablon önbelleği ve örnekleme oranına göre otomatik ölçekleme; tamamı aynı akış tablosuna yazılır.',
-      },
-      {
-        term: 'Cihazlar',
-        desc: 'SNMPv3 arayüz/durum takibi, syslog alıcısı ve FortiGate REST API',
-        note: 'VPN tünelleri, SD-WAN sağlık metrikleri, politika hit trendleri ve oturum izleme.',
-      },
+    group: 'Toplama & entegrasyon',
+    accent: 'tx',
+    rows: [
+      [
+        'Agent filosu',
+        'Enrollment, toplu telemetri, offline disk kuyruğu — doğrulanmış 5 000 agent. Agent↔hub mTLS, sertifikalar kendini yeniler.',
+      ],
+      [
+        'Akış toplama',
+        'NetFlow v5/v9, IPFIX ve sFlow v5 tek toplayıcıda; şablon önbelleği + örnekleme oranına göre ölçekleme.',
+      ],
+      [
+        'Ağ cihazları',
+        'SNMPv3 arayüz/durum takibi, syslog alıcısı, FortiGate REST API — VPN tünel, SD-WAN sağlık, politika hit trendi.',
+      ],
     ],
   },
   {
-    label: 'Güvenlik & uyumluluk',
+    group: 'Güvenlik & uyumluluk',
     accent: 'rose',
-    items: [
-      {
-        term: 'Erişim',
-        desc: 'Rol tabanlı erişim (admin / netops / analyst / viewer + site scope) ve OIDC SSO',
-        note: 'Entegrasyon token’ları ve hash-zincirli append-only denetim kaydı.',
-      },
-      {
-        term: 'SIEM / IOC',
-        desc: 'IOC kara listesiyle L7 ve DNS eşleştirmesi',
-        note: 'Olaylar CEF, LEEF, JSON veya düz syslog olarak Splunk HEC, ServiceNow, QRadar, ArcSight gibi hedeflere aktarılır.',
-      },
-      {
-        term: 'Uyumluluk',
-        desc: '5651 için imzalı log zinciri, ISO 27001 için denetim kayıtları',
-        note: 'Risk defteri, SoA, iç denetim ve tek tıkla denetçi paketi.',
-      },
+    rows: [
+      [
+        'Erişim denetimi',
+        'Rol tabanlı erişim (admin / netops / analyst / viewer + site scope), OIDC SSO, hash-zincirli append-only denetim kaydı.',
+      ],
+      [
+        'SIEM / IOC',
+        'IOC kara listesiyle L7 + DNS eşleştirme; olaylar CEF / LEEF / JSON → Splunk HEC, QRadar, ServiceNow, ArcSight.',
+      ],
+      [
+        '5651 + ISO 27001',
+        'İmzalı log zinciri + RFC 3161 zaman damgası; risk defteri, SoA, iç denetim ve tek tıkla denetçi paketi.',
+      ],
     ],
   },
   {
-    label: 'Ölçek & operasyon',
+    group: 'Ölçek & operasyon',
     accent: 'emerald',
-    items: [
-      {
-        term: 'Depo',
-        desc: 'PostgreSQL + TimescaleDB üzerinde katmanlı saklama — ham 7g · 1dk 90g · 1sa 2y',
-        note: 'NATS JetStream ile esnek ingest hattı; k8s/Helm dağıtımı hazır.',
-      },
-      {
-        term: 'Anomali',
-        desc: 'İstatistiksel anomali tespiti — saatlik baseline + z-skoru',
-        note: 'SLA, kapasite ve banding raporları; Teams, Slack, SMTP ve imzalı webhook bildirim kanalları.',
-      },
-      {
-        term: 'Dağıtım',
-        desc: 'Docker/Helm, deb · rpm · MSI · pkg installer’ları, imza doğrulamalı otomatik güncelleme',
-        note: 'Elle bakımlı OpenAPI 3.1 şeması + gömülü /api/docs gezgini.',
-      },
+    rows: [
+      [
+        'Depo',
+        'SQLite → PostgreSQL + TimescaleDB tek bayrakla; katmanlı saklama ham 7g · 1dk 90g · 1sa 2y. NATS JetStream ingest hattı.',
+      ],
+      [
+        'Anomali & rapor',
+        'Mevsimsel + EWMA baseline anomali tespiti; SLA / kapasite / PDF raporlar; zamanlı ve olay-tetikli çalışır.',
+      ],
+      [
+        'AI analiz',
+        'Çoklu sağlayıcı (OpenAI-uyumlu + Anthropic); /ai sohbet sekmesi, gecelik analiz, olay triyajı. Opt-in + egress kilidi.',
+      ],
     ],
   },
 ];
 
-/* 5651 zinciri — her halka bir öncekinin çıktısını mühürler, sıra bilgi taşır */
+/* 5651 zinciri — her halka bir öncekinin çıktısını mühürler */
 const CHAIN = [
-  { tag: 'Olay', value: 'log kaydı' },
-  { tag: 'Zincir', value: 'SHA-256 hash' },
-  { tag: 'Saatlik', value: 'Merkle checkpoint' },
-  { tag: 'Günlük', value: 'RFC 3161 damgası' },
-  { tag: 'Manifest', value: 'ed25519 imza' },
-  { tag: 'Saklama', value: 'WORM · 2 yıl', done: true },
+  { tag: 'OLAY', value: 'log kaydı' },
+  { tag: 'ZİNCİR', value: 'SHA-256 hash' },
+  { tag: 'SAATLİK', value: 'Merkle kök' },
+  { tag: 'GÜNLÜK', value: 'RFC 3161 damga' },
+  { tag: 'MANİFEST', value: 'ed25519 imza' },
+  { tag: 'SAKLAMA', value: 'WORM · 2 yıl', done: true },
 ];
 
-const NEW_IN = [
-  'Karşılıklı TLS (mTLS)',
-  'NetFlow v9 / IPFIX',
-  'sFlow v5',
-  'L7 uygulama görünürlüğü',
-  'DNS görünürlüğü',
-  'Coğrafi trafik haritası',
-  'SIEM / ITSM connector',
-  'IOC eşleştirme',
-  'OpenAPI 3.1 + /api/docs',
-];
-
-/* Sayaç animasyonu için hedef sayı + son ek ayrı tutuluyor; "<1 sn"
-   sayılabilir olmadığından statik geçiyor. */
-const STATS = [
-  { to: 1000, suffix: '', label: 'cihaz · 60 sn poll' },
-  { to: 5000, suffix: '', label: 'agent · 30 sn batch' },
-  { to: 50, suffix: 'K', label: 'flow/sn sürekli' },
-  { static: '<1 sn', label: 'panel sorgusu p95' },
-];
-
-/* Sunucuda ve JS kapalıyken son değer basılır (SSR/hidrasyon güvenli);
-   istemcide monte olunca sıfırdan sayılır. prefers-reduced-motion'da
-   animasyon yok. */
-/* Kartın altındaki mini spark: sayıyı değil, sistemin çalıştığını anlatır.
-   Sayılar tasarım hedefi olduğu için oynatılmıyor — oynatmak gerçek zamanlı
-   veri varmış izlenimi verirdi. rAF yerine setInterval: arka planda kısılsa
-   da çalışır, duraklarsa da geride yanlış bir DEĞER değil donmuş bir çizgi
-   kalır. */
-const SPARK_N = 26;
-
-function useLiveSpark(seed) {
-  const [pts, setPts] = React.useState(() => {
-    const rnd = makeRng(seed);
-    const a = [];
-    let v = 0.5;
-    for (let i = 0; i < SPARK_N; i++) {
-      v = Math.max(0.12, Math.min(0.92, v + (rnd() - 0.5) * 0.34));
-      a.push(v);
-    }
-    return a;
-  });
-
-  React.useEffect(() => {
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return undefined;
-    const rnd = makeRng(seed + 977);
-    const id = setInterval(() => {
-      setPts((prev) => {
-        const next = prev.slice(1);
-        const last = prev[prev.length - 1];
-        next.push(Math.max(0.12, Math.min(0.92, last + (rnd() - 0.5) * 0.36)));
-        return next;
-      });
-    }, 700);
-    return () => clearInterval(id);
-  }, [seed]);
-
-  return pts;
-}
-
-function StatCard({ stat, index }) {
-  const [value, setValue] = React.useState(stat.to ?? 0);
-  const spark = useLiveSpark(index * 131 + 17);
-
-  React.useEffect(() => {
-    if (stat.to == null) return undefined;
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // sekme arka plandaysa rAF hiç çalışmaz — animasyonu atla, değeri bas
-    if (reduce || document.visibilityState === 'hidden') {
-      setValue(stat.to);
-      return undefined;
-    }
-    let raf = 0;
-    const dur = 900;
-    const delay = index * 90;
-    const t0 = performance.now() + delay;
-    setValue(0);
-    const tick = (now) => {
-      const p = Math.min(1, Math.max(0, (now - t0) / dur));
-      setValue(Math.round(stat.to * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    // Emniyet: rAF duraklatılırsa sayaç 0'da donup "0 cihaz" gösteriyordu.
-    // Zamanlayıcı arka planda kısılsa da çalışır, son değeri garanti eder.
-    const guard = setTimeout(() => {
-      cancelAnimationFrame(raf);
-      setValue(stat.to);
-    }, delay + dur + 400);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(guard);
-    };
-  }, [stat.to, index]);
-
-  const W = 100;
-  const H = 26;
-  const xy = (v, i) => [(i / (SPARK_N - 1)) * W, H - v * (H - 3) - 1.5];
-  const line = spark.map((v, i) => xy(v, i).join(',')).join(' ');
-  const [ex, ey] = xy(spark[spark.length - 1], SPARK_N - 1);
-
-  return (
-    <div className={styles.cell} style={{ animationDelay: `${index * 90}ms` }}>
-      <span className={styles.cellValue}>
-        {stat.static ?? value.toLocaleString('tr-TR') + stat.suffix}
-      </span>
-      <span className={styles.cellLabel}>{stat.label}</span>
-      <svg
-        className={styles.cellSpark}
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <polyline
-          points={line}
-          fill="none"
-          stroke="#22d3ee"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-          opacity="0.7"
-        />
-        <circle className={styles.sparkTip} cx={ex} cy={ey} r="2" fill="#22d3ee" />
-      </svg>
-    </div>
-  );
-}
-
-/* Ölçek: aynı binary'nin iki yapılandırması. Sütun sırası bir ilerlemeyi
-   anlatıyor (tek düğüm → filo), tabloyu taşıyan bilgi bu. */
+/* Tek düğüm → Ölçek: aynı binary'nin iki yapılandırması */
 const SCALE_ROWS = [
-  {
-    key: 'Depo',
-    single: 'SQLite dosyası',
-    scaled: 'PostgreSQL + TimescaleDB (pgx)',
-  },
-  {
-    key: 'Kuyruk',
-    single: 'Doğrudan yazım',
-    scaled: 'NATS JetStream — ingest / processor ayrışması',
-  },
-  {
-    key: 'Saklama',
-    single: 'Otomatik temizlik',
-    scaled: 'Hypertable + continuous aggregate: ham 7g → 1dk 90g → 1sa 2y',
-  },
-  {
-    key: 'Dağıtım',
-    single: 'Tek binary · docker-compose',
-    scaled: 'Helm chart — N × ingest + kontrolcü + yük dengeleyici',
-  },
-  {
-    key: 'Taşıma',
-    single: 'HTTP',
-    scaled: 'Opsiyonel mTLS — dahili CA, ECDSA P-256',
-  },
-  {
-    key: 'Güncelleme',
-    single: 'Elle',
-    scaled: 'stable / beta kanalı — SHA-256 + ed25519 doğrulamalı atomik değişim',
-  },
+  ['Depo', 'SQLite dosyası', 'PostgreSQL + TimescaleDB (pgx)'],
+  ['Kuyruk', 'Doğrudan yazım', 'NATS JetStream — ingest / processor ayrışması'],
+  ['Saklama', 'Otomatik temizlik', 'Hypertable + cagg: ham 7g → 1dk 90g → 1sa 2y'],
+  ['Dağıtım', 'Tek binary · docker-compose', 'Helm — N × ingest + kontrolcü + yük dengeleyici'],
+  ['Taşıma', 'HTTP', 'Opsiyonel mTLS — dahili CA, ECDSA P-256'],
+  ['Güncelleme', 'Elle', 'stable / beta kanalı — SHA-256 + ed25519 doğrulamalı atomik değişim'],
 ];
 
-/* üç birbirini dışlayan kurulum yolu (sıralı adım değil) — harf rozetli */
+/* üç birbirini dışlayan kurulum yolu (sıralı adım değil) */
 const STEPS = [
   {
     badge: 'A',
     label: 'Tek-node demo',
-    code: 'git clone https://github.com/gokayybaz/bazntms\ncd bazntms\ndocker compose -f deploy/docker-compose.yml up --build\n# → http://localhost:8080 · şifre: demo123',
+    code: `git clone ${REPO}
+cd bazntms
+docker compose -f deploy/docker-compose.yml up --build
+# → http://localhost:8080 · şifre: demo123`,
   },
   {
     badge: 'B',
-    label: 'Elle derleyin ve agent bağlayın',
-    code: 'make                       # frontend + hub + agent + ctl\n./bazntmsctl setup         # interaktif sihirbaz → bazntms-hub.yml\n./bazntms-hub -config bazntms-hub.yml\n\n# agent bağlamak için (deb · rpm · MSI · pkg release sayfasında):\n./bazntms-agent -hub-url https://hub.example.com \\\n  -enroll-token <hub-loglarındaki-token>',
+    label: 'Elle derle ve agent bağla',
+    code: `make                       # frontend + hub + agent + ctl
+./bazntmsctl setup         # interaktif sihirbaz → bazntms-hub.yml
+./bazntms-hub -config bazntms-hub.yml
+
+# agent (deb · rpm · MSI · pkg release sayfasında):
+./bazntms-agent -hub-url https://hub.example.com \\
+  -enroll-token <hub-loglarındaki-token>`,
   },
   {
     badge: 'C',
     label: 'Ölçek mimarisi (k8s olmadan)',
-    code: 'docker compose -f deploy/docker-compose.scale.yml up --build\n# 2 × ingest replikası + kontrolcü + nginx LB + JetStream\n# --scale hub-ingest=4 → yatay büyüt · dashboard: :8080 · agent API: :8081',
+    code: `docker compose -f deploy/docker-compose.scale.yml up --build
+# 2 × ingest + kontrolcü + nginx LB + JetStream
+# --scale hub-ingest=4 → yatay büyüt
+# dashboard :8080 · agent API :8081`,
   },
 ];
 
-/* --- ikonlar --- */
-
-const IconGitHub = () => (
-  <svg className={styles.icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
-  </svg>
-);
-
-const IconArrowUpRight = () => (
-  <svg
-    className={styles.icon}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M7 17 17 7" />
-    <path d="M9 7h8v8" />
-  </svg>
-);
-
-function Wire() {
-  const canvasRef = React.useRef(null);
-  const rxRef = React.useRef(null);
-  const txRef = React.useRef(null);
-
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !canvas.getContext) return undefined;
-    const ctx = canvas.getContext('2d');
-
-    const N = 120; // 1 örnek = 1 sn
-    const rx = [];
-    const tx = [];
-    let seed = 20260905;
-    const rnd = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    for (let k = 0; k < N; k++) {
-      rx.push(0.16);
-      tx.push(0.05);
-    }
-
-    let burst = 0;
-    const step = () => {
-      if (burst > 0) burst--;
-      else if (rnd() < 0.05) burst = 4 + Math.floor(rnd() * 11);
-
-      const target = burst > 0 ? 0.52 + rnd() * 0.4 : 0.1 + rnd() * 0.22;
-      const prev = rx[N - 1];
-      let v = prev + (target - prev) * 0.26 + (rnd() - 0.5) * 0.06;
-      v = Math.max(0.03, Math.min(0.97, v));
-      rx.push(v);
-      rx.shift();
-
-      const pt = tx[N - 1];
-      const tTarget = v * (0.2 + rnd() * 0.22);
-      const t = pt + (tTarget - pt) * 0.3 + (rnd() - 0.5) * 0.03;
-      tx.push(Math.max(0.02, Math.min(0.72, t)));
-      tx.shift();
-    };
-    for (let w = 0; w < 400; w++) step();
-
-    let W = 0;
-    let H = 0;
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const r = canvas.getBoundingClientRect();
-      W = Math.max(1, Math.round(r.width));
-      H = Math.max(1, Math.round(r.height));
-      canvas.width = Math.round(W * dpr);
-      canvas.height = Math.round(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    // rx ve tx aynı ölçekten okunur — "tx her zaman rx'ten küçük" korunur
-    const peak = () => {
-      let p = 0.25;
-      for (let i = 0; i < N; i++) if (rx[i] > p) p = rx[i];
-      return p;
-    };
-
-    const trace = (series, axis, dir, span, scale, color, aNear, aFar) => {
-      const x = (i) => (i / (N - 1)) * W;
-      const off = (i) => (series[i] / scale) * span * 0.94;
-      const y = (i) => axis + dir * off(i);
-
-      // gradyan eğrinin gerçek tepesine bağlanır — düşük sinyalde de görünür
-      let maxOff = 8;
-      for (let m = 0; m < N; m++) if (off(m) > maxOff) maxOff = off(m);
-      const far = axis + dir * maxOff;
-
-      const g = ctx.createLinearGradient(0, dir < 0 ? far : axis, 0, dir < 0 ? axis : far);
-      g.addColorStop(0, dir < 0 ? aNear : aFar);
-      g.addColorStop(1, dir < 0 ? aFar : aNear);
-
-      ctx.beginPath();
-      ctx.moveTo(0, axis);
-      for (let i = 0; i < N; i++) ctx.lineTo(x(i), y(i));
-      ctx.lineTo(W, axis);
-      ctx.closePath();
-      ctx.fillStyle = g;
-      ctx.fill();
-
-      ctx.beginPath();
-      for (let j = 0; j < N; j++) {
-        if (j === 0) ctx.moveTo(x(j), y(j));
-        else ctx.lineTo(x(j), y(j));
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.25;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(x(N - 1), y(N - 1), 2.4, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, W, H);
-      const axis = Math.round(H * 0.62) + 0.5;
-      const scale = peak();
-
-      ctx.strokeStyle = 'rgba(148,163,184,0.055)';
-      ctx.lineWidth = 1;
-      for (let t = 0; t <= N; t += 20) {
-        const gx = Math.round((t / (N - 1)) * W) + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(gx, 0);
-        ctx.lineTo(gx, H);
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = 'rgba(148,163,184,0.16)';
-      ctx.beginPath();
-      ctx.moveTo(0, axis);
-      ctx.lineTo(W, axis);
-      ctx.stroke();
-
-      trace(rx, axis, -1, axis, scale, '#22d3ee', 'rgba(34,211,238,0.26)', 'rgba(34,211,238,0.02)');
-      trace(tx, axis, 1, H - axis, scale, '#a78bfa', 'rgba(167,139,250,0.30)', 'rgba(167,139,250,0.02)');
-    };
-
-    const readout = () => {
-      if (rxRef.current) rxRef.current.textContent = (rx[N - 1] * 11.6).toFixed(2);
-      if (txRef.current) txRef.current.textContent = (tx[N - 1] * 11.6).toFixed(2);
-    };
-
-    resize();
-    draw();
-    readout();
-
-    const ro = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => { resize(); draw(); })
-      : null;
-    if (ro) ro.observe(canvas);
-    else window.addEventListener('resize', resize);
-
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let raf = 0;
-    if (!reduce) {
-      let last = 0;
-      const loop = (ts) => {
-        if (ts - last > 220) {
-          last = ts;
-          step();
-          draw();
-          readout();
-        }
-        raf = requestAnimationFrame(loop);
-      };
-      raf = requestAnimationFrame(loop);
-    }
-
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      if (ro) ro.disconnect();
-      else window.removeEventListener('resize', resize);
-    };
-  }, []);
-
-  return (
-    <div className={styles.wireWrap}>
-      <div className={styles.wireHead}>
-        <span className={styles.wireLabel}>Canlı verim · 120 sn pencere</span>
-        <div className={styles.readout}>
-          <span className={styles.kRx}>
-            <i className={`${styles.swatch} ${styles.swRx}`} />
-            indirilen <b ref={rxRef}>0.00</b> Mb/s
-          </span>
-          <span className={styles.kTx}>
-            <i className={`${styles.swatch} ${styles.swTx}`} />
-            gönderilen <b ref={txRef}>0.00</b> Mb/s
-          </span>
-        </div>
-      </div>
-      <canvas ref={canvasRef} className={styles.wireCanvas} aria-hidden="true" />
-    </div>
-  );
-}
-
-/* --- temsilî panel verisi --------------------------------------------
-   Gerçek veri yok — sentetik, döngüsel bir sahne. Başlangıç durumu
-   deterministik üretilir ki SSR ile hidrasyon arasında fark çıkmasın. */
-
-const PANEL_ENDPOINTS = [
-  { host: 'cdn.example.net', meta: 'AS13335 · US', base: 0.92 },
-  { host: 'update.example.com', meta: 'AS16509 · IE', base: 0.64 },
-  { host: 'pkg.example.org', meta: 'AS24940 · DE', base: 0.47 },
-  { host: 'api.example.io', meta: 'AS15169 · NL', base: 0.31 },
-  { host: 'mail.example.net', meta: 'AS8075 · TR', base: 0.19 },
+/* v1.3.0 hattına kadar operatörün önemsediği başlıklar */
+const NEW_IN = [
+  'eBPF süreç atfı (Linux)',
+  'ETW süreç atfı (Windows)',
+  'çoklu-sağlayıcı AI analiz + /ai',
+  'uyarı yaşam döngüsü + bakım penceresi',
+  'Jira / ServiceNow connector',
+  'zamanlı / PDF / SLA rapor',
+  'olay motoru + tehdit istihbaratı',
+  'sağlık skoru',
+  'v1.0 GA + doğrulanmış kapasite',
 ];
 
-const PANEL_FEED = [
-  { kind: 'proc', text: 'yeni süreç · agent-ofis-3 : curl' },
-  { kind: 'warn', text: 'bant genişliği zirvesi · agent-dc1-07' },
-  { kind: 'crit', text: 'IOC eşleşmesi · agent-sube-a' },
-  { kind: 'proc', text: 'yeni hedef · agent-dc1-07 : pkg.example.org' },
-  { kind: 'warn', text: 'şüpheli port · agent-ofis-3 : 4444/tcp' },
-];
-
+/* --- deterministik RNG (SSR ↔ hidrasyon farkı çıkmasın) --- */
 function makeRng(seed) {
-  let s = seed;
+  let s = seed >>> 0;
   return () => {
     s = (s * 1103515245 + 12345) & 0x7fffffff;
     return s / 0x7fffffff;
   };
 }
 
-function initialPanel() {
-  const rnd = makeRng(4242);
-  const spark = [];
-  let v = 0.42;
-  for (let i = 0; i < 48; i++) {
-    v = Math.max(0.1, Math.min(0.94, v + (rnd() - 0.5) * 0.2));
-    spark.push(v);
-  }
-  return {
-    spark,
-    pps: 3.2,
-    eps: 4.8,
-    online: 124,
-    alerts: 2,
-    endpoints: PANEL_ENDPOINTS.map((e) => ({ ...e, v: e.base })),
-    head: 0,
-  };
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
-function LivePanel() {
-  const [snap, setSnap] = React.useState(initialPanel);
+/* ============================ TUI primitifleri ============================ */
 
-  React.useEffect(() => {
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return undefined; // tek kare kalır
+function Panel({ title, right, children, className = '' }) {
+  return (
+    <section className={`${styles.panel} ${className}`}>
+      {(title || right) && (
+        <header className={styles.panelHead}>
+          {title && (
+            <h3 className={styles.panelTitle}>
+              <span aria-hidden>┤</span>
+              <span>{title}</span>
+              <span aria-hidden>├</span>
+            </h3>
+          )}
+          {right && <div className={styles.panelRight}>{right}</div>}
+        </header>
+      )}
+      <div className={styles.panelBody}>{children}</div>
+    </section>
+  );
+}
 
-    const rnd = makeRng(97531);
-    let t = 0;
-    const id = setInterval(() => {
-      t += 1;
-      setSnap((prev) => {
-        const spark = prev.spark.slice(1);
-        const last = prev.spark[prev.spark.length - 1];
-        const next = Math.max(0.1, Math.min(0.94, last + (rnd() - 0.5) * 0.26));
-        spark.push(next);
+/* Meter — LABEL [███····] değer. accent rx/tx tek renk; threshold htop rampası. */
+function Meter({ label, value, max, display, width = 18, accent = 'threshold' }) {
+  const frac = max > 0 && Number.isFinite(value) ? Math.min(1, Math.max(0, value / max)) : 0;
+  const filled = Math.round(frac * width);
+  const empty = width - filled;
+  const text = display ?? String(Math.round(value || 0));
 
-        return {
-          spark,
-          pps: Math.max(0.6, Math.min(9.9, prev.pps + (rnd() - 0.5) * 0.7)),
-          eps: Math.max(0.4, Math.min(19, prev.eps + (rnd() - 0.5) * 1.6)),
-          online: Math.max(118, Math.min(140, prev.online + (rnd() < 0.86 ? 0 : rnd() < 0.5 ? -1 : 1))),
-          // taban 1: akışta görünen uyarı satırlarıyla çelişmesin
-          alerts: Math.max(1, Math.min(6, prev.alerts + (rnd() < 0.93 ? 0 : rnd() < 0.5 ? -1 : 1))),
-          endpoints: prev.endpoints.map((e) => ({
-            ...e,
-            v: Math.max(0.08, Math.min(1, e.v + (rnd() - 0.5) * 0.13)),
-          })),
-          head: t % PANEL_FEED.length,
-        };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const W = 320;
-  const H = 84;
-  const pt = (v, i, n) => [(i / (n - 1)) * W, H - v * (H - 8) - 4];
-  const line = snap.spark.map((v, i) => pt(v, i, snap.spark.length).join(',')).join(' ');
-  const area = `M0,${H} L${snap.spark
-    .map((v, i) => pt(v, i, snap.spark.length).join(','))
-    .join(' L')} L${W},${H} Z`;
-  const feed = Array.from({ length: 3 }, (_, i) => PANEL_FEED[(snap.head + i) % PANEL_FEED.length]);
-
-  const stats = [
-    { label: 'Aktif agent', value: `${snap.online} / 140`, caption: 'filo toplamı', accent: 'sEmerald' },
-    { label: 'Paket hızı', value: `${snap.pps.toFixed(1)}K pps`, caption: 'anlık', accent: 'sCyan' },
-    { label: 'Olay hızı', value: `${snap.eps.toFixed(1)} / sn`, caption: 'son 60 sn', accent: 'sViolet' },
-    { label: 'Açık uyarı', value: `${snap.alerts}`, caption: 'kritik dahil', accent: 'sAmber' },
-  ];
+  let bar;
+  let valueCls;
+  if (accent === 'rx' || accent === 'tx') {
+    const cls = accent === 'rx' ? styles.fgRx : styles.fgTx;
+    bar = <span className={cls}>{'█'.repeat(filled)}</span>;
+    valueCls = cls;
+  } else {
+    const warnAt = Math.round(0.6 * width);
+    const critAt = Math.round(0.85 * width);
+    const nOf = (from, to) => Math.max(0, Math.min(filled, to) - Math.max(0, from));
+    bar = (
+      <>
+        <span className={styles.fgEmerald}>{'█'.repeat(nOf(0, warnAt))}</span>
+        <span className={styles.fgAmber}>{'█'.repeat(nOf(warnAt, critAt))}</span>
+        <span className={styles.fgRose}>{'█'.repeat(nOf(critAt, width))}</span>
+      </>
+    );
+    valueCls =
+      frac < 0.6 ? styles.fgEmerald : frac < 0.85 ? styles.fgAmber : styles.fgRose;
+  }
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.panelBar}>
-        <span className={styles.panelUrl}>bazntms.local · Genel Bakış</span>
-        <span className={styles.panelLive}>
-          <i className={styles.pulse} /> WS: CANLI
+    <div className={styles.meter} role="meter" aria-label={label} aria-valuenow={Math.round(value || 0)} aria-valuemin={0} aria-valuemax={Math.round(max || 0)}>
+      <span className={styles.meterLabel}>{label}</span>
+      <span aria-hidden className={styles.meterBar}>
+        <span className={styles.meterBracket}>[</span>
+        <span className={styles.meterTrack}>
+          {bar}
+          <span className={styles.fgRule}>{'·'.repeat(empty)}</span>
         </span>
-      </div>
-
-      <div className={styles.panelStats}>
-        {stats.map((s) => (
-          <div key={s.label} className={`${styles.tile} ${styles[s.accent]}`}>
-            <span className={styles.tileLabel}>{s.label}</span>
-            <b className={styles.tileValue}>{s.value}</b>
-            <span className={styles.tileCaption}>{s.caption}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className={styles.panelBody}>
-        <div className={styles.panelCard}>
-          <div className={styles.panelCardHead}>
-            <span className={styles.panelCardTitle}>Verim · 48 sn</span>
-            <span className={styles.panelUnit}>Mb/s</span>
-          </div>
-          <svg className={styles.spark} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-            <path d={area} fill="rgba(34,211,238,0.14)" />
-            <polyline points={line} fill="none" stroke="#22d3ee" strokeWidth="1.5" strokeLinejoin="round" />
-          </svg>
-        </div>
-
-        <div className={styles.panelCard}>
-          <div className={styles.panelCardHead}>
-            <span className={styles.panelCardTitle}>En yoğun uç noktalar</span>
-          </div>
-          <ul className={styles.epList}>
-            {snap.endpoints.map((e) => (
-              <li key={e.host}>
-                <div className={styles.epRow}>
-                  <span className={styles.epHost}>{e.host}</span>
-                  <span className={styles.epMeta}>{e.meta}</span>
-                </div>
-                <div className={styles.epBar}>
-                  <i style={{ width: `${Math.round(e.v * 100)}%` }} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <ul className={styles.feed}>
-        {feed.map((f, i) => (
-          <li key={`${f.text}-${i}`} className={styles[f.kind]}>
-            <span className={styles.feedDot} />
-            {f.text}
-          </li>
-        ))}
-      </ul>
+        <span className={styles.meterBracket}>]</span>
+      </span>
+      <span className={`${styles.meterValue} ${valueCls}`}>{text}</span>
     </div>
   );
 }
 
-/* --- mimari --- */
+/* Sparkline — 8 seviyeli blok rampası (▁▂▃▄▅▆▇█) */
+const RAMP = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+function sparkChars(data) {
+  if (!data.length) return '';
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  return data
+    .map((v) => RAMP[Math.max(0, Math.min(7, Math.round(((v - min) / span) * 7)))])
+    .join('');
+}
 
-function Architecture() {
-  const agents = [
-    { y: 64, name: 'agent · ofis-a' },
-    { y: 150, name: 'agent · dc1' },
-    { y: 236, name: 'agent · şube-3' },
-  ];
-  const devices = [
-    { y: 64, name: 'firewall' },
-    { y: 150, name: 'core-switch' },
-    { y: 236, name: 'router' },
-  ];
+/* Bracket — [ ETIKET ] link/buton. primary → reverse-video cyan. */
+function Bracket({ href, to, children, primary = false, external = false }) {
+  const baseUrl = useBaseUrl(to || '/');
+  const url = href ?? baseUrl;
   return (
-    <svg
-      className={styles.archSvg}
-      viewBox="0 0 960 400"
-      role="img"
-      aria-label="bazNTMS mimarisi: agent'lar ve ağ cihazları hub'a telemetri gönderir; hub PostgreSQL/TimescaleDB ve NATS JetStream üzerine yazar"
+    <a
+      className={`${styles.bracket} ${primary ? styles.bracketPrimary : ''}`}
+      href={url}
+      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
     >
-      <g className={styles.archFlow}>
-        <path d="M232 87 C 320 87, 340 160, 392 176" />
-        <path d="M232 173 L 392 190" />
-        <path d="M232 259 C 320 259, 340 220, 392 204" />
-        <path d="M728 87 C 640 87, 620 160, 568 176" />
-        <path d="M728 173 L 568 190" />
-        <path d="M728 259 C 640 259, 620 220, 568 204" />
-        <path d="M436 250 L 436 306" />
-        <path d="M524 250 L 524 306" />
-      </g>
-
-      <text x="40" y="36" className={styles.archGroup}>UÇLAR</text>
-      {agents.map((a) => (
-        <g key={a.name}>
-          <rect x="40" y={a.y} width="192" height="46" rx="8" className={styles.archNode} />
-          <circle cx="64" cy={a.y + 23} r="3.5" className={styles.archDotRx} />
-          <text x="80" y={a.y + 28} className={styles.archText}>{a.name}</text>
-        </g>
-      ))}
-
-      <text x="920" y="36" className={styles.archGroup} textAnchor="end">AĞ CİHAZLARI</text>
-      {devices.map((d) => (
-        <g key={d.name}>
-          <rect x="728" y={d.y} width="192" height="46" rx="8" className={styles.archNode} />
-          <circle cx="752" cy={d.y + 23} r="3.5" className={styles.archDotTx} />
-          <text x="768" y={d.y + 28} className={styles.archText}>{d.name}</text>
-        </g>
-      ))}
-
-      <rect x="392" y="140" width="176" height="110" rx="12" className={styles.archHub} />
-      <text x="480" y="184" textAnchor="middle" className={styles.archHubText}>bazntms-hub</text>
-      <text x="480" y="206" textAnchor="middle" className={styles.archSub}>ingest · RBAC</text>
-      <text x="480" y="224" textAnchor="middle" className={styles.archSub}>audit · uyarı</text>
-
-      <rect x="336" y="306" width="200" height="52" rx="8" className={styles.archNode} />
-      <text x="436" y="330" textAnchor="middle" className={styles.archText}>PostgreSQL + TimescaleDB</text>
-      <text x="436" y="346" textAnchor="middle" className={styles.archSub}>hypertable · cagg · retention</text>
-
-      <rect x="556" y="306" width="200" height="52" rx="8" className={styles.archNode} />
-      <text x="656" y="330" textAnchor="middle" className={styles.archText}>NATS JetStream</text>
-      <text x="656" y="346" textAnchor="middle" className={styles.archSub}>ingest → processor</text>
-
-      <text x="292" y="128" className={styles.archLabel}>telemetri ↑</text>
-      <text x="668" y="128" className={styles.archLabel}>SNMP · NetFlow · Syslog</text>
-    </svg>
+      <span aria-hidden className={styles.bracketEdge}>
+        [
+      </span>
+      <span className={styles.bracketLabel}>{children}</span>
+      <span aria-hidden className={styles.bracketEdge}>
+        ]
+      </span>
+    </a>
   );
 }
 
-/* --- kopyala düğmesi --- */
-
-function CopyButton({ code, className }) {
-  const [state, setState] = React.useState('idle'); // idle | done | error
+/* CopyButton — pano erişimi kurumsal politikayla engellenebilir → hata durumu */
+function CopyButton({ code, className = '' }) {
+  const [state, setState] = React.useState('idle');
   return (
     <button
       type="button"
-      className={`${className} ${state === 'error' ? styles.copyError : ''}`}
+      className={`${styles.copy} ${state === 'error' ? styles.copyError : ''} ${className}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(code);
           setState('done');
         } catch {
-          // pano erişimi kurumsal tarayıcı politikasıyla engellenmiş olabilir
           setState('error');
         } finally {
-          setTimeout(() => setState('idle'), 1800);
+          window.setTimeout(() => setState('idle'), 1800);
         }
       }}
     >
@@ -751,144 +306,559 @@ function CopyButton({ code, className }) {
   );
 }
 
-const QUICK_CMD = 'docker compose -f deploy/docker-compose.yml up --build';
+/* ThroughputTrace — elle SVG, basamaklı çizgi, mono tick, karakter-ızgara
+   zemin, alan dolgusu / gradyan YOK. Tek rAF döngüsü ~4 fps; sentetik veri;
+   prefers-reduced-motion → tek kare donar. (frontend ThroughputChart kalıbı) */
+const TRACE_N = 96;
+function initTrace(seed) {
+  const rnd = makeRng(seed);
+  const rx = [];
+  const tx = [];
+  let r = 0.18;
+  let burst = 0;
+  for (let i = 0; i < TRACE_N; i++) {
+    if (burst > 0) burst--;
+    else if (rnd() < 0.05) burst = 4 + Math.floor(rnd() * 10);
+    const target = burst > 0 ? 0.55 + rnd() * 0.38 : 0.1 + rnd() * 0.22;
+    r = Math.max(0.03, Math.min(0.97, r + (target - r) * 0.28 + (rnd() - 0.5) * 0.05));
+    rx.push(r);
+    tx.push(Math.max(0.02, Math.min(0.7, r * (0.22 + rnd() * 0.2))));
+  }
+  return { rx, tx };
+}
+
+function ThroughputTrace() {
+  const [buf, setBuf] = React.useState(() => initTrace(20260909));
+  const rxRef = React.useRef(null);
+  const txRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+    const rnd = makeRng(97531);
+    let raf = 0;
+    let last = 0;
+    let burst = 0;
+    const loop = (ts) => {
+      if (ts - last > 240) {
+        last = ts;
+        setBuf((prev) => {
+          const rx = prev.rx.slice(1);
+          const tx = prev.tx.slice(1);
+          if (burst > 0) burst--;
+          else if (rnd() < 0.05) burst = 4 + Math.floor(rnd() * 10);
+          const lastR = prev.rx[prev.rx.length - 1];
+          const target = burst > 0 ? 0.55 + rnd() * 0.38 : 0.1 + rnd() * 0.22;
+          const r = Math.max(
+            0.03,
+            Math.min(0.97, lastR + (target - lastR) * 0.28 + (rnd() - 0.5) * 0.06),
+          );
+          rx.push(r);
+          tx.push(Math.max(0.02, Math.min(0.7, r * (0.22 + rnd() * 0.2))));
+          return { rx, tx };
+        });
+      }
+      raf = window.requestAnimationFrame(loop);
+    };
+    raf = window.requestAnimationFrame(loop);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
+  const W = 520;
+  const H = 150;
+  const PAD = { t: 10, r: 8, b: 18, l: 40 };
+  const iw = W - PAD.l - PAD.r;
+  const ih = H - PAD.t - PAD.b;
+  const peak = Math.max(0.35, ...buf.rx);
+  const x = (i) => PAD.l + (i / (TRACE_N - 1)) * iw;
+  const y = (v) => PAD.t + ih - (v / peak) * ih;
+
+  const step = (series) => {
+    let d = `M${x(0).toFixed(1)},${y(series[0]).toFixed(1)}`;
+    for (let i = 1; i < series.length; i++) {
+      const px = x(i).toFixed(1);
+      d += ` L${px},${y(series[i - 1]).toFixed(1)} L${px},${y(series[i]).toFixed(1)}`;
+    }
+    return d;
+  };
+
+  const lastRx = buf.rx[buf.rx.length - 1];
+  const lastTx = buf.tx[buf.tx.length - 1];
+  if (rxRef.current) rxRef.current.textContent = (lastRx * 11.6).toFixed(2);
+  if (txRef.current) txRef.current.textContent = (lastTx * 11.6).toFixed(2);
+
+  const yTicks = [0, 0.5, 1];
+  const xTicks = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <div className={styles.trace}>
+      <div className={styles.traceHead}>
+        <span>
+          <i className={styles.swatchRx} /> indirilen{' '}
+          <b ref={rxRef} className={styles.fgRx}>
+            {(lastRx * 11.6).toFixed(2)}
+          </b>{' '}
+          Mb/s
+        </span>
+        <span>
+          <i className={styles.swatchTx} /> gönderilen{' '}
+          <b ref={txRef} className={styles.fgTx}>
+            {(lastTx * 11.6).toFixed(2)}
+          </b>{' '}
+          Mb/s
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className={styles.traceSvg} preserveAspectRatio="none" role="img" aria-label="Temsilî canlı verim izi">
+        {yTicks.map((f, i) => (
+          <line key={`y${i}`} x1={PAD.l} x2={W - PAD.r} y1={PAD.t + ih - f * ih} y2={PAD.t + ih - f * ih} stroke="#232b3a" strokeWidth="1" />
+        ))}
+        {xTicks.map((f, i) => (
+          <line key={`x${i}`} x1={PAD.l + f * iw} x2={PAD.l + f * iw} y1={PAD.t} y2={PAD.t + ih} stroke="#232b3a" strokeWidth="1" />
+        ))}
+        {yTicks.map((f, i) => (
+          <text key={`yt${i}`} x={PAD.l - 6} y={PAD.t + ih - f * ih + 3} textAnchor="end" fill="#8794a8" fontSize="8" fontFamily="ui-monospace, monospace">
+            {(f * peak * 11.6).toFixed(0)}
+          </text>
+        ))}
+        <text x={PAD.l} y={H - 4} fill="#8794a8" fontSize="8" fontFamily="ui-monospace, monospace">
+          -96 sn
+        </text>
+        <text x={W - PAD.r} y={H - 4} textAnchor="end" fill="#8794a8" fontSize="8" fontFamily="ui-monospace, monospace">
+          şimdi
+        </text>
+        <path d={step(buf.tx)} fill="none" stroke="#a78bfa" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+        <path d={step(buf.rx)} fill="none" stroke="#22d3ee" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+        <rect x={x(TRACE_N - 1) - 2.4} y={y(lastTx) - 2.4} width="4.8" height="4.8" fill="#a78bfa" />
+        <rect x={x(TRACE_N - 1) - 2.4} y={y(lastRx) - 2.4} width="4.8" height="4.8" fill="#22d3ee" />
+      </svg>
+    </div>
+  );
+}
+
+/* Hero üst şeridi — dashboard TuiHeader karşılığı */
+function TopStrip() {
+  const [now, setNow] = React.useState(null);
+  React.useEffect(() => {
+    setNow(new Date());
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <div className={styles.topStrip}>
+      <span className={styles.brand}>
+        <BrandGlyph />
+        <b>bazNTMS</b>
+      </span>
+      <span className={styles.wsPill}>
+        <i className={styles.wsDot} /> WS: CANLI
+      </span>
+      <span className={styles.stripMeters}>
+        <Meter label="RX" value={0.62} max={1} width={7} accent="rx" display="7.2 Mb/s" />
+        <Meter label="TX" value={0.2} max={1} width={7} accent="tx" display="2.3 Mb/s" />
+        <Meter label="PPS" value={0.32} max={1} width={7} accent="threshold" display="3.2K" />
+      </span>
+      <span className={styles.stripRight}>
+        <span className={styles.verTag}>v1.3.0</span>
+        <span className={styles.clock}>
+          {now ? now.toLocaleTimeString('tr-TR') : '--:--:--'}
+          <i className={styles.cursor} />
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function BrandGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.glyph} fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="5" r="1.6" />
+      <circle cx="19" cy="5" r="1.6" />
+      <circle cx="5" cy="19" r="1.6" />
+      <circle cx="19" cy="19" r="1.6" />
+      <path d="M6.2 6.2 10.6 10.6m6.8-4.4-4.4 4.4M6.2 17.8l4.4-4.4m6.8 4.4-4.4-4.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/* ============================ Panel vitrin (statik Dashboard alıntısı) ============================ */
+
+const SHOW_SPARK = [
+  0.42, 0.5, 0.38, 0.55, 0.7, 0.52, 0.6, 0.75, 0.58, 0.44, 0.5, 0.62, 0.8, 0.66, 0.52,
+  0.48, 0.58, 0.72, 0.85, 0.7, 0.55, 0.6, 0.68, 0.5, 0.46, 0.58, 0.64, 0.78, 0.6, 0.52,
+  0.5, 0.44, 0.56, 0.66, 0.6, 0.48,
+];
+const SHOW_ENDPOINTS = [
+  ['cdn.example.net', 'AS13335 · US', 0.92],
+  ['update.example.com', 'AS16509 · IE', 0.64],
+  ['pkg.example.org', 'AS24940 · DE', 0.47],
+  ['api.example.io', 'AS15169 · NL', 0.31],
+  ['mail.example.net', 'AS8075 · TR', 0.19],
+];
+const SHOW_FEED = [
+  ['proc', 'yeni süreç · agent-ofis-3 : curl'],
+  ['warn', 'bant genişliği zirvesi · agent-dc1-07'],
+  ['crit', 'IOC eşleşmesi · agent-sube-a'],
+];
+const SHOW_TILES = [
+  ['AKTİF AGENT', '124 / 140', 'filo toplamı', 'emerald'],
+  ['PAKET HIZI', '3.2K pps', 'anlık', 'rx'],
+  ['OLAY HIZI', '4.8 / sn', 'son 60 sn', 'tx'],
+  ['AÇIK UYARI', '2', 'kritik dahil', 'amber'],
+];
+
+function ShowcasePanel() {
+  return (
+    <Panel
+      title="bazntms.local · Genel Bakış"
+      right={
+        <span className={styles.wsPill}>
+          <i className={styles.wsDot} /> WS: CANLI
+        </span>
+      }
+      className={styles.showcase}
+    >
+      <div className={styles.tiles}>
+        {SHOW_TILES.map(([label, value, cap, tone]) => (
+          <div key={label} className={`${styles.tile} ${styles[`edge_${tone}`]}`}>
+            <span className={styles.tileLabel}>{label}</span>
+            <b className={styles.tileValue}>{value}</b>
+            <span className={styles.tileCap}>{cap}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.showBody}>
+        <div className={styles.showCol}>
+          <div className={styles.showColHead}>
+            <span>VERİM · 48 sn</span>
+            <span className={styles.dimText}>Mb/s</span>
+          </div>
+          <div className={`${styles.sparkRow} ${styles.fgRx}`}>{sparkChars(SHOW_SPARK)}</div>
+          <div className={styles.showColHead}>
+            <span>EN YOĞUN UÇ NOKTALAR</span>
+          </div>
+          <ul className={styles.epList}>
+            {SHOW_ENDPOINTS.map(([host, meta, v]) => (
+              <li key={host}>
+                <div className={styles.epRow}>
+                  <span className={styles.epHost}>{host}</span>
+                  <span className={styles.epMeta}>{meta}</span>
+                </div>
+                <div className={styles.epBar}>
+                  <i style={{ width: `${Math.round(v * 100)}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className={styles.showCol}>
+          <div className={styles.showColHead}>
+            <span>UYARI AKIŞI</span>
+          </div>
+          <ul className={styles.feed}>
+            {SHOW_FEED.map(([kind, text]) => (
+              <li key={text} className={styles[`feed_${kind}`]}>
+                <span className={styles.feedDot} />
+                {text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/* ============================ Mimari (elle SVG) ============================ */
+
+function Architecture() {
+  const agents = [
+    { y: 62, name: 'agent · ofis-a' },
+    { y: 146, name: 'agent · dc1' },
+    { y: 230, name: 'agent · şube-3' },
+  ];
+  const devices = [
+    { y: 62, name: 'firewall' },
+    { y: 146, name: 'core-switch' },
+    { y: 230, name: 'router' },
+  ];
+  return (
+    <svg className={styles.archSvg} viewBox="0 0 960 390" role="img" aria-label="bazNTMS mimarisi: agent'lar ve ağ cihazları hub'a telemetri gönderir; hub PostgreSQL/TimescaleDB ve NATS JetStream üzerine yazar">
+      <g className={styles.archFlow}>
+        <path d="M232 85 C 320 85, 340 158, 392 172" />
+        <path d="M232 169 L 392 186" />
+        <path d="M232 253 C 320 253, 340 214, 392 200" />
+        <path d="M728 85 C 640 85, 620 158, 568 172" />
+        <path d="M728 169 L 568 186" />
+        <path d="M728 253 C 640 253, 620 214, 568 200" />
+        <path d="M436 246 L 436 300" />
+        <path d="M524 246 L 524 300" />
+      </g>
+
+      <text x="40" y="34" className={styles.archGroup}>UÇLAR</text>
+      {agents.map((a) => (
+        <g key={a.name}>
+          <rect x="40" y={a.y} width="192" height="44" className={styles.archNode} />
+          <rect x="56" y={a.y + 20} width="6" height="6" className={styles.archDotRx} />
+          <text x="74" y={a.y + 27} className={styles.archText}>{a.name}</text>
+        </g>
+      ))}
+
+      <text x="920" y="34" className={styles.archGroup} textAnchor="end">AĞ CİHAZLARI</text>
+      {devices.map((d) => (
+        <g key={d.name}>
+          <rect x="728" y={d.y} width="192" height="44" className={styles.archNode} />
+          <rect x="744" y={d.y + 20} width="6" height="6" className={styles.archDotTx} />
+          <text x="762" y={d.y + 27} className={styles.archText}>{d.name}</text>
+        </g>
+      ))}
+
+      <rect x="392" y="136" width="176" height="110" className={styles.archHub} />
+      <text x="480" y="178" textAnchor="middle" className={styles.archHubText}>bazntms-hub</text>
+      <text x="480" y="200" textAnchor="middle" className={styles.archSub}>ingest · RBAC</text>
+      <text x="480" y="220" textAnchor="middle" className={styles.archSub}>audit · uyarı motoru</text>
+
+      <rect x="336" y="300" width="200" height="52" className={styles.archNode} />
+      <text x="436" y="324" textAnchor="middle" className={styles.archText}>PostgreSQL + TimescaleDB</text>
+      <text x="436" y="340" textAnchor="middle" className={styles.archSub}>hypertable · cagg · retention</text>
+
+      <rect x="556" y="300" width="200" height="52" className={styles.archNode} />
+      <text x="656" y="324" textAnchor="middle" className={styles.archText}>NATS JetStream</text>
+      <text x="656" y="340" textAnchor="middle" className={styles.archSub}>ingest → processor</text>
+
+      <text x="292" y="126" className={styles.archLabel}>telemetri ↑ (mTLS)</text>
+      <text x="668" y="126" className={styles.archLabel}>SNMP · NetFlow · Syslog</text>
+    </svg>
+  );
+}
+
+/* ============================ Alt ekran şeridi (FnKeyBar karşılığı) ============================ */
+
+function ScreenBar({ active, onJump }) {
+  return (
+    <div className={styles.screenBar}>
+      <div className={styles.screenBarInner}>
+        {SCREENS.map((s, i) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`${styles.screenKey} ${active === s.id ? styles.screenKeyActive : ''}`}
+            onClick={() => onJump(s.id)}
+          >
+            <span className={styles.screenNum}>{i + 1}</span>
+            <span>{s.label}</span>
+          </button>
+        ))}
+        <span className={styles.screenBarSpacer} />
+        <a className={styles.screenAction} href="#kurulum">
+          KURULUM ↵
+        </a>
+        <a className={styles.screenAction} href={REPO} target="_blank" rel="noreferrer">
+          GITHUB ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ Sayfa ============================ */
 
 export default function Home() {
+  const [active, setActive] = React.useState('ust');
   const docsUrl = useBaseUrl('/docs/installation');
   const apiUrl = useBaseUrl('/docs/reference/api');
   const configUrl = useBaseUrl('/docs/reference/configuration');
-  const upgradeUrl = useBaseUrl('/docs/reference/upgrading');
+
+  const jump = React.useCallback((id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+  }, []);
+
+  /* aktif ekranı en görünür bölümden izle */
+  React.useEffect(() => {
+    const ids = SCREENS.map((s) => s.id);
+    const io = new IntersectionObserver(
+      (entries) => {
+        const vis = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (vis) setActive(vis.target.id);
+      },
+      { rootMargin: '-45% 0px -45% 0px', threshold: [0, 0.5, 1] },
+    );
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) io.observe(el);
+    });
+    return () => io.disconnect();
+  }, []);
+
+  /* klavye: 1–7 ekran, g/G baş/son, ? kurulum (dashboard useHotkeys dili;
+     tarayıcı/OS'a bağlı F-tuşları ele geçirilmez) */
+  React.useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= SCREENS.length) {
+        jump(SCREENS[n - 1].id);
+      } else if (e.key === 'g') {
+        window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      } else if (e.key === 'G') {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      } else if (e.key === '?') {
+        jump('kurulum');
+      } else {
+        return;
+      }
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [jump]);
 
   return (
     <Layout
       title="Ağ Trafiği İzleme Platformu"
-      description="Hub + agent + cihaz entegrasyonları: canlı trafik izleme, TimescaleDB + NATS ölçek altyapısı, RBAC/SSO, imza doğrulamalı agent güncellemesi."
+      description="Hub + agent + cihaz entegrasyonları: canlı paket ölçümü, süreç bazlı L7/DNS görünürlüğü, TimescaleDB + NATS ölçek altyapısı, RBAC/SSO, 5651 uyumlu imzalı loglar. Açık kaynak, MIT, kendi altyapınızda."
     >
       <main className={`${styles.page} landing-root`}>
-        {/* HERO — koyu vitrin, bento ızgara */}
-        <section className={styles.hero}>
+        {/* ---------- ÜST: Genel Bakış ekranı ---------- */}
+        <section id="ust" className={styles.hero}>
           <div className={styles.shell}>
+            <TopStrip />
             <div className={styles.heroGrid}>
               <div className={styles.heroMain}>
-                <span className={styles.eyebrow}>Açık kaynak · MIT · kendi altyapınızda</span>
                 <h1 className={styles.title}>
-                  Paketten <em>imzalı kayda</em> kadar tek bir platform.
+                  Paketten <span className={styles.fgRx}>imzalı kayda</span>. Tek makineden{' '}
+                  <span className={styles.fgRx}>5&nbsp;000 agent</span>'a, aynı binary.
                 </h1>
-                <p className={styles.heroSub}>
-                  Paket seviyesinde izleme, akış toplama ve 5651 uyumlu imzalı loglar.
-                  Tek makineden <b>5.000 agent</b>’a aynı binary.
+                <p className={styles.lede}>
+                  Hub + uç agent + ağ cihazı entegrasyonları. Canlı paket ölçümü, akış
+                  toplama, süreç bazlı L7/DNS görünürlüğü ve 5651 uyumlu imzalı loglar —
+                  kendi altyapınızda, tek Go binary'sine gömülü.
                 </p>
 
                 <div className={styles.cmd}>
+                  <span aria-hidden className={styles.cmdSigil}>$</span>
                   <code className={styles.cmdText}>{QUICK_CMD}</code>
-                  <CopyButton code={QUICK_CMD} className={styles.cmdCopy} />
+                  <CopyButton code={QUICK_CMD} />
                 </div>
 
-                <div className={`${styles.ctas} ${styles.heroCtas}`}>
-                  <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
-                    <span className={styles.btnLabel}>Kurulum dokümanı</span>
-                    <IconArrowUpRight />
-                  </a>
-                  <a
-                    className={`${styles.btn} ${styles.btnGhostDark}`}
-                    href="https://github.com/gokayybaz/bazntms"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <IconGitHub />
-                    <span className={styles.btnLabel}>GitHub</span>
-                    <IconArrowUpRight />
-                  </a>
+                <div className={styles.heroCtas}>
+                  <Bracket to="/docs/installation" primary>
+                    KURULUM
+                  </Bracket>
+                  <Bracket href={REPO} external>
+                    GITHUB ↗
+                  </Bracket>
+                  <span className={styles.heroMeta}>MIT · vendor lock-in yok</span>
                 </div>
               </div>
 
               <div className={styles.heroAside}>
-                {STATS.map((s, i) => (
-                  <StatCard key={s.label} stat={s} index={i} />
-                ))}
+                <Panel title="CANLI ÖZET">
+                  <div className={styles.asideMeters}>
+                    <Meter label="RX" value={0.62} max={1} accent="rx" display="7.2 Mb/s" />
+                    <Meter label="TX" value={0.2} max={1} accent="tx" display="2.3 Mb/s" />
+                    <Meter label="PPS" value={0.32} max={1} accent="threshold" display="3.2K pps" />
+                    <Meter label="EVT" value={0.24} max={1} accent="threshold" display="4.8 / sn" />
+                  </div>
+                  <ThroughputTrace />
+                  <p className={styles.asideNote}>
+                    temsilî akış — gerçek veri değil, örnekleme penceresini gösterir
+                  </p>
+                </Panel>
               </div>
             </div>
+          </div>
+        </section>
 
-            <Wire />
+        {/* ---------- YETENEK ---------- */}
+        <section id="yetenekler" className={styles.section}>
+          <div className={styles.shell}>
+            <h2 className={styles.h2}>Uçtan uca görünürlük</h2>
+            <p className={styles.sectionLede}>
+              Dört alan, on iki yetenek. Her satır bir mekanizma anlatır — her rengin
+              sabit bir okunuşu var, panelde gördüğünüzle aynı.
+            </p>
 
-            <div className={styles.wireFoot}>
-              <span>Temsilî akış — gerçek veri değil, örnekleme penceresini gösterir</span>
-              <span>WebSocket · 1 sn / örnek</span>
+            <div className={styles.tableWrap}>
+              <table className={styles.tuiTable}>
+                <colgroup>
+                  <col className={styles.colAlan} />
+                  <col className={styles.colTerm} />
+                  <col className={styles.colMech} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>ALAN</th>
+                    <th>YETENEK</th>
+                    <th>MEKANİZMA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CAPABILITIES.map((g) =>
+                    g.rows.map(([term, mech], i) => (
+                      <tr key={term} className={styles[`grp_${g.accent}`]}>
+                        {i === 0 && (
+                          <td rowSpan={g.rows.length} className={styles.grpCell}>
+                            {g.group}
+                          </td>
+                        )}
+                        <td className={styles.termCell}>{term}</td>
+                        <td className={styles.mechCell}>{mech}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
 
-        {/* YETENEKLER — açık, bento kartlar */}
-        <section className={styles.section} id="yetenekler">
+        {/* ---------- PANEL ---------- */}
+        <section id="panel" className={styles.sectionTint}>
           <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>Yetenekler</span>
-              <h2 className={styles.h2}>Uçtan uca görünürlük</h2>
-              <p className={styles.lede}>
-                Dört alan, on iki yetenek. Her rengin sabit bir okunuşu var — panelde
-                gördüğünüz anlamın aynısı.
-              </p>
-            </div>
-
-            <div className={styles.cards}>
-              {CAPABILITY_GROUPS.map((group) => (
-                <div key={group.label} className={styles.card}>
-                  <div className={styles.cardHead}>
-                    <span className={`${styles.cardDot} ${styles[group.accent]}`} />
-                    <span className={styles.cardGroup}>{group.label}</span>
-                  </div>
-                  {group.items.map((it) => (
-                    <div key={it.term} className={styles.item}>
-                      <h3>{it.desc}</h3>
-                      <p>{it.note}</p>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <h2 className={styles.h2}>Kurulumdan sonra gördüğünüz ekran</h2>
+            <p className={styles.sectionLede}>
+              Filo sayaçları, canlı verim, en yoğun uç noktalar ve uyarı akışı — gerçek
+              panelin birebir dili, sentetik veriyle sahnelenmiş.
+            </p>
+            <ShowcasePanel />
           </div>
         </section>
 
-        {/* PANEL — koyu vitrin */}
-        <section className={styles.showcase} id="panel">
+        {/* ---------- 5651 ---------- */}
+        <section id="uyumluluk" className={styles.section}>
           <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>Panel</span>
-              <h2 className={styles.h2}>Kurulumdan sonra gördüğünüz ekran</h2>
-              <p className={styles.lede}>
-                Filo sayaçları, canlı verim, en yoğun uç noktalar ve uyarı akışı —
-                sentetik veriyle sahnelenmiş bir görünüm.
-              </p>
-            </div>
-            <LivePanel />
-          </div>
-        </section>
-
-        {/* 5651 */}
-        <section className={`${styles.section} ${styles.sectionTint}`} id="uyumluluk">
-          <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>5651 · ISO 27001</span>
-              <h2 className={styles.h2}>Logun sonradan değişmediğini kanıtlayabilirsiniz</h2>
-              <p className={styles.lede}>
-                Kayıtlar yazıldığı anda zincire eklenir. Her halka bir öncekinin özetini
-                taşır; zincir saatlik köklerle mühürlenir, gün sonunda dış bir otoriteden
-                zaman damgası alır.
-              </p>
-            </div>
+            <h2 className={styles.h2}>Logun sonradan değişmediğini kanıtlarsınız</h2>
+            <p className={styles.sectionLede}>
+              Kayıt yazıldığı anda zincire eklenir. Her halka bir öncekinin özetini
+              taşır; zincir saatlik köklerle mühürlenir, gün sonunda dış bir otoriteden
+              zaman damgası alır.
+            </p>
 
             <div className={styles.chain}>
-              {CHAIN.map((c) => (
-                <div key={c.tag} className={styles.link}>
-                  <span className={styles.linkTag}>{c.tag}</span>
-                  <span className={`${styles.linkValue} ${c.done ? styles.chainDone : ''}`}>{c.value}</span>
-                </div>
+              {CHAIN.map((c, i) => (
+                <React.Fragment key={c.tag}>
+                  <div className={`${styles.link} ${c.done ? styles.linkDone : ''}`}>
+                    <span className={styles.linkTag}>{c.tag}</span>
+                    <span className={styles.linkValue}>{c.value}</span>
+                  </div>
+                  {i < CHAIN.length - 1 && (
+                    <span aria-hidden className={styles.linkArrow}>
+                      ─▶
+                    </span>
+                  )}
+                </React.Fragment>
               ))}
             </div>
 
             <div className={styles.notes}>
               <div>
-                <h3>Delil paketi</h3>
+                <h3 className={styles.noteH}>Delil paketi</h3>
                 <p>
                   Tarih aralığıyla çıkarım, PII maskeleme ve <code>bazntmsctl verify</code>{' '}
                   ile çevrimdışı doğrulama — paketi teslim alan tarafın bazNTMS kurmasına
@@ -896,92 +866,84 @@ export default function Home() {
                 </p>
               </div>
               <div>
-                <h3>ISO 27001</h3>
+                <h3 className={styles.noteH}>ISO 27001</h3>
                 <p>
-                  Annex A kontrol haritası, risk defteri, SoA, iç denetim kayıtları ve tek
-                  tıkla denetçi paketi.
+                  Annex A kontrol haritası, risk defteri, SoA, iç denetim kayıtları ve
+                  tek tıkla denetçi paketi. Zaman sapması alarmı (A.8.17).
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* MİMARİ */}
-        <section className={styles.section} id="mimari">
+        {/* ---------- MİMARİ ---------- */}
+        <section id="mimari" className={styles.sectionTint}>
           <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>Mimari</span>
-              <h2 className={styles.h2}>Nasıl çalışır?</h2>
-              <p className={styles.lede}>
-                Hub stateless’tır; deploy replikaları arasında uyarı, poller ve yakalama
-                rolleri bayraklarla ayrılır.
-              </p>
-            </div>
-            <div className={styles.svgScroll}>
+            <h2 className={styles.h2}>Nasıl çalışır?</h2>
+            <p className={styles.sectionLede}>
+              Hub stateless'tır; deploy replikaları arasında uyarı, poller ve yakalama
+              rolleri bayraklarla ayrılır. Agent↔hub trafiği opsiyonel mTLS ile korunur.
+            </p>
+            <div className={styles.archScroll}>
               <Architecture />
             </div>
+          </div>
+        </section>
+
+        {/* ---------- ÖLÇEK ---------- */}
+        <section id="olcek" className={styles.section}>
+          <div className={styles.shell}>
+            <h2 className={styles.h2}>Tek makineden filoya, aynı binary</h2>
+            <p className={styles.sectionLede}>
+              Büyürken platform değiştirmezsiniz. Depo seçimi tek bayrakla değişir:{' '}
+              <code>-db</code> bir dosya yolu alırsa SQLite, <code>postgres://</code> DSN
+              alırsa PostgreSQL/TimescaleDB. Uygulama kodu ve arayüz aynı kalır.
+            </p>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.tuiTable}>
+                <colgroup>
+                  <col className={styles.colScaleKey} />
+                  <col className={styles.colHalf} />
+                  <col className={styles.colHalf} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>TEK DÜĞÜM</th>
+                    <th>ÖLÇEK</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SCALE_ROWS.map(([k, single, scaled]) => (
+                    <tr key={k}>
+                      <td className={styles.termCell}>{k}</td>
+                      <td className={styles.mechCell}>{single}</td>
+                      <td className={styles.mechCell}>{scaled}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className={styles.hint}>
-              Ayrıntılar için <a href={upgradeUrl}>operasyon dokümanlarına</a> göz atın.
+              Ölçek hedefleri <code>bazntms-loadgen</code> + k6 ile doğrulanır (5 000
+              agent @ 30 sn · p95 5 ms · ≥50 000 flow/sn kayıpsız) —{' '}
+              <a href={`${REPO}/blob/main/docs/CAPACITY.md`} target="_blank" rel="noreferrer">
+                docs/CAPACITY.md
+              </a>
+              . k8s olmadan denemek için <code>deploy/docker-compose.scale.yml</code>.
             </p>
           </div>
         </section>
 
-        {/* ÖLÇEK */}
-        <section className={styles.section} id="olcek">
+        {/* ---------- KURULUM ---------- */}
+        <section id="kurulum" className={styles.sectionTint}>
           <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>Ölçek</span>
-              <h2 className={styles.h2}>Tek makineden filoya, aynı binary</h2>
-              <p className={styles.lede}>
-                Büyürken platform değiştirmiyorsunuz. Depo seçimi tek bayrakla
-                değişir: <code>-db</code> bir dosya yolu alırsa SQLite,{' '}
-                <code>postgres://</code> DSN alırsa PostgreSQL/TimescaleDB. Uygulama
-                kodu ve arayüz aynı kalır.
-              </p>
-            </div>
-
-            <div className={styles.scale}>
-              <div className={styles.scaleHead}>
-                <span />
-                <span className={styles.scaleColSingle}>Tek düğüm</span>
-                <span className={styles.scaleColScaled}>Ölçek</span>
-              </div>
-              {SCALE_ROWS.map((r) => (
-                <div key={r.key} className={styles.scaleRow}>
-                  <span className={styles.scaleKey}>{r.key}</span>
-                  <span className={styles.scaleSingle}>
-                    <i className={styles.scaleMini}>Tek düğüm</i>
-                    {r.single}
-                  </span>
-                  <span className={styles.scaleScaled}>
-                    <i className={styles.scaleMini}>Ölçek</i>
-                    {r.scaled}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <p className={styles.hint}>
-              Ölçek mimarisi tasarım hedefleri{' '}
-              <a href="https://github.com/gokayybaz/bazntms/tree/main/loadtest" target="_blank" rel="noreferrer">
-                <code>bazntms-loadgen</code> ve k6
-              </a>{' '}
-              ile doğrulanır; k8s olmadan denemek için{' '}
-              <code>deploy/docker-compose.scale.yml</code>.
+            <h2 className={styles.h2}>Üç kurulum yolundan birini seçin</h2>
+            <p className={styles.sectionLede}>
+              Üçü birbirinin alternatifi — sıralı adım değil. Hepsi aynı binary'yi
+              kullanır.
             </p>
-          </div>
-        </section>
-
-        {/* KURULUM */}
-        <section className={`${styles.section} ${styles.sectionTint}`} id="kurulum">
-          <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>Kurulum</span>
-              <h2 className={styles.h2}>Üç kurulum yolundan birini seçin</h2>
-              <p className={styles.lede}>
-                Üçü birbirinin alternatifi — sıralı adım değil. Hepsi aynı binary’yi kullanır.
-              </p>
-            </div>
 
             <div className={styles.steps}>
               {STEPS.map((s) => (
@@ -989,56 +951,61 @@ export default function Home() {
                   <div className={styles.stepHead}>
                     <span className={styles.stepBadge}>{s.badge}</span>
                     <span className={styles.stepLabel}>{s.label}</span>
-                    <CopyButton code={s.code} className={styles.copy} />
+                    <CopyButton code={s.code} />
                   </div>
-                  <pre>{s.code}</pre>
+                  <pre className={styles.stepPre}>{s.code}</pre>
                 </div>
               ))}
             </div>
 
             <p className={styles.hint}>
-              Tüm yapılandırma seçenekleri için <a href={configUrl}>yapılandırma referansına</a> bakın.
+              Tüm bayraklar ve ortam değişkenleri için{' '}
+              <a href={configUrl}>yapılandırma referansı</a>. Windows için MSI
+              sihirbazı Npcap'i sessizce kurar.
             </p>
           </div>
         </section>
 
-        {/* v0.3.0 */}
-        <section className={styles.section}>
+        {/* ---------- v1.3.0 ---------- */}
+        <section id="surum" className={styles.section}>
           <div className={styles.shell}>
-            <div className={styles.sectionHead}>
-              <span className={styles.eyebrow}>v0.3.0</span>
-              <h2 className={styles.h2}>Bu sürümde yeni</h2>
-            </div>
+            <h2 className={styles.h2}>v1.3.0 hattında yeni</h2>
+            <p className={styles.sectionLede}>
+              v0.4.0'dan bu yana: süreç atfı artık Linux'ta eBPF, Windows'ta ETW —
+              pcap/Npcap zorunlu değil. Derin toplama + L7 tüm kurulumlarda varsayılan
+              açık.
+            </p>
             <div className={styles.badges}>
               {NEW_IN.map((n) => (
-                <span key={n} className={styles.badge}>{n}</span>
+                <span key={n} className={styles.badge}>
+                  {n}
+                </span>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ALT CTA */}
+        {/* ---------- ALT ---------- */}
         <section className={styles.bottom}>
           <div className={styles.shell}>
             <h2 className={styles.bottomTitle}>Ağınızı bugün görünür kılın.</h2>
             <p className={styles.bottomText}>
               Tek-node demo ile başlayın; aynı kurulumu TimescaleDB ve NATS arkasına
-              taşıyarak filo ölçeğine çıkarın.
+              taşıyarak filo ölçeğine çıkarın. Platform değişmez.
             </p>
-            <div className={`${styles.ctas} ${styles.bottomCtas}`}>
-              <a className={`${styles.btn} ${styles.btnPrimary}`} href={docsUrl}>
-                <span className={styles.btnLabel}>Kurulum dokümanı</span>
-                <IconArrowUpRight />
-              </a>
-              <a className={`${styles.btn} ${styles.btnGhostDark}`} href={apiUrl}>
-                API referansı
-              </a>
+            <div className={styles.heroCtas}>
+              <Bracket to="/docs/installation" primary>
+                KURULUM
+              </Bracket>
+              <Bracket href={apiUrl}>API REFERANSI</Bracket>
             </div>
             <p className={styles.bottomRisk}>
               MIT lisanslı · kendi altyapınızda çalışır · vendor lock-in yok
             </p>
           </div>
         </section>
+
+        <ScreenBar active={active} onJump={jump} />
       </main>
     </Layout>
   );
