@@ -75,9 +75,18 @@ jobs:
       # zamaninda: L7 (SNI/Host) icin Npcap gerekir; MSI kurulumu bunu
       # otomatik kurar (deploy/msi/install-npcap.ps1). Npcap yoksa agent
       # ETW'ye duser → surec trafigi + DNS akar, L7 akmaz.
+      #
+      # GOOS/GOARCH matristen ZORUNLU verilir: macos-latest runner'ı Apple
+      # Silicon, ubuntu/windows runner'ları amd64 — GOARCH verilmezse çapraz
+      # hedefler (özellikle darwin/amd64) sessizce runner mimarisinde derlenip
+      # yanlış etiketle paketlenir (v1.0–v1.3 boyunca darwin/amd64 aslında
+      # arm64'tü). darwin çapraz derlemesi cgo+libpcap ile temiz: macOS SDK'sı
+      # evrensel .tbd stub'ları sağlar, Go cgo otomatik -arch geçirir.
       - name: Build binaries
         env:
           CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
           EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
@@ -88,6 +97,26 @@ jobs:
             -o "bazntms-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntms-agent
           go build -trimpath -ldflags "$LDFLAGS" \
             -o "bazntmsctl-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/bazntmsctl
+
+      # Yanlış mimarili bir asset asla release'e çıkmasın: her binary'nin gömülü
+      # build bilgisindeki GOOS/GOARCH matris hedefiyle birebir eşleşmeli.
+      - name: Mimari sağlaması
+        run: |
+          EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
+          fail=0
+          for b in bazntms bazntms-agent bazntmsctl; do
+            f="${b}-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
+            info=$(go version -m "$f")
+            got_os=$(printf '%s\n' "$info" | grep -oE 'GOOS=[a-z0-9]+' | cut -d= -f2)
+            got_arch=$(printf '%s\n' "$info" | grep -oE 'GOARCH=[a-z0-9]+' | cut -d= -f2)
+            if [ "$got_os" = "${{ matrix.goos }}" ] && [ "$got_arch" = "${{ matrix.goarch }}" ]; then
+              echo "$f: $got_os/$got_arch OK"
+            else
+              echo "::error::$f: beklenen ${{ matrix.goos }}/${{ matrix.goarch }}, bulunan ${got_os:-?}/${got_arch:-?}"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ]
 
       # macOS pkg installer (Faz 7.3; yalnizca darwin runner'larda)
       - name: Build macOS pkg
