@@ -23,6 +23,8 @@ docs-site/build/
 docs-site/.docusaurus/
 web/dist/*
 !web/dist/.gitkeep
+# demo build'i (npm run build:demo) — CI docs-site/build/demo'ya kopyalar
+web/demo/
 
 # diger
 *.log

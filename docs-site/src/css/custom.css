@@ -313,6 +313,23 @@ body::after {
   color: var(--tui-ground);
 }
 
+/* canlı demo düğmesi — reverse-video cyan (dashboard'daki aktif sekme dili).
+   Docusaurus href öğesine kendi harici-link ikonunu ekler (↗). */
+.navbar__item--demo {
+  background: var(--tui-rx);
+  color: var(--tui-ground);
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  margin-left: 0.35rem;
+}
+.navbar__item--demo:hover {
+  color: var(--tui-ground);
+  filter: brightness(1.08);
+}
+.navbar__item--demo .iconExternalLink {
+  margin-left: 0.25rem;
+}
+
 /* sürüm rozeti — [v1.3.0] */
 .navbar__item--version {
   border: 1px solid var(--tui-rule-hi);

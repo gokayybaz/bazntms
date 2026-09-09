@@ -91,6 +91,13 @@ bir kurulum **5.000 agent** ölçeğine aynı binary ile taşınır.
 - **Doğrulanmış kapasite**: 5.000 agent @ 30 sn (p95 5 ms) · ≥50.000 flow/sn
   (kayıpsız) · 1.000 cihaz / 60 sn poll — bkz. [`docs/CAPACITY.md`](docs/CAPACITY.md)
 
+## Canlı Demo
+
+Kurulum yapmadan panoyu görmek için: **<https://gokayybaz.github.io/bazntms/demo/>**
+— sentetik veriyle çalışan, backend gerektirmeyen statik bir dashboard build'i
+(140 agent'lık filo, cihazlar, uyarı yaşam döngüsü, anomali, AI sekmesi, 5651
+uyumluluk…). Değişiklikler kaydedilmez. Yerelde: `cd frontend && npm run dev:demo`.
+
 ## Hızlı Başlangıç
 
 Üç kurulum yolu — üçü birbirinin alternatifi, hepsi aynı binary'yi kullanır.

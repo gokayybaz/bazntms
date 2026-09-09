@@ -1,6 +1,7 @@
 import React from 'react';
 import Layout from '@theme/Layout';
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.css';
 
 /* ============================================================================
@@ -14,6 +15,8 @@ import styles from './index.module.css';
 
 const REPO = 'https://github.com/gokayybaz/bazntms';
 const QUICK_CMD = 'docker compose -f deploy/docker-compose.yml up --build';
+// Canlı demo URL'i docusaurus.config.js customFields.demoUrl'den gelir
+// (mutlak URL — Docusaurus kırık-link denetçisi harici saysın diye).
 
 /* alt şerit: numaralı ekranlar (dashboard TabBar karşılığı) */
 const SCREENS = [
@@ -634,7 +637,7 @@ function Architecture() {
 
 /* ============================ Alt ekran şeridi (FnKeyBar karşılığı) ============================ */
 
-function ScreenBar({ active, onJump }) {
+function ScreenBar({ active, onJump, demoUrl }) {
   return (
     <div className={styles.screenBar}>
       <div className={styles.screenBarInner}>
@@ -650,6 +653,9 @@ function ScreenBar({ active, onJump }) {
           </button>
         ))}
         <span className={styles.screenBarSpacer} />
+        <a className={styles.screenAction} href={demoUrl} target="_blank" rel="noreferrer">
+          CANLI DEMO ↗
+        </a>
         <a className={styles.screenAction} href="#kurulum">
           KURULUM ↵
         </a>
@@ -665,6 +671,8 @@ function ScreenBar({ active, onJump }) {
 
 export default function Home() {
   const [active, setActive] = React.useState('ust');
+  const { siteConfig } = useDocusaurusContext();
+  const demoUrl = siteConfig.customFields.demoUrl;
   const docsUrl = useBaseUrl('/docs/installation');
   const apiUrl = useBaseUrl('/docs/reference/api');
   const configUrl = useBaseUrl('/docs/reference/configuration');
@@ -747,9 +755,10 @@ export default function Home() {
                 </div>
 
                 <div className={styles.heroCtas}>
-                  <Bracket to="/docs/installation" primary>
-                    KURULUM
+                  <Bracket href={demoUrl} primary external>
+                    CANLI DEMO ↗
                   </Bracket>
+                  <Bracket to="/docs/installation">KURULUM</Bracket>
                   <Bracket href={REPO} external>
                     GITHUB ↗
                   </Bracket>
@@ -767,7 +776,10 @@ export default function Home() {
                   </div>
                   <ThroughputTrace />
                   <p className={styles.asideNote}>
-                    temsilî akış — gerçek veri değil, örnekleme penceresini gösterir
+                    temsilî akış —{' '}
+                    <a href={demoUrl} target="_blank" rel="noreferrer">
+                      panoyu sentetik veriyle canlı gez ↗
+                    </a>
                   </p>
                 </Panel>
               </div>
@@ -824,7 +836,11 @@ export default function Home() {
             <h2 className={styles.h2}>Kurulumdan sonra gördüğünüz ekran</h2>
             <p className={styles.sectionLede}>
               Filo sayaçları, canlı verim, en yoğun uç noktalar ve uyarı akışı — gerçek
-              panelin birebir dili, sentetik veriyle sahnelenmiş.
+              panelin birebir dili, sentetik veriyle sahnelenmiş.{' '}
+              <a href={demoUrl} target="_blank" rel="noreferrer">
+                Tam panoyu canlı gezin ↗
+              </a>{' '}
+              — kurulum gerekmez, backend yok.
             </p>
             <ShowcasePanel />
           </div>
@@ -994,9 +1010,10 @@ export default function Home() {
               taşıyarak filo ölçeğine çıkarın. Platform değişmez.
             </p>
             <div className={styles.heroCtas}>
-              <Bracket to="/docs/installation" primary>
-                KURULUM
+              <Bracket href={demoUrl} primary external>
+                CANLI DEMO ↗
               </Bracket>
+              <Bracket to="/docs/installation">KURULUM</Bracket>
               <Bracket href={apiUrl}>API REFERANSI</Bracket>
             </div>
             <p className={styles.bottomRisk}>
@@ -1005,7 +1022,7 @@ export default function Home() {
           </div>
         </section>
 
-        <ScreenBar active={active} onJump={jump} />
+        <ScreenBar active={active} onJump={jump} demoUrl={demoUrl} />
       </main>
     </Layout>
   );

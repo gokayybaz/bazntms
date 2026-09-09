@@ -22,6 +22,10 @@ npm run lint                     # oxlint — uyarılar CI'ı kırmaz, hatalar k
 npm run test                     # vitest run
 npm run build                    # tsc -b && vite build (../web/dist'e yazar)
 npm run dev                      # Vite dev server, :8080'e proxy (vite.config.ts)
+npm run build:demo               # backend'siz demo build'i → ../web/demo (src/demo/
+                                 # window.fetch+WS taklidi); docs.yml build/demo'ya
+                                 # kopyalar → gokayybaz.github.io/bazntms/demo/
+npm run dev:demo                 # demo modunu yerelde gez (HashRouter, base /bazntms/demo/)
 
 # make test yalnızca: go vet + gofmt -l + tsc -b (go test/npm test'i kapsamaz)
 ```

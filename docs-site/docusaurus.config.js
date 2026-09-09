@@ -11,12 +11,20 @@ const { themes } = require('prism-react-renderer');
 // Tema: ürünün kendi arayüzüyle (frontend/DESIGN.md — "htop çok-panelli
 // terminal") aynı dil. Tek koyu tema, tek mono aile, kare köşe. Açık tema
 // dalı yok — DESIGN.md kuralı ("Don't açık tema dalı açma").
+const SITE_URL = 'https://gokayybaz.github.io';
+const BASE_URL = '/bazntms/';
+// Canlı demo: Docusaurus router'ının DIŞINDA, docs.yml'in build/demo altına
+// kopyaladığı statik frontend build'i. Mutlak URL — Docusaurus'un kırık-link
+// denetçisi bunu harici sayar (yoksa build-anında build/demo yok diye uyarır).
+const DEMO_URL = `${SITE_URL}${BASE_URL}demo/`;
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'bazNTMS',
   tagline: 'Ağ trafiği izleme — hub + agent + cihaz entegrasyonları',
-  url: 'https://gokayybaz.github.io',
-  baseUrl: '/bazntms/',
+  url: SITE_URL,
+  baseUrl: BASE_URL,
+  customFields: { demoUrl: DEMO_URL },
   favicon: 'img/bazntms.svg',
   trailingSlash: false,
   onBrokenLinks: 'warn',
@@ -65,6 +73,13 @@ const config = {
           { to: '/docs/reference/api', label: 'API', position: 'left' },
           { to: '/docs/reference/upgrading', label: 'Güncelleme', position: 'left' },
           { to: '/docs/reference/troubleshooting', label: 'Sorun Giderme', position: 'left' },
+          {
+            href: DEMO_URL,
+            label: 'Demo',
+            position: 'right',
+            className: 'navbar__item--demo',
+            target: '_self',
+          },
           {
             to: '/docs/reference/changelog',
             label: 'v1.3.0',

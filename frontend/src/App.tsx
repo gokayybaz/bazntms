@@ -6,6 +6,7 @@ import { DialogProvider } from './lib/dialog'
 import { TuiHeader } from './components/TuiHeader'
 import { TabBar } from './components/TabBar'
 import { FnKeyBar } from './components/FnKeyBar'
+import { DemoBanner } from './components/DemoBanner'
 import { ShellKeys } from './components/ShellKeys'
 import { LoginScreen } from './components/LoginScreen'
 import { DashboardPage } from './pages/DashboardPage'
@@ -139,10 +140,17 @@ export default function App() {
     )
   }
 
+  const demo = import.meta.env.VITE_DEMO === '1'
+
   return (
     <KeymapProvider>
       <DialogProvider>
-        <div className="grid h-screen grid-rows-[auto_auto_1fr_auto] bg-ground">
+        <div
+          className={`grid h-screen bg-ground ${
+            demo ? 'grid-rows-[auto_auto_auto_1fr_auto]' : 'grid-rows-[auto_auto_1fr_auto]'
+          }`}
+        >
+          {demo && <DemoBanner />}
           <TuiHeader
             connected={connected}
             fleet={fleet}
