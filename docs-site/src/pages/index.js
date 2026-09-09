@@ -731,13 +731,13 @@ export default function Home() {
             <div className={styles.heroGrid}>
               <div className={styles.heroMain}>
                 <h1 className={styles.title}>
-                  Paketten <span className={styles.fgRx}>imzalı kayda</span>. Tek makineden{' '}
-                  <span className={styles.fgRx}>5&nbsp;000 agent</span>'a, aynı binary.
+                  Paketten <span className={styles.fgRx}>imzalı kayda</span> kadar tek
+                  platform. Paket seviyesinde izleme, akış toplama ve 5651 uyumlu
+                  imzalı loglar.
                 </h1>
                 <p className={styles.lede}>
-                  Hub + uç agent + ağ cihazı entegrasyonları. Canlı paket ölçümü, akış
-                  toplama, süreç bazlı L7/DNS görünürlüğü ve 5651 uyumlu imzalı loglar —
-                  kendi altyapınızda, tek Go binary'sine gömülü.
+                  Tek makineden <span className={styles.fgRx}>5.000 agent</span>'a kadar
+                  tek binary.
                 </p>
 
                 <div className={styles.cmd}>
