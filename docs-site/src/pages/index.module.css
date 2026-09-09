@@ -318,22 +318,27 @@
 
 .title {
   margin: 0;
-  font-size: clamp(22px, 2.9vw, 31px);
-  line-height: 1.32;
+  font-size: clamp(26px, 3.6vw, 40px);
+  line-height: 1.25;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: var(--ink-hi);
   text-wrap: balance;
-  max-width: 34ch;
+  max-width: 24ch;
+}
+/* vurgulu ifadeler ("imzalı kayda", "5.000 agent") satır sonunda bölünmesin */
+.title span,
+.lede span {
+  white-space: nowrap;
 }
 
-/* kısa değer-cümlesi — TUI'de her metin mono (DESIGN.md); dim değil ink */
+/* başlığın altındaki kısa açıklama — mono, sönük ikincil ton */
 .lede {
   margin: 16px 0 0;
-  max-width: 40ch;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink);
+  max-width: 46ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dim);
 }
 
 .cmd {

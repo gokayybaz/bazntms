@@ -732,10 +732,10 @@ export default function Home() {
               <div className={styles.heroMain}>
                 <h1 className={styles.title}>
                   Paketten <span className={styles.fgRx}>imzalı kayda</span> kadar tek
-                  platform. Paket seviyesinde izleme, akış toplama ve 5651 uyumlu
-                  imzalı loglar.
+                  platform.
                 </h1>
                 <p className={styles.lede}>
+                  Paket seviyesinde izleme, akış toplama ve 5651 uyumlu imzalı loglar.
                   Tek makineden <span className={styles.fgRx}>5.000 agent</span>'a kadar
                   tek binary.
                 </p>
