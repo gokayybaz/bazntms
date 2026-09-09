@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatBytes } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { attrEmptyHint, type AttrDiag } from './attrDiag'
 import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
@@ -20,7 +21,11 @@ const RANGES = [
   { label: '6 saat', value: 360 },
 ] as const
 
-export function ProcessesCard({ agentId, onActivate }: { agentId?: number; onActivate?: (process: string) => void } = {}) {
+export function ProcessesCard({
+  agentId,
+  onActivate,
+  diag,
+}: { agentId?: number; onActivate?: (process: string) => void; diag?: AttrDiag } = {}) {
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
   const { data, loaded } = usePolledJson<ProcessUsage[]>(
     `/api/v1/processes?minutes=${minutes}&limit=20${agentId ? `&agent_id=${agentId}` : ''}`,
@@ -57,23 +62,14 @@ export function ProcessesCard({ agentId, onActivate }: { agentId?: number; onAct
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <RangeTabs ranges={RANGES} value={minutes} onChange={setMinutes} />
         <span className="ml-auto font-mono text-[10px] text-tui-dim">
-          {onActivate ? 'Enter → süreç detayı · ' : ''}nethogs yöntemi: pcap + soket→PID · agent'ta -pcap açık olmalı
+          {onActivate ? 'Enter → süreç detayı · ' : ''}süreç→soket atfı · eBPF / pcap / ETW
         </span>
       </div>
 
       {!loaded ? (
         <PanelState kind="loading" />
       ) : rows.length === 0 ? (
-        <PanelState
-          kind="empty"
-          message="Henüz süreç trafiği yok."
-          hint={
-            <>
-              agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın ve hub'da{' '}
-              <code className="text-tui-dim">-agent-pcap</code> politikasını açın
-            </>
-          }
-        />
+        <PanelState kind="empty" message="Henüz süreç trafiği yok." hint={attrEmptyHint(diag ?? {}, 'süreç trafiği')} />
       ) : (
         <TuiTable
           columns={cols}

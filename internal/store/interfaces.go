@@ -178,9 +178,10 @@ type AgentStore interface {
 	RegisterOrReuseAgent(a Agent, offlineBefore int64) (id int64, reused bool, err error)
 	AgentByTokenHash(hash string) (*Agent, error)
 	TouchAgent(id int64, version string, protoVersion int, remoteIP string) error
-	// SetAgentAttrMethod, agent'ın bildirdiği aktif süreç-atıf arka ucunu
-	// ("ebpf"|"pcap"|"etw"|"off") kaydeder. Boş = değiştirme (eski agent).
-	SetAgentAttrMethod(id int64, method string) error
+	// SetAgentAttrInfo, agent'ın her batch'te bildirdiği süreç-atıf teşhisini
+	// kaydeder: arka uç ("ebpf"|"pcap"|"etw"|"off"), pcap yakalama arayüzü ve
+	// kapalı/başlatılamadı nedeni. method boş = değiştirme (eski agent).
+	SetAgentAttrInfo(id int64, method, iface, note string) error
 	SaveIfaceSamples(agentID int64, ts int64, samples []telemetry.InterfaceSample) error
 	ReplaceConnLatest(agentID int64, conns []telemetry.ConnectionSample) error
 	ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error)
@@ -225,6 +226,13 @@ type DeviceStore interface {
 	// uplink nil → köke bağlı.
 	SetDeviceUplink(deviceID int64, uplink *int64) error
 	UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error
+	// UpdateDeviceFortiMeta, FortiGate cihazında tespit edilen FortiOS sürümü +
+	// uç yetenek özeti (JSON); boş değerler mevcut veriyi ezmez.
+	UpdateDeviceFortiMeta(id int64, version, capsJSON string) error
+	// SetDeviceFortiProfile, kullanıcının pinlediği sürüm profili ("" → auto).
+	SetDeviceFortiProfile(id int64, profile string) error
+	// SetDeviceVDOM, FortiGate cihazının hedef VDOM'u ("" → root; "all" → hepsi).
+	SetDeviceVDOM(id int64, vdom string) error
 	SaveDeviceIfaceSamples(deviceID int64, ts int64, ifaces []DeviceIface) error
 	LatestDeviceIfaces(deviceID int64) ([]DeviceIfaceRate, error)
 	SaveFlows(rows []FlowRow) error

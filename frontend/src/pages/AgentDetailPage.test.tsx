@@ -174,6 +174,51 @@ describe('AgentDetailPage', () => {
     expect(deleteCall).toBeUndefined()
   })
 
+  it('Atıf rozeti pcap yönteminde dinlenen arayüzü gösterir', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (typeof url === 'string' && url === '/api/v1/agents/1') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              agent: { ...AGENT, attr_method: 'pcap', attr_iface: 'Tailscale' },
+              connections: [],
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
+    expect(screen.getByText('@ Tailscale')).toBeInTheDocument()
+  })
+
+  it('Atıf rozeti off + neden (attr_note) gösterir', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (typeof url === 'string' && url === '/api/v1/agents/1') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              agent: { ...AGENT, attr_method: 'off', attr_note: 'hub PCAP politikasi kapali (-agent-pcap=false)' },
+              connections: [],
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+      }),
+    )
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'sunucu-01' })).toBeInTheDocument())
+    // hem "Atıf" rozetinin yanında hem de boş panellerin ipucunda görünür
+    expect(screen.getAllByText(/hub PCAP politikasi kapali/).length).toBeGreaterThan(0)
+  })
+
   it('bağlantı tablosu filtrelenmiş/toplam sayıyı gösterir', async () => {
     const user = userEvent.setup()
     renderPage()

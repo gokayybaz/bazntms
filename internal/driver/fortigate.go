@@ -49,11 +49,15 @@ func (f *FortiDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) 
 		Token:     token,
 		VerifyTLS: d.APIVerifyTLS,
 		Timeout:   20 * time.Second,
+		// Kullanıcı pinlemediyse ("" / "auto") istemci ilk yanıtın sürümünden
+		// profili kendi seçer.
+		Profile: fortigate.ResolveProfile(d.APIProfile, ""),
 	})
 
-	// sistem durumu: sysName/sysDescr
+	// sistem durumu: sysName/sysDescr + FortiOS sürümü (profil + rozet)
 	if st, err := fc.SystemStatus(ctx); err == nil {
 		snap.SysName = st.Hostname
+		snap.APIVersion = st.Version
 		descr := "FortiOS"
 		if st.Version != "" {
 			descr += " " + st.Version
@@ -95,7 +99,7 @@ func (f *FortiDriver) Poll(ctx context.Context, d store.Device, v *vault.Vault) 
 // yutulur (bir uç desteklenmiyorsa turu bozmamalı).
 func (f *FortiDriver) pollVdom(ctx context.Context, fc *fortigate.Client, d store.Device, vdom string, now int64, snap *Snapshot) {
 	// kaynak kullanımı: en güncel örnek (dizi döner; son elemanı alırız)
-	if samples, err := fc.ResourceUsage(ctx, vdom, "1minute"); err == nil && len(samples) > 0 {
+	if samples, err := fc.ResourceUsage(ctx, vdom); err == nil && len(samples) > 0 {
 		last := samples[len(samples)-1]
 		ts := last.Time
 		if ts == 0 {

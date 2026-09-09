@@ -287,8 +287,8 @@ func (q *Queue) handle(msg jetstream.Msg, st store.Store) {
 			slog.Error("kuyruk: agent touch hatasi", "agent_id", env.AgentID, "err", err)
 		}
 		if env.Batch.AttrMethod != "" {
-			if err := st.SetAgentAttrMethod(env.AgentID, env.Batch.AttrMethod); err != nil {
-				slog.Error("kuyruk: attr_method kaydi hatasi", "agent_id", env.AgentID, "err", err)
+			if err := st.SetAgentAttrInfo(env.AgentID, env.Batch.AttrMethod, env.Batch.AttrIface, env.Batch.AttrNote); err != nil {
+				slog.Error("kuyruk: attr teshis kaydi hatasi", "agent_id", env.AgentID, "err", err)
 			}
 		}
 		if len(env.Batch.ProcessTraffic) > 0 {

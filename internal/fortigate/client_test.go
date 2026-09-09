@@ -160,6 +160,135 @@ func TestPoliciesPagination(t *testing.T) {
 	}
 }
 
+// --- Faz 27: gerçek FortiOS 7.2 şekilleri + sürüm tespiti ---
+
+func env72(results string) string {
+	return `{"http_method":"GET","results":` + results + `,"vdom":"root","status":"success","version":"v7.2.11","build":1639}`
+}
+
+func TestInterfaces72MapKeyed(t *testing.T) {
+	// 7.2: results ada-göre anahtarlı obje; link bool; speed top-level Mbps
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(env72(`{
+			"port1":{"id":"port1","name":"port1","alias":"wan","link":true,"speed":1000.0,
+			         "ip":"10.0.0.2 255.255.255.0","rx_bytes":9000,"tx_bytes":4000,"rx_errors":1},
+			"port2":{"id":"port2","name":"port2","link":false,"speed":0}
+		}`)))
+	})
+	ifaces, err := c.Interfaces(context.Background(), "root")
+	if err != nil || len(ifaces) != 2 {
+		t.Fatalf("interfaces: %v %d", err, len(ifaces))
+	}
+	byName := map[string]Interface{}
+	for _, i := range ifaces {
+		byName[i.Name] = i
+	}
+	p1 := byName["port1"]
+	if p1.Status != "up" || p1.SpeedBps() != 1_000_000_000 || p1.IP != "10.0.0.2" || p1.RxBytes != 9000 {
+		t.Fatalf("port1: %+v", p1)
+	}
+	if byName["port2"].Status != "down" {
+		t.Fatalf("port2 down bekleniyordu: %+v", byName["port2"])
+	}
+	if c.Version() != "v7.2.11" || c.ProfileID() != "7.2" {
+		t.Fatalf("sürüm auto-tespit: version=%q profile=%q", c.Version(), c.ProfileID())
+	}
+}
+
+func TestResourceUsageMapOfArrays(t *testing.T) {
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("interval") != "" {
+			t.Errorf("interval parametresi gönderilmemeli: %s", r.URL.RawQuery)
+		}
+		w.Write([]byte(env72(`{"cpu":[{"current":23}],"mem":[{"current":61}],"disk":[{"current":12}],"session":[{"current":1500}]}`)))
+	})
+	s, err := c.ResourceUsage(context.Background(), "root")
+	if err != nil || len(s) != 1 {
+		t.Fatalf("resource: %v %+v", err, s)
+	}
+	if s[0].CPU != 23 || s[0].Mem != 61 || s[0].Session != 1500 {
+		t.Fatalf("resource örnek: %+v", s[0])
+	}
+}
+
+func TestIPsecProxyIDShape(t *testing.T) {
+	// 7.2: peer=rgwy; tünel status yok → proxyid[].status; baytlar proxyid altında
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(env72(`[{"name":"hq","rgwy":"203.0.113.9","proxyid":[
+			{"status":"up","incoming_bytes":500,"outgoing_bytes":300}]}]`)))
+	})
+	tuns, err := c.IPsecTunnels(context.Background(), "root")
+	if err != nil || len(tuns) != 1 {
+		t.Fatalf("ipsec: %v %+v", err, tuns)
+	}
+	if tuns[0].Peer != "203.0.113.9" || tuns[0].Status != "up" || tuns[0].RxBytes != 500 || tuns[0].TxBytes != 300 {
+		t.Fatalf("ipsec tünel: %+v", tuns[0])
+	}
+}
+
+func TestSSLVPN72UserName(t *testing.T) {
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(env72(`[{"user_name":"mehmet","remote_host":"88.1.2.3","uptime":120}]`)))
+	})
+	s, err := c.SSLVPNSessions(context.Background(), "root")
+	if err != nil || len(s) != 1 || s[0].User != "mehmet" || s[0].RemoteHost != "88.1.2.3" {
+		t.Fatalf("ssl: %v %+v", err, s)
+	}
+}
+
+func TestSDWANIfnameKeyed(t *testing.T) {
+	// 7.2: {hc:{ifname:{...}}} — members dizisi yok
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(env72(`{"SLA":{"port1":{"status":"up","latency":8.1,"jitter":0.7,"packet_loss":0},
+			"port2":{"status":"down","latency":0,"jitter":0,"packet_loss":100}}}`)))
+	})
+	h, err := c.SDWANHealth(context.Background(), "root")
+	if err != nil || len(h["SLA"]) != 2 {
+		t.Fatalf("sdwan: %v %+v", err, h)
+	}
+	byIf := map[string]SDWANMember{}
+	for _, m := range h["SLA"] {
+		byIf[m.Member] = m
+	}
+	if byIf["port1"].LatencyMs != 8.1 || byIf["port2"].State != "down" {
+		t.Fatalf("sdwan üye: %+v", h["SLA"])
+	}
+}
+
+func TestPoliciesMonitorCmdbJoin(t *testing.T) {
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v2/cmdb/firewall/policy":
+			w.Write([]byte(env72(`[{"policyid":1,"name":"lan-wan","action":"accept"},{"policyid":2,"name":"deny-all","action":"deny"}]`)))
+		case r.URL.Path == "/api/v2/monitor/firewall/policy":
+			w.Write([]byte(env72(`[{"policyid":1,"bytes":123456,"hit_count":42},{"policyid":2,"bytes":0,"hit_count":0}]`)))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	pols, err := c.Policies(context.Background(), "root")
+	if err != nil || len(pols) != 2 {
+		t.Fatalf("policies: %v %+v", err, pols)
+	}
+	if pols[0].Name != "lan-wan" || pols[0].Hits != 42 || pols[0].Bytes != 123456 {
+		t.Fatalf("policy join: %+v", pols[0])
+	}
+}
+
+func TestProfilePinnedOverridesVersion(t *testing.T) {
+	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(env72(`{"hostname":"x"}`)))
+	})
+	c.pinnedProfile = true
+	c.profile, _ = ProfileByID("7.4")
+	if _, err := c.SystemStatus(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if c.ProfileID() != "7.4" {
+		t.Fatalf("pinlenmiş profil sürümle ezildi: %s", c.ProfileID())
+	}
+}
+
 func TestAuthFailure(t *testing.T) {
 	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

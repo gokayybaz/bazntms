@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gokayybaz/bazntms/internal/fortigate"
 	"github.com/gokayybaz/bazntms/internal/store"
 )
 
@@ -31,6 +32,7 @@ type deviceRequest struct {
 	APIToken     string `json:"api_token"` // fortigate: düz metin → vault
 	APIVerifyTLS bool   `json:"api_verify_tls"`
 	VDOM         string `json:"vdom"`
+	APIProfile   string `json:"profile"` // fortigate: FortiOS sürüm profili ("" / "auto" → oto)
 	PollSeconds  int    `json:"poll_seconds"`
 }
 
@@ -132,6 +134,13 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		if req.VDOM == "" {
 			req.VDOM = "root"
 		}
+		if !fortigate.ValidProfileID(req.APIProfile) {
+			http.Error(w, "geçersiz fortigate profili", http.StatusBadRequest)
+			return
+		}
+		if req.APIProfile == "auto" {
+			req.APIProfile = ""
+		}
 	}
 	// hassas alanlari sifrele
 	var err error
@@ -160,7 +169,7 @@ func (s *Server) handleDeviceAdd(w http.ResponseWriter, r *http.Request) {
 		V3User: req.V3User, V3AuthProto: req.V3AuthProto, V3AuthPass: req.V3AuthPass,
 		V3PrivProto: req.V3PrivProto, V3PrivPass: req.V3PrivPass,
 		APIURL: req.APIURL, APIToken: req.APIToken,
-		APIVerifyTLS: req.APIVerifyTLS, VDOM: req.VDOM,
+		APIVerifyTLS: req.APIVerifyTLS, VDOM: req.VDOM, APIProfile: req.APIProfile,
 		PollSeconds: req.PollSeconds, Enabled: !unmanaged,
 	})
 	if err != nil {

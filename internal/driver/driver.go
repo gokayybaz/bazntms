@@ -25,6 +25,10 @@ type Snapshot struct {
 	SysDescr  string
 	LastError string
 
+	// APIVersion, FortiGate cihazlarında yanıt zarfından tespit edilen FortiOS
+	// sürümü ("v7.2.11"); poller cihaz satırına yazar (sürüm profili + rozet).
+	APIVersion string
+
 	// ortak (snmp + fortigate)
 	Ifaces []store.DeviceIface
 

@@ -57,3 +57,53 @@ func TestDeepCollectMethod(t *testing.T) {
 		})
 	}
 }
+
+// TestIsSanalIface, auto arayuz seciminin sanal/VPN adaptorlerini (Tailscale
+// vakasi) ele alip fiziksel NIC adlarina dokunmadigini dogrular.
+func TestIsSanalIface(t *testing.T) {
+	sanal := []string{
+		"Tailscale", "tailscale0", "wg0", "WireGuard Tunnel", "utun4", "tun0",
+		"tap0", "ztyugelu6b", "vEthernet (WSL)", "docker0", "br-1a2b3c",
+		"veth9f3", "VMware Network Adapter VMnet8", "ppp0", "Npcap Loopback Adapter",
+	}
+	for _, n := range sanal {
+		if !isSanalIface(n) {
+			t.Errorf("isSanalIface(%q) = false; sanal olmaliydi", n)
+		}
+	}
+	fiziksel := []string{"eth0", "en0", "Ethernet", "Ethernet 2", "Wi-Fi", "wlan0", "enp3s0", "Local Area Connection"}
+	for _, n := range fiziksel {
+		if isSanalIface(n) {
+			t.Errorf("isSanalIface(%q) = true; fiziksel olmaliydi", n)
+		}
+	}
+}
+
+// TestHubHostPort, hub URL'inden dogru "host:port"un cikarildigini dogrular
+// (autoIface varsayilan-rota probu bu hedefe dial eder).
+func TestHubHostPort(t *testing.T) {
+	cases := map[string]string{
+		"https://hub.example.com":      "hub.example.com:443",
+		"http://hub.example.com":       "hub.example.com:80",
+		"https://hub.example.com:8443": "hub.example.com:8443",
+		"http://10.0.0.5:8080":         "10.0.0.5:8080",
+		"":                             "",
+		"://bozuk":                     "",
+		"not a url":                    "",
+	}
+	for in, want := range cases {
+		if got := hubHostPort(in); got != want {
+			t.Errorf("hubHostPort(%q) = %q; beklenen %q", in, got, want)
+		}
+	}
+}
+
+// TestKisalt, attr_note kisaltmasinin rune sinirinda calistigini dogrular.
+func TestKisalt(t *testing.T) {
+	if got := kisalt("kisa", 10); got != "kisa" {
+		t.Errorf("kisalt kisa metni degistirdi: %q", got)
+	}
+	if got := kisalt("abcdefghij", 5); got != "abcde…" {
+		t.Errorf("kisalt(_,5) = %q; beklenen %q", got, "abcde…")
+	}
+}

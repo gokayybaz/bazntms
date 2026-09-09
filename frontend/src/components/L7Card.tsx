@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatBytes, formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { attrEmptyHint, type AttrDiag } from './attrDiag'
 import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
@@ -21,7 +22,7 @@ const RANGES = [
   { label: '6 saat', value: 360 },
 ] as const
 
-export function L7Card({ agentId }: { agentId?: number } = {}) {
+export function L7Card({ agentId, diag }: { agentId?: number; diag?: AttrDiag } = {}) {
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
   const { data, loaded } = usePolledJson<L7Row[]>(
     `/api/v1/l7?minutes=${minutes}&limit=30${agentId ? `&agent_id=${agentId}` : ''}`,
@@ -67,7 +68,7 @@ export function L7Card({ agentId }: { agentId?: number } = {}) {
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <RangeTabs ranges={RANGES} value={minutes} onChange={setMinutes} />
-        <span className="ml-auto font-mono text-[10px] text-tui-dim">TLS SNI + HTTP Host · agent'ta -pcap açık olmalı</span>
+        <span className="ml-auto font-mono text-[10px] text-tui-dim">TLS SNI + HTTP Host · pcap gerekir (Windows: Npcap)</span>
       </div>
 
       {!loaded ? (
@@ -76,9 +77,11 @@ export function L7Card({ agentId }: { agentId?: number } = {}) {
         <PanelState
           kind="empty"
           message="Henüz uygulama görünürlüğü verisi yok."
+          className="mx-auto max-w-md"
           hint={
             <>
-              agent'ları <code className="text-tui-dim">-pcap</code> ile çalıştırın
+              L7 payload gerektirir → yalnız <span className="text-tui-dim">pcap</span> arka ucunda görünür
+              (eBPF/ETW'de yok). {attrEmptyHint(diag ?? {}, 'uygulama görünürlüğü (L7)')}
             </>
           }
         />

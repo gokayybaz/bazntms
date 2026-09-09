@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatNum } from '../lib/format'
 import { usePolledJson } from '../lib/usePolledJson'
+import { attrEmptyHint, type AttrDiag } from './attrDiag'
 import { PanelState } from './PanelState'
 import { RangeTabs } from './RangeTabs'
 import { TuiTable } from './TuiTable'
@@ -20,7 +21,7 @@ const RANGES = [
   { label: '6 saat', value: 360 },
 ] as const
 
-export function DnsCard({ agentId }: { agentId?: number } = {}) {
+export function DnsCard({ agentId, diag }: { agentId?: number; diag?: AttrDiag } = {}) {
   const [minutes, setMinutes] = useState<15 | 60 | 360>(60)
   const { data, loaded } = usePolledJson<DnsRow[]>(
     `/api/v1/dns?minutes=${minutes}&limit=30${agentId ? `&agent_id=${agentId}` : ''}`,
@@ -57,7 +58,7 @@ export function DnsCard({ agentId }: { agentId?: number } = {}) {
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <RangeTabs ranges={RANGES} value={minutes} onChange={setMinutes} />
-        <span className="ml-auto font-mono text-[10px] text-tui-dim">UDP/53 · süreç atıflı · agent'ta -pcap açık olmalı</span>
+        <span className="ml-auto font-mono text-[10px] text-tui-dim">UDP/53 · süreç atıflı</span>
       </div>
 
       {!loaded ? (
@@ -69,9 +70,8 @@ export function DnsCard({ agentId }: { agentId?: number } = {}) {
           className="mx-auto max-w-md"
           hint={
             <>
-              Agent'ta <code className="text-tui-dim">collect.pcap</code> ve hub'da{' '}
-              <code className="text-tui-dim">-agent-pcap</code> açık olmalı. Süreç trafiği doluyor ama DNS boşsa:
-              sorgular yakalanan arayüzden geçmiyordur — DoH/DoT ya da VPN/Tailscale MagicDNS (ayrı{' '}
+              {attrEmptyHint(diag ?? {}, 'DNS')} Süreç trafiği doluyor ama yalnız DNS boşsa: sorgular
+              yakalanan arayüzden geçmiyordur — DoH/DoT ya da VPN/Tailscale MagicDNS (ayrı{' '}
               <code className="text-tui-dim">utun</code> arayüzü) tipik nedendir.
             </>
           }

@@ -19,9 +19,11 @@ collect:
   interval_seconds: 30
   # Windows'ta L7 (TLS SNI / HTTP Host) uygulama gorunurlugu icin `pcap`
   # yontemi + Npcap gerekir. MSI kurulumu Npcap'i otomatik (sessiz) kurdugu
-  # icin bu ayar hazir gelir. Npcap bir sekilde yoksa agent net bir uyari
-  # basar ve `-collect-method=etw` ile surec trafigi + DNS (L7 haric) yine
-  # akar. Derin toplamayi tamamen kapatmak icin: method: off
+  # icin bu ayar hazir gelir. Npcap bir sekilde yoksa (internet yok / imza-
+  # hash uyusmadi) agent OTOMATIK olarak ETW'ye duser → surec trafigi + DNS
+  # yine akar, yalnizca L7 bos kalir (agent.log'a net bir satir yazilir ve
+  # panel bos-durum metni bunu soyler). Derin toplamayi tamamen kapatmak
+  # icin: method: off
   method: pcap
   pcap_interface: auto
   # ham PCAP kaydi (hub politikasi da acik olmali)

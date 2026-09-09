@@ -718,6 +718,34 @@ paths:
       responses:
         "200": { description: Eklendi }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/devices/probe:
+    post:
+      tags: [devices]
+      summary: FortiGate bağlantısını sına — her uca gerçek istek, sürüm + uç yetenek raporu (yetki:devices)
+      description: >
+        Gövde `{api_url, api_token, api_verify_tls, vdom, profile}` (yeni cihaz)
+        veya `{device_id, profile?}` (mevcut cihaz; kayıtlı token çözülür, sonuç
+        cihaz satırına yazılır). FortiOS monitor API'si şema vermediğinden probe
+        her veri ucuna gerçek istek atıp bağlanabilirlik/HTTP kodu/parse sonucunu
+        raporlar ve yanıt zarfından FortiOS sürümünü çıkarır.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id: { type: integer }
+                api_url: { type: string }
+                api_token: { type: string }
+                api_verify_tls: { type: boolean }
+                vdom: { type: string }
+                profile: { type: string, description: "'' | auto | 7.0 | 7.2 | 7.4 | 7.6 | default" }
+      responses:
+        "200": { description: "Sınama raporu { version, vdom_mode, endpoints[], caps{} }" }
+        "400": { description: Geçersiz istek }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/devices/{id}:
     delete:
       tags: [devices]
@@ -745,6 +773,25 @@ paths:
       responses:
         "200": { description: Güncellendi }
         "400": { description: Geçersiz üst cihaz }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/devices/{id}/fortigate:
+    put:
+      tags: [devices]
+      summary: FortiGate cihazının VDOM / sürüm profilini düzenle (yetki:devices)
+      parameters: [ { $ref: "#/components/parameters/idPath" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vdom: { type: string, nullable: true }
+                profile: { type: string, nullable: true, description: "'' | auto | 7.0 | 7.2 | 7.4 | 7.6 | default" }
+      responses:
+        "200": { description: Güncellendi }
+        "400": { description: Geçersiz profil / cihaz FortiGate değil }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/devices/{id}/interfaces:
@@ -1783,6 +1830,8 @@ components:
         version: { type: string }
         remote_ip: { type: string }
         attr_method: { type: string, description: "süreç-atıf arka ucu: ebpf | pcap | etw | off (boş = eski agent)" }
+        attr_iface: { type: string, description: "pcap yakalama arayüzü (yalnız method=pcap) — 'motor çalışıyor ama panel boş' teşhisi" }
+        attr_note: { type: string, description: "atıf motoru kapalı/başlatılamadıysa insan-okur neden (collect.method=off | hub -agent-pcap=false | pcap hata ipucu)" }
         conns: { type: integer }
         rates:
           type: array
@@ -1809,6 +1858,11 @@ components:
         last_poll: { type: integer }
         last_error: { type: string }
         uplink_device_id: { type: integer, nullable: true, description: "üst cihaz (switch → router zinciri)" }
+        api_url: { type: string }
+        vdom: { type: string }
+        api_profile: { type: string, description: "FortiGate: pinlenmiş FortiOS sürüm profili ('' = otomatik tespit)" }
+        api_version: { type: string, description: "FortiGate: son poll/probe'da tespit edilen FortiOS sürümü" }
+        api_caps: { type: string, description: "FortiGate: son 'Bağlantıyı Sına' uç yetenek özeti (JSON)" }
     DeviceCreate:
       type: object
       required: [name, kind]
@@ -1829,6 +1883,7 @@ components:
         api_token: { type: string }
         api_verify_tls: { type: boolean }
         vdom: { type: string }
+        profile: { type: string, description: "FortiGate FortiOS sürüm profili: '' | auto | 7.0 | 7.2 | 7.4 | 7.6 | default" }
         poll_seconds: { type: integer }
     Flow:
       type: object

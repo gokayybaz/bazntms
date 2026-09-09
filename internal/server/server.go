@@ -181,6 +181,9 @@ func (s *Server) SetAgentCA(ca *pki.CA) { s.agentCA = ca }
 // SetMultiSite, çoklu-saha (MSP) modunu açar/kapatır (S14.B1).
 func (s *Server) SetMultiSite(on bool) { s.multiSite = on }
 
+// SetVault, kimlik kasasını bağlar (New'e nil geçildiyse sonradan; testler için).
+func (s *Server) SetVault(v *vault.Vault) { s.vault = v }
+
 // SetMockDevices, ölçek testi için `vendor=mock` cihaz eklemeye izin verir
 // (S21.2 — `-mock-devices`). Kapalıyken (varsayılan) POST /api/v1/devices bu
 // vendor'ı 400 ile reddeder; sürücü seçimi (driver.For) her zaman mock'u tanır
@@ -309,8 +312,10 @@ func (s *Server) Handler() http.Handler {
 	// cihazlar ve ag cihazi verileri (Faz 3; ekleme/silme = netops+)
 	mux.HandleFunc("GET /api/v1/devices", s.handleDevicesList)
 	mux.Handle("POST /api/v1/devices", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceAdd)))
+	mux.Handle("POST /api/v1/devices/probe", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceProbe)))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceDelete)))
 	mux.Handle("PUT /api/v1/devices/{id}/uplink", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceSetUplink)))
+	mux.Handle("PUT /api/v1/devices/{id}/fortigate", s.requirePerm(PermManageDevices, http.HandlerFunc(s.handleDeviceFortiConfig)))
 	mux.HandleFunc("GET /api/v1/devices/{id}/interfaces", s.handleDeviceIfaces)
 	mux.HandleFunc("GET /api/v1/devices/{id}/resources", s.handleDeviceResources)
 	mux.HandleFunc("GET /api/v1/devices/{id}/vpn", s.handleDeviceVPN)

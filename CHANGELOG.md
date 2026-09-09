@@ -13,6 +13,54 @@ Kanallar: `agents.uplink_device_id` gibi şema değişiklikleri hub açılışı
 otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 — yükseltmeden önce yedek alın (bkz. [`docs/UPGRADE-RUNBOOK.md`](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)).
 
+## [Unreleased]
+
+### Süreç atfı: yakalama arayüzü seçimi + panel teşhisi
+
+Sıfırdan kurulan bir Windows agent'ında süreç/DNS/L7 panelleri boştu: motor
+`pcap` modunda **çalışıyordu** ama `autoIface` "ilk yönlendirilebilir IPv4'lü
+arayüz" olarak **Tailscale** sanal adaptörünü (CGNAT `100.64/10`) seçmişti →
+gerçek trafik yakalanan arayüzden geçmiyordu. Yeni bayrak/uç yok → **patch**.
+
+- **Arayüz seçimi** ([`cmd/bazntms-agent` `autoIface`](https://github.com/gokayybaz/bazntms/blob/main/cmd/bazntms-agent/main.go)):
+  önce hub'a (yoksa `8.8.8.8`'e) giden **varsayılan-rota** arayüzü; Tailscale /
+  WireGuard / `utun*` / `vEthernet` / `docker*` gibi sanal/VPN adaptörleri
+  elenir (yalnız son çare olarak kullanılır). eBPF/ETW soket düzeyinde çalışır,
+  etkilenmez.
+- **Panel teşhisi:** agent her batch'te `attr_iface` (pcap'in dinlediği arayüz)
+  + `attr_note` (motor kapalı/başlatılamadıysa neden) bildirir. Agent detay
+  **Atıf** rozeti `pcap @ Tailscale` biçiminde gösterir; boş Süreç/L7/DNS
+  panellerinin metni artık "motor çalışıyor ama yanlış/sanal arayüz — 
+  `collect.pcap_interface` verin" gibi somut ipucu verir. Eski, artık işlevsiz
+  `-pcap` / `collect.pcap` yönlendirmeleri kaldırıldı.
+- **Windows Npcap yedeği:** zorlanmış `method: pcap` (MSI seed'i) yükseltilmiş
+  Windows'ta Npcap yüklenemezse artık **otomatik ETW'ye düşer** → süreç trafiği
+  + DNS akmaya devam eder (yalnız L7 boş). Önceden hiç veri gelmiyordu.
+- Migrasyon `0023` — `agents.attr_iface` / `agents.attr_note` (hub açılışında
+  otomatik).
+
+### FortiGate REST driver — sürüm uyumu + "Bağlantıyı Sına"
+
+Gerçek FortiOS 7.2 kutusuyla test edilince driver'ın yalnız `monitor/system/status`
+dışında veri getirmediği görüldü: sürücü idealize/sentetik şemalara göre
+yazılmıştı, gerçek FortiOS 7.x `results` biçimleri farklı. Yeni bayrak/uç
+kaldırılmadı → **minor**.
+
+- **Toleranslı ayrıştırma** ([`internal/fortigate/parse.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/fortigate/parse.go)):
+  `results` dizi ↔ ada-anahtarlı obje, alan-adı (`user`/`user_name`,
+  `rgwy`/`peer`), tip (`link` bool/obje, hız Mbps sayı/`"1000FDX"`) farkları
+  tek yerde yutulur.
+- **Sürüm profili** ([`internal/fortigate/profile.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/fortigate/profile.go)):
+  `auto` (yanıt zarfındaki `version`'dan tespit) + `7.0/7.2/7.4/7.6/default`;
+  kullanıcı form'dan/cihaz satırından elle sabitleyebilir.
+- **`POST /api/v1/devices/probe`** — her uca gerçek istek atıp sürüm + VDOM modu +
+  uç yetenek raporu döndürür; UI'da cihaz eklerken ve satırda "yeniden sına".
+- Kaynak kullanımı artık `interval` parametresiz çekilir (sürüm-bağımsız güncel
+  değerler); politika sayaçları `monitor/firewall/policy` + `cmdb/firewall/policy`
+  join; `cmdb`'de geçersiz `fields` isteği kaldırıldı.
+- Migrasyon `0022` — `devices.api_profile` / `api_version` / `api_caps`
+  (hub açılışında otomatik).
+
 ## [1.3.0] — 2026-09-08
 
 Faz 26 — **AI analiz**. Monolit döneminde (`d92d0fb:internal/ai`) vardı,

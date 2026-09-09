@@ -79,6 +79,46 @@ func TestDevicesAndPoll(t *testing.T) {
 	}
 }
 
+func TestFortiGateMeta(t *testing.T) {
+	st := openTest(t)
+	id, err := st.AddDevice(Device{
+		Name: "fgt-1", Host: "10.0.0.1", Kind: "firewall", Vendor: "fortigate",
+		APIURL: "https://10.0.0.1", VDOM: "root", APIProfile: "7.2", PollSeconds: 60, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	d, _ := st.DeviceByID(id)
+	if d.APIProfile != "7.2" || d.APIVersion != "" || d.APICaps != "" {
+		t.Fatalf("başlangıç meta: %+v", d)
+	}
+
+	// poll yolu: yalnız sürüm, caps boş → mevcut caps'i ezmemeli
+	if err := st.UpdateDeviceFortiMeta(id, "v7.2.11", `{"interface":"ok"}`); err != nil {
+		t.Fatalf("meta 1: %v", err)
+	}
+	if err := st.UpdateDeviceFortiMeta(id, "v7.2.12", ""); err != nil {
+		t.Fatalf("meta 2: %v", err)
+	}
+	d, _ = st.DeviceByID(id)
+	if d.APIVersion != "v7.2.12" || d.APICaps != `{"interface":"ok"}` {
+		t.Fatalf("boş caps mevcut değeri ezdi: %+v", d)
+	}
+
+	// kullanıcı profili pinini temizle → auto
+	if err := st.SetDeviceFortiProfile(id, ""); err != nil {
+		t.Fatalf("profil: %v", err)
+	}
+	if err := st.SetDeviceVDOM(id, "all"); err != nil {
+		t.Fatalf("vdom: %v", err)
+	}
+	d, _ = st.DeviceByID(id)
+	if d.APIProfile != "" || d.VDOM != "all" {
+		t.Fatalf("profil/vdom güncellemesi: %+v", d)
+	}
+}
+
 func TestFlowsAndSyslog(t *testing.T) {
 	st := openTest(t)
 	now := time.Now().Unix()

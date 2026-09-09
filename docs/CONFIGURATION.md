@@ -221,10 +221,24 @@ Arayüzde cihaz eklerken **vendor: FortiGate** seçilir; alanlar:
 
 | Alan | Açıklama |
 |------|----------|
-| `api_url` | `https://<cihaz>[:port]` — REST API adresi |
-| `api_token` | System > Admin > REST API Admin token'ı — vault'ta şifreli saklanır, **read-only profil önerilir** |
+| `api_url` | `https://<cihaz>[:port]` — REST API, **web GUI ile aynı HTTPS portundadır** (varsayılan 443; `admin-sport` değiştirilmişse `:8443` gibi). Ayrı API portu yoktur. |
+| `api_token` | System > Administrators > **REST API Admin** token'ı — vault'ta şifreli saklanır. **Read-only profil** + ihtiyaç duyulan scope'lara (System, Network, VPN, Policy & Objects) okuma izni. Trusted Hosts doluysa hub'ın kaynak IP'si listede olmalı. |
 | `api_verify_tls` | Self-signed sertifika kullanıyorsanız kapatın |
-| `vdom` | boş/`root` → tek VDOM; `all` → tüm VDOM'lar taranır |
+| `vdom` | boş/`root` → tek VDOM; `all` → tüm VDOM'lar taranır (Global kapsamlı API admin gerekir) |
+| `profile` | FortiOS sürüm profili: `auto` (varsayılan — yanıt zarfındaki `version`'dan tespit) veya `7.0`/`7.2`/`7.4`/`7.6`/`default`. Yanlış tespit durumunda elle sabitleyin. |
+
+**Bağlantıyı Sına** — cihaz eklerken (kaydetmeden) ve cihaz satırında
+"yeniden sına" ile: her uca gerçek istek atılır, dönen yanıt raporlanır
+(bağlanabilirlik · HTTP kodu · parser'ın anladığı kayıt sayısı · yanıt biçimi)
+ve FortiOS sürümü + VDOM modu çıkarılır. `✕` = yetki/erişim sorunu, `~` =
+bağlandı ama veri yok, `✓` = çalışıyor. "ham yanıt" ile ucun ilk ~2 KB'ı görülür.
+
+**Sürüm uyumu** — FortiOS `monitor/*` uçları canlı şema vermez ve `results`
+biçimi sürümler arası değişir (dizi ↔ ada-anahtarlı obje; `user`↔`user_name`;
+`link` bool↔obje; hız Mbps sayı↔`"1000FDX"`). İstemci ([`internal/fortigate/parse.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/fortigate/parse.go))
+bu biçimleri toleranslı yutar; toleransla çözülemeyen az sayıda fark (endpoint
+yolu, param değeri) sürüm profilinden gelir. Politika hit sayaçları
+`monitor/firewall/policy`'den, ad/aksiyon `cmdb/firewall/policy`'den birleştirilir.
 
 Toplanan veriler: sistem durumu (serial/firmware/uptime), CPU/RAM/disk,
 oturum sayısı, arayüz sayaçları, IPsec/SSL VPN, SD-WAN health-check,

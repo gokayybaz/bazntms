@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -192,8 +193,12 @@ func main() {
 			attrIface = cfg.Collect.PCAPInterface
 		}
 		if attrIface == "" || attrIface == "auto" {
-			attrIface = autoIface()
+			attrIface = autoIface(*hubURL)
 		}
+		// attrNote: atıf motoru KAPALI/başlatılamadıysa insan-okur neden — hub'a
+		// her batch'te bildirilir (telemetry.AttrNote) ve UI'da panel boş-durum
+		// metnine yansır. Motor çalışırken "".
+		attrNote := ""
 		// Windows'ta friendly arayuz adini (\Device\NPF_{GUID}) pcap cihaz
 		// adina cevirmek newPcapAttrSource icine tasindi (yalniz pcap arka ucu
 		// secilince Npcap'e dokunulsun; ETW/eBPF varsayilaninda hic aranmasin).
@@ -212,7 +217,9 @@ func main() {
 				attrTried = true
 				eng, e := agent.NewAttrSource(agent.AttrConfig{Method: attrMethod, Iface: attrIface})
 				if e != nil {
-					if hint := pcapErrHint(e); hint != "" {
+					hint := pcapErrHint(e)
+					attrNote = firstNonEmpty(hint, kisalt(e.Error(), 200))
+					if hint != "" {
 						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "yontem", firstNonEmpty(attrMethod, "auto"), "iface", attrIface, "err", e, "cozum", hint)
 					} else {
 						slog.Warn("surec atfi baslatilamadi — telemetri surecek", "yontem", firstNonEmpty(attrMethod, "auto"), "iface", attrIface, "err", e)
@@ -222,16 +229,19 @@ func main() {
 				slog.Info("surec atfi aktif", "yontem", eng.Method(), "iface", attrIface)
 				attrEng = eng
 				attrOffLogged = false
+				attrNote = ""
 			case !allow && attrEng != nil:
 				slog.Info("surec atfi durduruldu — hub PCAP politikasi kapandi")
 				attrEng.Stop()
 				attrEng = nil
 				attrTried = false
 				attrOffLogged = true // "durduruldu" yeterli; ayrica "devre disi" yazma
+				attrNote = "hub PCAP politikasi kapali (-agent-pcap=false)"
 			case !allow && attrEng == nil && pcapWant && !attrOffLogged:
 				slog.Info("PCAP politikasi hub tarafinda kapali — surec atfi devre disi", "cozum", "hub -agent-pcap=false ile baslatilmis; politikayi acmak icin bu bayragi kaldirin (varsayilan acik)")
 				attrOffLogged = true
 				attrTried = false
+				attrNote = "hub PCAP politikasi kapali (-agent-pcap=false)"
 			}
 		}
 		// pcapWant calisma boyunca sabit (bayrak + config'ten bir kez cozulur).
@@ -240,6 +250,7 @@ func main() {
 		// anlasilmadigi icin burada bir kez acikca belirt.
 		if !pcapWant {
 			// pcapWant yalnizca collect.method: off iken false olur.
+			attrNote = "collect.method=off"
 			slog.Info("surec atfi kapali — collect.method=off",
 				"cozum", "L7 / surec trafigi / DNS gorunurlugu istiyorsaniz collect.method satirini kaldirin (varsayilan: auto)")
 		}
@@ -250,7 +261,7 @@ func main() {
 			if client.PCAPEnabled() {
 				iface := *pcapIface
 				if iface == "" || iface == "auto" {
-					iface = autoIface()
+					iface = autoIface(*hubURL)
 				}
 				if dev, rerr := agent.ResolvePcapDevice(iface); rerr == nil {
 					iface = dev
@@ -356,8 +367,15 @@ func main() {
 			case <-timer.C:
 				batch := client.Collect()
 				batch.AttrMethod = "off"
+				batch.AttrNote = attrNote
 				if attrEng != nil {
 					batch.AttrMethod = attrEng.Method()
+					// yakalama arayüzü yalnız pcap arka ucunda anlamlı (eBPF/ETW
+					// soket düzeyinde, tüm arayüzler). UI teşhisi: "motor çalışıyor
+					// ama panel boş → yanlış arayüz mü?" sorusunu yanıtlar.
+					if batch.AttrMethod == "pcap" {
+						batch.AttrIface = attrIface
+					}
 					batch.ProcessTraffic = attrEng.Deltas()
 					batch.L7 = attrEng.L7Deltas()
 					batch.DNS = attrEng.DNSDeltas()
@@ -467,6 +485,15 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
+// kisalt, s'yi en fazla n rune'a indirger (telemetri attr_note alani sismesin).
+func kisalt(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
 // pcapErrHint, pcap acilis hatasinin Windows'ta Npcap eksikligi oldugunu
 // tespit edip anlamli bir cozum onerisi dondurur — oncesinde gopacket'in ham
 // "couldn't load wpcap.dll" hatasi tek basina loglaniyordu, bu hatanin
@@ -491,16 +518,102 @@ func pcapErrHint(err error) string {
 	return ""
 }
 
-// autoIface, atf/kayit icin ilk uygun arayuzu secer: up, loopback degil ve
-// yonlendirilebilir bir IPv4'u olan. IPv4 bulunamazsa ikinci gecişte adresi
-// olan ilk arayuze duser (yalniz-IPv6 ortamlar). Windows'ta friendly ad
-// doner; cagiran taraf ResolvePcapDevice ile \Device\NPF_ adina cevirir.
-func autoIface() string {
+// sanalIfaceSubstr / sanalIfacePrefix, auto arayuz seciminde EN SONA atilan
+// sanal / VPN / konteyner adaptorleridir. Gercek trafik (ve dolayisiyla L7 +
+// DNS gorunurlugu) fiziksel NIC'te akar; bir Windows kutusunda Tailscale
+// adaptorunun 100.x (CGNAT) adresi "yonlendirilebilir" testini gecip
+// yanlislikla seciliyordu (bkz. docs/TROUBLESHOOTING.md — "yanlis arayuz").
+var sanalIfaceSubstr = []string{
+	"tailscale", "wireguard", "wintun", "tap-windows", "tap0", "zerotier",
+	"vmware", "virtualbox", "hyper-v", "vethernet", "loopback",
+	"nordlynx", "mullvad", "protonvpn", "expressvpn", "openvpn", "docker",
+}
+var sanalIfacePrefix = []string{"wg", "zt", "tun", "tap", "utun", "veth", "br-", "ppp", "gpd"}
+
+// isSanalIface, arayuz adinin sanal/VPN/konteyner adaptorune ait olup
+// olmadigini soyler (buyuk/kucuk harf duyarsiz).
+func isSanalIface(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	for _, s := range sanalIfaceSubstr {
+		if strings.Contains(n, s) {
+			return true
+		}
+	}
+	for _, p := range sanalIfacePrefix {
+		if strings.HasPrefix(n, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// hubHostPort, hub URL'inden "host:port" uretir (semaya gore 443/80 varsayilan).
+// Bos donerse cagiran bir sonraki hedefe (8.8.8.8) duser.
+func hubHostPort(hubURL string) string {
+	u, err := url.Parse(hubURL)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	if u.Port() != "" {
+		return u.Host
+	}
+	port := "443"
+	if u.Scheme == "http" {
+		port = "80"
+	}
+	return net.JoinHostPort(u.Hostname(), port)
+}
+
+// outboundIface, verilen "host:port" hedefine giden yerel arayuzun adini
+// dondurur. UDP "baglantisi" paket GONDERMEZ — yalnizca cekirdegin rota
+// secimini kullanir. Hedefe rota yoksa "" doner.
+func outboundIface(target string) string {
+	c, err := net.Dial("udp", target)
+	if err != nil {
+		return ""
+	}
+	defer c.Close()
+	la, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || la.IP == nil {
+		return ""
+	}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	var fallback string
+	for _, i := range ifaces {
+		addrs, _ := i.Addrs()
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok && ipn.IP.Equal(la.IP) {
+				return i.Name
+			}
+		}
+	}
+	return ""
+}
+
+// autoIface, atf/kayit icin yakalama arayuzunu secer. Oncelik sirasi:
+//  1. hub'a (yoksa 8.8.8.8'e) giden VARSAYILAN-ROTA arayuzu — gercek trafigin
+//     aktigi yer; sanal/VPN adaptoru ise atlanir.
+//  2. yedek: ilk UP, loopback-disi, yonlendirilebilir IPv4'lu FIZIKSEL arayuz.
+//  3. son care: sanal olsa / yalniz-IPv6 olsa bile adresi olan ilk arayuz
+//     (tek-adaptorlu kutular).
+//
+// Windows'ta friendly ad doner; cagiran ResolvePcapDevice ile \Device\NPF_ yapar.
+func autoIface(hubURL string) string {
+	for _, tgt := range []string{hubHostPort(hubURL), "8.8.8.8:53"} {
+		if tgt == "" {
+			continue
+		}
+		if name := outboundIface(tgt); name != "" && !isSanalIface(name) {
+			return name
+		}
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	var lastResort string
 	for _, i := range ifaces {
 		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
 			continue
@@ -509,9 +622,7 @@ func autoIface() string {
 		if err != nil || len(addrs) == 0 {
 			continue
 		}
-		if fallback == "" {
-			fallback = i.Name
-		}
+		routableV4 := false
 		for _, a := range addrs {
 			ipn, ok := a.(*net.IPNet)
 			if !ok {
@@ -521,8 +632,20 @@ func autoIface() string {
 			if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() {
 				continue
 			}
+			routableV4 = true
+		}
+		if isSanalIface(i.Name) {
+			if lastResort == "" && routableV4 {
+				lastResort = i.Name // sanal ama en azindan adresli — son care
+			}
+			continue
+		}
+		if routableV4 {
 			return i.Name
 		}
+		if lastResort == "" {
+			lastResort = i.Name // fiziksel ama yalniz-IPv6 — CGNAT sanaldan iyi
+		}
 	}
-	return fallback
+	return lastResort
 }

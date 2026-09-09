@@ -432,8 +432,8 @@ func (s *Server) handleAgentTelemetry(w http.ResponseWriter, r *http.Request) {
 		slog.Error("agent touch hatasi", "agent_id", agent.ID, "err", err)
 	}
 	if batch.AttrMethod != "" {
-		if err := s.store.SetAgentAttrMethod(agent.ID, batch.AttrMethod); err != nil {
-			slog.Error("agent attr_method kaydi hatasi", "agent_id", agent.ID, "err", err)
+		if err := s.store.SetAgentAttrInfo(agent.ID, batch.AttrMethod, batch.AttrIface, batch.AttrNote); err != nil {
+			slog.Error("agent attr teshis kaydi hatasi", "agent_id", agent.ID, "err", err)
 		}
 	}
 	if len(batch.ProcessTraffic) > 0 {

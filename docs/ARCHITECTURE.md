@@ -367,7 +367,10 @@ sorusunu üç değiştirilebilir arka uçtan biriyle yanıtlar. Ortak arayüz
 `internal/agent/attrsource.go` `AttrSource` (`Deltas` / `L7Deltas` / `DNSDeltas`
 / `Stop` / `Method`); seçici `newAttrSource(cfg, caps)` platform + `collect.method`
 + çalışma-zamanı yeteneğine göre birini kurar ve eskisine **zarif düşer**.
-Aktif yöntem her telemetri batch'inde `attr_method` ile hub'a bildirilir.
+Aktif yöntem her telemetri batch'inde `attr_method` ile hub'a bildirilir;
+yanında `attr_iface` (pcap'in dinlediği arayüz) ve `attr_note` (motor kapalı/
+başlatılamadıysa insan-okur neden) → agent detay rozetine ve boş panel
+ipucuna yansır.
 
 | Arka uç | Platform | Yöntem | Gereksinim |
 |---------|----------|--------|-----------|
@@ -376,9 +379,19 @@ Aktif yöntem her telemetri batch'inde `attr_method` ile hub'a bildirilir.
 | **pcap** | Linux / macOS / Windows | `internal/agent/attr.go` — **nethogs yöntemi**: pcap ile başlık yakala (snaplen 600), 4'lü çifti dönemlik soket-tablosu → PID eşlemesiyle sürece çevir | `CAP_NET_RAW` / Npcap + libpcap |
 
 `auto` tercih sırası: Linux `eBPF → pcap`, Windows `ETW → pcap`, macOS `pcap`.
+Zorlanmış `pcap` normalde düşmez; tek istisna yükseltilmiş Windows'ta Npcap
+yüklenemezse `pcap → ETW` (MSI seed'i `method: pcap` ile gelir — Npcap sessiz
+kurulumu başarısız olsa bile süreç trafiği + DNS aksın).
 eBPF/ETW **paket yakalamaz** — çekirdeğin soket katmanına bağlanır; her *paket*
 yerine her *send/recv işlemi* başına çalışır → belirgin şekilde ucuz, byte
 sayımı offload'dan (GRO/LRO) etkilenmez, `CAP_NET_RAW` gerekmez.
+
+**pcap yakalama arayüzü** (`cmd/bazntms-agent` `autoIface`): `collect.pcap_interface`
+verilmemişse agent, hub'a (yoksa `8.8.8.8`'e) giden **varsayılan-rota** arayüzünü
+seçer ve Tailscale / WireGuard / `utun*` / `vEthernet` gibi **sanal/VPN
+adaptörlerini eler** — bunların yönlendirilebilir (ör. Tailscale CGNAT `100.64/10`)
+adresi eski "ilk uygun arayüz" seçicisini yanıltıp trafiksiz bir arayüzü
+seçtiriyordu. eBPF/ETW soket düzeyinde çalıştığı için bu yalnız pcap'i etkiler.
 
 **L7 uygulama görünürlüğü** (`internal/agent/l7.go`, `l7Tracker`): giden TCP
 payload'ında TLS ClientHello **SNI**'si ve HTTP **Host** başlığı çıkarılıp

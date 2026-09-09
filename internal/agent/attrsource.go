@@ -111,8 +111,19 @@ func attrPlan(method string, caps attrCaps) []string {
 	switch method {
 	case "off":
 		return nil
-	case "ebpf", "pcap", "etw":
-		return []string{method} // zorlanmış
+	case "ebpf", "etw":
+		return []string{method} // zorlanmış — kurulamıyorsa hata (düşme yok)
+	case "pcap":
+		// Zorlanmış "pcap" da normalde düşmez. Tek istisna: ETW'nin mevcut
+		// olduğu (yükseltilmiş Windows) bir kutuda Npcap yüklenemezse ETW'ye
+		// düş — Windows MSI seed'i `method: pcap` ile gelir (L7/SNI için) ve
+		// Npcap sessiz kurulumu başarısız olsa bile süreç trafiği + DNS akmaya
+		// devam etsin (yalnız L7 boş kalır). Linux'ta caps.etw hep false →
+		// zorlanmış pcap tek eleman kalır.
+		if caps.etw {
+			return []string{"pcap", "etw"}
+		}
+		return []string{"pcap"}
 	default: // "" | "auto"
 		return autoAttrPlan(caps)
 	}

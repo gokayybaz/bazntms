@@ -17,7 +17,7 @@ import (
 )
 
 const mockFortiResponses = `
-{"http_method":"GET","results":{"version":"v7.4.4","build":2698,"serial":"FGTEST1","hostname":"fgt-x","uptime":7200},"status":"success"}
+{"http_method":"GET","results":{"version":"v7.2.11","build":1639,"serial":"FGTEST1","hostname":"fgt-x","uptime":7200},"status":"success"}
 `
 
 func TestFortiDriverPoll(t *testing.T) {
@@ -27,31 +27,38 @@ func TestFortiDriverPoll(t *testing.T) {
 		w.Write([]byte(mockFortiResponses))
 	})
 	mux.HandleFunc("/api/v2/monitor/system/resource/usage", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"http_method":"GET","results":[{"time":` + nowStr() + `,"cpu":23.5,"mem":61.2,"disk":12.0,"session":1500}],"status":"success"}`))
+		// 7.2: map-of-arrays; interval parametresi gönderilmez
+		w.Write([]byte(`{"http_method":"GET","results":{"cpu":[{"current":23.5}],"mem":[{"current":61.2}],"disk":[{"current":12.0}],"session":[{"current":1500}]},"status":"success"}`))
 	})
 	mux.HandleFunc("/api/v2/monitor/system/interface", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"http_method":"GET","results":[
-			{"id":1,"name":"wan1","alias":"uplink","ip":"10.0.0.2","status":"up","link":{"speed":"1000FDX"},
-			 "rx_bytes":9000,"tx_bytes":4000,"rx_errors":1,"tx_errors":0,"rx_drops":0,"tx_drops":2}
-		],"status":"success"}`))
+		// 7.2: ada-göre anahtarlı; link bool; speed top-level Mbps
+		w.Write([]byte(`{"http_method":"GET","results":{
+			"wan1":{"id":"wan1","name":"wan1","alias":"uplink","ip":"10.0.0.2 255.255.255.0","link":true,"speed":1000.0,
+			 "rx_bytes":9000,"tx_bytes":4000,"rx_errors":1,"tx_errors":0}
+		},"status":"success"}`))
 	})
 	mux.HandleFunc("/api/v2/monitor/vpn/ipsec", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"http_method":"GET","results":[{"name":"hq","status":"up","rx_bytes":111,"tx_bytes":222,"peer":"1.1.1.1"},{"name":"branch","status":"down"}],"status":"success"}`))
+		// 7.2: peer=rgwy; baytlar proxyid[] altında
+		w.Write([]byte(`{"http_method":"GET","results":[
+			{"name":"hq","rgwy":"1.1.1.1","proxyid":[{"status":"up","incoming_bytes":111,"outgoing_bytes":222}]},
+			{"name":"branch","rgwy":"2.2.2.2","proxyid":[{"status":"down"}]}
+		],"status":"success"}`))
 	})
 	mux.HandleFunc("/api/v2/monitor/vpn/ssl", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"http_method":"GET","results":{"users":[{"user":"veli","remote_host":"8.8.8.8","uptime":60,"rx":5,"tx":6}]},"status":"success"}`))
+		w.Write([]byte(`{"http_method":"GET","results":[{"user_name":"veli","remote_host":"8.8.8.8","uptime":60}],"status":"success"}`))
 	})
 	mux.HandleFunc("/api/v2/monitor/virtual-wan/health-check", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"http_method":"GET","results":{"sla1":{"members":[{"name":"wan1","state":"up","latency":14.2,"jitter":1.5,"packet_loss":0}]}},"status":"success"}`))
 	})
-	policyReqs := 0
 	mux.HandleFunc("/api/v2/cmdb/firewall/policy", func(w http.ResponseWriter, r *http.Request) {
-		policyReqs++
 		if r.URL.Query().Get("start") == "0" {
-			w.Write([]byte(`{"http_method":"GET","results":[{"policyid":7,"name":"web-out","action":"accept","hit_count":100,"bytes":5000}],"status":"success"}`))
+			w.Write([]byte(`{"http_method":"GET","results":[{"policyid":7,"name":"web-out","action":"accept"}],"status":"success"}`))
 			return
 		}
 		w.Write([]byte(`{"http_method":"GET","results":[],"status":"success"}`))
+	})
+	mux.HandleFunc("/api/v2/monitor/firewall/policy", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"http_method":"GET","results":[{"policyid":7,"bytes":5000,"hit_count":100}],"status":"success"}`))
 	})
 	mux.HandleFunc("/api/v2/cmdb/system/vdom", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"http_method":"GET","results":[{"name":"root"}],"status":"success"}`))
@@ -83,6 +90,9 @@ func TestFortiDriverPoll(t *testing.T) {
 
 	if snap.SysName != "fgt-x" || snap.SysDescr == "" {
 		t.Fatalf("sys: %+v", snap)
+	}
+	if snap.APIVersion != "v7.2.11" {
+		t.Fatalf("APIVersion tespit edilmedi: %q", snap.APIVersion)
 	}
 	if len(snap.Ifaces) != 1 || snap.Ifaces[0].Name != "wan1" ||
 		snap.Ifaces[0].Speed != 1_000_000_000 || snap.Ifaces[0].OperStatus != 1 {

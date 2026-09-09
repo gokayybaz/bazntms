@@ -31,7 +31,8 @@ func TestAttrPlan(t *testing.T) {
 		{"auto darwin", "", attrCaps{pcap: true}, []string{"pcap"}},
 		{"auto hicbir yetenek yok", "auto", attrCaps{}, nil},
 		{"zorlanmis ebpf yetenekleri yok sayar", "ebpf", attrCaps{pcap: true}, []string{"ebpf"}},
-		{"zorlanmis pcap", "pcap", attrCaps{ebpf: true, pcap: true}, []string{"pcap"}},
+		{"zorlanmis pcap (linux) tek eleman", "pcap", attrCaps{ebpf: true, pcap: true}, []string{"pcap"}},
+		{"zorlanmis pcap (windows) Npcap yoksa ETW'ye duser", "pcap", attrCaps{etw: true, pcap: true}, []string{"pcap", "etw"}},
 		{"off", "off", attrCaps{ebpf: true, pcap: true}, nil},
 	}
 	for _, c := range cases {

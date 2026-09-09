@@ -27,13 +27,20 @@ type Device struct {
 	APIToken     string `json:"-"`                       // sifreli (fortigate; API yanıtına asla girmez)
 	APIVerifyTLS bool   `json:"api_verify_tls"`          // false → self-signed kabul
 	VDOM         string `json:"vdom,omitempty"`          // bos → root; "all" → tum vdomlar
-	PollSeconds  int    `json:"poll_seconds"`
-	Enabled      bool   `json:"enabled"`
-	SysName      string `json:"sys_name"`
-	SysDescr     string `json:"sys_descr"`
-	AddedAt      int64  `json:"added_at"`
-	LastPoll     int64  `json:"last_poll"`
-	LastError    string `json:"last_error,omitempty"`
+	// APIProfile, kullanıcının pinlediği FortiOS sürüm profili ("" / "auto" →
+	// yanıttan otomatik tespit). Bkz. internal/fortigate/profile.go.
+	APIProfile string `json:"api_profile,omitempty"`
+	// APIVersion, son poll/probe'da tespit edilen FortiOS sürümü ("v7.2.11").
+	APIVersion string `json:"api_version,omitempty"`
+	// APICaps, son probe/poll'un uç yetenek özeti (JSON: {"interface":"ok",...}).
+	APICaps     string `json:"api_caps,omitempty"`
+	PollSeconds int    `json:"poll_seconds"`
+	Enabled     bool   `json:"enabled"`
+	SysName     string `json:"sys_name"`
+	SysDescr    string `json:"sys_descr"`
+	AddedAt     int64  `json:"added_at"`
+	LastPoll    int64  `json:"last_poll"`
+	LastError   string `json:"last_error,omitempty"`
 	// UplinkDeviceID, bu cihazın bağlı olduğu üst cihaz (switch → router
 	// zinciri). nil = doğrudan router/internet. Canlı Akış şeması için;
 	// şimdilik yalnız API'den atanır.
@@ -106,10 +113,10 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 	var id int64
 	err := s.db.QueryRow(s.q(`INSERT INTO devices
 		(name, host, kind, site, vendor, snmp_version, community, v3_user, v3_auth_proto, v3_auth_pass, v3_priv_proto, v3_priv_pass,
-		 api_url, api_token_enc, api_verify_tls, vdom, poll_seconds, enabled, added_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
+		 api_url, api_token_enc, api_verify_tls, vdom, api_profile, poll_seconds, enabled, added_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`),
 		d.Name, d.Host, d.Kind, d.Site, d.Vendor, d.SNMPVersion, d.Community, d.V3User, d.V3AuthProto, d.V3AuthPass,
-		d.V3PrivProto, d.V3PrivPass, d.APIURL, d.APIToken, btoi(d.APIVerifyTLS), d.VDOM,
+		d.V3PrivProto, d.V3PrivPass, d.APIURL, d.APIToken, btoi(d.APIVerifyTLS), d.VDOM, d.APIProfile,
 		d.PollSeconds, btoi(d.Enabled), time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -122,6 +129,7 @@ func (s *sqlStore) AddDevice(d Device) (int64, error) {
 func (s *sqlStore) ListDevices(site string) ([]Device, error) {
 	q := `SELECT id, name, host, kind, site, vendor, snmp_version, community, v3_user, v3_auth_proto,
 		v3_auth_pass, v3_priv_proto, v3_priv_pass, api_url, api_token_enc, api_verify_tls, vdom,
+		api_profile, api_version, api_caps,
 		poll_seconds, enabled, sys_name, sys_descr, added_at, last_poll, last_error, uplink_device_id
 		FROM devices`
 	args := []any{}
@@ -141,7 +149,7 @@ func (s *sqlStore) ListDevices(site string) ([]Device, error) {
 		var uplink sql.NullInt64
 		if err := rows.Scan(&d.ID, &d.Name, &d.Host, &d.Kind, &d.Site, &d.Vendor, &d.SNMPVersion, &d.Community, &d.V3User,
 			&d.V3AuthProto, &d.V3AuthPass, &d.V3PrivProto, &d.V3PrivPass, &d.APIURL, &d.APIToken,
-			&d.APIVerifyTLS, &d.VDOM, &d.PollSeconds, &d.Enabled,
+			&d.APIVerifyTLS, &d.VDOM, &d.APIProfile, &d.APIVersion, &d.APICaps, &d.PollSeconds, &d.Enabled,
 			&d.SysName, &d.SysDescr, &d.AddedAt, &d.LastPoll, &d.LastError, &uplink); err != nil {
 			return nil, err
 		}
@@ -190,6 +198,31 @@ func (s *sqlStore) SetDeviceUplink(deviceID int64, uplink *int64) error {
 func (s *sqlStore) UpdateDevicePoll(id int64, sysName, sysDescr string, lastErr string) error {
 	_, err := s.db.Exec(s.q(`UPDATE devices SET last_poll = ?, sys_name = ?, sys_descr = ?, last_error = ? WHERE id = ?`),
 		time.Now().Unix(), sysName, sysDescr, lastErr, id)
+	return err
+}
+
+// UpdateDeviceFortiMeta, FortiGate cihazında tespit edilen sürüm + uç yetenek
+// özetini (JSON) kaydeder. Poll ve probe yolları çağırır; boş değerler mevcut
+// veriyi ezmez.
+func (s *sqlStore) UpdateDeviceFortiMeta(id int64, version, capsJSON string) error {
+	_, err := s.db.Exec(s.q(`UPDATE devices SET
+		api_version = CASE WHEN ? <> '' THEN ? ELSE api_version END,
+		api_caps    = CASE WHEN ? <> '' THEN ? ELSE api_caps END
+		WHERE id = ?`), version, version, capsJSON, capsJSON, id)
+	return err
+}
+
+// SetDeviceFortiProfile, kullanıcının pinlediği sürüm profilini ayarlar
+// ("" / "auto" → otomatik tespit).
+func (s *sqlStore) SetDeviceFortiProfile(id int64, profile string) error {
+	_, err := s.db.Exec(s.q(`UPDATE devices SET api_profile = ? WHERE id = ?`), profile, id)
+	return err
+}
+
+// SetDeviceVDOM, FortiGate cihazının hedef VDOM'unu ayarlar ("" → root;
+// "all" → tüm vdomlar taranır).
+func (s *sqlStore) SetDeviceVDOM(id int64, vdom string) error {
+	_, err := s.db.Exec(s.q(`UPDATE devices SET vdom = ? WHERE id = ?`), vdom, id)
 	return err
 }
 

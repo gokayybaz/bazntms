@@ -13,6 +13,7 @@ import { ThroughputChart } from '../components/ThroughputChart'
 import { ProcessesCard } from '../components/ProcessesCard'
 import { L7Card } from '../components/L7Card'
 import { DnsCard } from '../components/DnsCard'
+import type { AttrDiag } from '../components/attrDiag'
 
 interface AgentConnSample {
   proto: string
@@ -33,10 +34,24 @@ const RANGES = [
 const DELETE_CONFIRM_MS = 4000
 
 // AttrMethodBadge — agent'ın aktif süreç-atıf arka ucu (Faz 20).
-// ebpf/etw/pcap = aktif (cyan), off = kapalı (slate), boş = eski agent.
-function AttrMethodBadge({ method }: { method?: string }) {
+// ebpf/etw/pcap = aktif (cyan) + pcap'te dinlenen arayüz; off = kapalı —
+// nedeni (attr_note) varsa amber ve yanında gösterilir; boş = eski agent.
+function AttrMethodBadge({ method, iface, note }: { method?: string; iface?: string; note?: string }) {
   if (!method) return <span className="text-tui-dim">—</span>
-  return <StatusPill tone={method === 'off' ? 'slate' : 'cyan'} label={method} dot={false} />
+  if (method === 'off') {
+    return (
+      <span className="flex flex-wrap items-center gap-1">
+        <StatusPill tone={note ? 'amber' : 'slate'} label="off" dot={false} />
+        {note && <span className="text-[10px] text-amber-400">{note}</span>}
+      </span>
+    )
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <StatusPill tone="cyan" label={method} dot={false} />
+      {method === 'pcap' && iface && <span className="text-[10px] text-tui-dim">@ {iface}</span>}
+    </span>
+  )
 }
 
 function relTime(unix: number): string {
@@ -245,6 +260,9 @@ export function AgentDetailPage() {
     )
   }
 
+  // süreç-atıf teşhisi — boş Süreç/L7/DNS panellerine "neden" ipucu verir
+  const attrDiag: AttrDiag = { method: agent.attr_method, iface: agent.attr_iface, note: agent.attr_note }
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-3 px-4 py-3 font-mono">
       <Link to="/agentlar" className="text-[11px] text-tui-dim hover:text-rx">
@@ -341,7 +359,7 @@ export function AgentDetailPage() {
             {([
               ['IP', agent.remote_ip || '—'],
               ['Sürüm', `${agent.version || '—'} · pv${agent.protocol_version}`],
-              ['Atıf', <AttrMethodBadge key="am" method={agent.attr_method} />],
+              ['Atıf', <AttrMethodBadge key="am" method={agent.attr_method} iface={agent.attr_iface} note={agent.attr_note} />],
               ['Bağlantı', formatNum(agent.conns)],
               ['Arayüz', String(agent.rates?.length ?? 0)],
               ['İlk Görülme', relTime(agent.first_seen)],
@@ -392,14 +410,15 @@ export function AgentDetailPage() {
       <Panel title="Süreç Trafiği" right={<span className="text-[10px] text-tui-dim">bu agent · Enter → detay</span>}>
         <ProcessesCard
           agentId={agent.id}
+          diag={attrDiag}
           onActivate={(process) => navigate(`/agentlar/${agent.id}/surec/${encodeURIComponent(process)}`)}
         />
       </Panel>
       <Panel title="Uygulama Görünürlüğü" right={<span className="text-[10px] text-tui-dim">L7 · SNI + HTTP Host</span>}>
-        <L7Card agentId={agent.id} />
+        <L7Card agentId={agent.id} diag={attrDiag} />
       </Panel>
       <Panel title="DNS Görünürlüğü" right={<span className="text-[10px] text-tui-dim">UDP/53 · süreç atıflı</span>}>
-        <DnsCard agentId={agent.id} />
+        <DnsCard agentId={agent.id} diag={attrDiag} />
       </Panel>
 
       {/* bağlantılar */}

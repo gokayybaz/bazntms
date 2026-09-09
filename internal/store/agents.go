@@ -34,6 +34,13 @@ type Agent struct {
 	// AttrMethod, agent'ın en son bildirdiği aktif süreç-atıf arka ucu:
 	// "ebpf" | "pcap" | "etw" | "off". Boş = henüz bildirmedi / eski agent.
 	AttrMethod string `json:"attr_method,omitempty"`
+	// AttrIface, pcap arka ucunun dinlediği yakalama arayüzü (yalnız
+	// method=pcap). UI teşhisi: "motor çalışıyor ama panel boş → yanlış/sanal
+	// arayüz mü?".
+	AttrIface string `json:"attr_iface,omitempty"`
+	// AttrNote, atıf motoru kapalı/başlatılamadıysa insan-okur neden
+	// ("collect.method=off" | "hub -agent-pcap=false" | pcap hata ipucu).
+	AttrNote string `json:"attr_note,omitempty"`
 }
 
 func TokenHash(token string) string {
@@ -110,12 +117,19 @@ func (s *sqlStore) TouchAgent(id int64, version string, protoVersion int, remote
 	return err
 }
 
-// SetAgentAttrMethod, agent'ın bildirdiği süreç-atıf arka ucunu kaydeder.
-// Boş string = değiştirme (alan taşımayan eski agent).
-func (s *sqlStore) SetAgentAttrMethod(id int64, method string) error {
+// SetAgentAttrInfo, agent'ın her telemetri batch'inde bildirdiği süreç-atıf
+// teşhis bilgisini kaydeder: aktif arka uç (method) + pcap yakalama arayüzü
+// (iface) + kapalı/başlatılamadı nedeni (note). method boş = değiştirme (alan
+// taşımayan eski agent — çağıran zaten bu durumda çağırmaz); iface/note ise
+// o batch'te ne bildirildiyse odur (boş dönebilir → motor sağlıklı çalışıyor).
+func (s *sqlStore) SetAgentAttrInfo(id int64, method, iface, note string) error {
 	_, err := s.db.Exec(
-		s.q(`UPDATE agents SET attr_method = COALESCE(NULLIF(?, ''), attr_method) WHERE id = ?`),
-		method, id)
+		s.q(`UPDATE agents SET
+			attr_method = COALESCE(NULLIF(?, ''), attr_method),
+			attr_iface  = ?,
+			attr_note   = ?
+			WHERE id = ?`),
+		method, iface, note, id)
 	return err
 }
 
@@ -174,7 +188,7 @@ type AgentWithRates struct {
 // verimler. site bos degilse yalnizca o sitenin agent'lari doner (Faz 5.1
 // site scope).
 func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentWithRates, error) {
-	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method
+	q := `SELECT id, name, site, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method, attr_iface, attr_note
 		FROM agents`
 	args := []any{}
 	if site != "" {
@@ -192,12 +206,14 @@ func (s *sqlStore) ListAgents(onlineWindow time.Duration, site string) ([]AgentW
 	for rows.Next() {
 		var a AgentWithRates
 		var uplink sql.NullInt64
-		var attrMethod sql.NullString
-		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod); err != nil {
+		var attrMethod, attrIface, attrNote sql.NullString
+		if err := rows.Scan(&a.ID, &a.Name, &a.Site, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod, &attrIface, &attrNote); err != nil {
 			return nil, err
 		}
 		a.UplinkDeviceID = i64ptr(uplink)
 		a.AttrMethod = attrMethod.String
+		a.AttrIface = attrIface.String
+		a.AttrNote = attrNote.String
 		a.Online = now-a.LastSeen <= int64(onlineWindow.Seconds())
 		out = append(out, a)
 	}
@@ -384,17 +400,19 @@ func (s *sqlStore) AgentHistory(agentID int64, since time.Time) ([]Bucket, error
 }
 
 func (s *sqlStore) AgentByID(id int64) (*Agent, error) {
-	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method
+	row := s.db.QueryRow(s.q(`SELECT id, name, site, token_hash, first_seen, last_seen, version, protocol_version, remote_ip, uplink_device_id, attr_method, attr_iface, attr_note
 		FROM agents WHERE id = ?`), id)
 	var a Agent
 	var uplink sql.NullInt64
-	var attrMethod sql.NullString
-	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod)
+	var attrMethod, attrIface, attrNote sql.NullString
+	err := row.Scan(&a.ID, &a.Name, &a.Site, &a.TokenHash, &a.FirstSeen, &a.LastSeen, &a.Version, &a.ProtocolVersion, &a.RemoteIP, &uplink, &attrMethod, &attrIface, &attrNote)
 	if err != nil {
 		return nil, err
 	}
 	a.UplinkDeviceID = i64ptr(uplink)
 	a.AttrMethod = attrMethod.String
+	a.AttrIface = attrIface.String
+	a.AttrNote = attrNote.String
 	return &a, nil
 }
 

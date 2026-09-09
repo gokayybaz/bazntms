@@ -37,6 +37,10 @@ export interface AgentWithRates {
   uplink_device_id?: number
   /** süreç-atıf arka ucu: ebpf | pcap | etw | off (boş = eski agent) */
   attr_method?: string
+  /** pcap yakalama arayüzü (yalnız method=pcap) — "motor çalışıyor ama panel boş" teşhisi */
+  attr_iface?: string
+  /** atıf motoru kapalı/başlatılamadıysa insan-okur neden */
+  attr_note?: string
 }
 
 export interface AlertEvent {

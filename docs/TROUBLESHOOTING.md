@@ -20,15 +20,31 @@ Kontrol listesi:
 2. **Hub politikası açık mı?** `-agent-pcap` v1.3.0'dan beri varsayılan açık.
    `agent.log`: `PCAP politikasi hub tarafinda kapali` → hub `-agent-pcap=false`
    ile başlatılmış (veya `hub.yaml`'de `agent_pcap: false`); kaldırın.
-3. **`agent.log`'da hangi yöntem seçildi?** `süreç atfı aktif  yöntem=ebpf`
-   gibi bir satır olmalı. `yöntem=pcap` ise eBPF/ETW ortamı uygun değildir —
-   aynı log satırındaki `not=` alanı nedeni söyler (`kernel 5.4 < 5.8` vb.).
-4. **eBPF yüklenmedi:** `eBPF nesnesi yüklenemedi` → kernel < 5.8 ya da BTF yok
+3. **`agent.log`'da hangi yöntem seçildi?** `surec atfi aktif  yontem=ebpf
+   iface=…` gibi bir satır olmalı. `yontem=pcap` ise eBPF/ETW ortamı uygun
+   değildir; `surec atfi baslatilamadi` satırındaki `err=` / `cozum=` nedeni
+   söyler.
+4. **Motor çalışıyor (`surec atfi aktif`) ama paneller yine boş → yanlış
+   arayüz.** Yalnızca `pcap` yönteminde olur: agent, hub'a/internete giden
+   varsayılan-rota arayüzünü seçer ve Tailscale/WireGuard/`utun*` gibi sanal
+   adaptörleri eler. Yine de yanlış arayüz seçildiyse (örn. tek fiziksel NIC
+   yok, ya da tüm trafik bir VPN'den akıyor) `agent.yml`'de açıkça verin:
+   ```yaml
+   collect:
+     pcap_interface: "Ethernet"   # Windows: Get-NetAdapter · Linux/macOS: ip -o link / ifconfig
+   ```
+   Agent detay sayfasındaki **Atıf** rozeti dinlenen arayüzü `pcap @ Tailscale`
+   biçiminde gösterir; panel boş-durum metni de aynı ipucunu verir.
+5. **eBPF yüklenmedi:** `eBPF nesnesi yüklenemedi` → kernel < 5.8 ya da BTF yok
    (`CONFIG_DEBUG_INFO_BTF=y` gerekir; RHEL/Debian ≥ 11 var, bazı minimal
    imajlarda yok). Seçici otomatik pcap'e düşer.
-5. **Windows ETW başlamadı:** yükseltilmemiş süreç → `ETW atlandı: süreç
+6. **Windows ETW başlamadı:** yükseltilmemiş süreç → `ETW atlandı: süreç
    yükseltilmemiş`. Servis olarak kurulduysa SYSTEM'dir; elle çalıştırıyorsanız
    "Yönetici olarak çalıştır".
+7. **`attr_method=off` rozeti** üç anlama gelir; hangisi olduğunu rozetin
+   yanındaki not (ve `/api/v1/agents` → `attr_note`) söyler: `collect.method=off`
+   (config), `hub PCAP politikasi kapali (-agent-pcap=false)` (hub), ya da bir
+   başlatma hatası ipucu (Npcap yok / kernel eski / arayüz yok).
 
 ### Windows'ta Npcap
 
@@ -38,10 +54,13 @@ imza doğrulamalı) ve agent `collect.method: pcap` ile gelir → **L7 (SNI/Host
 Windows'ta da çalışır.**
 
 Npcap kurulamazsa (internet yok, imza/hash uyuşmadı) MSI yine başarıyla biter;
-agent otomatik **ETW**'ye düşer → süreç trafiği + DNS akar, **L7 akmaz**.
-`agent.log`: `pcap arka ucu (L7/SNI dahil) icin Npcap gerekir`. Elle kurup
-servisi yeniden başlatın (`sc stop bazntms-agent && sc start bazntms-agent`),
-ya da geçici olarak `-collect-method=etw`.
+agent **otomatik ETW**'ye düşer → süreç trafiği + DNS akar, **L7 akmaz**
+(`method: pcap` seed'i zorlanmış olsa da yükseltilmiş Windows'ta ETW yedeği
+devreye girer). `agent.log`: `pcap arka ucu (L7/SNI dahil) icin Npcap gerekir`
++ ardından `atif arka ucu kurulamadi, siradaki deneniyor  yontem=pcap`. L7
+istiyorsanız Npcap'i elle kurup servisi yeniden başlatın
+(`sc stop bazntms-agent && sc start bazntms-agent`). Npcap kurulum günlüğü:
+`C:\ProgramData\bazntms\npcap-install.log`.
 
 Hava boşluklu / internet erişimi olmayan Windows makineleri: Npcap'i önceden
 kurun, MSI kurulumu onu tespit edip atlar.
@@ -197,30 +216,20 @@ token'larıyla yapılır).
 
 ### Agent detayında Süreçler / DNS / L7 panelleri boş
 
-Bu üç panel de tek bir agent motorundan (`internal/agent/attr.go` — pcap +
-soket→PID atfı) beslenir. Motor yalnızca **agent isteği** (`agent.yml`'de
-`collect.pcap: true` ya da `-pcap` bayrağı) **ve hub politikası**
-(`bazntms-hub -agent-pcap`) birlikte açıkken başlar.
+Ana tanı yukarıdaki [**Süreç trafiği / DNS / L7 panelleri boş**](#süreç-trafiği--dns--l7-panelleri-boş)
+bölümünde. Bu panellere özel iki ek not:
 
-Kontrol sırası:
-
-1. `agent.log`'da başlangıçtan hemen sonra bir satır arayın:
-   - `surec atfi aktif iface=…` → motor çalışıyor, sorun trafik/atıf tarafında.
-   - `derin toplama kapali — surec trafigi / DNS / L7 gorunurlugu yok` →
-     `agent.yml`'de `collect.pcap` kapalı. `true` yapıp servisi yeniden başlatın
-     (`launchctl kickstart -k system/local.bazntms.agent` / `systemctl restart
-     bazntms-agent` / `sc stop|start bazntms-agent`).
-   - `PCAP politikasi hub tarafinda kapali` → hub'ı `-agent-pcap` ile başlatın.
-   - Hiçbiri yoksa ve satır beklediğiniz gibi değilse: agent eski bir binary
-     olabilir (v0.3.3 öncesi bu tanı satırını basmaz).
-2. `.pkg` / MSI / deb / rpm **yeniden kurulumu** mevcut `agent.yml`'e dokunmaz;
-   ama dosya yoksa sihirbaz yeni bir tane üretir. v0.3.3+ paketleri
-   `collect.pcap: true` yazar, daha eskiler `false` — yeniden kurulumdan sonra
-   panellerin boşaldığını görürseniz önce bu satırı kontrol edin.
-3. Docker/Alpine agent'larında yalnızca kendi çıkış trafiği varsa (örn. yalnız
+1. `.pkg` / MSI / deb / rpm **yeniden kurulumu** mevcut `agent.yml`'e dokunmaz;
+   dosya yoksa sihirbaz yeni bir tane üretir (v1.3.0+ → `collect.method: auto`).
+   Eski bir kurulumda `collect.method: off` ya da `collect.pcap: false` kalmışsa:
+   `collect.pcap` artık yok sayılır, ama `method: off` hâlâ kapatır — o satırı
+   silin.
+2. Docker/Alpine agent'larında yalnızca kendi çıkış trafiği varsa (örn. yalnız
    hub'a konuşan sentetik agent) L7 boş kalabilir: `sanitizeHost` noktasız tek
    etiketli host adlarını (`lb` gibi) eler — gerçek FQDN hedeflerine giden
-   trafik gerekir.
+   trafik gerekir. Konteynerde eBPF/pcap için `--network=host` +
+   `--cap-add=NET_RAW --cap-add=NET_ADMIN` (eBPF ayrıca `/sys` BTF erişimi)
+   gerekir.
 
 ## AI analizi sorunları (Faz 26)
 

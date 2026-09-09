@@ -169,43 +169,43 @@ func TestRegisterOrReuseAgent(t *testing.T) {
 	}
 }
 
-// TestTouchAgentVersionGuard, TouchAgent'in dolu surum/protokol degerini
-// yazdigini, bos "" / 0 gelince mevcut degeri KORUDUGUNU dogrular (surum
-// tasimayan eski agent hub'daki bilgiyi silmemeli).
-func TestSetAgentAttrMethod(t *testing.T) {
+// TestSetAgentAttrInfo, süreç-atıf teşhis bilgisinin (yöntem + yakalama arayüzü
+// + kapalı neden) yazıldığını, "off"un geçerli olduğunu ve boş yöntemin mevcut
+// değeri KORUDUĞUNU (alan taşımayan eski agent) doğrular.
+func TestSetAgentAttrInfo(t *testing.T) {
 	st := openTest(t)
 	id, err := st.RegisterAgent(Agent{Name: "a", TokenHash: TokenHash("t")})
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	// yeni agent → boş
-	if a, _ := st.AgentByID(id); a.AttrMethod != "" {
-		t.Fatalf("başlangıçta boş beklenirdi: %q", a.AttrMethod)
+	if a, _ := st.AgentByID(id); a.AttrMethod != "" || a.AttrIface != "" || a.AttrNote != "" {
+		t.Fatalf("başlangıçta boş beklenirdi: %+v", a)
 	}
 	// bildir → yazılır, hem AgentByID hem ListAgents okur
-	if err := st.SetAgentAttrMethod(id, "ebpf"); err != nil {
+	if err := st.SetAgentAttrInfo(id, "pcap", "Ethernet", ""); err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	if a, _ := st.AgentByID(id); a.AttrMethod != "ebpf" {
-		t.Fatalf("AgentByID: %q", a.AttrMethod)
+	if a, _ := st.AgentByID(id); a.AttrMethod != "pcap" || a.AttrIface != "Ethernet" {
+		t.Fatalf("AgentByID: %+v", a)
 	}
 	agents, _ := st.ListAgents(time.Minute, "")
-	if len(agents) != 1 || agents[0].AttrMethod != "ebpf" {
+	if len(agents) != 1 || agents[0].AttrMethod != "pcap" || agents[0].AttrIface != "Ethernet" {
 		t.Fatalf("ListAgents: %+v", agents)
 	}
-	// "off" da geçerli bir değer — saklanır
-	if err := st.SetAgentAttrMethod(id, "off"); err != nil {
+	// motor kapandı → "off" + neden; iface temizlenir
+	if err := st.SetAgentAttrInfo(id, "off", "", "hub PCAP politikasi kapali (-agent-pcap=false)"); err != nil {
 		t.Fatalf("set off: %v", err)
 	}
-	if a, _ := st.AgentByID(id); a.AttrMethod != "off" {
-		t.Fatalf("off yazılmalıydı: %q", a.AttrMethod)
+	if a, _ := st.AgentByID(id); a.AttrMethod != "off" || a.AttrIface != "" || a.AttrNote == "" {
+		t.Fatalf("off + neden yazılmalıydı: %+v", a)
 	}
-	// boş string → değiştirme (eski agent)
-	if err := st.SetAgentAttrMethod(id, ""); err != nil {
+	// boş yöntem → yöntemi değiştirme (eski agent); iface/note yine de güncellenir
+	if err := st.SetAgentAttrInfo(id, "", "", ""); err != nil {
 		t.Fatalf("set empty: %v", err)
 	}
 	if a, _ := st.AgentByID(id); a.AttrMethod != "off" {
-		t.Fatalf("boş string mevcut değeri korumalıydı: %q", a.AttrMethod)
+		t.Fatalf("boş yöntem mevcut değeri korumalıydı: %q", a.AttrMethod)
 	}
 }
 

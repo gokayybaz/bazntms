@@ -208,6 +208,13 @@ func (p *Poller) pollDevice(d store.Device) {
 	if err := p.store.UpdateDevicePoll(d.ID, snap.SysName, snap.SysDescr, snap.LastError); err != nil {
 		slog.Warn("cihaz durum guncellemesi", "device", d.Name, "err", err)
 	}
+	// FortiGate: tespit edilen FortiOS sürümünü tazele (sürüm profili + rozet).
+	// Uç yetenek özeti "Bağlantıyı Sına"dan gelir — poll ezmesin diye boş geçilir.
+	if snap.APIVersion != "" {
+		if err := p.store.UpdateDeviceFortiMeta(d.ID, snap.APIVersion, ""); err != nil {
+			slog.Warn("fortigate meta guncellemesi", "device", d.Name, "err", err)
+		}
+	}
 	slog.Info("poll tamam",
 		"device", d.Name, "vendor", d.Vendor,
 		"ifaces", len(snap.Ifaces), "resources", len(snap.Resources),

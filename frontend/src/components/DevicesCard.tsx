@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatBits } from '../lib/format'
 import { FortiPanel } from './FortiPanel'
+import { FortiProbeReport, type ProbeReport } from './FortiProbeReport'
+
+// FortiOS sürüm profilleri — internal/fortigate/profile.go ile aynı liste.
+const FORTI_PROFILES = ['auto', '7.0', '7.2', '7.4', '7.6', 'default'] as const
 
 interface Device {
   id: number
@@ -13,6 +17,9 @@ interface Device {
   snmp_version: number
   api_url: string
   vdom: string
+  api_profile?: string
+  api_version?: string
+  api_caps?: string
   poll_seconds: number
   enabled: boolean
   sys_name: string
@@ -178,12 +185,7 @@ export function DevicesCard({ refreshKey }: { refreshKey: number }) {
               {d.sys_descr && (
                 <p className="mt-1 truncate text-[11px] text-tui-dim" title={d.sys_descr}>{d.sys_descr}</p>
               )}
-              {d.vendor === 'fortigate' && (d.api_url || d.vdom) && (
-                <p className="mt-1 font-mono text-[10px] text-tui-dim">
-                  {d.api_url}
-                  {d.vdom && <span className="ml-2 bg-panel-2 px-1.5 py-0.5 text-tui-dim">vdom: {d.vdom}</span>}
-                </p>
-              )}
+              {d.vendor === 'fortigate' && <FortiDeviceRow device={d} onChanged={load} />}
               {d.last_error && (
                 <p className="mt-1 truncate font-mono text-[11px] text-rose-400/80" title={d.last_error}>⚠ {d.last_error}</p>
               )}
@@ -245,13 +247,36 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
     name: '', host: '', kind: 'router', site: '', vendor: 'snmp', snmp_version: 2,
     community: '', v3_user: '', v3_auth_proto: 'SHA', v3_auth_pass: '',
     v3_priv_proto: 'AES', v3_priv_pass: '',
-    api_url: '', api_token: '', api_verify_tls: true, vdom: 'root',
+    api_url: '', api_token: '', api_verify_tls: true, vdom: 'root', profile: 'auto',
     poll_seconds: 60,
   })
   const [submitting, setSubmitting] = useState(false)
+  const [probing, setProbing] = useState(false)
+  const [probe, setProbe] = useState<ProbeReport | null>(null)
   const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }))
   const inputCls =
     'w-full border border-rule-hi bg-panel px-2.5 py-1.5 text-sm outline-none placeholder:text-tui-dim focus:border-cyan-500/60'
+
+  const runProbe = async () => {
+    setProbing(true)
+    setProbe(null)
+    try {
+      const res = await fetch('/api/v1/devices/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_url: form.api_url, api_token: form.api_token,
+          api_verify_tls: form.api_verify_tls, vdom: form.vdom, profile: form.profile,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setProbe(await res.json())
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setProbing(false)
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -309,13 +334,34 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
               <input value={form.vdom} onChange={(e) => set('vdom', e.target.value)} placeholder="root veya all" className={inputCls} />
             </Field>
           </div>
-          <Field label="REST API Token *">
-            <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="kasada şifrelenir; read-only profil önerilir" className={inputCls} />
-          </Field>
+          <div className="grid grid-cols-1 gap-2 @lg:grid-cols-2">
+            <Field label="REST API Token *">
+              <input type="password" value={form.api_token} onChange={(e) => set('api_token', e.target.value)} placeholder="kasada şifrelenir; read-only profil önerilir" className={inputCls} />
+            </Field>
+            <Field label="FortiOS Profili">
+              <select value={form.profile} onChange={(e) => set('profile', e.target.value)} className={inputCls}>
+                {FORTI_PROFILES.map((p) => (
+                  <option key={p} value={p}>{p === 'auto' ? 'auto (yanıttan tespit)' : p}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
           <label className="flex items-center gap-2 text-[11px] text-tui-dim">
             <input type="checkbox" checked={form.api_verify_tls} onChange={(e) => set('api_verify_tls', e.target.checked)} className="accent-cyan-500" />
             TLS sertifikasını doğrula (self-signed kurulumlarda kapatın)
           </label>
+          <div>
+            <button
+              type="button"
+              onClick={runProbe}
+              disabled={probing || !form.api_url || !form.api_token}
+              className="border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.04em] text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
+            >
+              {probing ? 'sınanıyor…' : 'Bağlantıyı Sına'}
+            </button>
+            <span className="ml-2 text-[10px] text-tui-dim">kaydetmeden her ucu test eder — sürüm + erişim raporu</span>
+          </div>
+          {probe && <FortiProbeReport report={probe} />}
         </div>
       ) : (
         <>
@@ -365,5 +411,93 @@ function DeviceForm({ onAdded, onError }: { onAdded: () => void; onError: (s: st
         <span className="text-[11px] text-tui-dim">poll aralığı: {form.poll_seconds} sn</span>
       </div>
     </form>
+  )
+}
+
+// FortiDeviceRow — cihaz satırında FortiGate meta bilgisi: API adresi, tespit
+// edilen FortiOS sürümü, uç yetenek özeti + elle "yeniden sına" ve sürüm
+// profili sabitleme.
+function FortiDeviceRow({ device: d, onChanged }: { device: Device; onChanged: () => void }) {
+  const [probing, setProbing] = useState(false)
+  const [report, setReport] = useState<ProbeReport | null>(null)
+  const [err, setErr] = useState('')
+
+  const caps: Record<string, string> = (() => {
+    try {
+      return d.api_caps ? JSON.parse(d.api_caps) : {}
+    } catch {
+      return {}
+    }
+  })()
+  const capCounts = Object.values(caps).reduce(
+    (a, v) => {
+      if (v === 'denied' || v === 'error') a.bad++
+      else if (v === 'empty') a.empty++
+      return a
+    },
+    { bad: 0, empty: 0 },
+  )
+
+  const reprobe = async (profile?: string) => {
+    setProbing(true)
+    setErr('')
+    try {
+      const res = await fetch('/api/v1/devices/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile === undefined ? { device_id: d.id } : { device_id: d.id, profile }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setReport(await res.json())
+      onChanged()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setProbing(false)
+    }
+  }
+
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-tui-dim">
+        {d.api_url && <span>{d.api_url}</span>}
+        {d.vdom && <span className="bg-panel-2 px-1.5 py-0.5">vdom: {d.vdom}</span>}
+        {d.api_version && (
+          <span className="border border-orange-500/40 bg-orange-500/10 px-1.5 py-0.5 text-orange-300">
+            FortiOS {d.api_version}
+          </span>
+        )}
+        <span className="bg-panel-2 px-1.5 py-0.5">
+          profil: {d.api_profile || 'auto'}
+        </span>
+        {(capCounts.bad > 0 || capCounts.empty > 0) && (
+          <span className="text-amber-400/90">
+            ⚠ {capCounts.bad > 0 && `${capCounts.bad} uç erişilemiyor`}
+            {capCounts.bad > 0 && capCounts.empty > 0 && ' · '}
+            {capCounts.empty > 0 && `${capCounts.empty} boş`}
+          </span>
+        )}
+        <select
+          value={d.api_profile || 'auto'}
+          onChange={(e) => reprobe(e.target.value === 'auto' ? '' : e.target.value)}
+          disabled={probing}
+          aria-label={`${d.name} FortiOS profili`}
+          className="border border-rule-hi bg-panel px-1 py-0.5 text-[10px] outline-none focus:border-cyan-500/60"
+        >
+          {FORTI_PROFILES.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => reprobe()}
+          disabled={probing}
+          className="border border-cyan-500/40 px-1.5 py-0.5 uppercase text-cyan-300 transition hover:bg-cyan-500/10 disabled:opacity-40"
+        >
+          {probing ? 'sınanıyor…' : 'yeniden sına'}
+        </button>
+      </div>
+      {err && <p className="font-mono text-[10px] text-rose-400/80">⚠ {err}</p>}
+      {report && <FortiProbeReport report={report} />}
+    </div>
   )
 }

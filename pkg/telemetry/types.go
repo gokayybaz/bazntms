@@ -145,7 +145,16 @@ type TelemetryBatch struct {
 	// AttrMethod, agent'in aktif surec-atif arka ucu: "ebpf" | "pcap" | "etw"
 	// | "off". Bos = tasimayan eski agent (hub mevcut degeri korur). Yalnizca
 	// gosterim/teshis — hub davranisini etkilemez.
-	AttrMethod     string                 `json:"attr_method,omitempty"`
+	AttrMethod string `json:"attr_method,omitempty"`
+	// AttrIface, pcap arka ucunun dinledigi yakalama arayuzu (yalnizca
+	// method=pcap; eBPF/ETW soket duzeyinde, tum arayuzler). UI teshisi:
+	// "motor calisiyor ama panel bos → yanlis/sanal arayuz mu yakalaniyor?"
+	AttrIface string `json:"attr_iface,omitempty"`
+	// AttrNote, atif motoru KAPALI/baslatilamadiysa insan-okur neden:
+	// "collect.method=off" | "hub PCAP politikasi kapali (-agent-pcap=false)" |
+	// pcap acilis hata ipucu. Motor calisirken "". UI panel bos-durum metnine
+	// yansir.
+	AttrNote       string                 `json:"attr_note,omitempty"`
 	Interfaces     []InterfaceSample      `json:"interfaces"`
 	Connections    []ConnectionSample     `json:"connections"`
 	ProcessTraffic []ProcessTrafficSample `json:"process_traffic,omitempty"`

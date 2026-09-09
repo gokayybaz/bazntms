@@ -74,6 +74,8 @@ export interface DemoAgent {
   remote_ip: string
   online: boolean
   attr_method: string
+  attr_iface?: string
+  attr_note?: string
   uplink_device_id?: number
   ifaces: Iface[]
   conns: number
@@ -189,6 +191,15 @@ function attrFor(os: string): string {
   return 'pcap'
 }
 
+// attrIfaceFor / attrNoteFor — süreç-atıf teşhis alanları (yalnız gösterim).
+function attrIfaceFor(os: string, method: string): string | undefined {
+  if (method !== 'pcap') return undefined
+  return os === 'windows' ? 'Ethernet' : os === 'darwin' ? 'en0' : 'eth0'
+}
+function attrNoteFor(method: string): string | undefined {
+  return method === 'off' ? 'collect.method=off' : undefined
+}
+
 function buildDevices() {
   const base = now() - 86400 * 40
   const defs: Partial<DemoDevice>[] = [
@@ -265,6 +276,7 @@ function buildAgents() {
     }
     const id = i + 1
     const octet = 10 + Math.floor(i / 250)
+    const attrForResolved = attrFor(os)
     const a: DemoAgent = {
       id,
       name: `agent-${site}-${String(counters[site]).padStart(3, '0')}`,
@@ -275,7 +287,9 @@ function buildAgents() {
       protocol_version: 1,
       remote_ip: `10.${site === 'merkez' ? 0 : site === 'ankara' ? 10 : site === 'izmir' ? 20 : site === 'dc-1' ? 30 : 40}.${ri(rnd, 4, 250)}.${ri(rnd, 2, 250)}`,
       online,
-      attr_method: online ? attrFor(os) : attrFor(os),
+      attr_method: attrForResolved,
+      attr_iface: attrIfaceFor(os, attrForResolved),
+      attr_note: attrNoteFor(attrForResolved),
       ifaces,
       conns: online ? ri(rnd, 4, 44) : 0,
       connSamples: [],
@@ -478,6 +492,8 @@ export function agentJSON(a: DemoAgent) {
     conns: a.conns,
     uplink_device_id: a.uplink_device_id,
     attr_method: a.attr_method,
+    attr_iface: a.attr_iface,
+    attr_note: a.attr_note,
   }
 }
 
