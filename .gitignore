@@ -40,6 +40,9 @@ docs/perf/pprof/
 # kimlik kasasi master key (gizli, makineye ozel)
 /vault.key
 
+# docker compose .env dosyalari (yerel gizli degerler — sablon icin .env.example'a bakin)
+deploy/.env
+
 # mTLS PKI (hub CA + sunucu sertifikasi) + agent istemci sertifikalari
 /pki/
 *.state.json
