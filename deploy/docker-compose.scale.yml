@@ -85,7 +85,14 @@ services:
       - "-pprof" # Faz 21: profil için (compose ağı içinden; bkz. scripts/profile.sh)
       - "0.0.0.0:6060"
       - "-ai" # Faz 26: AI analiz. Yerel model için `ai` profilini de ayağa kaldırın:
-      - "-ai-allow-cloud=false" #   docker compose -f deploy/docker-compose.scale.yml --profile ai up -d --build
+      # Faz 27: Jev (TypeSafe AI) her zaman bulut — bu yüzden allow-cloud
+      # true'ya çekildi (Jev DIŞINDA hâlâ tek yapılandırılmış sağlayıcı
+      # aşağıdaki yerel ollama'dır; bulut sağlayıcı EKLEMEDEN allow-cloud=true
+      # tek başına dışarı veri göndermez). JEV_API_KEY boşsa -ai-jev fiilen
+      # etkisiz kalır (bkz. deploy/.env.example).
+      - "-ai-allow-cloud=true" #   docker compose -f deploy/docker-compose.scale.yml --profile ai up -d --build
+      - "-ai-jev"
+      - "-ai-jev-api-key=${JEV_API_KEY:-}"
       - "-llm-base-url" #   ai_providers boşsa bootstrap sağlayıcı (ollama servisi)
       - "http://ollama:11434/v1"
       - "-llm-model"
@@ -103,6 +110,7 @@ services:
       BAZNTMS_DB_MAX_CONNS: "64" # Faz 21: combined ingest + devpoll havuzu doyuruyordu (32 → 64)
       GOMEMLIMIT: "512MiB" # Faz 21 S21.13: Go GC/scavenger RSS'i sınır altında tutar
       AUTH_PASSWORD: demo123
+      BAZNTMS_AI__TRIAGE__ENABLED: "true" # Faz 27: Jev on-filtresi yalniz triyaj acikken calisir
     deploy:
       replicas: 2
     healthcheck:

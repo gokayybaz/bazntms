@@ -102,6 +102,16 @@ type HubConfig struct {
 			MinSeverity string `koanf:"min_severity"` // warn | crit (boş → crit)
 			MaxPerHour  int    `koanf:"max_per_hour"` // 0 → 10 (LLM maliyet/gürültü sınırı)
 		} `koanf:"triage"`
+		// Jev (Faz 27): TypeSafe AI'nin karar modeli — triyaj ön-filtresi.
+		// Her zaman bulut (self-hosted seçeneği yok); allow_cloud=false iken
+		// enabled=true olsa da devre dışı kalır (egress kilidi).
+		Jev struct {
+			Enabled       bool    `koanf:"enabled"`
+			APIKey        string  `koanf:"api_key"`
+			BaseURL       string  `koanf:"base_url"`       // boş → https://api.typesafe.ai/v1
+			Model         string  `koanf:"model"`          // boş → jev-latest
+			MinConfidence float64 `koanf:"min_confidence"` // 0 → 0.55
+		} `koanf:"jev"`
 	} `koanf:"ai"`
 	Log struct {
 		Level  string `koanf:"level"`
@@ -170,6 +180,8 @@ var hubFlagKeys = map[string]string{
 	"ai.base_url":              "llm-base-url",
 	"ai.api_key":               "llm-api-key",
 	"ai.default_model":         "llm-model",
+	"ai.jev.enabled":           "ai-jev",
+	"ai.jev.api_key":           "ai-jev-api-key",
 	"updates.dir":              "updates-dir",
 	"enroll_token":             "enroll-token",
 	"compliance.enabled":       "compliance",
