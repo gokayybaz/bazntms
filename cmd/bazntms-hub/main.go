@@ -366,8 +366,13 @@ func main() {
 		} else if *aiJevOn && !allowCloud {
 			slog.Warn("ai-jev acik ama ai-allow-cloud kapali — Jev devre disi (egress kilidi)")
 		}
+		srv.SetJev(jev, ai.JevStatus{
+			FlagOn: *aiJevOn, AllowCloud: allowCloud, Active: jev != nil,
+			BaseURL: cfg.AI.Jev.BaseURL, Model: cfg.AI.Jev.Model, MinConfidence: cfg.AI.Jev.MinConfidence,
+		})
 		if cfg.AI.Triage.Enabled {
-			aiTriage = ai.NewTriager(aiReg, srv.BuildAISnapshot, cfg.AI.Triage.MinSeverity, cfg.AI.Triage.MaxPerHour, jev, cfg.AI.Jev.MinConfidence)
+			aiTriage = ai.NewTriager(aiReg, srv.BuildAISnapshot, cfg.AI.Triage.MinSeverity, cfg.AI.Triage.MaxPerHour,
+				jev, cfg.AI.Jev.MinConfidence, st.SetIncidentJevDecision)
 			slog.Info("AI olay triyajı aktif", "min_severity", cfg.AI.Triage.MinSeverity)
 		}
 	}

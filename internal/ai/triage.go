@@ -29,18 +29,20 @@ type jevDecider interface {
 // harcanmasın. Hata/kesinti FAIL-OPEN: eski severity+rate-limit davranışına
 // düşülür, hiçbir incident sessizce triyajsız kalmaz.
 type Triager struct {
-	reg        *Registry
-	snapshot   func(scope, ref, site string) Snapshot
-	minSev     string
-	maxPerHr   int
-	jev        jevDecider
-	jevMinConf float64
+	reg            *Registry
+	snapshot       func(scope, ref, site string) Snapshot
+	minSev         string
+	maxPerHr       int
+	jev            jevDecider
+	jevMinConf     float64
+	setJevDecision func(incidentID int64, noul float64, worth bool) error
 
 	mu     sync.Mutex
 	window []time.Time // son 1 saatteki triyaj zamanları
 }
 
-func NewTriager(reg *Registry, snapshot func(scope, ref, site string) Snapshot, minSeverity string, maxPerHour int, jev jevDecider, jevMinConf float64) *Triager {
+func NewTriager(reg *Registry, snapshot func(scope, ref, site string) Snapshot, minSeverity string, maxPerHour int,
+	jev jevDecider, jevMinConf float64, setJevDecision func(incidentID int64, noul float64, worth bool) error) *Triager {
 	if minSeverity == "" {
 		minSeverity = "crit"
 	}
@@ -50,7 +52,8 @@ func NewTriager(reg *Registry, snapshot func(scope, ref, site string) Snapshot, 
 	if jevMinConf <= 0 {
 		jevMinConf = 0.55
 	}
-	return &Triager{reg: reg, snapshot: snapshot, minSev: minSeverity, maxPerHr: maxPerHour, jev: jev, jevMinConf: jevMinConf}
+	return &Triager{reg: reg, snapshot: snapshot, minSev: minSeverity, maxPerHr: maxPerHour,
+		jev: jev, jevMinConf: jevMinConf, setJevDecision: setJevDecision}
 }
 
 // Enqueue, bir incident için triyaj başlatır (asenkron, hız-sınırlı). nil
@@ -169,6 +172,11 @@ func (t *Triager) jevWorthTriage(in store.Incident) bool {
 	}
 	worth := *a.Noul >= t.jevMinConf
 	slog.Info("Jev ön-filtre kararı", "incident", in.ID, "noul", *a.Noul, "esik", t.jevMinConf, "triyaj_edilecek", worth)
+	if t.setJevDecision != nil {
+		if err := t.setJevDecision(in.ID, *a.Noul, worth); err != nil {
+			slog.Warn("Jev kararı incident'a yazılamadı", "incident", in.ID, "err", err)
+		}
+	}
 	return worth
 }
 

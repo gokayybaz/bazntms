@@ -62,6 +62,7 @@ type IncidentStore interface {
 	SetIncidentStatus(id int64, status, by string, ts int64) error
 	SetIncidentExtRef(id int64, ref string) error
 	RecentOpenIncidents(since time.Time) ([]Incident, error)
+	SetIncidentJevDecision(id int64, noul float64, worth bool) error
 }
 
 // EventStore, normalleştirilmiş olay akışı (Faz 24-A) — kaynak tabloların

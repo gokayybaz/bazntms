@@ -32,6 +32,9 @@ interface Detail {
     resolved_ts?: number
     created_ts: number
     updated_ts: number
+    // Faz 27 S27.7: Jev ön-filtre kararı. -1/undefined = değerlendirilmedi.
+    jev_noul?: number
+    jev_worth?: boolean
   }
   evidence: Evidence[]
 }
@@ -178,6 +181,16 @@ export function IncidentDetailPage() {
                 ['Kabul eden', i.ack_by || '—'],
                 ['Açıldı', relTime(i.created_ts)],
                 ['Son etkinlik', relTime(i.last_seen)],
+                [
+                  'Jev ön-filtre',
+                  i.jev_noul == null || i.jev_noul === -1 ? (
+                    '—'
+                  ) : (
+                    <span key="jev" className={i.jev_worth ? 'text-emerald-400' : 'text-tui-dim'}>
+                      {i.jev_worth ? 'değer' : 'değmez'} (%{Math.round(i.jev_noul * 100)})
+                    </span>
+                  ),
+                ],
               ] as [string, ReactNode][]
             ).map(([k, v]) => (
               <div key={k} className="min-w-0">

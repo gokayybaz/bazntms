@@ -221,6 +221,40 @@ func (s *Server) handleAIProviderModels(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, map[string]any{"models": models})
 }
 
+// --- Jev (Faz 27 S27.7) — salt-okunur durum + bağlantı testi, CRUD yok ---
+
+// SetJev, Jev triyaj ön-filtresini bağlar (main.go). c=nil → kapalı; status
+// her durumda (kapalıyken de) Yönetim UI'sının nedeni göstermesi için set edilir.
+func (s *Server) SetJev(c *ai.JevClient, status ai.JevStatus) { s.jev = c; s.jevStatus = status }
+
+func (s *Server) handleAIJevStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.jevStatus)
+}
+
+func (s *Server) handleAIJevTest(w http.ResponseWriter, r *http.Request) {
+	if s.jev == nil {
+		writeJSON(w, map[string]any{"ok": false, "error": "Jev etkin değil (-ai-jev / -ai-allow-cloud kontrol edin)"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	start := time.Now()
+	answers, _, err := s.jev.Decide(ctx, "bağlantı testi", map[string]ai.JevQuestion{
+		"ok": {Type: ai.JevNoul, Instructions: "Bu bir bağlantı testidir, her zaman evet de."},
+	})
+	latency := time.Since(start).Milliseconds()
+	s.audit(r, identityFromCtx(r), "ai.jev.test", "jev", boolStr(err == nil))
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "latency_ms": latency})
+		return
+	}
+	var noul float64
+	if a, ok := answers["ok"]; ok && a.Noul != nil {
+		noul = *a.Noul
+	}
+	writeJSON(w, map[string]any{"ok": true, "latency_ms": latency, "noul": noul})
+}
+
 // --- konuşmalar (PermAnalyze) ---
 
 func (s *Server) handleAIConversationsList(w http.ResponseWriter, r *http.Request) {

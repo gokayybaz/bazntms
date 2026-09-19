@@ -71,6 +71,17 @@ type jevResponse struct {
 	Usage   jevUsage             `json:"usage"`
 }
 
+// JevStatus, Yönetim UI'sı için Jev'in yapılandırma/durum özeti — sır
+// İÇERMEZ (API anahtarı yok). Faz 27 S27.7.
+type JevStatus struct {
+	FlagOn        bool    `json:"flag_on"`     // -ai-jev bayrağı verildi mi
+	AllowCloud    bool    `json:"allow_cloud"` // -ai-allow-cloud
+	Active        bool    `json:"active"`      // FlagOn && AllowCloud
+	BaseURL       string  `json:"base_url"`
+	Model         string  `json:"model"`
+	MinConfidence float64 `json:"min_confidence"`
+}
+
 // JevClient, TypeSafe AI'nin /v1/systemone ucuna karsi kucuk bir istemci.
 type JevClient struct {
 	baseURL string

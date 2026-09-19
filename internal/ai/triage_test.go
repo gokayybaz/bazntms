@@ -33,14 +33,14 @@ func TestSevRank(t *testing.T) {
 		t.Fatal("severity sıralaması bozuk")
 	}
 	// minSev=crit → warn incident triyaja girmez
-	tr := NewTriager(nil, nil, "crit", 10, nil, 0)
+	tr := NewTriager(nil, nil, "crit", 10, nil, 0, nil)
 	if sevRank("warn") >= sevRank(tr.minSev) {
 		t.Fatal("warn, crit eşiğini geçmemeli")
 	}
 }
 
 func TestNewTriagerDefaults(t *testing.T) {
-	tr := NewTriager(nil, nil, "", 0, nil, 0)
+	tr := NewTriager(nil, nil, "", 0, nil, 0, nil)
 	if tr.minSev != "crit" || tr.maxPerHr != 10 || tr.jevMinConf != 0.55 {
 		t.Fatalf("varsayılanlar: minSev=%q maxPerHr=%d jevMinConf=%v", tr.minSev, tr.maxPerHr, tr.jevMinConf)
 	}
@@ -66,26 +66,53 @@ func TestJevWorthTriage(t *testing.T) {
 	in := store.Incident{ID: 1, Severity: "crit"}
 
 	// jev=nil → eski davranış (her zaman evet)
-	tr := NewTriager(nil, nil, "crit", 10, nil, 0)
+	tr := NewTriager(nil, nil, "crit", 10, nil, 0, nil)
 	if !tr.jevWorthTriage(in) {
 		t.Fatal("jev=nil iken her zaman true dönmeli")
 	}
 
 	// düşük güven → atlanmalı
-	tr = NewTriager(nil, nil, "crit", 10, fakeJev{noul: 0.2}, 0.55)
+	tr = NewTriager(nil, nil, "crit", 10, fakeJev{noul: 0.2}, 0.55, nil)
 	if tr.jevWorthTriage(in) {
 		t.Fatal("noul eşiğin altında — atlanmalıydı")
 	}
 
 	// yüksek güven → devam etmeli
-	tr = NewTriager(nil, nil, "crit", 10, fakeJev{noul: 0.9}, 0.55)
+	tr = NewTriager(nil, nil, "crit", 10, fakeJev{noul: 0.9}, 0.55, nil)
 	if !tr.jevWorthTriage(in) {
 		t.Fatal("noul eşiğin üstünde — devam etmeliydi")
 	}
 
 	// hata → fail-open (devam etmeli)
-	tr = NewTriager(nil, nil, "crit", 10, fakeJev{err: fmt.Errorf("bağlantı hatası")}, 0.55)
+	tr = NewTriager(nil, nil, "crit", 10, fakeJev{err: fmt.Errorf("bağlantı hatası")}, 0.55, nil)
 	if !tr.jevWorthTriage(in) {
 		t.Fatal("jev hatasında fail-open olmalı (devam etmeli)")
+	}
+}
+
+func TestJevWorthTriagePersistsDecision(t *testing.T) {
+	in := store.Incident{ID: 7, Severity: "crit"}
+	var gotID int64
+	var gotNoul float64
+	var gotWorth bool
+	tr := NewTriager(nil, nil, "crit", 10, fakeJev{noul: 0.9}, 0.55, func(id int64, noul float64, worth bool) error {
+		gotID, gotNoul, gotWorth = id, noul, worth
+		return nil
+	})
+	if !tr.jevWorthTriage(in) {
+		t.Fatal("noul eşiğin üstünde — devam etmeliydi")
+	}
+	if gotID != 7 || gotNoul != 0.9 || !gotWorth {
+		t.Fatalf("setJevDecision çağrısı = id=%d noul=%v worth=%v", gotID, gotNoul, gotWorth)
+	}
+
+	// fail-open yolunda (hata) setJevDecision ÇAĞRILMAMALI — jev_noul -1
+	// sentinel'inde kalmalı ("değerlendirilmedi" ile "değmez" karışmasın).
+	called := false
+	tr = NewTriager(nil, nil, "crit", 10, fakeJev{err: fmt.Errorf("bağlantı hatası")}, 0.55,
+		func(id int64, noul float64, worth bool) error { called = true; return nil })
+	tr.jevWorthTriage(in)
+	if called {
+		t.Fatal("fail-open yolunda setJevDecision çağrılmamalı")
 	}
 }

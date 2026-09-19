@@ -1365,6 +1365,18 @@ paths:
       responses:
         "200": { description: "{ models: [string] }" }
         "502": { description: sağlayıcıya ulaşılamadı }
+  /api/v1/ai/jev:
+    get:
+      tags: [ai]
+      summary: Jev (TypeSafe AI) triyaj ön-filtresi durumu — salt-okunur, sır içermez (yetki:global-admin)
+      responses:
+        "200": { description: "{ flag_on, allow_cloud, active, base_url, model, min_confidence }" }
+  /api/v1/ai/jev/test:
+    post:
+      tags: [ai]
+      summary: Jev bağlantı testi (yetki:global-admin)
+      responses:
+        "200": { description: "{ ok, latency_ms, noul, error }" }
 
   /api/v1/reports/archive:
     get:
