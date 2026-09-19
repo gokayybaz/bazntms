@@ -167,7 +167,9 @@ func (t *Triager) jevWorthTriage(in store.Incident) bool {
 	if !ok || a.Noul == nil {
 		return true
 	}
-	return *a.Noul >= t.jevMinConf
+	worth := *a.Noul >= t.jevMinConf
+	slog.Info("Jev ön-filtre kararı", "incident", in.ID, "noul", *a.Noul, "esik", t.jevMinConf, "triyaj_edilecek", worth)
+	return worth
 }
 
 func sevRank(s string) int {
