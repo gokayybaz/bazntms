@@ -21,8 +21,6 @@ const DETAIL = {
     last_seen: Math.floor(Date.now() / 1000) - 30,
     created_ts: Math.floor(Date.now() / 1000) - 200,
     updated_ts: Math.floor(Date.now() / 1000) - 30,
-    jev_noul: 0.83,
-    jev_worth: true,
   },
   evidence: [
     { kind: 'alert', ref: '1', ts: Math.floor(Date.now() / 1000) - 200, summary: '[proc/info] yeni süreç' },
@@ -30,18 +28,12 @@ const DETAIL = {
   ],
 }
 
-// jev_noul=-1: Jev değerlendirmedi (kapalı/hata/fail-open) — "—" gösterilmeli.
-const DETAIL_NO_JEV = { ...DETAIL, incident: { ...DETAIL.incident, id: 43, jev_noul: -1, jev_worth: false } }
-
 function mockFetch() {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       if (url.match(/\/incidents\/42$/) && (!init || !init.method)) {
         return Promise.resolve({ ok: true, status: 200, json: async () => DETAIL } as Response)
-      }
-      if (url.match(/\/incidents\/43$/) && (!init || !init.method)) {
-        return Promise.resolve({ ok: true, status: 200, json: async () => DETAIL_NO_JEV } as Response)
       }
       if (url.includes('/incidents/42/') && init?.method === 'POST') {
         return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true, status: 'investigating' }) } as Response)
@@ -77,16 +69,6 @@ describe('IncidentDetailPage', () => {
     expect(screen.getByText('[ioc/crit] tehdit eşleşmesi')).toBeInTheDocument()
     // r1|agent3 dedup anahtarı
     expect(screen.getByText('r1|agent3')).toBeInTheDocument()
-    // Faz 27 S27.7: Jev ön-filtre kararı
-    expect(screen.getByText('değer (%83)')).toBeInTheDocument()
-  })
-
-  it('jev_noul=-1 iken Jev ön-filtresi "—" gösterir (değerlendirilmedi)', async () => {
-    mockFetch()
-    renderAt('/uyarilar/olay/43')
-    await screen.findByText('Şüpheli çıkış aktivitesi (IOC)')
-    const dt = await screen.findByText('Jev ön-filtre')
-    expect(dt.nextElementSibling?.textContent).toBe('—')
   })
 
   it('İncele eylemi POST atar', async () => {

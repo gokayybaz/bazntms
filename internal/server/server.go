@@ -46,8 +46,6 @@ type Server struct {
 	ti                *threatintel.Service // Faz 24-E: tehdit istihbaratı (nil = pasif)
 	hcache            healthCache          // Faz 25-A: sağlık skoru ~30sn önbellek
 	aiReg             *ai.Registry         // Faz 26: AI analiz motoru (nil = kapalı)
-	jev               *ai.JevClient        // Faz 27: triyaj ön-filtresi (nil = kapalı)
-	jevStatus         ai.JevStatus         // Yönetim UI'sı için — sır içermez
 	auth              *AuthManager
 	oidc              *OIDCManager
 	updatesDir        string         // guncelleme kanali dizini (Faz 7.3; bos = kapali)
@@ -257,9 +255,6 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/ai/providers/{id}", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderDelete)))
 	mux.Handle("POST /api/v1/ai/providers/{id}/test", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderTest)))
 	mux.Handle("GET /api/v1/ai/providers/{id}/models", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIProviderModels)))
-	// Jev (Faz 27 S27.7) — salt-okunur durum + bağlantı testi, CRUD yok.
-	mux.Handle("GET /api/v1/ai/jev", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIJevStatus)))
-	mux.Handle("POST /api/v1/ai/jev/test", s.requirePerm(PermGlobalAdmin, http.HandlerFunc(s.handleAIJevTest)))
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)

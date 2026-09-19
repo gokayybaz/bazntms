@@ -74,8 +74,6 @@ func main() {
 	llmBaseURL := fl.String("llm-base-url", "", "Bootstrap AI saglayicisi taban adresi (OpenAI-uyumlu; ex: http://localhost:11434/v1). ai_providers tablosu bossa bir kez seed edilir")
 	llmAPIKey := fl.String("llm-api-key", "", "Bootstrap AI saglayicisi API anahtari (yerel modeller icin gerekmez)")
 	llmModel := fl.String("llm-model", "", "Bootstrap AI saglayicisi varsayilan modeli (ex: qwen2.5:7b, gpt-4o-mini)")
-	aiJevOn := fl.Bool("ai-jev", false, "Jev (TypeSafe AI) triyaj on-filtresi (Faz 27). Her zaman bulut — ai-allow-cloud da acik olmali")
-	aiJevAPIKey := fl.String("ai-jev-api-key", "", "Jev API anahtari")
 	ipAPILookup := fl.Bool("ip-api-lookup", true, "MMDB yoksa ip-api.com ile IP cozumleme")
 	authPassword := fl.String("auth-password", "", "Arayuz sifresi (bos ise kimlik dogrulama kapali; AUTH_PASSWORD de gecerli)")
 	configPath := fl.String("config", "", "YAML config dosyasi (bayraklar ustunlukte)")
@@ -359,20 +357,8 @@ func main() {
 		srv.SetAIRegistry(aiReg)
 		slog.Info("AI analiz aktif", "bulut_izni", allowCloud)
 
-		var jev *ai.JevClient
-		if *aiJevOn && allowCloud {
-			jev = ai.NewJevClient(cfg.AI.Jev.BaseURL, *aiJevAPIKey, cfg.AI.Jev.Model, nil)
-			slog.Info("Jev triyaj ön-filtresi aktif")
-		} else if *aiJevOn && !allowCloud {
-			slog.Warn("ai-jev acik ama ai-allow-cloud kapali — Jev devre disi (egress kilidi)")
-		}
-		srv.SetJev(jev, ai.JevStatus{
-			FlagOn: *aiJevOn, AllowCloud: allowCloud, Active: jev != nil,
-			BaseURL: cfg.AI.Jev.BaseURL, Model: cfg.AI.Jev.Model, MinConfidence: cfg.AI.Jev.MinConfidence,
-		})
 		if cfg.AI.Triage.Enabled {
-			aiTriage = ai.NewTriager(aiReg, srv.BuildAISnapshot, cfg.AI.Triage.MinSeverity, cfg.AI.Triage.MaxPerHour,
-				jev, cfg.AI.Jev.MinConfidence, st.SetIncidentJevDecision)
+			aiTriage = ai.NewTriager(aiReg, srv.BuildAISnapshot, cfg.AI.Triage.MinSeverity, cfg.AI.Triage.MaxPerHour)
 			slog.Info("AI olay triyajı aktif", "min_severity", cfg.AI.Triage.MinSeverity)
 		}
 	}

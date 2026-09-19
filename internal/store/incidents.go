@@ -29,12 +29,6 @@ type Incident struct {
 	AckTs             int64  `json:"ack_ts,omitempty"`
 	ResolvedTs        int64  `json:"resolved_ts,omitempty"`
 	ExtRef            string `json:"ext_ref,omitempty"`
-	// JevNoul, Faz 27 S27.7 — Jev ön-filtre kararı. -1 = değerlendirilmedi
-	// (Jev kapalı ya da hata/fail-open); gerçek bir skor her zaman [0,1]
-	// aralığında olduğundan -1 güvenli sentinel'dir (omitempty yanlış olurdu:
-	// 0.0 da geçerli bir skor).
-	JevNoul  float64 `json:"jev_noul"`
-	JevWorth bool    `json:"jev_worth"`
 }
 
 type IncidentEvidence struct {
@@ -54,16 +48,14 @@ type IncidentFilter struct {
 
 const incidentCols = `id, title, severity, status, site, agent_id, correlation_key,
 	correlation_reason, summary, risk_score, created_ts, updated_ts, first_seen,
-	last_seen, ack_by, ack_ts, resolved_ts, ext_ref, jev_noul, jev_worth`
+	last_seen, ack_by, ack_ts, resolved_ts, ext_ref`
 
 func scanIncident(sc interface{ Scan(...any) error }) (Incident, error) {
 	var i Incident
-	var jevWorth int64
 	err := sc.Scan(&i.ID, &i.Title, &i.Severity, &i.Status, &i.Site, &i.AgentID,
 		&i.CorrelationKey, &i.CorrelationReason, &i.Summary, &i.RiskScore,
 		&i.CreatedTs, &i.UpdatedTs, &i.FirstSeen, &i.LastSeen,
-		&i.AckBy, &i.AckTs, &i.ResolvedTs, &i.ExtRef, &i.JevNoul, &jevWorth)
-	i.JevWorth = jevWorth != 0
+		&i.AckBy, &i.AckTs, &i.ResolvedTs, &i.ExtRef)
 	return i, err
 }
 
@@ -132,19 +124,6 @@ func (s *sqlStore) AddIncidentEvidence(incidentID int64, ev IncidentEvidence) er
 	_, err := s.db.Exec(s.q(`INSERT INTO incident_evidence (incident_id, kind, ref, ts, summary)
 		VALUES (?,?,?,?,?) ON CONFLICT (incident_id, kind, ref) DO NOTHING`),
 		incidentID, ev.Kind, ev.Ref, ev.Ts, ev.Summary)
-	return err
-}
-
-// SetIncidentJevDecision, Jev ön-filtre kararını (Faz 27 S27.7) incident'a
-// yazar — arayüzde gösterilebilmesi için. Yalnız Jev fiilen yanıt verdiğinde
-// çağrılır (bkz. internal/ai/triage.go); kapalı/hata durumunda jev_noul
-// varsayılan -1'de kalır.
-func (s *sqlStore) SetIncidentJevDecision(id int64, noul float64, worth bool) error {
-	w := 0
-	if worth {
-		w = 1
-	}
-	_, err := s.db.Exec(s.q(`UPDATE incidents SET jev_noul = ?, jev_worth = ? WHERE id = ?`), noul, w, id)
 	return err
 }
 

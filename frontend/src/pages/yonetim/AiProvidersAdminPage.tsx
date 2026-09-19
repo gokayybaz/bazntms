@@ -26,25 +26,12 @@ const KIND_LABEL: Record<string, string> = {
   'openai-compat': 'OpenAI-uyumlu (vLLM/OpenRouter/…)',
 }
 
-// GET /api/v1/ai/jev yanıtı (yerel tip — CLAUDE.md). Faz 27 S27.7 — salt-okunur,
-// sır içermez; düzenleme/silme yok, config.go'dan (-ai-jev/-ai-allow-cloud) okunur.
-interface JevStatus {
-  flag_on: boolean
-  allow_cloud: boolean
-  active: boolean
-  base_url: string
-  model: string
-  min_confidence: number
-}
-
 export function AiProvidersAdminPage() {
   const { form, confirm } = useDialog()
   const [provs, setProvs] = useState<Provider[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState('')
   const [testResult, setTestResult] = useState<Record<number, string>>({})
-  const [jev, setJev] = useState<JevStatus | null>(null)
-  const [jevTestResult, setJevTestResult] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -70,30 +57,9 @@ export function AiProvidersAdminPage() {
     }
   }, [])
 
-  const loadJev = useCallback(async () => {
-    try {
-      const r = await fetch('/api/v1/ai/jev')
-      if (r.ok) setJev(await r.json())
-    } catch {
-      /* Jev paneli olmadan da sayfa çalışır */
-    }
-  }, [])
-
   useEffect(() => {
     load()
-    loadJev()
-  }, [load, loadJev])
-
-  const testJev = async () => {
-    setJevTestResult('test ediliyor…')
-    try {
-      const r = await fetch('/api/v1/ai/jev/test', { method: 'POST' })
-      const d = await r.json()
-      setJevTestResult(d.ok ? `✓ ${d.latency_ms} ms (noul: ${d.noul})` : `✗ ${d.error ?? 'başarısız'}`)
-    } catch {
-      setJevTestResult('✗ ulaşılamadı')
-    }
-  }
+  }, [load])
 
   const edit = async (p?: Provider) => {
     let opts: { no_think?: boolean; max_tokens?: number; temperature?: number } = {}
@@ -221,47 +187,6 @@ export function AiProvidersAdminPage() {
                 </span>
               </div>
             ))}
-          </div>
-        )}
-      </Panel>
-
-      <Panel title="Jev (TypeSafe AI) — Triyaj Ön-filtresi">
-        {!jev ? (
-          <PanelState kind="loading" />
-        ) : (
-          <div className="space-y-2 font-mono text-[11px]">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className={jev.active ? 'text-emerald-400' : 'text-rose-400'}>{jev.active ? 'aktif' : 'kapalı'}</span>
-              {!jev.active && (
-                <span className="text-tui-dim">
-                  {!jev.flag_on ? '(-ai-jev kapalı)' : !jev.allow_cloud ? '(-ai-allow-cloud kapalı)' : ''}
-                </span>
-              )}
-              <span className="ml-auto flex gap-2">
-                {jevTestResult && <span className="text-rx">{jevTestResult}</span>}
-                <button onClick={() => void testJev()} disabled={!jev.active} className="text-tui-dim hover:text-rx disabled:opacity-40">
-                  Test Et
-                </button>
-              </span>
-            </div>
-            <dl className="grid grid-cols-3 gap-x-4 gap-y-1">
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">Taban adres</dt>
-                <dd className="truncate text-ink-hi">{jev.base_url || 'api.typesafe.ai (varsayılan)'}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">Model</dt>
-                <dd className="truncate text-ink-hi">{jev.model || 'jev-latest (varsayılan)'}</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.04em] text-tui-dim">Eşik (min. güven)</dt>
-                <dd className="truncate text-ink-hi">{jev.min_confidence || 0.55}</dd>
-              </div>
-            </dl>
-            <p className="text-[10px] text-tui-dim">
-              Yapılandırma dosya/bayrak ile ayarlanır (-ai-jev, -ai-jev-api-key) — bu panel salt-okunur. Jev her zaman bulut olduğundan
-              -ai-allow-cloud da açık olmalı.
-            </p>
           </div>
         )}
       </Panel>
