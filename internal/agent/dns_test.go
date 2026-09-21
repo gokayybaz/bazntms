@@ -60,6 +60,31 @@ func TestParseDNSNames(t *testing.T) {
 	}
 }
 
+// TestParseDNSNamesTruncatedRecordDoesNotPanic, gopacket@v1.1.19'un DNS
+// decoder'inin canli LAN'da tekrar tekrar agent'i cokerttigi hatayi
+// yeniden uretir: bir kaynak kaydinin adi (burada kok "." — tek 0x00 bayti)
+// tamamen coziliyor ama TYPE/CLASS/TTL/RDLENGTH alanlari icin yeterli bayt
+// kalmiyor. gopacket bunu hata donmek yerine slice sinirlari disina cikip
+// panic atiyor (dns.go: rr.decode, data[endq+2:endq+4] vb.) — safeDecodeDNS
+// bunu recover ile yakalamali, agent surecini cokertmemeli.
+func TestParseDNSNamesTruncatedRecordDoesNotPanic(t *testing.T) {
+	payload := []byte{
+		0x00, 0x00, // ID
+		0x81, 0x80, // flags: yanit
+		0x00, 0x00, // QDCOUNT=0
+		0x00, 0x01, // ANCOUNT=1
+		0x00, 0x00, // NSCOUNT=0
+		0x00, 0x00, // ARCOUNT=0
+		0x00,       // answer adi: kok (tek sifir bayt) — endq=13
+		0x00, 0x01, // yalniz TYPE icin yer var; CLASS/TTL/RDLENGTH okumasi
+		// buffer disina tasmali (len=15, gopacket data[15:17] okumaya calisir)
+	}
+	names, isResp := parseDNSNames(payload) // panic atarsa test cokerdi
+	if names != nil || isResp {
+		t.Fatalf("bozuk kayittan veri cikti: names=%v isResp=%v", names, isResp)
+	}
+}
+
 func TestKeepDomain(t *testing.T) {
 	keep := []string{"example.com", "a.b.c.example.co.uk", "xn--nxasmq6b.example"}
 	drop := []string{"", "localhost", "host", "printer.local", "1.0.0.127.in-addr.arpa",

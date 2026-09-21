@@ -44,7 +44,7 @@ func parseDNSNames(payload []byte) (names []string, isResp bool) {
 		return nil, false
 	}
 	d := &layers.DNS{}
-	if d.DecodeFromBytes(payload, gopacket.NilDecodeFeedback) != nil {
+	if !safeDecodeDNS(d, payload) {
 		return nil, false
 	}
 	if d.QDCount == 0 {
@@ -57,6 +57,22 @@ func parseDNSNames(payload []byte) (names []string, isResp bool) {
 		}
 	}
 	return names, d.QR
+}
+
+// safeDecodeDNS, gopacket'in DNS decode'unu calistirir. gopacket@v1.1.19'un
+// DNS layer'i bazi bozuk/sikistirilmis-isim-isaretcili paketlerde hata
+// dondurmek yerine slice sinirlari disina cikip panic atiyor (canli LAN'da
+// mDNS/SSDP gurultusuyle tekrar tekrar tetiklenip surecin tamamini cokertti
+// — bu loop() kendi goroutine'inde calisir, recover olmadan panic tum
+// bazntms-agent'i sonlandirir). Burada izole bir recover ile bozuk paket
+// normal "cozemedim" yoluna (false donus) dusuruluyor.
+func safeDecodeDNS(d *layers.DNS, payload []byte) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	return d.DecodeFromBytes(payload, gopacket.NilDecodeFeedback) == nil
 }
 
 // DNSDeltas, son gonderimden bu yana surec bazli DNS sorgu/yanit farklarini
