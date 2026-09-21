@@ -71,7 +71,8 @@ func TestDomainEnrichment(t *testing.T) {
 		t.Errorf("IP → boş beklenirdi: %+v", g)
 	}
 	// önbellek: ikinci çağrı aynı sonuç
-	if s.Domain("api.openai.com") != s.Domain("api.openai.com") {
+	first := s.Domain("api.openai.com")
+	if second := s.Domain("api.openai.com"); first != second {
 		t.Error("önbellek tutarsız")
 	}
 }

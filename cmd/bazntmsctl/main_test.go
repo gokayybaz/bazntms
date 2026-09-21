@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -312,13 +313,21 @@ func TestCmdSetupInteractiveCustomAnswers(t *testing.T) {
 		}
 	}
 
-	// dosya izinleri: sırlar içerebileceği için 0600 olmalı
-	fi, err := os.Stat(out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("hub.yml izinleri 0600 değil: %v", fi.Mode().Perm())
+	// dosya izinleri: sırlar içerebileceği için 0600 olmalı. Windows'ta Go'nun
+	// os paketi POSIX izin bitlerini gerçek NTFS ACL'lerine çeviremiyor —
+	// os.WriteFile(...,0o600) orada yalnızca "salt-okunur değil" bayrağına
+	// indirgenir ve Stat().Mode().Perm() her zaman 0666/0444 döner (bkz.
+	// internal/update/update_test.go'daki aynı desen). Gerçek tek-kullanıcı
+	// kısıtlaması Windows'ta ancak ACL/DACL ile mümkün — bu kod tabanında
+	// henüz yok, bu yüzden kontrol yalnızca POSIX platformlarında anlamlı.
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != 0o600 {
+			t.Errorf("hub.yml izinleri 0600 değil: %v", fi.Mode().Perm())
+		}
 	}
 }
 

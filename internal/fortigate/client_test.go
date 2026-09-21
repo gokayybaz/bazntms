@@ -257,10 +257,10 @@ func TestSDWANIfnameKeyed(t *testing.T) {
 
 func TestPoliciesMonitorCmdbJoin(t *testing.T) {
 	c, _ := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/v2/cmdb/firewall/policy":
+		switch r.URL.Path {
+		case "/api/v2/cmdb/firewall/policy":
 			w.Write([]byte(env72(`[{"policyid":1,"name":"lan-wan","action":"accept"},{"policyid":2,"name":"deny-all","action":"deny"}]`)))
-		case r.URL.Path == "/api/v2/monitor/firewall/policy":
+		case "/api/v2/monitor/firewall/policy":
 			w.Write([]byte(env72(`[{"policyid":1,"bytes":123456,"hit_count":42},{"policyid":2,"bytes":0,"hit_count":0}]`)))
 		default:
 			http.NotFound(w, r)

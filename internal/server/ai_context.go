@@ -132,7 +132,7 @@ func (s *Server) anomalyDeviations(site string) []any {
 	raw := s.alerts.AnomalyActive()
 	out := make([]any, 0, len(raw))
 	for _, d := range raw {
-		if site != "" && !(d.Dim == "fleet" || d.Dim == "local" || (d.Dim == "site" && d.Key == site)) {
+		if site != "" && d.Dim != "fleet" && d.Dim != "local" && (d.Dim != "site" || d.Key != site) {
 			continue
 		}
 		out = append(out, d)
@@ -144,6 +144,6 @@ func round2(v float64) float64 { return float64(int64(v*100+0.5)) / 100 }
 
 func parseInt64(s string) int64 {
 	var n int64
-	fmt.Sscanf(s, "%d", &n)
+	_, _ = fmt.Sscanf(s, "%d", &n)
 	return n
 }

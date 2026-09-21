@@ -48,7 +48,8 @@ func TestRecommendDeterministicTemplates(t *testing.T) {
 		}
 	}
 	// deterministik: iki çağrı aynı çıktı
-	if strings.Join(recommend(d), "|") != strings.Join(recommend(d), "|") {
+	first := strings.Join(recommend(d), "|")
+	if second := strings.Join(recommend(d), "|"); first != second {
 		t.Fatal("deterministik değil")
 	}
 }

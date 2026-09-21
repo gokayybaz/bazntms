@@ -161,7 +161,7 @@ func (s *Server) handleAIMessagePost(w http.ResponseWriter, r *http.Request) {
 
 	// ilk turda başlık + model/sağlayıcı yaz
 	if firstTurn && conv.Title == "" {
-		st.SetAIConversationMeta(conv.ID, titleFrom(userText), model, prov.ID)
+		_ = st.SetAIConversationMeta(conv.ID, titleFrom(userText), model, prov.ID)
 	}
 	s.audit(r, identityFromCtx(r), "ai.analyze",
 		fmt.Sprintf("ai_conversation:%d", conv.ID),

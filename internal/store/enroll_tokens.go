@@ -28,6 +28,7 @@ type EnrollToken struct {
 	RevokedAt    int64  `json:"revoked_at"`
 }
 
+// #nosec G101 -- SQL sütun adları listesi (token_hash bir sütun adı, sır değeri değil); gerçek sır EnrollToken.TokenHash alanında tutulur ve json:"-" ile dışarıya kapalı.
 const enrollTokenCols = `id, name, token_hash, site, created_at, expires_at, last_used, revoked,
 	max_uses, used_count, allowed_cidrs, created_by, revoked_at`
 

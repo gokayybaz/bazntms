@@ -8,9 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strconv"
 	"testing"
-	"time"
 
 	"github.com/gokayybaz/bazntms/internal/store"
 	"github.com/gokayybaz/bazntms/internal/vault"
@@ -151,8 +149,4 @@ func TestFortiDriverMissingToken(t *testing.T) {
 	if err == nil {
 		t.Fatal("token'sız poll hata vermeli")
 	}
-}
-
-func nowStr() string {
-	return strconv.FormatInt(time.Now().Unix(), 10)
 }
