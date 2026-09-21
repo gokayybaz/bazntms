@@ -24,6 +24,7 @@ import (
 	"github.com/gokayybaz/bazntms/internal/capture"
 	"github.com/gokayybaz/bazntms/internal/config"
 	"github.com/gokayybaz/bazntms/internal/logging"
+	"github.com/gokayybaz/bazntms/internal/sysmon"
 	"github.com/gokayybaz/bazntms/internal/update"
 	"github.com/gokayybaz/bazntms/internal/version"
 )
@@ -593,27 +594,26 @@ func outboundIface(target string) string {
 }
 
 // autoIface, atf/kayit icin yakalama arayuzunu secer. Oncelik sirasi:
-//  1. hub'a (yoksa 8.8.8.8'e) giden VARSAYILAN-ROTA arayuzu — gercek trafigin
-//     aktigi yer; sanal/VPN adaptoru ise atlanir.
-//  2. yedek: ilk UP, loopback-disi, yonlendirilebilir IPv4'lu FIZIKSEL arayuz.
-//  3. son care: sanal olsa / yalniz-IPv6 olsa bile adresi olan ilk arayuz
-//     (tek-adaptorlu kutular).
+//  1. tek fiziksel (sanal/VPN olmayan, yonlendirilebilir IPv4'lu, UP,
+//     loopback-disi) aday varsa direkt o doner.
+//  2. birden fazla fiziksel aday varsa busiestIface ile kisa bir ornekleme
+//     penceresinde en cok RX+TX byte ureteni secilir — gercek trafigin
+//     aktigi yer, "ilk bulunan" veya "varsayilan route" degil. VPN full-tunnel
+//     oldugunda varsayilan route yaniltici olabilir (bkz. docs/TROUBLESHOOTING.md
+//     — "yanlis arayuz"); trafik olcumu bu varsayima bagli degil.
+//  3. trafik hepsi sessizse / sayaclar okunamazsa: hub'a (yoksa 8.8.8.8'e)
+//     giden VARSAYILAN-ROTA arayuzu tie-breaker olarak kullanilir.
+//  4. hicbiri fiziksel aday vermezse son care: sanal olsa / yalniz-IPv6 olsa
+//     bile adresi olan ilk arayuz (tek-adaptorlu kutular).
 //
 // Windows'ta friendly ad doner; cagiran ResolvePcapDevice ile \Device\NPF_ yapar.
 func autoIface(hubURL string) string {
-	for _, tgt := range []string{hubHostPort(hubURL), "8.8.8.8:53"} {
-		if tgt == "" {
-			continue
-		}
-		if name := outboundIface(tgt); name != "" && !isSanalIface(name) {
-			return name
-		}
-	}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	var lastResort string
+	var physical []string
+	var sanalCandidate, ipv6OnlyCandidate string
 	for _, i := range ifaces {
 		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
 			continue
@@ -635,17 +635,92 @@ func autoIface(hubURL string) string {
 			routableV4 = true
 		}
 		if isSanalIface(i.Name) {
-			if lastResort == "" && routableV4 {
-				lastResort = i.Name // sanal ama en azindan adresli — son care
+			if sanalCandidate == "" && routableV4 {
+				sanalCandidate = i.Name // sanal ama en azindan adresli — son care
 			}
 			continue
 		}
 		if routableV4 {
-			return i.Name
+			physical = append(physical, i.Name)
+			continue
 		}
-		if lastResort == "" {
-			lastResort = i.Name // fiziksel ama yalniz-IPv6 — CGNAT sanaldan iyi
+		if ipv6OnlyCandidate == "" {
+			ipv6OnlyCandidate = i.Name // fiziksel ama yalniz-IPv6 — CGNAT sanaldan iyi
 		}
 	}
-	return lastResort
+	switch len(physical) {
+	case 0:
+		if sanalCandidate != "" {
+			return sanalCandidate
+		}
+		return ipv6OnlyCandidate
+	case 1:
+		return physical[0]
+	}
+	if name := busiestIface(physical); name != "" {
+		return name
+	}
+	for _, tgt := range []string{hubHostPort(hubURL), "8.8.8.8:53"} {
+		if tgt == "" {
+			continue
+		}
+		if name := outboundIface(tgt); name != "" && !isSanalIface(name) {
+			return name
+		}
+	}
+	return physical[0]
+}
+
+// ifaceSampleWindow, busiestIface'in RX+TX byte deltasini olctugu ornekleme
+// penceresi. autoIface surec baslangicinda bir kez cagrildigi icin (dongude
+// degil) bu gecikme kabul edilebilir.
+const ifaceSampleWindow = 700 * time.Millisecond
+
+// busiestIface, verilen fiziksel arayuz adaylari arasinda kisa bir ornekleme
+// penceresinde en cok RX+TX byte ureteni dondurur. Sayaclar okunamazsa veya
+// hepsi sessizse "" doner — cagiran varsayilan-route probuna duser.
+func busiestIface(names []string) string {
+	before := ifaceByteMap(names)
+	if before == nil {
+		return ""
+	}
+	time.Sleep(ifaceSampleWindow)
+	after := ifaceByteMap(names)
+	if after == nil {
+		return ""
+	}
+	var best string
+	var bestDelta uint64
+	for _, n := range names {
+		b, ok1 := before[n]
+		a, ok2 := after[n]
+		if !ok1 || !ok2 || a < b { // a<b: sayac sifirlanmis/wrap olmus
+			continue
+		}
+		if d := a - b; d > bestDelta {
+			bestDelta, best = d, n
+		}
+	}
+	return best
+}
+
+// ifaceByteMap, sysmon.ListInterfaces() uzerinden istenen arayuz adlari icin
+// RX+TX kumulatif byte toplamini dondurur. Liste bossa (sayac okunamadi) nil
+// doner.
+func ifaceByteMap(names []string) map[string]uint64 {
+	list := sysmon.ListInterfaces()
+	if len(list) == 0 {
+		return nil
+	}
+	want := make(map[string]bool, len(names))
+	for _, n := range names {
+		want[n] = true
+	}
+	m := make(map[string]uint64, len(names))
+	for _, ifi := range list {
+		if want[ifi.Name] {
+			m[ifi.Name] = ifi.RxBytes + ifi.TxBytes
+		}
+	}
+	return m
 }
