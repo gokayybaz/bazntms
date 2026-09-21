@@ -15,6 +15,8 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-09-21
+
 ### Süreç atfı: yakalama arayüzü seçimi + panel teşhisi
 
 Sıfırdan kurulan bir Windows agent'ında süreç/DNS/L7 panelleri boştu: motor
@@ -719,7 +721,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0
