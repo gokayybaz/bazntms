@@ -40,7 +40,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.hub
-    command: ["-flow-port", "2055", "-syslog-port", "5514", "-poll-interval", "30", "-enroll-token", "demo-enroll-token", "-agent-pcap"]
+    command: ["-flow-port", "2055", "-syslog-port", "5514", "-poll-interval", "30", "-enroll-token", "demo-enroll-token", "-agent-pcap", "-update-github-interval", "15m"]
     ports:
       - "8080:8080"
       - "2055:2055/udp" # NetFlow v5

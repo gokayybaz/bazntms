@@ -81,6 +81,8 @@ services:
       - "/etc/bazntms/ioc.txt"
       - "-enroll-token"
       - "scale-enroll-token"
+      - "-update-github-interval"
+      - "15m" # varsayılan 30dk yerine — release sonrası daha hızlı doğrulama
       - "-mock-devices" # Faz 21 yük testi: bazntms-loadgen -mode device (vendor=mock)
       - "-pprof" # Faz 21: profil için (compose ağı içinden; bkz. scripts/profile.sh)
       - "0.0.0.0:6060"
