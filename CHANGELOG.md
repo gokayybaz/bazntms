@@ -15,6 +15,26 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-09-21
+
+### Düzeltildi — DNS ayrıştırmada agent çökmesi
+
+Gerçek bir ev ağında tekrar tekrar gözlemlendi: `gopacket@v1.1.19`'un DNS
+decoder'ı bazı bozuk/kısa kalmış kaynak kayıtlarında (isim çözümünden sonra
+TYPE/CLASS/TTL/RDLENGTH için yeterli bayt kalmayınca) hata döndürmek yerine
+"slice bounds out of range" panic atıyor. Bu, `pcapAttrSource.loop()`'un
+kendi goroutine'inde recover olmadan tüm `bazntms-agent` sürecini
+sonlandırıyordu — launchd/systemd hemen yeniden başlatıyor ama aynı LAN'daki
+(mDNS/SSDP) trafik panic'i tekrar tetikleyip sürekli çök/yeniden-başla
+döngüsüne sokuyor, süreç atfı motoru her seferinde sıfırdan başladığından
+Süreç/DNS/L7 panelleri kesintili/boş görünüyordu. Yeni bayrak/uç yok →
+**patch**.
+
+- [`internal/agent/dns.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/agent/dns.go):
+  `safeDecodeDNS`, gopacket'in decode çağrısını izole bir `recover()` ile
+  sarar; bozuk paket artık normal "çözemedim" yoluna düşüyor, panic dışarı
+  sızmıyor.
+
 ## [1.4.0] — 2026-09-21
 
 ### Süreç atfı: yakalama arayüzü seçimi + panel teşhisi
@@ -721,7 +741,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/gokayybaz/bazntms/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
