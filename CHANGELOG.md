@@ -23,10 +23,15 @@ arayüz" olarak **Tailscale** sanal adaptörünü (CGNAT `100.64/10`) seçmişti
 gerçek trafik yakalanan arayüzden geçmiyordu. Yeni bayrak/uç yok → **patch**.
 
 - **Arayüz seçimi** ([`cmd/bazntms-agent` `autoIface`](https://github.com/gokayybaz/bazntms/blob/main/cmd/bazntms-agent/main.go)):
-  önce hub'a (yoksa `8.8.8.8`'e) giden **varsayılan-rota** arayüzü; Tailscale /
-  WireGuard / `utun*` / `vEthernet` / `docker*` gibi sanal/VPN adaptörleri
-  elenir (yalnız son çare olarak kullanılır). eBPF/ETW soket düzeyinde çalışır,
-  etkilenmez.
+  Tailscale / WireGuard / `utun*` / `vEthernet` / `docker*` gibi sanal/VPN
+  adaptörleri elenir (yalnız son çare olarak kullanılır). Tek fiziksel aday
+  varsa direkt o seçilir; **birden fazla fiziksel aday varsa artık ilk-bulunan
+  veya varsayılan-rota değil, kısa bir örnekleme penceresinde en çok RX+TX
+  byte üreten** seçilir — full-tunnel VPN'lerde varsayılan-rota yanıltıcı
+  olabildiğinden (VPN kara listede olsa bile fiziksel NIC'in o an sessiz
+  kalması/sıralamaya bağlı seçilmesi mümkündü) bu artık isim/route varsayımına
+  bağlı değil; route probu yalnız trafik ölçülemediğinde tie-breaker olarak
+  kullanılıyor. eBPF/ETW soket düzeyinde çalışır, etkilenmez.
 - **Panel teşhisi:** agent her batch'te `attr_iface` (pcap'in dinlediği arayüz)
   + `attr_note` (motor kapalı/başlatılamadıysa neden) bildirir. Agent detay
   **Atıf** rozeti `pcap @ Tailscale` biçiminde gösterir; boş Süreç/L7/DNS
