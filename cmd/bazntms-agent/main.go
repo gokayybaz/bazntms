@@ -323,19 +323,28 @@ func main() {
 			defer updateTicker.Stop()
 			slog.Info("otomatik guncelleme aktif", "channel", *updateChannel,
 				"interval_hours", *updateInterval, "imza", *updateKey != "")
+			checkUpdate := func() {
+				upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey, st.Token, client.UpdateHTTPClient())
+				applied, err := upd.Apply(version.Version)
+				if err != nil {
+					slog.Warn("guncelleme kontrolu basarisiz", "err", err)
+					return
+				}
+				if applied {
+					slog.Info("guncelleme kuruldu, yeniden baslatiliyor", "channel", *updateChannel)
+					update.CleanupOld(os.Args[0])
+					exitAfterUpdate()
+				}
+			}
 			go func() {
+				// time.Ticker ilk tik'i interval GECTIKTEN SONRA verir — burada
+				// acikca bir ilk kontrol yapilmazsa agent acilista guncel olup
+				// olmadigini hic sormaz. Sik yeniden baslayan / kisa omurlu
+				// makineler (VM'ler, kisa surede coken agent'lar) boylece ilk
+				// tik'e hic ulasmadan guncellemesiz kalabiliyordu.
+				checkUpdate()
 				for range updateTicker.C {
-					upd := update.NewClient(client.BaseURL(), *updateChannel, *updateKey, st.Token, client.UpdateHTTPClient())
-					applied, err := upd.Apply(version.Version)
-					if err != nil {
-						slog.Warn("guncelleme kontrolu basarisiz", "err", err)
-						continue
-					}
-					if applied {
-						slog.Info("guncelleme kuruldu, yeniden baslatiliyor", "channel", *updateChannel)
-						update.CleanupOld(os.Args[0])
-						exitAfterUpdate()
-					}
+					checkUpdate()
 				}
 			}()
 		}

@@ -121,7 +121,14 @@ func (c *Client) ApplyTo(currentVersion, exePath string) (bool, error) {
 		return false, fmt.Errorf("indirme HTTP %d", resp.StatusCode)
 	}
 
-	tmp, err := os.CreateTemp("", "bazntms-update-*")
+	// Gecici dosya hedef exePath ile AYNI dizine yazilir: Install() sonunda
+	// os.Rename(tmpPath, exePath) atomik olmasi icin ayni dosya sistemine
+	// muhtac — OS'un varsayilan temp dizini (os.CreateTemp("", ...) →
+	// genelde /tmp) sertlestirilmis Linux imajlarinda ayri bir tmpfs mount'u
+	// olabilir ve rename "cross-device link" hatasiyla sessizce/sürekli
+	// basarisiz olur (bazi makinelerde /tmp ayni fs'teyse sorun cikmaz —
+	// "bazi bilgisayarlarda guncelleniyor, bazilarinda hic olmuyor" belirtisi).
+	tmp, err := os.CreateTemp(filepath.Dir(exePath), "bazntms-update-*")
 	if err != nil {
 		return false, err
 	}
