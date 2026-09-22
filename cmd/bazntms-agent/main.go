@@ -308,6 +308,18 @@ func main() {
 		if *updateDisabled || cfg.Update.Disabled {
 			updateOn = false
 		}
+		// Surumsuz gelistirme/CI build'leri (version.Version="dev" veya
+		// Docker'in "container" varsayilani) gercek bir release'e karsi
+		// CompareVersions'ta her zaman "eski" gorunur — otomatik guncelleme
+		// acik kalirsa bu build'ler sessizce ilgisiz bir GitHub release'i
+		// binary'siyle degistirilir (bkz. update.LooksLikeRelease yorumu).
+		// Bu, kullanicinin -update-enabled tercihinden BAGIMSIZ bir guvenlik
+		// sinirlamasidir.
+		if updateOn && !update.LooksLikeRelease(version.Version) {
+			updateOn = false
+			slog.Info("otomatik guncelleme atlandi — surumsuz build",
+				"version", version.Version, "not", "gercek bir release etiketiyle (-ldflags version.Version=vX.Y.Z) derlenmedi")
+		}
 		if *updateChannel == "stable" && cfg.Update.Channel != "" {
 			*updateChannel = cfg.Update.Channel
 		}

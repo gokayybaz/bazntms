@@ -37,6 +37,27 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+// TestLooksLikeRelease, surumsuz gelistirme/CI build etiketlerinin (main.go
+// bunlarda otomatik guncelleme dongusunu hic baslatmamali) ayirt edildigini
+// dogrular — bkz. LooksLikeRelease yorumu: bunlar CompareVersions'ta her
+// zaman "eski" gorundugunden guncelleme acik kalirsa sessizce ilgisiz bir
+// GitHub release'iyle degistirilirlerdi (docker-compose smoke testinde
+// version="container" build'i tam bunu yasadi).
+func TestLooksLikeRelease(t *testing.T) {
+	release := []string{"v1.0.0", "1.0.0", "v1.4.1", "v2.0.0-rc1"}
+	notRelease := []string{"dev", "container", "local"}
+	for _, v := range release {
+		if !LooksLikeRelease(v) {
+			t.Errorf("LooksLikeRelease(%q) = false, true beklenirdi", v)
+		}
+	}
+	for _, v := range notRelease {
+		if LooksLikeRelease(v) {
+			t.Errorf("LooksLikeRelease(%q) = true, false beklenirdi", v)
+		}
+	}
+}
+
 func TestInstallSwap(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "agent")

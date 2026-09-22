@@ -103,6 +103,25 @@ func CompareVersions(a, b string) int {
 	return 0
 }
 
+// LooksLikeRelease, verilen surumun gercek bir release etiketi (vX.Y.Z)
+// gibi goruldugunu soyler — ilk (major) parcasinin sayisal olup olmadigina
+// bakar. "dev" (Go derleme varsayilani, internal/version.Version) ve
+// "container" (Docker build-arg varsayilani, bkz. deploy/Dockerfile.agent)
+// gibi surumsuz gelistirme/CI build'leri bunu SAGLAMAZ: CompareVersions
+// sayisal-olmayan parcalari her zaman "en dusuk" saydigindan bu build'ler
+// herhangi bir gercek GitHub release'ine karsi HER ZAMAN "eski" gorunur —
+// otomatik guncelleme sessizce ilgisiz bir release binary'siyle kendini
+// degistirmeye calisir. Cagiran, bu false donerse guncelleme dongusunu hic
+// baslatmamali.
+func LooksLikeRelease(v string) bool {
+	parts := splitVersion(v)
+	if len(parts) == 0 {
+		return false
+	}
+	_, err := strconv.Atoi(parts[0])
+	return err == nil
+}
+
 func splitVersion(v string) []string {
 	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
 	if v == "" {
