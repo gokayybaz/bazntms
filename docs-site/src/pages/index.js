@@ -157,7 +157,7 @@ docker compose -f deploy/docker-compose.yml up --build
   },
 ];
 
-/* v1.3.0 hattına kadar operatörün önemsediği başlıklar */
+/* v1.4.2 hattına kadar operatörün önemsediği başlıklar */
 const NEW_IN = [
   'eBPF süreç atfı (Linux)',
   'ETW süreç atfı (Windows)',
@@ -168,6 +168,7 @@ const NEW_IN = [
   'olay motoru + tehdit istihbaratı',
   'sağlık skoru',
   'v1.0 GA + doğrulanmış kapasite',
+  'daha güvenilir otomatik agent güncellemesi',
 ];
 
 /* --- deterministik RNG (SSR ↔ hidrasyon farkı çıkmasın) --- */
@@ -460,7 +461,7 @@ function TopStrip() {
         <Meter label="PPS" value={0.32} max={1} width={7} accent="threshold" display="3.2K" />
       </span>
       <span className={styles.stripRight}>
-        <span className={styles.verTag}>v1.3.0</span>
+        <span className={styles.verTag}>v1.4.2</span>
         <span className={styles.clock}>
           {now ? now.toLocaleTimeString('tr-TR') : '--:--:--'}
           <i className={styles.cursor} />
@@ -982,10 +983,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---------- v1.3.0 ---------- */}
+        {/* ---------- v1.4.2 ---------- */}
         <section id="surum" className={styles.section}>
           <div className={styles.shell}>
-            <h2 className={styles.h2}>v1.3.0 hattında yeni</h2>
+            <h2 className={styles.h2}>v1.4.2 hattında yeni</h2>
             <p className={styles.sectionLede}>
               v0.4.0'dan bu yana: süreç atfı artık Linux'ta eBPF, Windows'ta ETW —
               pcap/Npcap zorunlu değil. Derin toplama + L7 tüm kurulumlarda varsayılan

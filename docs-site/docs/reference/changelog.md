@@ -22,6 +22,62 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-09-22
+
+### Düzeltildi — otomatik güncelleme bazı makinelerde hiç çalışmıyordu
+
+Filoda "bazı bilgisayarlarda otomatik güncellendi, bazılarında hiç
+olmadı" bildirildi. İki bağımsız sessiz-başarısızlık bulundu, ikisi de
+düzeltildi. Yeni bayrak/uç yok → **patch**.
+
+- [`internal/update/client.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/update/client.go):
+  indirilen güncelleme artık OS'un varsayılan geçici dizini yerine hedef
+  binary ile **aynı dizine** yazılıyor. Sertleştirilmiş Linux imajlarında
+  `/tmp` ayrı bir `tmpfs` mount'u olduğunda atomik `rename` "cross-device
+  link" hatasıyla her seferinde başarısız oluyordu (bazı makinelerde
+  `/tmp` aynı dosya sistemindeyse sorun çıkmıyordu — belirtiyle birebir
+  örtüşüyor).
+- [`cmd/bazntms-agent/main.go`](https://github.com/gokayybaz/bazntms/blob/main/cmd/bazntms-agent/main.go):
+  güncelleme kontrolü artık açılışta **hemen** bir kez çalışıyor, öncesinde
+  yalnızca `time.Ticker`'ın ilk tik'ini (varsayılan 6 saat) bekliyordu — sık
+  yeniden başlayan makineler bu tik'e hiç ulaşamayabiliyordu.
+- Bu ikinci düzeltme yeni bir regresyon açtı ve aynı sürümde giderildi:
+  [`internal/update/update.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/update/update.go)'daki
+  `LooksLikeRelease`, `version.Version="dev"`/`"container"` gibi sürümsüz
+  geliştirme/CI build'lerinde artık güncelleme döngüsünü hiç başlatmıyor —
+  aksi halde bu build'ler `CompareVersions`'ta her zaman "en düşük"
+  sayıldığından herhangi bir gerçek release'e karşı sessizce kendini
+  değiştirmeye çalışıyordu.
+
+**Etkilenen makineler için not:** cross-filesystem rename bug'ından
+etkilenen bir makine, bu düzeltmeyi de içeren `v1.4.2`'yi **kendi kendine
+indiremeyebilir** — halihazırda çalışan (buggy) binary aynı hatayla kendini
+değiştirmeye çalışmaya devam eder. Böyle makinelerde bir kez elle güncelleme
+(installer'ı tekrar çalıştırmak / binary'yi elle değiştirmek) gerekir;
+sonrasında otomatik güncelleme normal çalışır.
+
+## [1.4.1] — 2026-09-21
+
+### Düzeltildi — DNS ayrıştırmada agent çökmesi
+
+Gerçek bir ev ağında tekrar tekrar gözlemlendi: `gopacket@v1.1.19`'un DNS
+decoder'ı bazı bozuk/kısa kalmış kaynak kayıtlarında (isim çözümünden sonra
+TYPE/CLASS/TTL/RDLENGTH için yeterli bayt kalmayınca) hata döndürmek yerine
+"slice bounds out of range" panic atıyor. Bu, `pcapAttrSource.loop()`'un
+kendi goroutine'inde recover olmadan tüm `bazntms-agent` sürecini
+sonlandırıyordu — launchd/systemd hemen yeniden başlatıyor ama aynı LAN'daki
+(mDNS/SSDP) trafik panic'i tekrar tetikleyip sürekli çök/yeniden-başla
+döngüsüne sokuyor, süreç atfı motoru her seferinde sıfırdan başladığından
+Süreç/DNS/L7 panelleri kesintili/boş görünüyordu. Yeni bayrak/uç yok →
+**patch**.
+
+- [`internal/agent/dns.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/agent/dns.go):
+  `safeDecodeDNS`, gopacket'in decode çağrısını izole bir `recover()` ile
+  sarar; bozuk paket artık normal "çözemedim" yoluna düşüyor, panic dışarı
+  sızmıyor.
+
+## [1.4.0] — 2026-09-21
+
 ### Süreç atfı: yakalama arayüzü seçimi + panel teşhisi
 
 Sıfırdan kurulan bir Windows agent'ında süreç/DNS/L7 panelleri boştu: motor
@@ -30,10 +86,15 @@ arayüz" olarak **Tailscale** sanal adaptörünü (CGNAT `100.64/10`) seçmişti
 gerçek trafik yakalanan arayüzden geçmiyordu. Yeni bayrak/uç yok → **patch**.
 
 - **Arayüz seçimi** ([`cmd/bazntms-agent` `autoIface`](https://github.com/gokayybaz/bazntms/blob/main/cmd/bazntms-agent/main.go)):
-  önce hub'a (yoksa `8.8.8.8`'e) giden **varsayılan-rota** arayüzü; Tailscale /
-  WireGuard / `utun*` / `vEthernet` / `docker*` gibi sanal/VPN adaptörleri
-  elenir (yalnız son çare olarak kullanılır). eBPF/ETW soket düzeyinde çalışır,
-  etkilenmez.
+  Tailscale / WireGuard / `utun*` / `vEthernet` / `docker*` gibi sanal/VPN
+  adaptörleri elenir (yalnız son çare olarak kullanılır). Tek fiziksel aday
+  varsa direkt o seçilir; **birden fazla fiziksel aday varsa artık ilk-bulunan
+  veya varsayılan-rota değil, kısa bir örnekleme penceresinde en çok RX+TX
+  byte üreten** seçilir — full-tunnel VPN'lerde varsayılan-rota yanıltıcı
+  olabildiğinden (VPN kara listede olsa bile fiziksel NIC'in o an sessiz
+  kalması/sıralamaya bağlı seçilmesi mümkündü) bu artık isim/route varsayımına
+  bağlı değil; route probu yalnız trafik ölçülemediğinde tie-breaker olarak
+  kullanılıyor. eBPF/ETW soket düzeyinde çalışır, etkilenmez.
 - **Panel teşhisi:** agent her batch'te `attr_iface` (pcap'in dinlediği arayüz)
   + `attr_note` (motor kapalı/başlatılamadıysa neden) bildirir. Agent detay
   **Atıf** rozeti `pcap @ Tailscale` biçiminde gösterir; boş Süreç/L7/DNS
@@ -721,7 +782,10 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/gokayybaz/bazntms/compare/v1.4.1...v1.4.2
+[1.4.1]: https://github.com/gokayybaz/bazntms/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/gokayybaz/bazntms/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gokayybaz/bazntms/compare/v0.4.0...v1.0.0

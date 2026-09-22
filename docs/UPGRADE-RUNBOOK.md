@@ -78,15 +78,28 @@ Notlar:
 `gokayybaz/bazntms`) deposunun **en son GitHub release'ini** her 30 dk'da bir
 yoklar; yeni sürümde `bazntms-agent-*` binary'lerini `-updates-dir`'e
 (`updates/`) indirir, SHA-256 hesaplar, `manifest.json` yazar. Agent'larda
-otomatik güncelleme de **varsayılan açıktır**: her 6 saatte bir hub'ın
+otomatik güncelleme de **varsayılan açıktır**: **v1.4.2'den itibaren** açılışta
+hemen bir kez, sonra `update.interval_hours` (varsayılan 6 saat) aralıkla hub'ın
 kanalını sorgular → sürüm yükselmişse indirir → **SHA-256** doğrular →
 binary'yi atomik değiştirir → çıkar; supervisor yeniden başlatır (systemd
 `Restart=always` / launchd `KeepAlive` / docker `--restart` / Windows SCM
-failure-action — MSI kurar).
+failure-action — MSI kurar). **v1.4.2 öncesi** agent'lar açılışta hiç kontrol
+etmiyordu, yalnızca ilk 6 saatlik tik'i bekliyordu — restart bu süreyi
+kısaltmaz.
 
 Yani **GitHub'da yeni bir release yayınlamak yeterli** — fleet ~30 dk + agent
 yoklama aralığı içinde kendini günceller. `/api/v1/agents` sürüm dağılımından
 izleyin.
+
+> **v1.4.2 güvenilirlik notu:** v1.4.1 ve öncesinde, sertleştirilmiş Linux
+> imajlarında (`/tmp` ayrı bir `tmpfs` mount'uysa) indirilen binary'nin hedef
+> dizine atomik `rename`'i "cross-device link" hatasıyla **her seferinde**
+> başarısız olabiliyordu — etkilenen bir agent kendi kendine asla güncellenmez
+> (çalışan eski binary aynı hatayla takılır). Böyle bir agent v1.4.2'ye
+> geçmek için **bir kez elle** güncellenmeli (bkz. §3 aşağıda); sonrasında
+> otomatik kanal normal çalışır. Ayrıntı:
+> [CHANGELOG.md — 1.4.2](https://github.com/gokayybaz/bazntms/blob/main/CHANGELOG.md#142--2026-09-22),
+> teşhis: [TROUBLESHOOTING.md — Agent'lar otomatik güncellenmiyor](https://github.com/gokayybaz/bazntms/blob/main/docs/TROUBLESHOOTING.md#agentlar-otomatik-güncellenmiyor).
 
 Kapatmak:
 

@@ -86,8 +86,10 @@ bir kurulum **5.000 agent** ölçeğine aynı binary ile taşınır.
   + nginx LB + JetStream
 - **Paketler**: deb / rpm (nfpm + systemd), Windows MSI (WiX, Npcap sessiz kurulum),
   macOS pkg (launchd) — release CI otomatik üretir
-- **Otomatik agent güncellemesi** (varsayılan açık): stable/beta kanalları,
-  SHA-256 (+ opsiyonel ed25519) doğrulamalı, atomik binary değişimi
+- **Otomatik agent güncellemesi** (varsayılan açık, genelde müdahale
+  gerektirmez): stable/beta kanalları, SHA-256 (+ opsiyonel ed25519)
+  doğrulamalı, atomik binary değişimi — v1.4.2+ açılışta hemen + periyodik
+  kontrol eder; sorun olursa bkz. [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#agentlar-otomatik-güncellenmiyor)
 - **Doğrulanmış kapasite**: 5.000 agent @ 30 sn (p95 5 ms) · ≥50.000 flow/sn
   (kayıpsız) · 1.000 cihaz / 60 sn poll — bkz. [`docs/CAPACITY.md`](docs/CAPACITY.md)
 

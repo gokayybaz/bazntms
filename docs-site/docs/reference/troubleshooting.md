@@ -238,6 +238,43 @@ bölümünde. Bu panellere özel iki ek not:
    `--cap-add=NET_RAW --cap-add=NET_ADMIN` (eBPF ayrıca `/sys` BTF erişimi)
    gerekir.
 
+### Agent'lar otomatik güncellenmiyor
+
+Otomatik güncelleme **varsayılan açık** ve genelde hiçbir müdahale
+gerektirmez (bkz. [UPGRADE-RUNBOOK.md §2](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)). Beklemeden
+önce ilk kontrol edilecek şey **sürüm**: `bazntms-agent -version` (veya agent
+detay sayfası). **v1.4.2'den eski** bir agent restart edilse bile 30 dk gibi
+kısa bir sürede güncellenmemiş olabilir, bu normaldir — o sürümler açılışta
+hiç kontrol etmez, yalnızca `update.interval_hours` (varsayılan 6 saat)
+sonraki ilk tik'i bekler. v1.4.2+ agent'lar açılışta hemen bir kez kontrol
+eder.
+
+Bir agent **hiç** (6+ saat geçse de) güncellenmiyorsa, aşağıdakini agent
+logunda arayın:
+
+```
+WARN guncelleme kontrolu basarisiz err="yeni binary yerlestirme: rename ... invalid cross-device link"
+```
+
+Bu, v1.4.1 ve öncesindeki bir bug'dır (yalnızca Linux): indirilen güncelleme
+OS'un varsayılan geçici dizinine (`/tmp`) yazılıyordu; hedef binary farklı
+bir dosya sistemindeyse (`/tmp` ayrı bir `tmpfs` mount'uysa — sertleştirilmiş
+imajlarda yaygın) atomik `rename` bu hatayla her seferinde başarısız olur.
+Etkilenen bir agent **kendi kendine iyileşemez** — çalışan eski binary aynı
+hatayla kendini değiştirmeye çalışmaya devam eder; otomatik kanal o makinede
+işe yaramaz. **Yalnızca bu durumda**, o makineyi bir kez elle güncelleyin
+(installer'ı tekrar çalıştırın ya da servisi durdurup binary'yi elle
+değiştirin — bkz. [UPGRADE-RUNBOOK.md §3](https://github.com/gokayybaz/bazntms/blob/main/docs/UPGRADE-RUNBOOK.md)); v1.4.2
+sonrası bug'a hiç girmediği için bir daha elle müdahale gerekmez.
+
+Hub tarafını da kontrol edin — GitHub'dan yeni sürümü çekebiliyor mu:
+
+```
+# hub logunda:
+# "agent güncelleme kanalı yenilendi" ... version="vX.Y.Z" → beklenen sürüme geçti
+# "agent güncelleme senkronu başarısız" err=... → GitHub'a çıkış (egress) engelli olabilir
+```
+
 ## AI analizi sorunları (Faz 26)
 
 ### "AI analiz kapalı" / `/ai` sekmesi görünmüyor
