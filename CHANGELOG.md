@@ -15,6 +15,40 @@ otomatik migrasyonla uygulanır (`internal/store/migrations/`), geri alma yoktur
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-09-22
+
+### Düzeltildi — otomatik güncelleme bazı makinelerde hiç çalışmıyordu
+
+Filoda "bazı bilgisayarlarda otomatik güncellendi, bazılarında hiç
+olmadı" bildirildi. İki bağımsız sessiz-başarısızlık bulundu, ikisi de
+düzeltildi. Yeni bayrak/uç yok → **patch**.
+
+- [`internal/update/client.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/update/client.go):
+  indirilen güncelleme artık OS'un varsayılan geçici dizini yerine hedef
+  binary ile **aynı dizine** yazılıyor. Sertleştirilmiş Linux imajlarında
+  `/tmp` ayrı bir `tmpfs` mount'u olduğunda atomik `rename` "cross-device
+  link" hatasıyla her seferinde başarısız oluyordu (bazı makinelerde
+  `/tmp` aynı dosya sistemindeyse sorun çıkmıyordu — belirtiyle birebir
+  örtüşüyor).
+- [`cmd/bazntms-agent/main.go`](https://github.com/gokayybaz/bazntms/blob/main/cmd/bazntms-agent/main.go):
+  güncelleme kontrolü artık açılışta **hemen** bir kez çalışıyor, öncesinde
+  yalnızca `time.Ticker`'ın ilk tik'ini (varsayılan 6 saat) bekliyordu — sık
+  yeniden başlayan makineler bu tik'e hiç ulaşamayabiliyordu.
+- Bu ikinci düzeltme yeni bir regresyon açtı ve aynı sürümde giderildi:
+  [`internal/update/update.go`](https://github.com/gokayybaz/bazntms/blob/main/internal/update/update.go)'daki
+  `LooksLikeRelease`, `version.Version="dev"`/`"container"` gibi sürümsüz
+  geliştirme/CI build'lerinde artık güncelleme döngüsünü hiç başlatmıyor —
+  aksi halde bu build'ler `CompareVersions`'ta her zaman "en düşük"
+  sayıldığından herhangi bir gerçek release'e karşı sessizce kendini
+  değiştirmeye çalışıyordu.
+
+**Etkilenen makineler için not:** cross-filesystem rename bug'ından
+etkilenen bir makine, bu düzeltmeyi de içeren `v1.4.2`'yi **kendi kendine
+indiremeyebilir** — halihazırda çalışan (buggy) binary aynı hatayla kendini
+değiştirmeye çalışmaya devam eder. Böyle makinelerde bir kez elle güncelleme
+(installer'ı tekrar çalıştırmak / binary'yi elle değiştirmek) gerekir;
+sonrasında otomatik güncelleme normal çalışır.
+
 ## [1.4.1] — 2026-09-21
 
 ### Düzeltildi — DNS ayrıştırmada agent çökmesi
@@ -741,7 +775,8 @@ taşındı — atılan iş yok.
 SQLite kayıt, uyarı motoru, AI analizi, GeoIP, PCAP kaydı, rapor ve gömülü
 dashboard — tek binary.
 
-[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.1...HEAD
+[Yayımlanmamış]: https://github.com/gokayybaz/bazntms/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/gokayybaz/bazntms/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/gokayybaz/bazntms/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/gokayybaz/bazntms/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gokayybaz/bazntms/compare/v1.1.0...v1.3.0
